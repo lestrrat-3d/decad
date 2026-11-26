@@ -342,7 +342,7 @@ func TestEdgeWedgeFilletReflexRoots(t *testing.T) {
 	t.Parallel()
 	u := wedgePlateRectBoss(t)
 	const r = 2.0
-	got, err := decad.Fillet(t.Context(), u, decad.Edges(decad.Reflex()).Exactly(4), units.Millimeters(r))
+	got, err := decad.Fillet(u, decad.Edges(decad.Reflex()).Exactly(4), units.Millimeters(r)).Do(t.Context())
 	require.NoError(t, err)
 	area := (1 - math.Pi/4) * r * r
 	d := r * (10 - 3*math.Pi) / (3 * (4 - math.Pi))

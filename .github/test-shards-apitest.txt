@@ -857,7 +857,6 @@
 3	0.01	TestMassPropertiesRevolvePartialTriangle
 3	0.00	TestMassPropertiesTiltedFrameBox
 3	0.00	TestMeshImportOBJRoundTripsAnExportedBlock
-3	0.06	TestModifyOptionGates
 3	0.13	TestModifyRefusalRendersAClosedCircleAsClosed
 3	0.00	TestMotionPoseAt
 3	0.01	TestMoveFaceOnAnLShape
@@ -920,7 +919,6 @@
 3	0.03	TestShellCupHoledUndercuts
 3	0.00	TestShellCupInwardBox
 3	0.05	TestShellGivesEachDirectionItsOwnThickness
-3	0.01	TestShellOptionDispatch
 3	0.04	TestShellStackedBossOpenAtBottom
 3	0.00	TestSolidFromMeshBodyKeepsWorkingAfterPlacementAndReadings
 3	0.02	TestStackedBlindCutSplitsExistingSlab
@@ -3223,3 +3221,13 @@
 12	0.10	TestUnionCommandCopiesItsBodies
 12	0.10	TestUnionRefineToBoundFaults
 12	0.10	TestBooleanMatchingFacesIsAMethodOfCutAndIntersect
+12	0.10	TestShellSenseDispatch
+12	0.10	TestModifyMethodsLastCallWins
+12	0.10	TestModifyCommandsRunOnceAndConsume
+12	0.10	TestModifyCommandsRefuseNilContext
+12	0.10	TestModifyCommandsReturnCancellationByIdentity
+12	0.10	TestModifyConstructorsRecordANilBody
+12	0.10	TestModifyCommandsKeepTheGateOrder
+12	0.10	TestModifyCommandsCopyTheirSelector
+12	0.10	TestSideMethodsLastCallWins
+12	0.10	TestShellClosedAndShellShareTheirMethods

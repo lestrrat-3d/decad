@@ -233,9 +233,9 @@ func requireAgreesWithMeshTwin(t *testing.T, value, bound float64, fillet bool, 
 	require.NoError(t, err)
 	var twin *decad.Body
 	if fillet {
-		twin, err = decad.Fillet(t.Context(), cut, flatEdges(t, cut), units.Millimeters(size))
+		twin, err = decad.Fillet(cut, flatEdges(t, cut), units.Millimeters(size)).Do(t.Context())
 	} else {
-		twin, err = decad.Chamfer(t.Context(), cut, flatEdges(t, cut), units.Millimeters(size))
+		twin, err = decad.Chamfer(cut, flatEdges(t, cut), units.Millimeters(size)).Do(t.Context())
 	}
 	require.NoError(t, err)
 	v, err := twin.Volume()
@@ -255,14 +255,14 @@ func TestRevolvedShaftClassBBlend(t *testing.T) {
 	t.Run("D-flat fillet", func(t *testing.T) {
 		t.Parallel()
 		cut := dFlat(t, extrudedShaft)
-		got, err := decad.Fillet(t.Context(), cut, flatEdges(t, cut), units.Millimeters(1))
+		got, err := decad.Fillet(cut, flatEdges(t, cut), units.Millimeters(1)).Do(t.Context())
 		require.NoError(t, err)
 		requireBlendedShaft(t, got, 3, 3, 2, 1, flatFillet)
 
 		// The Revolve twin is the same class-B record, so it measures the
 		// same value and bound bit for bit.
 		rcut := dFlat(t, revolvedShaft)
-		twin, err := decad.Fillet(t.Context(), rcut, flatEdges(t, rcut), units.Millimeters(1))
+		twin, err := decad.Fillet(rcut, flatEdges(t, rcut), units.Millimeters(1)).Do(t.Context())
 		require.NoError(t, err)
 		v, err := twin.Volume()
 		require.NoError(t, err)
@@ -275,7 +275,7 @@ func TestRevolvedShaftClassBBlend(t *testing.T) {
 	t.Run("D-flat fillet r=2", func(t *testing.T) {
 		t.Parallel()
 		cut := dFlat(t, revolvedShaft)
-		got, err := decad.Fillet(t.Context(), cut, flatEdges(t, cut), units.Millimeters(2))
+		got, err := decad.Fillet(cut, flatEdges(t, cut), units.Millimeters(2)).Do(t.Context())
 		require.NoError(t, err)
 		value, bound := requireBlendedShaft(t, got, 3, 3, 2, 2, shaftLess(bAdd(flatSegment(), twice(flatFilletCorner(2)))))
 		requireAgreesWithMeshTwin(t, value, bound, true, 2)
@@ -284,14 +284,14 @@ func TestRevolvedShaftClassBBlend(t *testing.T) {
 	t.Run("D-flat chamfer", func(t *testing.T) {
 		t.Parallel()
 		cut := dFlat(t, revolvedShaft)
-		got, err := decad.Chamfer(t.Context(), cut, flatEdges(t, cut), units.Millimeters(1))
+		got, err := decad.Chamfer(cut, flatEdges(t, cut), units.Millimeters(1)).Do(t.Context())
 		require.NoError(t, err)
 		value, bound := requireBlendedShaft(t, got, 5, 1, 0, 1, shaftLess(bAdd(flatSegment(), twice(flatChamferCorner(1)))))
 		requireAgreesWithMeshTwin(t, value, bound, false, 1)
 
 		// The chamfer carries the crossings' displacement (PD7), so a further
 		// lateral blend refuses as any displaced prism does.
-		_, err = decad.Fillet(t.Context(), got, flatEdges(t, got), units.Millimeters(0.5))
+		_, err = decad.Fillet(got, flatEdges(t, got), units.Millimeters(0.5)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, `proven displacement`)
 	})
@@ -299,7 +299,7 @@ func TestRevolvedShaftClassBBlend(t *testing.T) {
 	t.Run("fillet then cap-loop chamfer", func(t *testing.T) {
 		t.Parallel()
 		cut := dFlat(t, revolvedShaft)
-		filleted, err := decad.Fillet(t.Context(), cut, flatEdges(t, cut), units.Millimeters(1))
+		filleted, err := decad.Fillet(cut, flatEdges(t, cut), units.Millimeters(1)).Do(t.Context())
 		require.NoError(t, err)
 		// The fillet result is an exact prism, so the cap-loop chamfer of its
 		// x = 40 end builds.
@@ -309,7 +309,7 @@ func TestRevolvedShaftClassBBlend(t *testing.T) {
 		require.Len(t, faces, 1)
 		loop := decad.Edges(decad.OuterLoopOf(faces[0].Origins()[0]))
 		const d = 0.5
-		got, err := decad.Chamfer(t.Context(), filleted, loop, units.Millimeters(d))
+		got, err := decad.Chamfer(filleted, loop, units.Millimeters(d)).Do(t.Context())
 		require.NoError(t, err)
 		// The filleted section is smooth and convex, so the band removes the
 		// d × d right triangle swept along it: by Pappus, (d²/2)·(P − 2π·d/3)
@@ -334,7 +334,7 @@ func TestRevolvedShaftClassBBlend(t *testing.T) {
 		const r = 0.5
 		top := twice(keyFilletCorner(r))
 		cut := keyway(t)
-		got, err := decad.Fillet(t.Context(), cut, shaftEdges(t, cut, keyTopCorners...), units.Millimeters(r))
+		got, err := decad.Fillet(cut, shaftEdges(t, cut, keyTopCorners...), units.Millimeters(r)).Do(t.Context())
 		require.NoError(t, err)
 		requireBlendedShaft(t, got, 5, 3, 2, r, shaftLess(bAdd(keySeat(), top)))
 
@@ -343,7 +343,7 @@ func TestRevolvedShaftClassBBlend(t *testing.T) {
 		fill := bMul(jf(2*r*r), bSub(jf(1), bQuo(junctionPi(), jf(4))))
 		cut = keyway(t)
 		all := append(append([][2]float64{}, keyTopCorners...), keyFloorCorner...)
-		got, err = decad.Fillet(t.Context(), cut, shaftEdges(t, cut, all...), units.Millimeters(r))
+		got, err = decad.Fillet(cut, shaftEdges(t, cut, all...), units.Millimeters(r)).Do(t.Context())
 		require.NoError(t, err)
 		requireBlendedShaft(t, got, 5, 5, 4, r, shaftLess(bSub(bAdd(keySeat(), top), fill)))
 	})
@@ -356,7 +356,7 @@ func TestRevolvedShaftClassBBlend(t *testing.T) {
 		require.NoError(t, err)
 		placed, err := decad.Transform(t.Context(), dFlat(t, extrudedShaft), move)
 		require.NoError(t, err)
-		got, err := decad.Fillet(t.Context(), placed, flatEdges(t, placed), units.Millimeters(1))
+		got, err := decad.Fillet(placed, flatEdges(t, placed), units.Millimeters(1)).Do(t.Context())
 		require.NoError(t, err)
 		requireBlendedShaft(t, got, 3, 3, 2, 1, flatFillet)
 	})
@@ -377,28 +377,27 @@ func TestRevolvedShaftClassBBlend(t *testing.T) {
 		text     string
 	}{
 		{"one flat edge", false, func(t *testing.T, b *decad.Body) error {
-			_, err := decad.Fillet(t.Context(), b, shaftEdges(t, b, flatCorners[0]), units.Millimeters(1))
+			_, err := decad.Fillet(b, shaftEdges(t, b, flatCorners[0]), units.Millimeters(1)).Do(t.Context())
 			return err
 		}, decad.ErrUnsupported, `brep-modify PD4`},
 		{"keyway floor edges alone", true, func(t *testing.T, b *decad.Body) error {
-			_, err := decad.Fillet(t.Context(), b, shaftEdges(t, b, keyFloorCorner...), units.Millimeters(0.5))
+			_, err := decad.Fillet(b, shaftEdges(t, b, keyFloorCorner...), units.Millimeters(0.5)).Do(t.Context())
 			return err
 		}, decad.ErrUnsupported, `brep-modify PD4`},
 		{"cap-loop chamfer", false, func(t *testing.T, b *decad.Body) error {
-			_, err := decad.Chamfer(t.Context(), b, endLoop(t, b), units.Millimeters(0.5))
+			_, err := decad.Chamfer(b, endLoop(t, b), units.Millimeters(0.5)).Do(t.Context())
 			return err
 		}, decad.ErrUnsupported, `brep-modify PD1`},
 		{"asymmetric chamfer", false, func(t *testing.T, b *decad.Body) error {
-			_, err := decad.Chamfer(t.Context(), b, flatEdges(t, b), units.Millimeters(1),
-				decad.WithAsymmetricChamfer(flat, units.Millimeters(0.5)))
+			_, err := decad.Chamfer(b, flatEdges(t, b), units.Millimeters(1)).Asymmetric(flat, units.Millimeters(0.5)).Do(t.Context())
 			return err
 		}, decad.ErrUnsupported, `brep-modify SB1`},
 		{"shell", false, func(t *testing.T, b *decad.Body) error {
-			_, err := decad.Shell(t.Context(), b, decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))).Exactly(1), units.Millimeters(1))
+			_, err := decad.Shell(b, decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))).Exactly(1), units.Millimeters(1)).Do(t.Context())
 			return err
 		}, decad.ErrUnsupported, `brep-modify SB1`},
 		{"fillet as large as the shaft", false, func(t *testing.T, b *decad.Body) error {
-			_, err := decad.Fillet(t.Context(), b, flatEdges(t, b), units.Millimeters(shaftR))
+			_, err := decad.Fillet(b, flatEdges(t, b), units.Millimeters(shaftR)).Do(t.Context())
 			return err
 		}, decad.ErrDegenerate, `no fillet of radius`},
 	} {
@@ -420,7 +419,7 @@ func TestRevolvedShaftClassBBlend(t *testing.T) {
 			if tc.key {
 				full = shaftEdges(t, cut, keyTopCorners...)
 			}
-			_, err = decad.Fillet(t.Context(), cut, full, units.Millimeters(0.5))
+			_, err = decad.Fillet(cut, full, units.Millimeters(0.5)).Do(t.Context())
 			require.NoError(t, err)
 		})
 	}

@@ -20,10 +20,10 @@ import (
 func patchRoundedBoxChamfer(t *testing.T, off float64) *decad.Body {
 	t.Helper()
 	box := bandBox(t, decad.New(), off, off, 20+off, 20+off, 10)
-	rounded, err := decad.Fillet(t.Context(), box, decad.Edges(decad.ParallelTo(bandUp)).Exactly(4), units.Millimeters(3))
+	rounded, err := decad.Fillet(box, decad.Edges(decad.ParallelTo(bandUp)).Exactly(4), units.Millimeters(3)).Do(t.Context())
 	require.NoError(t, err)
 	top := bandFacing(t, rounded, bandUp, 10)
-	out, err := decad.Chamfer(t.Context(), rounded, bandLoopQuery(top.Loops()[0]), units.Millimeters(1))
+	out, err := decad.Chamfer(rounded, bandLoopQuery(top.Loops()[0]), units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	return out
 }
@@ -48,7 +48,7 @@ func patchPocketMouthChamfer(t *testing.T) *decad.Body {
 	require.NoError(t, err)
 	cut, err := decad.Cut(plate, tool).Do(t.Context())
 	require.NoError(t, err)
-	out, err := decad.Chamfer(t.Context(), cut, bandLoopQuery(bandFacing(t, cut, bandUp, 10).Loops()[1]), units.Millimeters(1))
+	out, err := decad.Chamfer(cut, bandLoopQuery(bandFacing(t, cut, bandUp, 10).Loops()[1]), units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	return out
 }
@@ -57,7 +57,7 @@ func patchPocketMouthChamfer(t *testing.T) *decad.Body {
 // eight sphere patches, each three great-circle quarter arcs.
 func patchFilletedCube(t *testing.T) *decad.Body {
 	t.Helper()
-	out, err := decad.Fillet(t.Context(), bandBox(t, decad.New(), 0, 0, 20, 20, 20), decad.Edges(), units.Millimeters(2))
+	out, err := decad.Fillet(bandBox(t, decad.New(), 0, 0, 20, 20, 20), decad.Edges(), units.Millimeters(2)).Do(t.Context())
 	require.NoError(t, err)
 	return out
 }

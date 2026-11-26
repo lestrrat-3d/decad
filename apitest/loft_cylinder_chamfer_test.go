@@ -64,7 +64,7 @@ func TestLoftCylinderChamfersBothOuterCaps(t *testing.T) {
 
 	outerCaps := decad.Edges(decad.OuterLoopOf(decad.CapStart(joined))).
 		Or(decad.OuterLoopOf(decad.CapEnd(joined)))
-	chamfered, err := decad.Chamfer(t.Context(), joined, outerCaps, units.Millimeters(setback))
+	chamfered, err := decad.Chamfer(joined, outerCaps, units.Millimeters(setback)).Do(t.Context())
 	require.NoError(t, err)
 
 	mesh, err := chamfered.Tessellate(t.Context(), units.Millimeters(0.1),

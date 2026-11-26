@@ -180,7 +180,7 @@ func heroPlate(ctx context.Context) (*decad.Body, error) {
 	// Facing(0,-1,0) is the cap nearest the camera (Along on this XZ sketch
 	// is -Y); opening it turns the slab into a shadow-box whose side walls
 	// and back keep a uniform 1.8mm thickness.
-	shelled, err := decad.Shell(ctx, slab, decad.Faces(decad.Facing(r3.NewVec(0, -1, 0))), units.Millimeters(plateShellThickness))
+	shelled, err := decad.Shell(slab, decad.Faces(decad.Facing(r3.NewVec(0, -1, 0))), units.Millimeters(plateShellThickness)).Do(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("shell backing plate: %w", err)
 	}
@@ -298,16 +298,16 @@ func letterBody(ctx context.Context, loops [][]point, chamferCap bool) (*decad.B
 	if !chamferCap {
 		// Round the exposed outside corners while keeping the counters and
 		// interior cut-ins crisp for a legible wordmark.
-		filleted, err := decad.Fillet(ctx, extruded, decad.Edges(
+		filleted, err := decad.Fillet(extruded, decad.Edges(
 			decad.ParallelTo(r3.NewVec(0, 1, 0)),
 			decad.Convex(),
-		), units.Millimeters(letterFilletRadius))
+		), units.Millimeters(letterFilletRadius)).Do(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("fillet extruded loops: %w", err)
 		}
 		return filleted, nil
 	}
-	beveled, err := decad.Chamfer(ctx, extruded, decad.Edges(decad.CreatedBy(decad.CapEnd(extruded))), units.Millimeters(letterCapChamfer))
+	beveled, err := decad.Chamfer(extruded, decad.Edges(decad.CreatedBy(decad.CapEnd(extruded))), units.Millimeters(letterCapChamfer)).Do(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("chamfer letter cap: %w", err)
 	}

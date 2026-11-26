@@ -82,7 +82,7 @@ func crossBar(t *testing.T) *decad.Body {
 }
 
 // TestShellClosedDrilledBar is modify-general §3.2's closed shell of a holed
-// prism: WithNoOpenings keeps every face, lines the outside with an inset wall
+// prism: ShellClosed keeps every face, lines the outside with an inset wall
 // and the hole with a tube of radius r + t, and closes the ring between them
 // into one void shell.
 func TestShellClosedDrilledBar(t *testing.T) {
@@ -114,7 +114,7 @@ func TestShellClosedDrilledBar(t *testing.T) {
 			t.Parallel()
 			bar := tc.build(t)
 			doc := bar.Document()
-			closed, err := decad.Shell(t.Context(), bar, nil, units.Millimeters(1), decad.WithNoOpenings())
+			closed, err := decad.ShellClosed(bar, units.Millimeters(1)).Do(t.Context())
 			require.NoError(t, err)
 			require.True(t, closed.IsSolid())
 			requireManifold(t, closed)
@@ -217,8 +217,7 @@ func TestShellClosedDrilledBarOutward(t *testing.T) {
 			t.Parallel()
 			bar := tc.build(t)
 			doc := bar.Document()
-			closed, err := decad.Shell(t.Context(), bar, nil, units.Millimeters(1),
-				decad.WithNoOpenings(), decad.WithShellSense(decad.Outward))
+			closed, err := decad.ShellClosed(bar, units.Millimeters(1)).Sense(decad.Outward).Do(t.Context())
 			require.NoError(t, err)
 			require.True(t, closed.IsSolid())
 			requireManifold(t, closed)
@@ -273,7 +272,7 @@ func TestShellClosedDrilledBarRefusals(t *testing.T) {
 		name  string
 		build func(*testing.T) *decad.Body
 		th    float64
-		opts  []decad.ShellOption
+		set   []shellSetting
 		is    error
 		want  string
 	}{
@@ -299,25 +298,25 @@ func TestShellClosedDrilledBarRefusals(t *testing.T) {
 			// Outward the radius-3 hole erodes to radius 3 − t: at t = 3 it
 			// fills in, a feature the offset drops (S11a).
 			name: "outward fills the hole (S11a)", build: axialDrilledBar, th: 3,
-			opts: []decad.ShellOption{decad.WithShellSense(decad.Outward)},
-			is:   decad.ErrUnsupported, want: "drops a section feature",
+			set: []shellSetting{outwardSetting()},
+			is:  decad.ErrUnsupported, want: "drops a section feature",
 		},
 		{
 			name: "outward past the hole's radius (S11a)", build: axialDrilledBar, th: 4,
-			opts: []decad.ShellOption{decad.WithShellSense(decad.Outward)},
-			is:   decad.ErrUnsupported, want: "drops a section feature",
+			set: []shellSetting{outwardSetting()},
+			is:  decad.ErrUnsupported, want: "drops a section feature",
 		},
 		{
 			name: "outward fills the cross hole (S11a)", build: crossBar, th: 3,
-			opts: []decad.ShellOption{decad.WithShellSense(decad.Outward)},
-			is:   decad.ErrUnsupported, want: "drops a section feature",
+			set: []shellSetting{outwardSetting()},
+			is:  decad.ErrUnsupported, want: "drops a section feature",
 		},
 		{
 			// The 1-wide waist erodes away at t = 1, splitting the hole in
 			// two: the offset walls of the waist cross (S11b).
 			name: "outward splits a dumbbell hole (S11b)", build: dumbbellHoledPrism, th: 1,
-			opts: []decad.ShellOption{decad.WithShellSense(decad.Outward)},
-			is:   decad.ErrUnsupported, want: "the rewrite crosses itself",
+			set: []shellSetting{outwardSetting()},
+			is:  decad.ErrUnsupported, want: "the rewrite crosses itself",
 		},
 	}
 	for _, tc := range tests {
@@ -325,7 +324,7 @@ func TestShellClosedDrilledBarRefusals(t *testing.T) {
 			t.Parallel()
 			bar := tc.build(t)
 			doc := bar.Document()
-			_, err := decad.Shell(t.Context(), bar, nil, units.Millimeters(tc.th), append(tc.opts, decad.WithNoOpenings())...)
+			_, err := applyShellClosed(bar, units.Millimeters(tc.th), tc.set...).Do(t.Context())
 			require.ErrorIs(t, err, tc.is)
 			if tc.want != "" {
 				require.ErrorContains(t, err, tc.want)
@@ -342,7 +341,7 @@ func TestShellClosedDrilledBarRefusals(t *testing.T) {
 		rod := circleBodyAtZ(t, doc, 0, 3, -1, 6)
 		bar, err := decad.Cut(box, rod).Do(t.Context())
 		require.NoError(t, err)
-		_, err = decad.Shell(t.Context(), bar, nil, units.Millimeters(2), decad.WithNoOpenings())
+		_, err = decad.ShellClosed(bar, units.Millimeters(2)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 		require.ErrorContains(t, err, "SX11")
 		require.Equal(t, []*decad.Body{bar}, doc.Bodies())
@@ -360,7 +359,7 @@ func TestShellClosedDrilledBarThroughCut(t *testing.T) {
 	t.Parallel()
 	bar := axialDrilledBar(t)
 	doc := bar.Document()
-	closed, err := decad.Shell(t.Context(), bar, nil, units.Millimeters(1), decad.WithNoOpenings())
+	closed, err := decad.ShellClosed(bar, units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	rod := circleBodyAtZ(t, doc, 9.5, 0.3, -1, 12)
 	cut, err := decad.Cut(closed, rod).Do(t.Context())
@@ -390,7 +389,7 @@ func TestShellClosedBoxThroughCut(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	box := boxBodyAtZ(t, doc, -10, -10, 10, 10, 0, 10)
-	closed, err := decad.Shell(t.Context(), box, nil, units.Millimeters(1), decad.WithNoOpenings())
+	closed, err := decad.ShellClosed(box, units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	rod := circleBodyAtZ(t, doc, 9.5, 0.3, -1, 12)
 	cut, err := decad.Cut(closed, rod).Do(t.Context())

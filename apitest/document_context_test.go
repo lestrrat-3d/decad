@@ -213,7 +213,7 @@ func TestPlacementContextCancelsAnalyticRebuilds(t *testing.T) {
 			name: "Shell",
 			build: func(t *testing.T) (*decad.Document, *decad.Body) {
 				doc, box := shellBox(t)
-				body, err := decad.Shell(t.Context(), box, topCap(box), units.Millimeters(5))
+				body, err := decad.Shell(box, topCap(box), units.Millimeters(5)).Do(t.Context())
 				require.NoError(t, err)
 				return doc, body
 			},
@@ -273,7 +273,7 @@ func TestPlacementContextCancelsAnalyticAssembly(t *testing.T) {
 			name: "Cup",
 			build: func(t *testing.T) (*decad.Document, *decad.Body) {
 				doc, box := shellBox(t)
-				body, err := decad.Shell(t.Context(), box, topCap(box), units.Millimeters(5))
+				body, err := decad.Shell(box, topCap(box), units.Millimeters(5)).Do(t.Context())
 				require.NoError(t, err)
 				return doc, body
 			},
@@ -398,7 +398,7 @@ func TestPlacementContextCancelsAnalyticMetadataRewriting(t *testing.T) {
 			target: "AddBlendRoles",
 			build: func(t *testing.T) (*decad.Document, *decad.Body) {
 				doc, box := filletBox(t)
-				body, err := decad.Fillet(t.Context(), box, verticalEdges(), units.Millimeters(10))
+				body, err := decad.Fillet(box, verticalEdges(), units.Millimeters(10)).Do(t.Context())
 				require.NoError(t, err)
 				return doc, body
 			},
@@ -408,7 +408,7 @@ func TestPlacementContextCancelsAnalyticMetadataRewriting(t *testing.T) {
 			target: "renameCavityRoles",
 			build: func(t *testing.T) (*decad.Document, *decad.Body) {
 				doc, box := shellBox(t)
-				body, err := decad.Shell(t.Context(), box, topCap(box), units.Millimeters(5))
+				body, err := decad.Shell(box, topCap(box), units.Millimeters(5)).Do(t.Context())
 				require.NoError(t, err)
 				return doc, body
 			},
@@ -476,7 +476,7 @@ func TestPlacementContextPollsAnalyticRebuildHelpers(t *testing.T) {
 			target: "integrateMomentRecordModeContext",
 			build: func(t *testing.T) (*decad.Document, *decad.Body) {
 				doc, box := shellBox(t)
-				body, err := decad.Shell(t.Context(), box, topCap(box), units.Millimeters(5))
+				body, err := decad.Shell(box, topCap(box), units.Millimeters(5)).Do(t.Context())
 				require.NoError(t, err)
 				return doc, body
 			},
@@ -511,7 +511,7 @@ func TestPlacementContextPollsAnalyticRebuildHelpers(t *testing.T) {
 			target: "coalesceWalksContext",
 			build: func(t *testing.T) (*decad.Document, *decad.Body) {
 				doc, box := shellBox(t)
-				body, err := decad.Shell(t.Context(), box, topCap(box), units.Millimeters(5))
+				body, err := decad.Shell(box, topCap(box), units.Millimeters(5)).Do(t.Context())
 				require.NoError(t, err)
 				return doc, body
 			},
@@ -521,7 +521,7 @@ func TestPlacementContextPollsAnalyticRebuildHelpers(t *testing.T) {
 			target: "ReverseLoopRecordContext",
 			build: func(t *testing.T) (*decad.Document, *decad.Body) {
 				doc, box := shellBox(t)
-				body, err := decad.Shell(t.Context(), box, topCap(box), units.Millimeters(5))
+				body, err := decad.Shell(box, topCap(box), units.Millimeters(5)).Do(t.Context())
 				require.NoError(t, err)
 				return doc, body
 			},
@@ -692,7 +692,7 @@ func TestCopyPreservesFilletRoles(t *testing.T) {
 	// record, so a Copy re-mints its own fillet(i,j) roles: the copy has
 	// the SAME count of fillet-role faces as the source (modify §9).
 	_, box := filletBox(t)
-	src, err := decad.Fillet(t.Context(), box, verticalEdges(), units.Millimeters(10))
+	src, err := decad.Fillet(box, verticalEdges(), units.Millimeters(10)).Do(t.Context())
 	require.NoError(t, err)
 	srcFillets := countRolePrefix(src, "fillet(")
 	require.Equal(t, 4, srcFillets, `the source has one fillet role per rounded corner`)
@@ -724,7 +724,7 @@ func TestCopyPlacementPreservesFilletRoles(t *testing.T) {
 	// The same guarantee under a non-identity placement: Copy re-evaluates
 	// the payload under the composed motion and re-mints the fillet roles.
 	_, box := filletBox(t)
-	src, err := decad.Fillet(t.Context(), box, verticalEdges(), units.Millimeters(10))
+	src, err := decad.Fillet(box, verticalEdges(), units.Millimeters(10)).Do(t.Context())
 	require.NoError(t, err)
 	srcFillets := countRolePrefix(src, "fillet(")
 	require.Equal(t, 4, srcFillets)
@@ -743,7 +743,7 @@ func TestCopyPlacementPreservesChamferRoles(t *testing.T) {
 	// Chamfer shares the blend-descriptor machinery, so a copy re-mints its
 	// chamfer(i,j) roles the same way a fillet's are re-minted.
 	_, box := filletBox(t)
-	src, err := decad.Chamfer(t.Context(), box, verticalEdges(), units.Millimeters(8))
+	src, err := decad.Chamfer(box, verticalEdges(), units.Millimeters(8)).Do(t.Context())
 	require.NoError(t, err)
 	srcChamfers := countRolePrefix(src, "chamfer(")
 	require.Equal(t, 4, srcChamfers, `the source has one chamfer role per bevelled corner`)

@@ -76,8 +76,8 @@ func TestCrossCylinderBoreMouthChamferVerified(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			doc, target, bored := crossCylinderBore(t, tc.R, tc.r, tc.H, tc.c)
-			out, err := decad.Chamfer(t.Context(), bored,
-				crossBoreMouth(t, bored, tc.c, tc.r, true), units.Millimeters(tc.setback))
+			out, err := decad.Chamfer(bored,
+				crossBoreMouth(t, bored, tc.c, tc.r, true), units.Millimeters(tc.setback)).Do(t.Context())
 			require.NoError(t, err)
 			require.Equal(t, []*decad.Body{out}, doc.Bodies())
 			for _, endCap := range []decad.FeatureRef{decad.CapStart(target), decad.CapEnd(target)} {
@@ -136,17 +136,16 @@ func TestCrossCylinderBoreMouthChamferRefusesUnprovedCases(t *testing.T) {
 				require.NoError(t, err)
 				centerZ++
 			}
-			var opts []decad.ChamferOption
+			cmd := decad.Chamfer(receiver,
+				crossBoreMouth(t, receiver, centerZ, 1, tc.positive), units.Millimeters(tc.setback))
 			if tc.asymmetric {
 				sides, err := decad.Faces(decad.Cylindrical()).Exactly(1).SelectFaces(target)
 				require.NoError(t, err)
 				require.Len(t, sides[0].Origins(), 1)
 				side := sides[0].Origins()[0]
-				opts = append(opts, decad.WithAsymmetricChamfer(
-					decad.Faces(decad.FaceCreatedBy(side)).Exactly(1), units.Millimeters(0.25)))
+				cmd.Asymmetric(decad.Faces(decad.FaceCreatedBy(side)).Exactly(1), units.Millimeters(0.25))
 			}
-			_, err := decad.Chamfer(t.Context(), receiver,
-				crossBoreMouth(t, receiver, centerZ, 1, tc.positive), units.Millimeters(tc.setback), opts...)
+			_, err := cmd.Do(t.Context())
 			require.ErrorIs(t, err, decad.ErrUnsupported)
 			require.Equal(t, receiver, doc.Bodies()[len(doc.Bodies())-1])
 		})

@@ -27,8 +27,8 @@ func TestFacetedUnionNestedBossShellVerified(t *testing.T) {
 			}
 			joined, err := decad.Union(first, second).Do(t.Context())
 			require.NoError(t, err)
-			shell, err := decad.Shell(t.Context(), joined,
-				decad.Faces(decad.FaceCreatedBy(decad.CapEnd(boss))).Exactly(1), units.Millimeters(1))
+			shell, err := decad.Shell(joined,
+				decad.Faces(decad.FaceCreatedBy(decad.CapEnd(boss))).Exactly(1), units.Millimeters(1)).Do(t.Context())
 			require.NoError(t, err)
 			volume, err := shell.Volume()
 			require.NoError(t, err)
@@ -80,8 +80,8 @@ func TestFacetedUnionNestedBossShellKeepsThicknessAtRoot(t *testing.T) {
 	require.NoError(t, err)
 	joined, err := decad.Union(plate, boss).Do(t.Context())
 	require.NoError(t, err)
-	shell, err := decad.Shell(t.Context(), joined,
-		decad.Faces(decad.FaceCreatedBy(decad.CapEnd(boss))).Exactly(1), units.Millimeters(1))
+	shell, err := decad.Shell(joined,
+		decad.Faces(decad.FaceCreatedBy(decad.CapEnd(boss))).Exactly(1), units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	mesh, err := shell.Tessellate(t.Context(), units.Millimeters(0.05),
 		decad.WithVerification(decad.VerifyAll))
@@ -116,8 +116,8 @@ func TestFacetedUnionNestedBossShellRefusesInsufficientClearance(t *testing.T) {
 	require.NoError(t, err)
 	joined, err := decad.Union(plate, boss).Do(t.Context())
 	require.NoError(t, err)
-	_, err = decad.Shell(t.Context(), joined,
-		decad.Faces(decad.FaceCreatedBy(decad.CapEnd(boss))).Exactly(1), units.Millimeters(1))
+	_, err = decad.Shell(joined,
+		decad.Faces(decad.FaceCreatedBy(decad.CapEnd(boss))).Exactly(1), units.Millimeters(1)).Do(t.Context())
 	require.True(t, errors.Is(err, decad.ErrUnsupported), "Shell returned %v", err)
 	_, err = joined.Volume()
 	require.NoError(t, err)
@@ -137,8 +137,8 @@ func TestFacetedUnionNestedBossShellRefusesPlacedSourceRelation(t *testing.T) {
 	require.NoError(t, err)
 	joined, err = decad.Transform(t.Context(), joined, move)
 	require.NoError(t, err)
-	_, err = decad.Shell(t.Context(), joined,
-		decad.Faces(decad.FaceCreatedBy(decad.CapEnd(boss))).Exactly(1), units.Millimeters(1))
+	_, err = decad.Shell(joined,
+		decad.Faces(decad.FaceCreatedBy(decad.CapEnd(boss))).Exactly(1), units.Millimeters(1)).Do(t.Context())
 	require.True(t, errors.Is(err, decad.ErrUnsupported), "Shell returned %v", err)
 	_, err = joined.Volume()
 	require.NoError(t, err)

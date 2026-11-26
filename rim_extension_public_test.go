@@ -70,9 +70,9 @@ func TestChamferStraightRunAtCircularSupport(t *testing.T) {
 	cut, err := Cut(stock, tool).Do(ctx)
 	require.NoError(t, err)
 	sel := Edges(EndpointAt(r3.Vec{X: -4.25, Z: 3.0625}), EndpointAt(r3.Vec{X: -3, Z: 4})).Exactly(1)
-	_, err = Chamfer(ctx, cut, sel, units.Millimeters(.05))
+	_, err = Chamfer(cut, sel, units.Millimeters(.05)).Do(ctx)
 	require.ErrorIs(t, err, ErrUnsupported)
-	out, err := Chamfer(ctx, cut, sel, units.Millimeters(.25))
+	out, err := Chamfer(cut, sel, units.Millimeters(.25)).Do(ctx)
 	require.NoError(t, err)
 	// A vertical ray at x=-4 crosses the untouched side at z=3.25. At
 	// y=0.1, the 3:4 slope gives a 5:4 multiplier on the remaining setback.

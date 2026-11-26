@@ -16,7 +16,7 @@ func BenchmarkShellCupWithPost(b *testing.B) {
 		b.StopTimer()
 		doc, box := circleHoledBox(b, [3]float64{50, 30, 8})
 		b.StartTimer()
-		body, err := decad.Shell(b.Context(), box, topCap(box), units.Millimeters(5))
+		body, err := decad.Shell(box, topCap(box), units.Millimeters(5)).Do(b.Context())
 		require.NoError(b, err)
 		require.True(b, body.IsSolid())
 		require.Len(b, body.Faces(), 14)
@@ -56,10 +56,9 @@ func benchmarkShellCupPosts(b *testing.B, outward bool, holes ...[3]float64) {
 		var body *decad.Body
 		var err error
 		if outward {
-			body, err = decad.Shell(b.Context(), box, topCap(box), units.Millimeters(thickness),
-				decad.WithShellSense(decad.Outward))
+			body, err = decad.Shell(box, topCap(box), units.Millimeters(thickness)).Sense(decad.Outward).Do(b.Context())
 		} else {
-			body, err = decad.Shell(b.Context(), box, topCap(box), units.Millimeters(thickness))
+			body, err = decad.Shell(box, topCap(box), units.Millimeters(thickness)).Do(b.Context())
 		}
 		require.NoError(b, err)
 		require.True(b, body.IsSolid())

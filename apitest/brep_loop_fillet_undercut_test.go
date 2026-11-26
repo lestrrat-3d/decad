@@ -42,7 +42,7 @@ func TestBrepLoopFilletUndercutReadsEachPipePatch(t *testing.T) {
 	pocket, err := decad.Cut(plate, boxBodyAtZ(t, doc, 10, 15, 30, 25, 5, 5)).Do(t.Context())
 	require.NoError(t, err)
 	top := planeFacing(t, pocket, r3.NewVec(0, 0, 1), r3.NewVec(0, 0, 10))
-	got, err := decad.Fillet(t.Context(), pocket, loopEdgeQuery(top.Loops()[0]), units.Millimeters(1.5))
+	got, err := decad.Fillet(pocket, loopEdgeQuery(top.Loops()[0]), units.Millimeters(1.5)).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, filletLoopPatches(got), 4)
 
@@ -102,7 +102,7 @@ func TestBrepLoopFilletUndercutReflexCornerAndBottomLoop(t *testing.T) {
 			t.Parallel()
 			doc, l := polygonPrism(t, lPrism)
 			face := planeFacing(t, l, tc.normal, tc.at)
-			got, err := decad.Fillet(t.Context(), l, loopEdgeQuery(face.Loops()[0]), units.Millimeters(1.5))
+			got, err := decad.Fillet(l, loopEdgeQuery(face.Loops()[0]), units.Millimeters(1.5)).Do(t.Context())
 			require.NoError(t, err)
 			patches := filletLoopPatches(got)
 			require.Len(t, patches, 7)

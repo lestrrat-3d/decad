@@ -64,8 +64,7 @@ func TestReadSTEPRoundTripsAConcavePrism(t *testing.T) {
 
 func TestReadSTEPRoundTripsACavity(t *testing.T) {
 	t.Parallel()
-	closed, err := decad.Shell(t.Context(), decadtest.NewBlock(t, decad.New(), 0, 0, 20, 20, units.Millimeters(20)), nil,
-		units.Millimeters(3), decad.WithNoOpenings())
+	closed, err := decad.ShellClosed(decadtest.NewBlock(t, decad.New(), 0, 0, 20, 20, units.Millimeters(20)), units.Millimeters(3)).Do(t.Context())
 	require.NoError(t, err)
 	data := writeSTEP(t, closed)
 	require.Contains(t, string(data), "BREP_WITH_VOIDS")
@@ -79,8 +78,7 @@ func TestReadSTEPRoundTripsACavity(t *testing.T) {
 func TestReadSTEPRoundTripsALumpWithACavityBesideALump(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
-	closed, err := decad.Shell(t.Context(), decadtest.NewBlock(t, doc, 0, 0, 20, 20, units.Millimeters(20)), nil,
-		units.Millimeters(3), decad.WithNoOpenings())
+	closed, err := decad.ShellClosed(decadtest.NewBlock(t, doc, 0, 0, 20, 20, units.Millimeters(20)), units.Millimeters(3)).Do(t.Context())
 	require.NoError(t, err)
 	beside := decadtest.NewBlock(t, doc, 40, 0, 50, 10, units.Millimeters(10))
 	both, err := decad.Union(closed, beside).Do(t.Context())
@@ -148,8 +146,7 @@ func TestSTEPWritesACavityThatTouchesTheOuterShell(t *testing.T) {
 
 func TestReadSTEPHonoursAnOrientedVoidShellsFlag(t *testing.T) {
 	t.Parallel()
-	closed, err := decad.Shell(t.Context(), decadtest.NewBlock(t, decad.New(), 0, 0, 20, 20, units.Millimeters(20)), nil,
-		units.Millimeters(3), decad.WithNoOpenings())
+	closed, err := decad.ShellClosed(decadtest.NewBlock(t, decad.New(), 0, 0, 20, 20, units.Millimeters(20)), units.Millimeters(3)).Do(t.Context())
 	require.NoError(t, err)
 	data := writeSTEP(t, closed)
 	flipped := string(data)

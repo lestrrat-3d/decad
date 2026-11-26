@@ -33,7 +33,7 @@ func TestChamferRetainedCylinderRim(t *testing.T) {
 	require.NoError(t, err)
 	joined, err := Union(stock, boss).Do(ctx)
 	require.NoError(t, err)
-	finished, err := Chamfer(ctx, joined, Edges(OuterLoopOf(CapStart(boss))).Exactly(1), units.Millimeters(.2))
+	finished, err := Chamfer(joined, Edges(OuterLoopOf(CapStart(boss))).Exactly(1), units.Millimeters(.2)).Do(ctx)
 	require.NoError(t, err)
 	vol, err := finished.Volume()
 	require.NoError(t, err)

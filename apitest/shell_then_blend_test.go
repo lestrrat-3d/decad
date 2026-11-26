@@ -42,15 +42,15 @@ func shellBoxBoss(t *testing.T, opening boxBossOpening) (*decad.Document, *decad
 	var cavity float64
 	switch opening {
 	case openBossTop:
-		shell, err = decad.Shell(t.Context(), stack,
-			decad.Faces(decad.FaceCreatedBy(decad.CapEnd(stack))).Exactly(1), units.Millimeters(2))
+		shell, err = decad.Shell(stack,
+			decad.Faces(decad.FaceCreatedBy(decad.CapEnd(stack))).Exactly(1), units.Millimeters(2)).Do(t.Context())
 		cavity = 56*36*16 + 16*16*10
 	case openBoxBottom:
-		shell, err = decad.Shell(t.Context(), stack,
-			decad.Faces(decad.FaceCreatedBy(decad.CapStart(stack))).Exactly(1), units.Millimeters(2))
+		shell, err = decad.Shell(stack,
+			decad.Faces(decad.FaceCreatedBy(decad.CapStart(stack))).Exactly(1), units.Millimeters(2)).Do(t.Context())
 		cavity = 56*36*18 + 16*16*8
 	default:
-		shell, err = decad.Shell(t.Context(), stack, nil, units.Millimeters(2), decad.WithNoOpenings())
+		shell, err = decad.ShellClosed(stack, units.Millimeters(2)).Do(t.Context())
 		cavity = 56*36*16 + 16*16*8
 	}
 	require.NoError(t, err)
@@ -133,7 +133,7 @@ func TestShellBossThenBlendBoxVerticals(t *testing.T) {
 		t.Run("fillet "+tc.opening.String(), func(t *testing.T) {
 			t.Parallel()
 			doc, shell, before := shellBoxBoss(t, tc.opening)
-			filleted, err := decad.Fillet(t.Context(), shell, boxVerticals(), units.Millimeters(tc.r))
+			filleted, err := decad.Fillet(shell, boxVerticals(), units.Millimeters(tc.r)).Do(t.Context())
 			require.NoError(t, err)
 			requireVolumeNear(t, filleted, before-4*(1-math.Pi/4)*tc.r*tc.r*20)
 			mesh := requireBlendVerified(t, doc, filleted)
@@ -151,7 +151,7 @@ func TestShellBossThenBlendBoxVerticals(t *testing.T) {
 	t.Run("chamfer top", func(t *testing.T) {
 		t.Parallel()
 		doc, shell, before := shellBoxBoss(t, openBossTop)
-		chamfered, err := decad.Chamfer(t.Context(), shell, boxVerticals(), units.Millimeters(3))
+		chamfered, err := decad.Chamfer(shell, boxVerticals(), units.Millimeters(3)).Do(t.Context())
 		require.NoError(t, err)
 		requireVolumeNear(t, chamfered, before-4*4.5*20)
 		requireBlendVerified(t, doc, chamfered)
@@ -164,7 +164,7 @@ func TestShellBossThenBlendBoxVerticals(t *testing.T) {
 func TestShellBossThenFilletRefusesCavityBreakthrough(t *testing.T) {
 	t.Parallel()
 	_, shell, before := shellBoxBoss(t, openBossTop)
-	_, err := decad.Fillet(t.Context(), shell, boxVerticals(), units.Millimeters(7))
+	_, err := decad.Fillet(shell, boxVerticals(), units.Millimeters(7)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	const at = "the blend meets another facet of the body at {"
 	msg := err.Error()
@@ -187,7 +187,7 @@ func TestShellBossThenShellRefuses(t *testing.T) {
 	t.Parallel()
 	_, shell, before := shellBoxBoss(t, openBossTop)
 	bottom := decad.Faces(decad.Facing(r3.NewVec(0, 0, -1)), decad.NormalTo(r3.NewVec(0, 0, 1)))
-	_, err := decad.Shell(t.Context(), shell, bottom, units.Millimeters(0.5))
+	_, err := decad.Shell(shell, bottom, units.Millimeters(0.5)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.ErrorContains(t, err, "this evaluator does not modify a stacked shell's rounded cavity")
 	requireVolumeNear(t, shell, before)
@@ -204,7 +204,7 @@ func TestShellBossThenFilletOpeningRim(t *testing.T) {
 	doc, shell, _ := shellBoxBoss(t, openBossTop)
 	rim := decad.Edges(decad.Convex(), decad.ParallelTo(r3.NewVec(1, 0, 0)),
 		decad.EndpointAt(r3.NewVec(20, 10, 30))).Exactly(1)
-	filleted, err := decad.Fillet(t.Context(), shell, rim, units.Millimeters(1))
+	filleted, err := decad.Fillet(shell, rim, units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	found := false
 	for _, f := range filleted.Faces() {
@@ -237,7 +237,7 @@ func TestShellBossThenFilletOpeningInnerRim(t *testing.T) {
 	doc, shell, _ := shellBoxBoss(t, openBossTop)
 	const r = 1.0
 	rim := decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0)), decad.EndpointAt(r3.NewVec(22, 12, 30))).Exactly(1)
-	filleted, err := decad.Fillet(t.Context(), shell, rim, units.Millimeters(r))
+	filleted, err := decad.Fillet(shell, rim, units.Millimeters(r)).Do(t.Context())
 	require.NoError(t, err)
 	found := false
 	for _, f := range filleted.Faces() {
@@ -273,14 +273,14 @@ func TestShellPocketThenFilletOuterVerticals(t *testing.T) {
 	doc := decad.New()
 	pocket, err := decad.Cut(boxBodyAtZ(t, doc, 0, 0, 10, 10, 0, 10), boxBodyAtZ(t, doc, 3, 3, 7, 7, 6, 4)).Do(t.Context())
 	require.NoError(t, err)
-	shell, err := decad.Shell(t.Context(), pocket,
-		decad.Faces(decad.FaceCreatedBy(decad.CapEnd(pocket))).Exactly(1), units.Millimeters(1))
+	shell, err := decad.Shell(pocket,
+		decad.Faces(decad.FaceCreatedBy(decad.CapEnd(pocket))).Exactly(1), units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	before := 504 + 26*math.Pi/3
 	requireVolumeNear(t, shell, before)
 	verticals := decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)), decad.Convex(),
 		decad.LongerThan(units.Millimeters(9))).Exactly(4)
-	filleted, err := decad.Fillet(t.Context(), shell, verticals, units.Millimeters(1))
+	filleted, err := decad.Fillet(shell, verticals, units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	requireVolumeNear(t, filleted, before-4*(1-math.Pi/4)*10)
 	mesh := requireBlendVerified(t, doc, filleted)
@@ -316,8 +316,7 @@ func TestShellBossThenAsymmetricChamfer(t *testing.T) {
 	edges := decad.Edges(decad.Convex(), decad.ParallelTo(ex), decad.EndpointAt(r3.NewVec(0, 0, 20))).
 		Or(decad.Convex(), decad.ParallelTo(ex), decad.EndpointAt(r3.NewVec(20, 10, 30))).Exactly(2)
 	top := decad.Faces(decad.Facing(r3.NewVec(0, 0, 1)), decad.NormalTo(r3.NewVec(0, 0, 1)))
-	chamfered, err := decad.Chamfer(t.Context(), shell, edges, units.Millimeters(1),
-		decad.WithAsymmetricChamfer(top, units.Millimeters(0.5)))
+	chamfered, err := decad.Chamfer(shell, edges, units.Millimeters(1)).Asymmetric(top, units.Millimeters(0.5)).Do(t.Context())
 	require.NoError(t, err)
 	requireRemoved(t, shell, chamfered, 0.25*80)
 	mesh, err := chamfered.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
@@ -340,8 +339,8 @@ func TestShellThenFilletOtherStackedShells(t *testing.T) {
 	roundShell := func(t *testing.T) *decad.Body {
 		t.Helper()
 		stack := roundBossFromSketch(t, decad.New(), 10, 10)
-		shell, err := decad.Shell(t.Context(), stack,
-			decad.Faces(decad.FaceCreatedBy(decad.CapEnd(stack))).Exactly(1), units.Millimeters(1))
+		shell, err := decad.Shell(stack,
+			decad.Faces(decad.FaceCreatedBy(decad.CapEnd(stack))).Exactly(1), units.Millimeters(1)).Do(t.Context())
 		require.NoError(t, err)
 		return shell
 	}
@@ -352,19 +351,19 @@ func TestShellThenFilletOtherStackedShells(t *testing.T) {
 		require.NoError(t, err)
 		part, err = decad.Cut(part, circleBodyAtZ(t, doc, 0, 5, 7, 3)).Do(t.Context())
 		require.NoError(t, err)
-		shell, err := decad.Shell(t.Context(), part, decad.Faces(decad.FaceCreatedBy(decad.CapEnd(part))).Exactly(1),
-			units.Millimeters(1))
+		shell, err := decad.Shell(part, decad.Faces(decad.FaceCreatedBy(decad.CapEnd(part))).Exactly(1),
+			units.Millimeters(1)).Do(t.Context())
 		require.NoError(t, err)
-		filleted, err := decad.Fillet(t.Context(), shell,
-			decad.Edges(decad.Convex(), decad.ParallelTo(ez)).Exactly(4), units.Millimeters(1))
+		filleted, err := decad.Fillet(shell,
+			decad.Edges(decad.Convex(), decad.ParallelTo(ez)).Exactly(4), units.Millimeters(1)).Do(t.Context())
 		require.NoError(t, err)
 		requireRemoved(t, shell, filleted, 4*(1-math.Pi/4)*10)
 	})
 	t.Run("round boss verticals", func(t *testing.T) {
 		t.Parallel()
 		shell := roundShell(t)
-		filleted, err := decad.Fillet(t.Context(), shell,
-			decad.Edges(decad.Convex(), decad.ParallelTo(ez)).Exactly(4), units.Millimeters(3.3))
+		filleted, err := decad.Fillet(shell,
+			decad.Edges(decad.Convex(), decad.ParallelTo(ez)).Exactly(4), units.Millimeters(3.3)).Do(t.Context())
 		require.NoError(t, err)
 		requireRemoved(t, shell, filleted, 4*(1-math.Pi/4)*3.3*3.3*5)
 	})
@@ -372,8 +371,8 @@ func TestShellThenFilletOtherStackedShells(t *testing.T) {
 		t.Parallel()
 		shell := roundShell(t)
 		const r = 0.5
-		filleted, err := decad.Fillet(t.Context(), shell,
-			decad.Edges(decad.Circular(), decad.EndpointAt(r3.NewVec(14, 10, 10))).Exactly(1), units.Millimeters(r))
+		filleted, err := decad.Fillet(shell,
+			decad.Edges(decad.Circular(), decad.EndpointAt(r3.NewVec(14, 10, 10))).Exactly(1), units.Millimeters(r)).Do(t.Context())
 		require.NoError(t, err)
 		centroid := r * (10 - 3*math.Pi) / (3 * (4 - math.Pi))
 		requireRemoved(t, shell, filleted, 2*math.Pi*(4-centroid)*(1-math.Pi/4)*r*r)

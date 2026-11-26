@@ -297,7 +297,7 @@ inconsistent end.
 
 ## Cones from a revolved face
 
-`ConeFromFace(ctx, body, face, far)` builds a tool cone for a Revolve blank.
+`ConeFromFace(body, face, far).Do(ctx)` builds a tool cone for a Revolve blank.
 The cone is the nearest representable strict offset from the selected face's
 exact line. This need not be one float step: the rounded value may already be
 strictly sided, or the bound may be MaxFloat64. The construction guarantees

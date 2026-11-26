@@ -75,8 +75,8 @@ func TestFacetedRetainedBlendObliqueEnd(t *testing.T) {
 		const r = 2.0
 		cut := wedgedPlate(t, func(sc *retentionScene) *sketch.Plane { return sc.w.XY() },
 			[][2]float64{{-60, -30}, {-25, -30}, {35, 30}, {-60, 30}}, 80, r3.Vec{Z: 0.5})
-		out, err := decad.Fillet(t.Context(), cut, straightEdge(t, cut, r3.NewVec(40, 0, 20), x),
-			units.Millimeters(r))
+		out, err := decad.Fillet(cut, straightEdge(t, cut, r3.NewVec(40, 0, 20), x),
+			units.Millimeters(r)).Do(t.Context())
 		require.NoError(t, err)
 		requireEndCurveCovered(t, out, func(alpha float64) r3.Vec {
 			py := r - r*math.Cos(alpha)
@@ -91,7 +91,7 @@ func TestFacetedRetainedBlendObliqueEnd(t *testing.T) {
 		const r = 3.0
 		pair := topEdge(r3.NewVec(0, 0, 10), x).Or(decad.EndpointAt(r3.NewVec(0, 0, 10)), decad.ParallelTo(y))
 		box := blockIn(t, decad.New(), r3.NewVec(0, 0, 0), r3.NewVec(20, 20, 10))
-		out, err := decad.Fillet(t.Context(), box, pair, units.Millimeters(r))
+		out, err := decad.Fillet(box, pair, units.Millimeters(r)).Do(t.Context())
 		require.NoError(t, err)
 		requireEndCurveCovered(t, out, func(alpha float64) r3.Vec {
 			py := r - r*math.Cos(alpha)
@@ -110,7 +110,7 @@ func TestFacetedRetainedBlendObliqueEnd(t *testing.T) {
 			Or(decad.EndpointAt(corner), decad.ParallelTo(y)).Or(decad.EndpointAt(corner), decad.ParallelTo(z)).
 			Or(decad.EndpointAt(r3.NewVec(20, 0, 10)), decad.ParallelTo(y))
 		box := blockIn(t, decad.New(), r3.NewVec(0, 0, 0), r3.NewVec(20, 20, 10))
-		out, err := decad.Fillet(t.Context(), box, sel, units.Millimeters(r))
+		out, err := decad.Fillet(box, sel, units.Millimeters(r)).Do(t.Context())
 		require.NoError(t, err)
 		requireEndCurveCovered(t, out, func(alpha float64) r3.Vec {
 			py := r - r*math.Cos(alpha)

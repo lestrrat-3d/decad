@@ -137,7 +137,7 @@ func TestChargedChainChamferWindowLoop(t *testing.T) {
 	twinWindows := windowLoopEdges(bottomPlane(t, disc))
 	twinVol, err := disc.Volume()
 	require.NoError(t, err)
-	twin, err := decad.Chamfer(t.Context(), disc, namedEdges(twinWindows[0]), units.Millimeters(chargedChamfer))
+	twin, err := decad.Chamfer(disc, namedEdges(twinWindows[0]), units.Millimeters(chargedChamfer)).Do(t.Context())
 	require.NoError(t, err)
 	twinAfter, err := twin.Volume()
 	require.NoError(t, err)
@@ -150,7 +150,7 @@ func TestChargedChainChamferWindowLoop(t *testing.T) {
 			facetedBefore++
 		}
 	}
-	out, err := decad.Chamfer(t.Context(), part, namedEdges(windows[0]), units.Millimeters(chargedChamfer))
+	out, err := decad.Chamfer(part, namedEdges(windows[0]), units.Millimeters(chargedChamfer)).Do(t.Context())
 	require.NoError(t, err)
 	after, err := out.Volume()
 	require.NoError(t, err)
@@ -214,7 +214,7 @@ func TestChargedChainChamferWindowLoop(t *testing.T) {
 		t.Parallel()
 		part, bottom := filletedHub(t)
 		w := windowLoopEdges(bottom)
-		got, err := decad.Chamfer(t.Context(), part, namedEdges(w[3]), units.Millimeters(chargedChamfer))
+		got, err := decad.Chamfer(part, namedEdges(w[3]), units.Millimeters(chargedChamfer)).Do(t.Context())
 		require.NoError(t, err)
 		after, err := got.Volume()
 		require.NoError(t, err)
@@ -240,7 +240,7 @@ func TestChargedChainChamferMixed(t *testing.T) {
 		part, windows, rim, vol, area := fresh(t)
 		sel := append(append([]*decad.Edge(nil), windows[0]...), rim)
 		wantVol, wantArea := chamferOfLoop(t, sel)
-		out, err := decad.Chamfer(t.Context(), part, namedEdges(sel), units.Millimeters(chargedChamfer))
+		out, err := decad.Chamfer(part, namedEdges(sel), units.Millimeters(chargedChamfer)).Do(t.Context())
 		require.NoError(t, err)
 		after, err := out.Volume()
 		require.NoError(t, err)
@@ -256,7 +256,7 @@ func TestChargedChainChamferMixed(t *testing.T) {
 		part, windows, rim, vol, area := fresh(t)
 		sel := append(append(append([]*decad.Edge(nil), windows[0]...), windows[2]...), rim)
 		wantVol, wantArea := chamferOfLoop(t, sel)
-		out, err := decad.Chamfer(t.Context(), part, namedEdges(sel), units.Millimeters(chargedChamfer))
+		out, err := decad.Chamfer(part, namedEdges(sel), units.Millimeters(chargedChamfer)).Do(t.Context())
 		require.NoError(t, err)
 		after, err := out.Volume()
 		require.NoError(t, err)
@@ -293,7 +293,7 @@ func TestChargedChainChamferEveryRimAndWindow(t *testing.T) {
 	area, err := part.Area()
 	require.NoError(t, err)
 	wantVol, wantArea := chamferOfLoop(t, sel)
-	out, err := decad.Chamfer(t.Context(), part, namedEdges(sel), units.Millimeters(chargedChamfer))
+	out, err := decad.Chamfer(part, namedEdges(sel), units.Millimeters(chargedChamfer)).Do(t.Context())
 	require.NoError(t, err)
 	after, err := out.Volume()
 	require.NoError(t, err)
@@ -330,42 +330,42 @@ func TestChargedChainChamferRefusals(t *testing.T) {
 			}
 		}
 		require.Len(t, run, 7)
-		_, err := decad.Chamfer(t.Context(), part, namedEdges(run), units.Millimeters(chargedChamfer))
+		_, err := decad.Chamfer(part, namedEdges(run), units.Millimeters(chargedChamfer)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "an open tangent chain on walls that state a displacement is not built")
 	})
 
 	t.Run("a fillet of a bottom window loop", func(t *testing.T) {
 		t.Parallel()
-		_, err := decad.Fillet(t.Context(), part, namedEdges(windows[0]), units.Millimeters(0.5))
+		_, err := decad.Fillet(part, namedEdges(windows[0]), units.Millimeters(0.5)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "a tangent chain fillet on walls that state a displacement is not built")
 	})
 
 	t.Run("one window edge alone", func(t *testing.T) {
 		t.Parallel()
-		_, err := decad.Chamfer(t.Context(), part, namedEdges(windows[0][:1]), units.Millimeters(chargedChamfer))
+		_, err := decad.Chamfer(part, namedEdges(windows[0][:1]), units.Millimeters(chargedChamfer)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "whose continuation is not selected")
 	})
 
 	t.Run("a window loop missing one edge", func(t *testing.T) {
 		t.Parallel()
-		_, err := decad.Chamfer(t.Context(), part, namedEdges(windows[0][:7]), units.Millimeters(chargedChamfer))
+		_, err := decad.Chamfer(part, namedEdges(windows[0][:7]), units.Millimeters(chargedChamfer)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 	})
 
 	t.Run("a setback inside the inner arc by less than the chain's slack", func(t *testing.T) {
 		t.Parallel()
 		// R - t is positive but below the chain's slack, which the true wall's displacement and the junction shifts set.
-		_, err := decad.Chamfer(t.Context(), part, namedEdges(windows[0]), units.Millimeters(windowInner-1e-9))
+		_, err := decad.Chamfer(part, namedEdges(windows[0]), units.Millimeters(windowInner-1e-9)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 		require.ErrorContains(t, err, "the blend reaches the rim's axis")
 	})
 
 	t.Run("a setback that reaches the inner arc's axis", func(t *testing.T) {
 		t.Parallel()
-		_, err := decad.Chamfer(t.Context(), part, namedEdges(windows[0]), units.Millimeters(windowInner))
+		_, err := decad.Chamfer(part, namedEdges(windows[0]), units.Millimeters(windowInner)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 	})
 }
@@ -386,7 +386,7 @@ func TestChainWithTouchingEdgeKeepsItsRefusal(t *testing.T) {
 		}
 	}
 	require.Equal(t, 9, n)
-	_, err := decad.Chamfer(t.Context(), drilled, seam.Exactly(9), units.Millimeters(1))
+	_, err := decad.Chamfer(drilled, seam.Exactly(9), units.Millimeters(1)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.ErrorContains(t, err, "a selection that holds a tangent chain names only chain edges")
 }

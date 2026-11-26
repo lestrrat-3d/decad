@@ -78,7 +78,7 @@ func chamferConcaveArcEnd(t *testing.T, r, turn, d float64) {
 		Or(decad.EndpointAt(r3.Vec{X: v[0], Y: v[1], Z: 5}), decad.Circular()).
 		Or(decad.EndpointAt(r3.Vec{X: w[0], Y: w[1]}), decad.ParallelTo(inward)).
 		Or(decad.EndpointAt(r3.Vec{X: v[0], Y: v[1]}), decad.Circular())
-	out, err := decad.Chamfer(t.Context(), body, sel, units.Millimeters(d))
+	out, err := decad.Chamfer(body, sel, units.Millimeters(d)).Do(t.Context())
 	require.NoError(t, err)
 	require.True(t, out.IsSolid())
 	for _, diag := range out.OperationDiagnostics() {
@@ -156,7 +156,7 @@ func TestChamferConcaveEndKeepsItsRelief(t *testing.T) {
 			require.NoError(t, err)
 			before := volumeOf(t, body)
 
-			out, err := decad.Chamfer(ctx, body, topEdges(lineEdge(1, c.pts[2], c.pts[3])), units.Millimeters(d))
+			out, err := decad.Chamfer(body, topEdges(lineEdge(1, c.pts[2], c.pts[3])), units.Millimeters(d)).Do(ctx)
 			require.NoError(t, err)
 			shifted := false
 			for _, diag := range out.OperationDiagnostics() {

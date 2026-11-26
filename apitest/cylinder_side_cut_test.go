@@ -70,7 +70,7 @@ func TestCutRegisteredPrismArc(t *testing.T) {
 	pad := extrude(padSketch, .75, decad.Against)
 	joined, e := decad.Union(plate, pad).Do(ctx)
 	require.NoError(t, e)
-	joined, e = decad.Chamfer(ctx, joined, decad.Edges(decad.OuterLoopOf(decad.CapStart(pad))).Exactly(1), units.Millimeters(.25))
+	joined, e = decad.Chamfer(joined, decad.Edges(decad.OuterLoopOf(decad.CapStart(pad))).Exactly(1), units.Millimeters(.25)).Do(ctx)
 	require.NoError(t, e)
 	section := func(y, r float64) (*sketch.Sketch, *sketch.Profile) {
 		s := frame(r3.Vec{X: 8 + width, Y: y}, x, z)

@@ -123,7 +123,7 @@ func chamferHubPawlRuns(t *testing.T, hub []hubSeg) {
 			body := hubBody(t, hub)
 			sel, count := hubSelection(t, body, hub)
 			require.Equal(t, 36, count)
-			out, err := decad.Chamfer(t.Context(), body, sel, units.Millimeters(hubChamfer))
+			out, err := decad.Chamfer(body, sel, units.Millimeters(hubChamfer)).Do(t.Context())
 			require.NoError(t, err)
 			require.True(t, out.IsSolid())
 			mesh, err := out.Tessellate(t.Context(), units.Millimeters(0.05), decad.WithVerification(decad.VerifyAll))

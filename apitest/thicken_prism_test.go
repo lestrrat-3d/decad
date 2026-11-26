@@ -37,8 +37,7 @@ func TestThickenPrismCircle(t *testing.T) {
 				D: units.Millimeters(10), Dir: decad.Along,
 			}, decad.WithSurfaceResult())
 			require.NoError(t, err)
-			solid, err := decad.Thicken(t.Context(), sheet, units.Millimeters(tc.thickness),
-				decad.WithThickenSide(tc.side))
+			solid, err := decad.Thicken(sheet, units.Millimeters(tc.thickness)).Side(tc.side).Do(t.Context())
 			require.NoError(t, err)
 			require.Equal(t, decad.BodySolid, solid.Kind())
 			require.Len(t, solid.Faces(), 4)
@@ -59,8 +58,7 @@ func TestThickenPrismRectangle(t *testing.T) {
 	sheet, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along},
 		decad.WithSurfaceResult())
 	require.NoError(t, err)
-	solid, err := decad.Thicken(t.Context(), sheet, units.Millimeters(5),
-		decad.WithThickenSide(decad.ThickenNegative))
+	solid, err := decad.Thicken(sheet, units.Millimeters(5)).Side(decad.ThickenNegative).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, decad.BodySolid, solid.Kind())
 	require.Len(t, solid.Faces(), 10)
@@ -68,7 +66,7 @@ func TestThickenPrismRectangle(t *testing.T) {
 	decadtest.MeasuresArea(t, solid, units.SquareMillimeters(9000), decadtest.Exactly())
 	decadtest.MeasuresCentroid(t, solid, r3.NewVec(50, 30, 5), decadtest.Exactly())
 	decadtest.MeasuresBounds(t, solid, r3.NewVec(0, 0, 0), r3.NewVec(100, 60, 10), decadtest.Exactly())
-	_, err = decad.Thicken(t.Context(), sheet, units.Millimeters(1))
+	_, err = decad.Thicken(sheet, units.Millimeters(1)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrRetiredBody)
 }
 
@@ -78,8 +76,7 @@ func TestThickenStraightSweepSheetBuildsReplayableSolid(t *testing.T) {
 	doc := decad.New()
 	sheet, err := decad.Sweep(t.Context(), doc, s, profile, sweepLinePath(t), decad.WithSurfaceResult())
 	require.NoError(t, err)
-	solid, err := decad.Thicken(t.Context(), sheet, units.Millimeters(1),
-		decad.WithThickenSide(decad.ThickenNegative))
+	solid, err := decad.Thicken(sheet, units.Millimeters(1)).Side(decad.ThickenNegative).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, decad.BodySolid, solid.Kind())
 	decadtest.MeasuresVolume(t, solid, units.CubicMillimeters(3160), decadtest.Exactly())
@@ -102,7 +99,7 @@ func TestThickenStraightSweepSheetBuildsReplayableSolid(t *testing.T) {
 	require.NoError(t, err)
 	decadtest.MeasuresVolume(t, replay, units.CubicMillimeters(3160), decadtest.Exactly())
 	require.NotNil(t, faceByRole(t, replay, "side(0,1,0)"))
-	_, err = decad.Thicken(t.Context(), sheet, units.Millimeters(1))
+	_, err = decad.Thicken(sheet, units.Millimeters(1)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrRetiredBody)
 }
 
@@ -125,9 +122,9 @@ func TestThickenStraightSweepSheetSidesMatchExtrude(t *testing.T) {
 			extrudeSheet, err := decad.Extrude(t.Context(), decad.New(), s, profile,
 				decad.Distance{D: units.Millimeters(10), Dir: decad.Along}, decad.WithSurfaceResult())
 			require.NoError(t, err)
-			got, err := decad.Thicken(t.Context(), sweepSheet, units.Millimeters(2), decad.WithThickenSide(tc.side))
+			got, err := decad.Thicken(sweepSheet, units.Millimeters(2)).Side(tc.side).Do(t.Context())
 			require.NoError(t, err)
-			want, err := decad.Thicken(t.Context(), extrudeSheet, units.Millimeters(2), decad.WithThickenSide(tc.side))
+			want, err := decad.Thicken(extrudeSheet, units.Millimeters(2)).Side(tc.side).Do(t.Context())
 			require.NoError(t, err)
 			gotVolume, err := got.Volume()
 			require.NoError(t, err)
@@ -169,8 +166,7 @@ func TestThickenPrismRectangleRoundedSides(t *testing.T) {
 				D: units.Millimeters(10), Dir: decad.Along,
 			}, decad.WithSurfaceResult())
 			require.NoError(t, err)
-			solid, err := decad.Thicken(t.Context(), sheet, units.Millimeters(tc.thickness),
-				decad.WithThickenSide(tc.side))
+			solid, err := decad.Thicken(sheet, units.Millimeters(tc.thickness)).Side(tc.side).Do(t.Context())
 			require.NoError(t, err)
 			require.Len(t, solid.Faces(), 14)
 			volume, err := solid.Volume()
@@ -185,7 +181,7 @@ func TestThickenPrismRectangleRoundedSides(t *testing.T) {
 func TestThickenPrismNeckRefusal(t *testing.T) {
 	t.Parallel()
 	doc, sheet := thickenNeckSheet(t)
-	_, err := decad.Thicken(t.Context(), sheet, units.Millimeters(3), decad.WithThickenSide(decad.ThickenNegative))
+	_, err := decad.Thicken(sheet, units.Millimeters(3)).Side(decad.ThickenNegative).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.True(t, strings.Contains(err.Error(), "crosses itself"), err.Error())
 	require.Len(t, doc.Bodies(), 1)
@@ -195,8 +191,7 @@ func TestThickenPrismNeckRefusal(t *testing.T) {
 func TestThickenPrismConcaveAdmitted(t *testing.T) {
 	t.Parallel()
 	_, sheet := thickenNeckSheet(t)
-	solid, err := decad.Thicken(t.Context(), sheet, units.Millimeters(0.5),
-		decad.WithThickenSide(decad.ThickenNegative))
+	solid, err := decad.Thicken(sheet, units.Millimeters(0.5)).Side(decad.ThickenNegative).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, solid.Faces(), 30)
 	volume, err := solid.Volume()
@@ -208,8 +203,7 @@ func TestThickenPrismConcaveAdmitted(t *testing.T) {
 func TestThickenPrismNarrowNeckAdmitted(t *testing.T) {
 	t.Parallel()
 	_, sheet := thickenNeckSheet(t)
-	solid, err := decad.Thicken(t.Context(), sheet, units.Millimeters(1.5),
-		decad.WithThickenSide(decad.ThickenNegative))
+	solid, err := decad.Thicken(sheet, units.Millimeters(1.5)).Side(decad.ThickenNegative).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, solid.Faces(), 30)
 	volume, err := solid.Volume()
@@ -260,8 +254,7 @@ func TestThickenPrismUnrepresentablePublicOffset(t *testing.T) {
 		D: units.Millimeters(10), Dir: decad.Along,
 	}, decad.WithSurfaceResult())
 	require.NoError(t, err)
-	_, err = decad.Thicken(t.Context(), sheet, units.Millimeters(math.Ldexp(1, -13)),
-		decad.WithThickenSide(decad.ThickenNegative))
+	_, err = decad.Thicken(sheet, units.Millimeters(math.Ldexp(1, -13))).Side(decad.ThickenNegative).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.True(t, strings.Contains(err.Error(), "rounded"), err.Error())
 	require.Len(t, doc.Bodies(), 1)
@@ -275,7 +268,7 @@ func TestThickenStagedFamiliesRefuse(t *testing.T) {
 	loftDoc := decad.New()
 	loftSheet, err := decad.Loft(t.Context(), loftDoc, s0, p0, s1, p1, decad.WithSurfaceResult())
 	require.NoError(t, err)
-	_, err = decad.Thicken(t.Context(), loftSheet, units.Millimeters(1))
+	_, err = decad.Thicken(loftSheet, units.Millimeters(1)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Contains(t, err.Error(), "no admitted Thicken generator")
 	area, err := loftSheet.Area()

@@ -108,7 +108,7 @@ func TestStackedViewObliqueWallTag(t *testing.T) {
 					continue
 				}
 				edge := decad.Edges(decad.EndpointAt(e.Start().Position().Value), decad.EndpointAt(e.End().Position().Value)).Exactly(1)
-				_, err := decad.Chamfer(t.Context(), chamferPart, edge, units.Millimeters(0.5))
+				_, err := decad.Chamfer(chamferPart, edge, units.Millimeters(0.5)).Do(t.Context())
 				require.ErrorIs(t, err, decad.ErrUnsupported)
 				// The side's rim ends at a tangent junction with a corner round. A closed chamfer chain reads the
 				// oblique wall (charged-window-chamfer-design §3), so the selection is one edge of a chain whose

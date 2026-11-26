@@ -173,3 +173,17 @@ func TestCommandConstructorCallsEndInDo(t *testing.T) {
 	}
 	require.Empty(t, offenders, "a command constructor call used as a statement, or chained without Do")
 }
+
+// TestModifyConstructorsAreCommandConstructors fails when a modify-family
+// constructor stops returning a *<X>Command, which would drop it from both
+// lint checks above (agent-docs/command-api-design.md §12).
+func TestModifyConstructorsAreCommandConstructors(t *testing.T) {
+	t.Parallel()
+	constructors := commandConstructorNames(t)
+	for _, name := range []string{
+		"Fillet", "Chamfer", "FilletChord", "ChamferAngle", "Shell", "ShellClosed",
+		"Draft", "Offset", "Thicken", "MoveFace", "ConeFromFace",
+	} {
+		require.Contains(t, constructors, name)
+	}
+}

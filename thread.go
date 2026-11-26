@@ -178,9 +178,11 @@ func Thread(ctx context.Context, b *Body, spec ThreadSpec) (result *Body, retErr
 	}
 	chamfer := func(target *Body) (*Body, error) {
 		if leadAngle == 0 {
-			return Chamfer(ctx, target, edgesQuery(ends), units.Millimeters(leadIn))
+			out, err := chamfer(ctx, target, edgesQuery(ends), units.Millimeters(leadIn), chamferSettings{})
+			return out, operationError(OperationChamfer, err)
 		}
-		return ChamferAngle(ctx, target, edgesQuery(ends), units.Millimeters(leadIn), Faces(Planar()), units.Radians(leadAngle))
+		out, err := chamferAngle(ctx, target, edgesQuery(ends), units.Millimeters(leadIn), Faces(Planar()), units.Radians(leadAngle))
+		return out, operationError(OperationChamfer, err)
 	}
 	// Build on a copy, then retire b together with the chamfered copy only when
 	// the cut succeeds. The frame and plan still come from b's unchamfered face.

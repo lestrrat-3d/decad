@@ -27,8 +27,8 @@ func TestShellRoundStackedBoss(t *testing.T) {
 			doc := decad.New()
 			stack := roundBossFromSketch(t, doc, tc.cx, tc.cy)
 			require.Len(t, stack.Faces(), 8)
-			shell, err := decad.Shell(t.Context(), stack,
-				decad.Faces(decad.FaceCreatedBy(decad.CapEnd(stack))).Exactly(1), units.Millimeters(1))
+			shell, err := decad.Shell(stack,
+				decad.Faces(decad.FaceCreatedBy(decad.CapEnd(stack))).Exactly(1), units.Millimeters(1)).Do(t.Context())
 			require.NoError(t, err)
 			require.Len(t, shell.Faces(), 16)
 			volume, err := shell.Volume()
@@ -110,9 +110,9 @@ func TestShellRoundStackedBossClearance(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			doc := decad.New()
 			stack := roundBossFromSketch(t, doc, tc.cx, tc.cy)
-			_, err := decad.Shell(t.Context(), stack,
+			_, err := decad.Shell(stack,
 				decad.Faces(decad.FaceCreatedBy(decad.CapEnd(stack))).Exactly(1),
-				units.Millimeters(tc.thickness))
+				units.Millimeters(tc.thickness)).Do(t.Context())
 			require.ErrorIs(t, err, decad.ErrUnsupported)
 			_, err = stack.Volume()
 			require.NoError(t, err, "a refused Shell leaves the source live")

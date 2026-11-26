@@ -92,7 +92,7 @@ func planChains(b *topo.Body, edges []*topo.Edge, tangent TangentEnds, fillet bo
 		for _, l := range ls {
 			if _, ok := selected[l.other]; !ok {
 				return nil, nil, true, fmt.Errorf("%w: the selected edge ends at the tangent junction %s whose "+
-					"continuation is not selected; WithTangentChain selects the whole chain",
+					"continuation is not selected; TangentChain selects the whole chain",
 					decaderr.ErrUnsupported, selectorquery.RenderVec(l.at.Position))
 			}
 		}

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/modifyoption"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -22,7 +23,8 @@ func filletEmbossRim(ctx context.Context, body *Body, plane Plane, outward r3.Ve
 	if len(edges) == 0 {
 		return nil, fmt.Errorf(`%w: the relief's rim is not an edge of the result, so it has nothing to fillet`, ErrUnsupported)
 	}
-	return Fillet(ctx, body, edgesQuery(edges), units.Millimeters(radius))
+	out, err := fillet(ctx, body, edgesQuery(edges), units.Millimeters(radius), modifyoption.FilletConfig{})
+	return out, operationError(OperationFillet, err)
 }
 
 // embossRimEdges lists the edges of the relief's rim in body: for a raised

@@ -62,12 +62,12 @@ func TestBrepShellRemovesTheTop(t *testing.T) {
 
 	doc, bar := crossDrilledBar(t)
 	before := doc.Bodies()
-	_, err := decad.Shell(t.Context(), bar, decad.Faces(decad.NormalTo(r3.NewVec(1, 0, 0))).Exactly(2), units.Millimeters(2))
+	_, err := decad.Shell(bar, decad.Faces(decad.NormalTo(r3.NewVec(1, 0, 0))).Exactly(2), units.Millimeters(2)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.ErrorContains(t, err, "shell-opening SO6")
 	require.Equal(t, before, doc.Bodies())
 
-	shelled, err := decad.Shell(t.Context(), bar, decad.Faces(decad.Facing(up)).Exactly(1), units.Millimeters(2))
+	shelled, err := decad.Shell(bar, decad.Faces(decad.Facing(up)).Exactly(1), units.Millimeters(2)).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, doc.Bodies(), 1)
 	require.Len(t, shelled.Faces(), 13)
@@ -121,7 +121,7 @@ func requireShellVolumeSoundAnalytic(t *testing.T, doc *decad.Document, shelled 
 func TestBrepShellRemovesRoundThroughWall(t *testing.T) {
 	t.Parallel()
 	doc, bar := crossDrilledBar(t)
-	shelled, err := decad.Shell(t.Context(), bar, decad.Faces(decad.Cylindrical()).Exactly(1), units.Millimeters(1))
+	shelled, err := decad.Shell(bar, decad.Faces(decad.Cylindrical()).Exactly(1), units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, doc.Bodies(), 1)
 	require.Len(t, shelled.Faces(), 14)
@@ -165,7 +165,7 @@ func TestBrepShellRemovesAWallAndTheTop(t *testing.T) {
 	t.Parallel()
 	doc, bar := crossDrilledBar(t)
 	sel := decad.Faces(decad.Facing(r3.NewVec(0, -1, 0))).Or(decad.Facing(r3.NewVec(0, 0, 1))).Exactly(2)
-	shelled, err := decad.Shell(t.Context(), bar, sel, units.Millimeters(2))
+	shelled, err := decad.Shell(bar, sel, units.Millimeters(2)).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, doc.Bodies(), 1)
 	require.Len(t, shelled.Faces(), 13)

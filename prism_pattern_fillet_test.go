@@ -20,7 +20,7 @@ func TestPrismPatternFilletOfCopiedExtrudes(t *testing.T) {
 	before, err := joined.Volume()
 	require.NoError(t, err)
 	selection := prismPatternRootSelection(t, joined)
-	rounded, err := Fillet(t.Context(), joined, selection, units.Millimeters(0.05))
+	rounded, err := Fillet(joined, selection, units.Millimeters(0.05)).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, doc.Bodies(), 1)
 	after, err := rounded.Volume()
@@ -52,8 +52,8 @@ func TestPrismPatternFilletAcrossCircularWallStations(t *testing.T) {
 		multiStation = multiStation || len(contact.RingCut.Positions) > 2
 	}
 	require.True(t, multiStation)
-	rounded, err := Fillet(t.Context(), joined, selection,
-		units.Millimeters(0.14))
+	rounded, err := Fillet(joined, selection,
+		units.Millimeters(0.14)).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, doc.Bodies(), 1)
 	mesh, err := rounded.Tessellate(t.Context(), units.Millimeters(0.1), WithVerification(VerifyAll))
@@ -71,8 +71,8 @@ func TestPrismPatternFilletSectorBeyondRootDisk(t *testing.T) {
 	const radius = 0.055
 	require.Greater(t, 3+3*radius, 3.15)
 	require.Greater(t, 2*3*math.Sin(0.14), 6*radius)
-	rounded, err := Fillet(t.Context(), joined, prismPatternRootSelection(t, joined),
-		units.Millimeters(radius))
+	rounded, err := Fillet(joined, prismPatternRootSelection(t, joined),
+		units.Millimeters(radius)).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, doc.Bodies(), 1)
 	mesh, err := rounded.Tessellate(t.Context(), units.Millimeters(0.1), WithVerification(VerifyAll))
@@ -191,7 +191,7 @@ func TestPrismPatternFilletPastShortRadialLine(t *testing.T) {
 			}
 			require.Equal(t, 2*tc.teeth, roots)
 
-			rounded, err := Fillet(t.Context(), joined, selection.Exactly(roots), units.Millimeters(tc.radius))
+			rounded, err := Fillet(joined, selection.Exactly(roots), units.Millimeters(tc.radius)).Do(t.Context())
 			require.NoError(t, err)
 			require.Len(t, doc.Bodies(), 1)
 			require.True(t, rounded.IsSolid())
@@ -286,13 +286,13 @@ func TestPrismPatternFilletRefusesUnprovedCornerAndLargeRadius(t *testing.T) {
 		}
 	}
 	require.NotNil(t, exterior)
-	_, err = Fillet(t.Context(), joined, Edges(ParallelTo(r3.Vec{Z: 1}),
-		EndpointAt(exterior.Start().Position().Value)), units.Millimeters(0.05))
+	_, err = Fillet(joined, Edges(ParallelTo(r3.Vec{Z: 1}),
+		EndpointAt(exterior.Start().Position().Value)), units.Millimeters(0.05)).Do(t.Context())
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.Len(t, doc.Bodies(), 1)
 	// The tab's radial root lines run from 3 to 3.35. At r = 0.4 the line
 	// foot, sqrt(9+6r) = 3.38 from the axis, lies past the line's far end.
-	_, err = Fillet(t.Context(), joined, prismPatternRootSelection(t, joined), units.Millimeters(0.4))
+	_, err = Fillet(joined, prismPatternRootSelection(t, joined), units.Millimeters(0.4)).Do(t.Context())
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.ErrorContains(t, err, "contact escapes its connector")
 	require.Len(t, doc.Bodies(), 1)
@@ -344,7 +344,7 @@ func rimToothFillet(t *testing.T, tc rimToothCase, height float64) (*Body, bool)
 	for _, corner := range corners[1:] {
 		selection.Or(ParallelTo(r3.Vec{Z: 1}), EndpointAt(corner))
 	}
-	rounded, err := Fillet(t.Context(), joined, selection.Exactly(len(corners)), units.Millimeters(radius))
+	rounded, err := Fillet(joined, selection.Exactly(len(corners)), units.Millimeters(radius)).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, doc.Bodies(), 1)
 	require.True(t, rounded.IsSolid())

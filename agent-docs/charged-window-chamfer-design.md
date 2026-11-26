@@ -210,7 +210,7 @@ a tangent chain names only chain edges").
 | a charge that is negative or not finite, or an oblique wall without `ExtentDelta` | the wall is not read; today's texts |
 
 Junctions are read in the charged mode for both a chamfer and a fillet, so a fillet or an open chain reaches its own
-refusal text. `WithTangentChain` expansion (`Chainable`, `Tangent`) stays strict: it reads no charged face, and a seed
+refusal text. `TangentChain` expansion (`Chainable`, `Tangent`) stays strict: it reads no charged face, and a seed
 on one stays SX9.
 
 ### 3.6 Reach
@@ -234,7 +234,7 @@ faceted body charges the wall, refuses it, or is listed in `agent-docs/missing-f
 | a closed chamfer chain's walls (§3) | read the wall with `ExtentDelta` as its charge |
 | `facetedrecord.RetainedEdgeCurve` E2 | publishes a `Line3` between two planes; its falsifier slack adds `planeRimAmp·ExtentDelta` per plane as it adds `AxialDelta`, which only widens a reject-only test |
 | `NormalAt`, `edgewedge` | charge `NormalBound` |
-| retention §11 slab bound (`retainedPlaneOf`), `MirrorFace`, `ToFaceStop`, `trimgraph`, `retainedTag` and the partial loop chamfer, `WithTangentChain` expansion (`Chainable`), STEP's tag check | refuse `NormalBound ≠ 0` or `TagDeparture ≠ 0` |
+| retention §11 slab bound (`retainedPlaneOf`), `MirrorFace`, `ToFaceStop`, `trimgraph`, `retainedTag` and the partial loop chamfer, `TangentChain` expansion (`Chainable`), STEP's tag check | refuse `NormalBound ≠ 0` or `TagDeparture ≠ 0` |
 | `ToFaceAngularStop` (`internal/extent/angular_stop.go`) | refuses a plane that states `ExtentDelta` |
 | `parts` joint inference (`parts/faces.go` `addPlane`) | reads a plane that states `ExtentDelta` as an unread face (`facedeparture.Charged`). After a placement drops `ExtentDelta`, it reads the wall as any departed plane, with `NormalAt`'s bound as its position bound (listed in `agent-docs/missing-features.md`) |
 | `capplane.OfFace` | reads only a `CapRecord`, which an oblique wall never carries |

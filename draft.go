@@ -8,10 +8,10 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/draftrecord"
 	"github.com/lestrrat-3d/decad/internal/extent"
+	"github.com/lestrrat-3d/decad/internal/opcommand"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
-	"github.com/lestrrat-go/option/v3"
 )
 
 // This file is Draft (agent-docs/modify-design.md Part D §10): the face draft of an
@@ -48,13 +48,6 @@ type NeutralFrame struct {
 // The sealed set.
 func (NeutralFace) neutralPlane()  {}
 func (NeutralFrame) neutralPlane() {}
-
-// DraftOption is a placeholder option tier for [Draft]. It carries no
-// option today and reserves the signature for a later draft option.
-type DraftOption interface {
-	option.Interface
-	draftOption()
-}
 
 // errNilNeutralPlane rejects a nil plane, or a nil variant pointer: either
 // names no plane to tilt about.
@@ -100,22 +93,43 @@ var errNilNeutralPlane = fmt.Errorf(`%w: nil neutral plane`, ErrDegenerate)
 //     stays whole.
 //
 // The far section's own gates (draft SD5 to SD16) are those of a tapered
-// extrude. ctx, b, sel and neutral MUST NOT be nil; a nil one is [ErrDegenerate].
+// extrude. b, sel and neutral MUST NOT be nil; a nil one is [ErrDegenerate], and so is a nil ctx given to Do.
 // Every measurement of the result is Approximate: the tangent of the angle is
 // only ever enclosed.
-func Draft(ctx context.Context, b *Body, sel FaceSelector, neutral NeutralPlane, angle units.Value,
-	opts ...DraftOption) (result *Body, retErr error) {
-	defer func() { retErr = operationError(OperationDraft, retErr) }()
-	if ctx == nil {
-		return nil, fmt.Errorf(`%w: a nil context cannot control a draft`, ErrDegenerate)
+func Draft(b *Body, sel FaceSelector, neutral NeutralPlane, angle units.Value) *DraftCommand {
+	c := &DraftCommand{b: b, sel: copyFaceSelector(sel), neutral: neutral, angle: angle}
+	if b == nil {
+		c.state.Record("body", errNilBody)
 	}
+	return c
+}
+
+// DraftCommand leans walls of a body about a neutral plane. Build it with
+// [Draft]. It has no method.
+type DraftCommand struct {
+	state   opcommand.State // consumed flag and first recorded fault
+	b       *Body           // stored as given
+	sel     FaceSelector    // copied at Draft
+	neutral NeutralPlane    // stored as given
+	angle   units.Value     // the draft angle, gated at Do
+}
+
+// Do leans the walls and retires the body, or returns the error of the first
+// gate that refuses, leaving the body live. A nil ctx is ErrDegenerate, and a
+// second call returns ErrConsumed.
+func (c *DraftCommand) Do(ctx context.Context) (*Body, error) {
+	return runCommand(ctx, &c.state, OperationDraft, c.run)
+}
+
+func (c *DraftCommand) run(ctx context.Context) (*Body, error) {
+	return draft(ctx, c.b, c.sel, c.neutral, c.angle)
+}
+
+// draft is Draft's implementation. ctx is not nil, and the errors it returns
+// carry no operation tag (agent-docs/command-api-design.md §11).
+func draft(ctx context.Context, b *Body, sel FaceSelector, neutral NeutralPlane, angle units.Value) (*Body, error) {
 	if b == nil || b.n.Doc == nil {
 		return nil, fmt.Errorf(`%w: the body belongs to no document`, ErrDegenerate)
-	}
-	for _, o := range opts {
-		if o == nil {
-			return nil, fmt.Errorf(`%w: a nil option names nothing to apply`, ErrDegenerate)
-		}
 	}
 	d := documentHandle(b.n.Doc)
 

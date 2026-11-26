@@ -214,14 +214,19 @@ func tcCut(t *testing.T, b *decad.Body, tools ...*decad.Body) *decad.Body {
 
 const tcD = 0.5
 
-func tcChamfer(t *testing.T, b *decad.Body, edges []*decad.Edge, opts ...decad.ChamferOption) (*decad.Body, error) {
+// tcChamfer chamfers edges at setback tcD. chain adds the TangentChain method.
+func tcChamfer(t *testing.T, b *decad.Body, edges []*decad.Edge, chain ...bool) (*decad.Body, error) {
 	t.Helper()
-	return tcChamferBy(t, b, edges, tcD, opts...)
+	return tcChamferBy(t, b, edges, tcD, chain...)
 }
 
-func tcChamferBy(t *testing.T, b *decad.Body, edges []*decad.Edge, d float64, opts ...decad.ChamferOption) (*decad.Body, error) {
+func tcChamferBy(t *testing.T, b *decad.Body, edges []*decad.Edge, d float64, chain ...bool) (*decad.Body, error) {
 	t.Helper()
-	return decad.Chamfer(t.Context(), b, tcSelect(t, edges), units.Millimeters(d), opts...)
+	cmd := decad.Chamfer(b, tcSelect(t, edges), units.Millimeters(d))
+	if len(chain) > 0 && chain[0] {
+		cmd.TangentChain()
+	}
+	return cmd.Do(t.Context())
 }
 
 // tcEndPiece is the volume a chamfer of setback tcD removes beyond its full wedge where its straight end runs onto an
@@ -502,14 +507,14 @@ func TestChamferTangentChainAcrossPlanes(t *testing.T) {
 			require.NoError(t, err)
 			tcRequireChamfer(t, b, out, rim(b), barWant)
 		})
-		t.Run(fmt.Sprintf("a bar of radius %g from one seed under WithTangentChain", size.r), func(t *testing.T) {
+		t.Run(fmt.Sprintf("a bar of radius %g from one seed under TangentChain", size.r), func(t *testing.T) {
 			t.Parallel()
 			b := tcBar(t, newTCScene(), size.r, size.l)
 			seed := tcEdgesWhere(b, func(e *decad.Edge, m r3.Vec) bool {
 				return tcIsArc(e) && tcNear(m.Z, 2*size.r) && m.X < 0
 			})
 			require.Len(t, seed, 1)
-			out, err := tcChamfer(t, b, seed, decad.WithTangentChain())
+			out, err := tcChamfer(t, b, seed, true)
 			require.NoError(t, err)
 			tcRequireChamfer(t, b, out, rim(b), barWant)
 		})

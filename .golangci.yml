@@ -139,6 +139,17 @@ linters:
             - github.com/lestrrat-3d/decad.Cut
             - github.com/lestrrat-3d/decad.Intersect
             - github.com/lestrrat-3d/decad.Refine
+            - github.com/lestrrat-3d/decad.Fillet
+            - github.com/lestrrat-3d/decad.Chamfer
+            - github.com/lestrrat-3d/decad.FilletChord
+            - github.com/lestrrat-3d/decad.ChamferAngle
+            - github.com/lestrrat-3d/decad.Shell
+            - github.com/lestrrat-3d/decad.ShellClosed
+            - github.com/lestrrat-3d/decad.Draft
+            - github.com/lestrrat-3d/decad.Offset
+            - github.com/lestrrat-3d/decad.Thicken
+            - github.com/lestrrat-3d/decad.MoveFace
+            - github.com/lestrrat-3d/decad.ConeFromFace
   exclusions:
     generated: lax
     presets:

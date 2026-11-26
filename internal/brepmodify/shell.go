@@ -192,7 +192,7 @@ func Shell(ctx context.Context, env topo.Env, b *topo.Body, call ShellCall) (*to
 }
 
 // shellClosedPrism is reach BX5 (agent-docs/modify-design.md Part R §9.2), built by
-// prismshell.BuildClosed: WithNoOpenings on a straight prism keeps every face
+// prismshell.BuildClosed: ShellClosed on a straight prism keeps every face
 // and lines it with a wall of thickness t, closing a cavity whose walls form
 // one void shell (FaceShell.IsVoid), holed or not, in either sense.
 func shellClosedPrism(ctx context.Context, env topo.Env, pp prismrecord.Payload, s float64, t units.Value, tmm, tDelta float64) (*topo.Body, error) {
@@ -225,7 +225,7 @@ func classifyRemovedCaps(caps PrismCaps, removed []*topo.Face) (bool, bool, erro
 }
 
 // shellRevolve shells a revolve receiver through the faces in removed (nil for a
-// WithNoOpenings full turn). s is +1 inward, -1 outward.
+// ShellClosed full turn). s is +1 inward, -1 outward.
 func shellRevolve(ctx context.Context, env topo.Env, b *topo.Body, rp revolveplan.Payload, removed []*topo.Face,
 	s float64, t units.Value, tmm, tDelta float64) (*topo.Body, error) {
 	caps := CapsOf(b)

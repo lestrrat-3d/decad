@@ -69,7 +69,7 @@ func TestOffsetPadShoulderChamfer(t *testing.T) {
 	pad := extrude(padSketch, .75001, decad.Against)
 	joined, e := decad.Union(plate, pad).Do(ctx)
 	require.NoError(t, e)
-	rounded, e := decad.Chamfer(ctx, joined, decad.Edges(decad.OuterLoopOf(decad.CapStart(pad))).Exactly(1), units.Millimeters(.25))
+	rounded, e := decad.Chamfer(joined, decad.Edges(decad.OuterLoopOf(decad.CapStart(pad))).Exactly(1), units.Millimeters(.25)).Do(ctx)
 	require.NoError(t, e)
 	// The four-sided loft stops the existing bevel at z = 3.125.
 	var ss [2]*sketch.Sketch
@@ -94,9 +94,9 @@ func TestOffsetPadShoulderChamfer(t *testing.T) {
 	require.NoError(t, e)
 
 	sel := decad.Edges(decad.EndpointAt(r3.Vec{X: 8, Z: 3.125}), decad.EndpointAt(r3.Vec{X: 6.5, Z: 2})).Exactly(1)
-	_, e = decad.Chamfer(ctx, trimmed, sel, units.Millimeters(.5))
+	_, e = decad.Chamfer(trimmed, sel, units.Millimeters(.5)).Do(ctx)
 	require.ErrorIs(t, e, decad.ErrUnsupported)
-	res, e := decad.Chamfer(ctx, trimmed, sel, units.Millimeters(.25))
+	res, e := decad.Chamfer(trimmed, sel, units.Millimeters(.25)).Do(ctx)
 	require.NoError(t, e)
 
 	// A vertical ray through the plane-only portion of the shoulder meets the

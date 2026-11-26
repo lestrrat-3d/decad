@@ -27,7 +27,7 @@ func BenchmarkPrismUnionDownstreamFillet(b *testing.B) {
 		require.NoError(b, err)
 		b.StartTimer()
 
-		out, err := decad.Fillet(b.Context(), union, decad.Edges().AtLeast(1), units.Millimeters(1))
+		out, err := decad.Fillet(union, decad.Edges().AtLeast(1), units.Millimeters(1)).Do(b.Context())
 		b.StopTimer()
 		require.NoError(b, err)
 		volume, err := out.Volume()

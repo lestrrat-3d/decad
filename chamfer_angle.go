@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/opcommand"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/units"
 )
@@ -17,9 +18,9 @@ import (
 // It meets the other face d·sin(angle)/sin(φ + angle) from the edge, where φ is
 // the angle between the two faces across the corner the bevel cuts (the interior
 // angle of a convex edge, the open wedge of a concave one), which is d·tan(angle) on a right
-// angle. ChamferAngle states that second distance and builds the result with
-// [Chamfer] and [WithAsymmetricChamfer], so the receivers, routes and refusals of
-// those apply.
+// angle. ChamferAngle states that second distance and builds the result as
+// [Chamfer] with [ChamferCommand.Asymmetric] does, so the receivers, routes and
+// refusals of those apply.
 //
 // Every selected edge MUST lie between two planar faces, or be circular between a plane and a cylinder, cone or sphere, and may be convex or
 // concave: a concave edge's bevel adds a wedge of material to the corner. Any
@@ -31,15 +32,45 @@ import (
 // meets the other face: that is ErrDegenerate, as is an angle at or past those
 // bounds. d MUST be a positive length. A negative angle or length is
 // ErrNegativeMagnitude and a wrong unit kind is ErrUnitKind. reference follows
-// WithAsymmetricChamfer's rule of one adjacent face per edge. A nil context,
+// Asymmetric's rule of one adjacent face per edge. A nil context,
 // body or selector is ErrDegenerate. Every failure leaves b live and the
 // document unchanged.
-func ChamferAngle(ctx context.Context, b *Body, sel EdgeSelector, d units.Value, reference FaceSelector,
-	angle units.Value) (result *Body, retErr error) {
-	defer func() { retErr = operationError(OperationChamfer, retErr) }()
-	if ctx == nil {
-		return nil, fmt.Errorf(`%w: a nil context cannot control a chamfer`, ErrDegenerate)
+func ChamferAngle(b *Body, sel EdgeSelector, d units.Value, reference FaceSelector,
+	angle units.Value) *ChamferAngleCommand {
+	c := &ChamferAngleCommand{b: b, sel: copyEdgeSelector(sel), d: d, reference: copyFaceSelector(reference), angle: angle}
+	if b == nil {
+		c.state.Record("body", errNilBody)
 	}
+	return c
+}
+
+// ChamferAngleCommand bevels edges of a body by distance and angle. Build it
+// with [ChamferAngle]. It has no method.
+type ChamferAngleCommand struct {
+	state     opcommand.State // consumed flag and first recorded fault
+	b         *Body           // stored as given
+	sel       EdgeSelector    // copied at ChamferAngle
+	d         units.Value     // the distance along the reference face, gated at Do
+	reference FaceSelector    // copied at ChamferAngle
+	angle     units.Value     // the bevel angle, gated at Do
+}
+
+// Do bevels the edges and retires the body, or returns the error of the first
+// gate that refuses, leaving the body live. A nil ctx is ErrDegenerate, and a
+// second call returns ErrConsumed. Its errors carry [OperationChamfer].
+func (c *ChamferAngleCommand) Do(ctx context.Context) (*Body, error) {
+	return runCommand(ctx, &c.state, OperationChamfer, c.run)
+}
+
+func (c *ChamferAngleCommand) run(ctx context.Context) (*Body, error) {
+	return chamferAngle(ctx, c.b, c.sel, c.d, c.reference, c.angle)
+}
+
+// chamferAngle is ChamferAngle's implementation. ctx is not nil, and the
+// errors it returns carry no operation tag (agent-docs/command-api-design.md
+// §11).
+func chamferAngle(ctx context.Context, b *Body, sel EdgeSelector, d units.Value, reference FaceSelector,
+	angle units.Value) (*Body, error) {
 	if b == nil || b.n.Doc == nil {
 		return nil, fmt.Errorf(`%w: the body belongs to no document`, ErrDegenerate)
 	}
@@ -60,7 +91,7 @@ func ChamferAngle(ctx context.Context, b *Body, sel EdgeSelector, d units.Value,
 	// A selector Chamfer would refuse is left to Chamfer, so the error is its own.
 	q, ok := sel.(*EdgeQuery)
 	if !ok || q == nil {
-		return Chamfer(ctx, b, sel, d)
+		return chamfer(ctx, b, sel, d, chamferSettings{})
 	}
 	edges, err := q.SelectEdges(b)
 	if err != nil {
@@ -83,5 +114,6 @@ func ChamferAngle(ctx context.Context, b *Body, sel EdgeSelector, d units.Value,
 			return nil, fmt.Errorf(`%w: the selected edges meet at different angles, so they need different second distances`, ErrUnsupported)
 		}
 	}
-	return Chamfer(ctx, b, sel, d, WithAsymmetricChamfer(reference, units.Millimeters(second)))
+	asym, asymErr := newAsymmetricChamfer(reference, units.Millimeters(second))
+	return chamfer(ctx, b, sel, d, chamferSettings{asym: &asym, asymErr: asymErr})
 }

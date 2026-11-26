@@ -844,7 +844,7 @@ func TestBooleanChainOfConesContinuesPastEachJoint(t *testing.T) {
 func TestUnionCupOperand(t *testing.T) {
 	t.Parallel()
 	doc, box := shellBox(t)
-	cup, err := decad.Shell(t.Context(), box, topCap(box), units.Millimeters(5))
+	cup, err := decad.Shell(box, topCap(box), units.Millimeters(5)).Do(t.Context())
 	require.NoError(t, err)
 	cupVol, err := cup.Volume()
 	require.NoError(t, err)
@@ -982,7 +982,7 @@ func TestUnionOfAdmittedCapBlendBodies(t *testing.T) {
 	// A line-line cap chamfer carries a zero occupied-volume bound, so a
 	// disjoint union must retain both bodies' exact volume.
 	doc, box := capBlendBox(t)
-	blended, err := decad.Chamfer(t.Context(), box, capLoopEdges(box), units.Millimeters(5))
+	blended, err := decad.Chamfer(box, capLoopEdges(box), units.Millimeters(5)).Do(t.Context())
 	require.NoError(t, err)
 	other := boxBody(t, doc, 200, 0, 210, 10, 10)
 

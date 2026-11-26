@@ -171,7 +171,7 @@ func TestChamferFreeformRimVolume(t *testing.T) {
 	require.NoError(t, err)
 
 	const c = 0.5
-	out, err := decad.Chamfer(t.Context(), body, bothRims(body), units.Millimeters(c))
+	out, err := decad.Chamfer(body, bothRims(body), units.Millimeters(c)).Do(t.Context())
 	require.NoError(t, err)
 	warnings := out.OperationDiagnostics()
 	require.Len(t, warnings, 1)
@@ -222,7 +222,7 @@ func TestChamferFreeformRimOneCap(t *testing.T) {
 			body := f.prism(t, doc)
 			sharp, err := body.Volume()
 			require.NoError(t, err)
-			out, err := decad.Chamfer(t.Context(), body, tc.rim(body), units.Millimeters(c))
+			out, err := decad.Chamfer(body, tc.rim(body), units.Millimeters(c)).Do(t.Context())
 			require.NoError(t, err)
 			volume, err := out.Volume()
 			require.NoError(t, err)
@@ -256,18 +256,17 @@ func TestChamferFreeformRimRefusals(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
 		d      float64
-		opts   []decad.ChamferOption
 		target error
 		text   string
 	}{
-		{"setback reaches the far end", 4.5, nil, decad.ErrUnsupported, "far end"},
-		{"setback past a radius of curvature", 3, nil, decad.ErrDegenerate, "radius of curvature"},
+		{"setback reaches the far end", 4.5, decad.ErrUnsupported, "far end"},
+		{"setback past a radius of curvature", 3, decad.ErrDegenerate, "radius of curvature"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			doc := decad.New(decad.WithChainTolerance(units.Millimeters(0.1)))
 			body := f.prism(t, doc)
-			_, err := decad.Chamfer(t.Context(), body, bothRims(body), units.Millimeters(tc.d), tc.opts...)
+			_, err := decad.Chamfer(body, bothRims(body), units.Millimeters(tc.d)).Do(t.Context())
 			require.ErrorIs(t, err, tc.target)
 			require.ErrorContains(t, err, tc.text)
 			require.Equal(t, []*decad.Body{body}, doc.Bodies())
@@ -281,7 +280,7 @@ func TestChamferFreeformRimRefusals(t *testing.T) {
 		edges, err := decad.Edges(decad.OuterLoopOf(decad.CapStart(body))).SelectEdges(body)
 		require.NoError(t, err)
 		require.Greater(t, len(edges), 1)
-		_, err = decad.Chamfer(t.Context(), body, decad.Edges(decad.OuterLoopOf(decad.CapStart(body))).Exactly(1), units.Millimeters(0.5))
+		_, err = decad.Chamfer(body, decad.Edges(decad.OuterLoopOf(decad.CapStart(body))).Exactly(1), units.Millimeters(0.5)).Do(t.Context())
 		require.Error(t, err)
 		require.Equal(t, []*decad.Body{body}, doc.Bodies())
 	})
@@ -292,7 +291,7 @@ func TestChamferFreeformRimRefusals(t *testing.T) {
 		body := f.prism(t, doc)
 		ctx, cancel := context.WithCancel(t.Context())
 		cancel()
-		_, err := decad.Chamfer(ctx, body, bothRims(body), units.Millimeters(0.5))
+		_, err := decad.Chamfer(body, bothRims(body), units.Millimeters(0.5)).Do(ctx)
 		require.ErrorIs(t, err, context.Canceled)
 		require.Equal(t, []*decad.Body{body}, doc.Bodies())
 	})
@@ -318,7 +317,7 @@ func TestChamferFreeformBothRimsHoldTheOneRimBound(t *testing.T) {
 		t.Helper()
 		doc := decad.New(decad.WithChainTolerance(units.Millimeters(0.1)))
 		body := f.prism(t, doc)
-		out, err := decad.Chamfer(t.Context(), body, rims(body), units.Millimeters(c))
+		out, err := decad.Chamfer(body, rims(body), units.Millimeters(c)).Do(t.Context())
 		require.NoError(t, err)
 		return out
 	}

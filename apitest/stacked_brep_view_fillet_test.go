@@ -54,7 +54,7 @@ func TestStackedBrepViewFillet(t *testing.T) {
 
 			edge := decad.Edges(decad.EndpointAt(r3.Vec{X: tc.x, Y: -10, Z: 10}),
 				decad.EndpointAt(r3.Vec{X: tc.x, Y: 10, Z: 10})).Exactly(1)
-			out, err := decad.Fillet(t.Context(), part, edge, mm(0.5))
+			out, err := decad.Fillet(part, edge, mm(0.5)).Do(t.Context())
 			require.NoError(t, err)
 			after, err := out.Volume()
 			require.NoError(t, err)
@@ -103,7 +103,7 @@ func TestStackedBrepViewFilletReachesRetainedBlend(t *testing.T) {
 		require.NoError(t, err)
 		before, err := part.Volume()
 		require.NoError(t, err)
-		out, err := decad.Fillet(t.Context(), part, decad.Edges(decad.Reflex(), decad.Circular()), mm(0.5))
+		out, err := decad.Fillet(part, decad.Edges(decad.Reflex(), decad.Circular()), mm(0.5)).Do(t.Context())
 		require.NoError(t, err)
 		require.True(t, out.IsSolid())
 		after, err := out.Volume()
@@ -123,10 +123,10 @@ func TestStackedBrepViewFilletReachesRetainedBlend(t *testing.T) {
 		require.NoError(t, err)
 		edge := decad.Edges(decad.Reflex(), decad.Circular()).Exactly(1)
 		// A refusal leaves the body in place for the build below.
-		_, err = decad.Fillet(t.Context(), part, edge, mm(0.6))
+		_, err = decad.Fillet(part, edge, mm(0.6)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "a setback point falls on a vertex of its face's boundary")
-		out, err := decad.Fillet(t.Context(), part, edge, mm(0.5))
+		out, err := decad.Fillet(part, edge, mm(0.5)).Do(t.Context())
 		require.NoError(t, err)
 		require.True(t, out.IsSolid())
 		after, err := out.Volume()

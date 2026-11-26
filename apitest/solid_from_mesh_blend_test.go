@@ -36,7 +36,7 @@ func TestSolidFromMeshFilletsAnEdge(t *testing.T) {
 	t.Parallel()
 	_, body := solidFromBlock(t)
 	const r = 0.5
-	out, err := decad.Fillet(t.Context(), body, blockCornerEdge(), units.Millimeters(r))
+	out, err := decad.Fillet(body, blockCornerEdge(), units.Millimeters(r)).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := out.Volume()
 	require.NoError(t, err)
@@ -49,7 +49,7 @@ func TestSolidFromMeshFilletsAnEdge(t *testing.T) {
 func TestSolidFromMeshChamfersAnEdge(t *testing.T) {
 	t.Parallel()
 	_, body := solidFromBlock(t)
-	out, err := decad.Chamfer(t.Context(), body, blockCornerEdge(), units.Millimeters(0.5))
+	out, err := decad.Chamfer(body, blockCornerEdge(), units.Millimeters(0.5)).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := out.Volume()
 	require.NoError(t, err)
@@ -77,6 +77,6 @@ func TestSolidFromMeshTiltedFacesStayFaceted(t *testing.T) {
 	require.Equal(t, 1, faceted, "the slanted face has no exact float plane, so it stays Faceted")
 	// The edge along z at the origin ends on the slanted face, which carries no plane to blend against.
 	edge := decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)), decad.EndpointAt(r3.NewVec(0, 0, 0)))
-	_, err = decad.Fillet(t.Context(), body, edge, units.Millimeters(0.05))
+	_, err = decad.Fillet(body, edge, units.Millimeters(0.05)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 }

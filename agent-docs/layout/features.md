@@ -48,14 +48,14 @@ The rules for rows live in `agent-docs/layout.md`.
 | `emboss_rim.go` | Rim fillet of an `Emboss` relief: finds the rim edges in the result and calls `Fillet`, after a trial on a copy. See emboss design §7. |
 | `planar_face.go` | Resolves a selector to one analytic planar face and its outward normal; `Hole` and `Emboss` share it. |
 | `tool_combine.go` | Shared by composite features: chains Boolean steps, of one kind (`combineTools`) or several (`combineToolSteps`), over temporary tools, commits once, and retires tools without public history entries. |
-| `thicken.go` | Public `Thicken` option, thickness and sheet gates and the commit; `internal/thickenbuild/` dispatches the payload and builds. See surface §16. |
-| `offset.go` | `Offset`: option, distance and sheet gates and the commit; `internal/thickenbuild/` builds the second sheet at a normal distance. See surface §17. |
+| `thicken.go` | Public `Thicken`, `ThickenCommand` with its `Side` method, thickness and sheet gates and the commit; `internal/thickenbuild/` dispatches the payload and builds. See surface §16. |
+| `offset.go` | `Offset` and `OffsetCommand` with its `Side` method: distance and sheet gates and the commit; `internal/thickenbuild/` builds the second sheet at a normal distance. See surface §17. |
 | `patch_body.go` | `PatchEdges` selection and commit; the chain gates, level proof and Rule P live in `internal/patchchain/`. See surface §5.2. |
 | `stitch.go` | `Stitch`; builds through `internal/stitchrecord/`. See surface §6.4. |
 | `unstitch.go` | `Unstitch` sheet split; builds through `internal/stitchrecord/`. See surface §6.5. |
 | `extrude.go` | Generic `Extrude` over a profile or chain, `WithTaper`, linear-extent resolution, the chain ribbon entry point. See evaluator §5 and surface §13.2. |
 | `extrude_tilted_face.go` | `extrudeToTiltedFace`: `Extrude` to a planar face of an exact-vertex faceted solid that is tilted from the sweep, as an extrusion past the face cut by a prism on the face's own outline. See orthogonal Boolean B19. |
-| `draft.go` | `Draft`, `NeutralPlane`, `Walls` gates, plus the tapered extrude angle and surface-result gates, extent resolution and slab dispatch. See draft §5, §7, §10. |
+| `draft.go` | `Draft`, `DraftCommand`, `NeutralPlane`, `Walls` gates, plus the tapered extrude angle and surface-result gates, extent resolution and slab dispatch. See draft §5, §7, §10. |
 | `draft_mesh_prism.go` | `draftMeshPrism`: Draft of every wall of an exact-vertex faceted straight prism, read on the grid and swept with a taper. See orthogonal Boolean B21. |
 | `sheet_metal.go` | Public `SheetMetal`, `SheetMetalSpec` and `SheetMetalReport`: gates, the thickened centreline as a sketch outline, `Extrude`, and the flat pattern. See sheet-metal design. |
 | `sweep.go` | Generic `Sweep` over a profile or chain: nil, option and seam gates, then `internal/sweepbuild/` builds and root commits. Also the mitred options and entry adapters, built through `sweepmitre.Build`. See sweep §3.3, §15.8–§15.9, §16. |
@@ -65,7 +65,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `internal/extent/stop_revolve.go` | Exact `ToFace` level for a planar Revolve wall or angular cap. See evaluator §5. |
 | `loft.go` | Loft and LoftChain entry points and options. Builds through `loftrecord.FromProfiles` and `FromChains`. See loft §2/§4/§10/§16. |
 | `loft_sections.go` | Public smooth-section loft entry point and source-face assembly. See loft-sections design. |
-| `cone_from_face.go` | `ConeFromFace`: the full tool cone one float step off a Revolve blank's selected conical face. See loft-face-sections design. |
+| `cone_from_face.go` | `ConeFromFace` and `ConeFromFaceCommand`: the full tool cone one float step off a Revolve blank's selected conical face. See loft-face-sections design. |
 | `loft_faces.go` | `LoftFaces`, its `LoftFacesOption` tier and `WithConeTangentEnd`; the commit of the loft `internal/revolveloftfaces` assembles and proves; shared rational helpers and map aliases. See loft-face-sections design. |
 | `loft_point.go` | Admits a point-section Loft from Sketch and publishes the `internal/pointloft/` payload. See loft-point design. |
 

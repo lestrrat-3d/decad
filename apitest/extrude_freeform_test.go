@@ -1044,14 +1044,14 @@ func TestFreeformPrismFilletChamferRefuse(t *testing.T) {
 			t.Run("Fillet", func(t *testing.T) {
 				doc := decad.New()
 				body := fixture.build(t, doc)
-				_, err := decad.Fillet(t.Context(), body, verticalEdges(), units.Millimeters(1))
+				_, err := decad.Fillet(body, verticalEdges(), units.Millimeters(1)).Do(t.Context())
 				require.ErrorIs(t, err, decad.ErrUnsupported)
 				require.ErrorContains(t, err, "free-form boundary segment")
 			})
 			t.Run("Chamfer", func(t *testing.T) {
 				doc := decad.New()
 				body := fixture.build(t, doc)
-				_, err := decad.Chamfer(t.Context(), body, verticalEdges(), units.Millimeters(1))
+				_, err := decad.Chamfer(body, verticalEdges(), units.Millimeters(1)).Do(t.Context())
 				require.ErrorIs(t, err, decad.ErrUnsupported)
 				require.ErrorContains(t, err, "free-form boundary segment")
 			})
@@ -1078,7 +1078,7 @@ func TestFreeformPrismShellRefuses(t *testing.T) {
 		t.Run(fixture.name, func(t *testing.T) {
 			doc := decad.New()
 			body := fixture.build(t, doc)
-			_, err := decad.Shell(t.Context(), body, bothCaps(), units.Millimeters(1))
+			_, err := decad.Shell(body, bothCaps(), units.Millimeters(1)).Do(t.Context())
 			require.ErrorIs(t, err, decad.ErrUnsupported)
 			require.ErrorContains(t, err, "free-form boundary segment")
 		})
@@ -1093,7 +1093,7 @@ func TestFreeformPrismCapLoopChamferRefuses(t *testing.T) {
 	doc := decad.New()
 	body := freeformArchBody(t, doc)
 
-	_, err := decad.Chamfer(t.Context(), body, capLoopEdges(body), units.Millimeters(1))
+	_, err := decad.Chamfer(body, capLoopEdges(body), units.Millimeters(1)).Do(t.Context())
 
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.ErrorContains(t, err, "only a smooth rim offsets")

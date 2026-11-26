@@ -19,7 +19,7 @@ func BenchmarkOffsetPrismCircle(b *testing.B) {
 		doc := decad.New()
 		sheet := offsetCircleSheet(b, doc, 10)
 		b.StartTimer()
-		result, err := decad.Offset(b.Context(), sheet, units.Millimeters(2))
+		result, err := decad.Offset(sheet, units.Millimeters(2)).Do(b.Context())
 		b.StopTimer()
 		require.NoError(b, err)
 		require.Len(b, result.Faces(), 1)
@@ -43,8 +43,7 @@ func BenchmarkOffsetPrismNarrowNeck(b *testing.B) {
 		b.StopTimer()
 		doc, sheet := thickenNeckSheet(b)
 		b.StartTimer()
-		result, err := decad.Offset(b.Context(), sheet, units.Millimeters(1.5),
-			decad.WithOffsetSide(decad.OffsetNegative))
+		result, err := decad.Offset(sheet, units.Millimeters(1.5)).Side(decad.OffsetNegative).Do(b.Context())
 		b.StopTimer()
 		require.NoError(b, err)
 		require.Len(b, result.Faces(), 16)

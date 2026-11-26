@@ -71,7 +71,7 @@ func TestOrthogonalUndercutSurveyListsEveryBlockedFace(t *testing.T) {
 	// A shelled box with a closed cavity: the cavity's floor and ceiling shadow each other along z.
 	cavityDoc := decad.New()
 	block := blockIn(t, cavityDoc, r3.NewVec(0, 0, 0), r3.NewVec(20, 20, 20))
-	_, err = decad.Shell(t.Context(), block, nil, units.Millimeters(2), decad.WithNoOpenings())
+	_, err = decad.ShellClosed(block, units.Millimeters(2)).Do(t.Context())
 	require.NoError(t, err)
 	hollow, err := cavityDoc.Verify(t.Context(), decad.WithPullDirection(r3.NewVec(0, 0, 1)))
 	require.NoError(t, err)

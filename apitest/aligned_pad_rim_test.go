@@ -83,7 +83,7 @@ func alignedTrimmedPad(t *testing.T, bore bool) {
 		joined, e = decad.Cut(joined, extrude(s, 2, decad.Along)).Do(ctx)
 		require.NoError(t, e)
 	}
-	res, e := decad.Chamfer(ctx, joined, decad.Edges(decad.OuterLoopOf(decad.CapStart(pad))).Exactly(1), units.Millimeters(.25))
+	res, e := decad.Chamfer(joined, decad.Edges(decad.OuterLoopOf(decad.CapStart(pad))).Exactly(1), units.Millimeters(.25)).Do(ctx)
 	if bore {
 		require.ErrorIs(t, e, decad.ErrUnsupported)
 		return

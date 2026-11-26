@@ -35,8 +35,8 @@ func (sc *retentionScene) roundedBox(t *testing.T) *decad.Body {
 	box, err := decad.Extrude(t.Context(), sc.doc, s, s.Profiles()[0],
 		decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
 	require.NoError(t, err)
-	rounded, err := decad.Fillet(t.Context(), box,
-		decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1))).Exactly(4), units.Millimeters(3))
+	rounded, err := decad.Fillet(box,
+		decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1))).Exactly(4), units.Millimeters(3)).Do(t.Context())
 	require.NoError(t, err)
 	return rounded
 }

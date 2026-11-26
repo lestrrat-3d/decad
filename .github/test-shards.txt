@@ -382,3 +382,5 @@
 12	0.00	TestRunCommand
 12	0.01	TestCommandConstructorsAreInUnusedResultFuncs
 12	0.40	TestCommandConstructorCallsEndInDo
+12	0.01	TestModifyConstructorsAreCommandConstructors
+12	0.10	TestConeFromFaceCommand

@@ -819,7 +819,7 @@ boundary component, such as a `Cut` by a wholly embedded tool. `Extrude` and
 open-path `Sweep` does the same. A partial `Revolve` opens its groove at the
 angular caps. Those bodies have one connected, non-void shell. The `Shell`
 operation that removes a face leaves an opening, so its inner and outer skins
-connect. `Shell` accepts the closed `WithNoOpenings()` form, which builds a closed hollow
+connect. `Shell` accepts the closed `ShellClosed()` form, which builds a closed hollow
 body for a full-turn `Revolve` and a straight prism; `agent-docs/modify-design.md`
 Part R §9 and `Shell`'s doc comment name the receivers it builds and the calls it
 refuses. Sheet shells
@@ -1133,7 +1133,7 @@ not an unplaced exact point cone about world X is `ErrUnsupported`, a cone
 of another document `ErrForeignBody`, and a retired cone `ErrRetiredBody`.
 The construction is in `agent-docs/loft-face-sections-design.md`.
 
-`ConeFromFace(ctx, body, face, far)` is a free function that returns the full
+`ConeFromFace(body, face, far)` is a command whose `Do(ctx)` returns the full
 cone about the world X axis of a Revolve `body` whose meridian extends the
 selected conical `face`, using the nearest representable strict offset from
 that face's exact line (`far` is a `units.Value` length). This need not be one
@@ -1447,45 +1447,53 @@ which regions carry coarse rims before planning the next contact. A
 construction needing many booleans through one region has to be reshaped, not
 retried.
 
-Modify operations return a new body, retiring the receiver, on the same terms:
+Modify operations return a new body, retiring the receiver, on the same terms. Each is a command
+(`agent-docs/command-api-design.md`); `Do` returns `(*Body, error)`:
 
 ```go
-func Fillet(ctx context.Context, b *Body, sel EdgeSelector, r units.Value, opts ...FilletOption) (*Body, error)
-func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value, opts ...ChamferOption) (*Body, error)
-func Shell(ctx context.Context, b *Body, sel FaceSelector, thickness units.Value, opts ...ShellOption) (*Body, error)
-func ChamferAngle(ctx context.Context, b *Body, sel EdgeSelector, d units.Value, reference FaceSelector,
-    angle units.Value) (*Body, error)
-func FilletChord(ctx context.Context, b *Body, sel EdgeSelector, chord units.Value) (*Body, error)
+func Fillet(b *Body, sel EdgeSelector, r units.Value) *FilletCommand
+func (c *FilletCommand) TangentChain() *FilletCommand
+
+func Chamfer(b *Body, sel EdgeSelector, d units.Value) *ChamferCommand
+func (c *ChamferCommand) TangentChain() *ChamferCommand
+func (c *ChamferCommand) Asymmetric(reference FaceSelector, otherDistance units.Value) *ChamferCommand
+
+func FilletChord(b *Body, sel EdgeSelector, chord units.Value) *FilletChordCommand
+
+func ChamferAngle(b *Body, sel EdgeSelector, d units.Value, reference FaceSelector,
+    angle units.Value) *ChamferAngleCommand
+
+func Shell(b *Body, sel FaceSelector, thickness units.Value) *ShellCommand
+func (c *ShellCommand) Sense(s ShellSense) *ShellCommand
+func (c *ShellCommand) FaceThickness(normal r3.Vec, t units.Value) *ShellCommand
+
+func ShellClosed(b *Body, thickness units.Value) *ShellClosedCommand
+func (c *ShellClosedCommand) Sense(s ShellSense) *ShellClosedCommand
+func (c *ShellClosedCommand) FaceThickness(normal r3.Vec, t units.Value) *ShellClosedCommand
+
+func (c *FilletCommand) Do(ctx context.Context) (*Body, error) // and every command above
 ```
 
-`FilletChord(ctx, b, sel, chord)` rounds right-angled planar edges with the radius `chord/√2` and builds the result with
-`Fillet`. `agent-docs/modify-design.md` Part A owns its rules.
+`FilletChord(b, sel, chord).Do(ctx)` rounds right-angled planar edges with the radius `chord/√2` and builds the result
+as `Fillet` does. `agent-docs/modify-design.md` Part A owns its rules.
 
 `ChamferAngle` sets back `d` on `reference` and `d·tan(angle)` on the other face of each right-angled planar edge, and
-builds the result with `Chamfer`. `agent-docs/modify-design.md` Part A owns its rules.
+builds the result as `Chamfer` does. `agent-docs/modify-design.md` Part A owns its rules.
 
 Each bounds cancellation latency in its cancellable construction
 and audit paths, including Shell's shared offset-construction, crossing, and
 nesting audit. Cancellation returns `ctx.Err()` before commit, so the receiver
 stays live and the document remains unchanged.
 
-Modify reach options state modeling intent, not evaluator switches:
+The methods state modeling intent, not evaluator switches:
 
-```go
-type FilletChamferOption interface {
-    FilletOption
-    ChamferOption
-}
-
-func WithTangentChain() FilletChamferOption
-func WithAsymmetricChamfer(reference FaceSelector, otherDistance units.Value) ChamferOption
-func WithNoOpenings() ShellOption
-```
-
-`WithTangentChain` expands selected seeds only through proven analytic G1
-continuations. `WithAsymmetricChamfer` applies positional `d` on `reference`
-and `otherDistance` on the other adjacent face. `WithNoOpenings` is the only
-shell form that accepts `sel == nil`; it conflicts with a non-nil selector.
+`TangentChain` expands selected seeds only through proven analytic G1
+continuations; calling it twice is calling it once. `Asymmetric` applies positional `d` on `reference`
+and `otherDistance` on the other adjacent face; a second call replaces the first. `ShellClosed` keeps every face
+and takes no selector. `Sense` and `FaceThickness` of `Shell` and `ShellClosed` set the wall sense and the
+per-direction thickness; `FaceThickness` called again for one world axis direction replaces that direction's
+thickness. A fault of a method value, such as a zero `Asymmetric` distance or a `Sense` that names no sense,
+is returned by `Do` at the gate where the operation checks that input, and names the method as its subject.
 `agent-docs/modify-design.md` Part R owns exact receiver/target limits, refusal order,
 payloads, and validation.
 
@@ -1508,8 +1516,9 @@ func PatchEdges(ctx context.Context, b *Body, sel EdgeSelector) (*Body, error)
 
 func Stitch(ctx context.Context, bodies ...*Body) (*Body, error)
 func Unstitch(ctx context.Context, b *Body) ([]*Body, error)
-func Thicken(ctx context.Context, b *Body, thickness units.Value, opts ...ThickenOption) (*Body, error)
-func WithThickenSide(side ThickenSide) ThickenOption
+func Thicken(b *Body, thickness units.Value) *ThickenCommand
+func (c *ThickenCommand) Side(side ThickenSide) *ThickenCommand
+func (c *ThickenCommand) Do(ctx context.Context) (*Body, error)
 
 // The chain-fed forms. Each sweeps an OPEN sketch curve and always returns a
 // BodySheet, so WithSurfaceResult() is not among their options: ChainLoftOption

@@ -43,7 +43,7 @@ func TestTrimGraphClosedShell(t *testing.T) {
 	t.Run("bevelled plate", func(t *testing.T) {
 		t.Parallel()
 		beveled := bevelledPlate(t)
-		shelled, err := decad.Shell(t.Context(), beveled, nil, units.Millimeters(1), decad.WithNoOpenings())
+		shelled, err := decad.ShellClosed(beveled, units.Millimeters(1)).Do(t.Context())
 		require.NoError(t, err)
 
 		require.Len(t, shelled.Lumps(), 1)
@@ -94,15 +94,14 @@ func TestTrimGraphClosedShell(t *testing.T) {
 
 	t.Run("a dropped bevel face", func(t *testing.T) {
 		t.Parallel()
-		_, err := decad.Shell(t.Context(), bevelledPlate(t), nil, units.Millimeters(4), decad.WithNoOpenings())
+		_, err := decad.ShellClosed(bevelledPlate(t), units.Millimeters(4)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "(trim TG6)")
 	})
 
 	t.Run("outward stays refused", func(t *testing.T) {
 		t.Parallel()
-		_, err := decad.Shell(t.Context(), bevelledPlate(t), nil, units.Millimeters(1), decad.WithNoOpenings(),
-			decad.WithShellSense(decad.Outward))
+		_, err := decad.ShellClosed(bevelledPlate(t), units.Millimeters(1)).Sense(decad.Outward).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "modify-reach SX9")
 	})
@@ -113,7 +112,7 @@ func TestTrimGraphClosedShell(t *testing.T) {
 		// every tag is exactly its wall: its two floor edges are concave.
 		grooved := wedgedPlate(t, func(sc *retentionScene) *sketch.Plane { return sc.w.YZ() },
 			[][2]float64{{8, 14}, {10, 12}, {46, 48}, {44, 50}}, 100, r3.Vec{X: 0.5})
-		_, err := decad.Shell(t.Context(), grooved, nil, units.Millimeters(1), decad.WithNoOpenings())
+		_, err := decad.ShellClosed(grooved, units.Millimeters(1)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "modify-reach SX9")
 	})

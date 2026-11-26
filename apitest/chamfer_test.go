@@ -19,11 +19,11 @@ func TestChamferContextCancellationLeavesReceiverLive(t *testing.T) {
 	doc, box := filletBox(t)
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	body, err := decad.Chamfer(ctx, box, verticalEdges(), units.Millimeters(10))
+	body, err := decad.Chamfer(box, verticalEdges(), units.Millimeters(10)).Do(ctx)
 	require.Nil(t, body)
 	require.ErrorIs(t, err, context.Canceled)
 	require.Equal(t, []*decad.Body{box}, doc.Bodies())
-	body, err = decad.Chamfer(t.Context(), box, verticalEdges(), units.Millimeters(10))
+	body, err = decad.Chamfer(box, verticalEdges(), units.Millimeters(10)).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, []*decad.Body{body}, doc.Bodies())
 }
@@ -33,7 +33,7 @@ func TestChamferContextCancellationAtCommitLeavesReceiverLive(t *testing.T) {
 	doc, box := filletBox(t)
 	ctx := &commitBoundaryCancelContext{Context: t.Context()}
 
-	body, err := decad.Chamfer(ctx, box, verticalEdges(), units.Millimeters(10))
+	body, err := decad.Chamfer(box, verticalEdges(), units.Millimeters(10)).Do(ctx)
 
 	require.Nil(t, body)
 	require.ErrorIs(t, err, context.Canceled)
@@ -45,7 +45,7 @@ func TestChamferContextCancellationDuringPreprocessingLeavesReceiverLive(t *test
 	doc, box := filletBox(t)
 	ctx := &preAuditScanCancelContext{Context: t.Context()}
 
-	body, err := decad.Chamfer(ctx, box, verticalEdges(), units.Millimeters(10))
+	body, err := decad.Chamfer(box, verticalEdges(), units.Millimeters(10)).Do(ctx)
 
 	require.Nil(t, body)
 	require.ErrorIs(t, err, context.Canceled)
@@ -60,7 +60,7 @@ func TestChamferContextCancellationDuringAuditPreservesError(t *testing.T) {
 			doc, box := manySidedPrism(t, 300)
 			ctx := &auditScanCancelContext{Context: t.Context(), cancelErr: cancelErr}
 
-			body, err := decad.Chamfer(ctx, box, verticalEdges(), units.Millimeters(10))
+			body, err := decad.Chamfer(box, verticalEdges(), units.Millimeters(10)).Do(ctx)
 
 			require.Nil(t, body)
 			require.Equal(t, cancelErr, err)
@@ -73,7 +73,7 @@ func TestChamferContextCancellationDuringAuditPreservesError(t *testing.T) {
 func TestChamferSelectorAdmission(t *testing.T) {
 	testEdgeSelectorAdmission(t, "Chamfer", func(ctx context.Context, body *decad.Body, selector decad.EdgeSelector,
 		amount units.Value) (*decad.Body, error) {
-		return decad.Chamfer(ctx, body, selector, amount)
+		return decad.Chamfer(body, selector, amount).Do(ctx)
 	})
 }
 
@@ -89,7 +89,7 @@ func TestChamferBoxAllConvexEdges(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, edges, 4, `a box has four lateral edges`)
 
-	body, err := decad.Chamfer(t.Context(), box, verticalEdges(), units.Millimeters(d))
+	body, err := decad.Chamfer(box, verticalEdges(), units.Millimeters(d)).Do(t.Context())
 	require.NoError(t, err)
 	require.True(t, body.IsSolid())
 	requireManifold(t, body)
@@ -164,7 +164,7 @@ func TestChamferSingleStraightCapEdge(t *testing.T) {
 	box := boxBody(t, doc, 0, 0, 40, 20, 10)
 	edge := decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0)),
 		decad.EndpointAt(r3.NewVec(0, 0, 10))).Exactly(1)
-	beveled, err := decad.Chamfer(t.Context(), box, edge, units.Millimeters(2))
+	beveled, err := decad.Chamfer(box, edge, units.Millimeters(2)).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, []*decad.Body{beveled}, doc.Bodies())
 	volume, err := beveled.Volume()
@@ -187,7 +187,7 @@ func TestChamferSingleObliqueCapEdge(t *testing.T) {
 			part := chamferTrapezoid(t, doc)
 			edge := decad.Edges(decad.EndpointAt(r3.NewVec(100, 0, tc.z)),
 				decad.EndpointAt(r3.NewVec(72, 45, tc.z))).Exactly(1)
-			result, err := decad.Chamfer(t.Context(), part, edge, units.Millimeters(1))
+			result, err := decad.Chamfer(part, edge, units.Millimeters(1)).Do(t.Context())
 			require.NoError(t, err)
 			require.Equal(t, []*decad.Body{result}, doc.Bodies())
 			volume, err := result.Volume()
@@ -254,7 +254,7 @@ func TestChamferConcaveEdgeAddsWedge(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, picked, 1, `an L has one reflex corner`)
 
-	chamfered, err := decad.Chamfer(t.Context(), body, concave, units.Millimeters(d))
+	chamfered, err := decad.Chamfer(body, concave, units.Millimeters(d)).Do(t.Context())
 	require.NoError(t, err)
 	requireManifold(t, chamfered)
 
@@ -310,7 +310,7 @@ func TestChamferLineArcCorner(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, before, 3, `a quarter disk has three convex corners`)
 
-	chamfered, err := decad.Chamfer(t.Context(), body, corner, units.Millimeters(4))
+	chamfered, err := decad.Chamfer(body, corner, units.Millimeters(4)).Do(t.Context())
 	require.NoError(t, err)
 	requireManifold(t, chamfered)
 
@@ -373,7 +373,7 @@ func TestChamferArcArcCorner(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, picked, 2, `a lens has two arc/arc corners`)
 
-	chamfered, err := decad.Chamfer(t.Context(), body, corners, units.Millimeters(3))
+	chamfered, err := decad.Chamfer(body, corners, units.Millimeters(3)).Do(t.Context())
 	require.NoError(t, err)
 	requireManifold(t, chamfered)
 
@@ -428,12 +428,12 @@ func TestChamferHasNoS5Path(t *testing.T) {
 
 	// A fillet radius of 25 is S5 (ErrDegenerate) on this wall of radius 20.
 	corner := decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)), decad.Convex()).AtLeast(1)
-	_, err = decad.Fillet(t.Context(), body, corner, units.Millimeters(25))
+	_, err = decad.Fillet(body, corner, units.Millimeters(25)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrDegenerate, `fillet r=25 has no blend centre on a wall of radius 20: S5`)
 
 	// The same convex corner takes a chamfer with a comfortable setback: a chord
 	// always exists, so there is no S5 gate to fail.
-	chamfered, err := decad.Chamfer(t.Context(), body, corner, units.Millimeters(4))
+	chamfered, err := decad.Chamfer(body, corner, units.Millimeters(4)).Do(t.Context())
 	require.NoError(t, err, `a chamfer has no S5 path — a chord exists between any two feet`)
 	requireManifold(t, chamfered)
 }
@@ -446,7 +446,7 @@ func TestChamferOverLargeSetbackRefused(t *testing.T) {
 	// d = 40 → 80 > 60, so the audit refuses.
 	_, box := filletBox(t)
 	selector := verticalEdges()
-	_, err := decad.Chamfer(t.Context(), box, selector, units.Millimeters(40))
+	_, err := decad.Chamfer(box, selector, units.Millimeters(40)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported, `a setback that consumes a wall from both ends is S6`)
 	require.ErrorContains(t, err, `selector `+selector.String(),
 		`an audit failure retains the multi-edge query`)
@@ -467,7 +467,7 @@ func TestChamferOverLargeSetbackFlippingLoopIsUnsupported(t *testing.T) {
 	// rewritten section's signed area flips sign, so the audit's S8 (asked first)
 	// would grab it if S6 did not own it.
 	_, box := filletBox(t)
-	_, err := decad.Chamfer(t.Context(), box, verticalEdges(), units.Millimeters(120))
+	_, err := decad.Chamfer(box, verticalEdges(), units.Millimeters(120)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported, `an overrun that also flips the loop is still S6`)
 	require.NotErrorIs(t, err, decad.ErrDegenerate, `the overrun must not read as the S8 inside-out verdict`)
 	require.Equal(t, []*decad.Body{box}, box.Document().Bodies(), `a refused chamfer retires nothing`)
@@ -478,24 +478,24 @@ func TestChamferRefusals(t *testing.T) {
 	_, box := filletBox(t)
 
 	// A zero distance is the body the caller already holds: S13.
-	_, err := decad.Chamfer(t.Context(), box, verticalEdges(), units.Millimeters(0))
+	_, err := decad.Chamfer(box, verticalEdges(), units.Millimeters(0)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 
 	// A wrong-kind magnitude is S15.
-	_, err = decad.Chamfer(t.Context(), box, verticalEdges(), units.Degrees(5))
+	_, err = decad.Chamfer(box, verticalEdges(), units.Degrees(5)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnitKind)
 
 	// A negative magnitude is S15.
-	_, err = decad.Chamfer(t.Context(), box, verticalEdges(), units.Millimeters(-1))
+	_, err = decad.Chamfer(box, verticalEdges(), units.Millimeters(-1)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrNegativeMagnitude)
 
 	// A selector matching nothing is loud: S16.
-	_, err = decad.Chamfer(t.Context(), box, decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)), decad.Concave()), units.Millimeters(5))
+	_, err = decad.Chamfer(box, decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)), decad.Concave()), units.Millimeters(5)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrNoMatch, `a box has no concave lateral edge`)
 
 	// Cap edges mixed with lateral edges are the vertex-blend problem: S1, staged.
 	capEdges := decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0))).Or(decad.ParallelTo(r3.NewVec(0, 0, 1)))
-	_, err = decad.Chamfer(t.Context(), box, capEdges, units.Millimeters(5))
+	_, err = decad.Chamfer(box, capEdges, units.Millimeters(5)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported, `a chamfer of a cap edge is not supported`)
 
 	// The refusals left the document untouched — the box is still live.
@@ -511,7 +511,7 @@ func TestChamferNonPrismReceiverBooleanBuilt(t *testing.T) {
 	// booleanRimBody's bar crosses the disc strictly between its caps, so both
 	// cap rims survive the boolean untouched.
 	sel := decad.Edges()
-	_, err := decad.Chamfer(t.Context(), booleanRimBody(t, decad.New()), sel, units.Millimeters(1))
+	_, err := decad.Chamfer(booleanRimBody(t, decad.New()), sel, units.Millimeters(1)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported, `this evaluator chamfers a straight prism or a revolve only`)
 	require.ErrorContains(t, err, `selected edge[0] closed circle through (10,0,0), centre (0,0,0), radius 10 mm`,
 		`an untouched boolean rim between a plane and a cylinder renders as the circle it is`)
@@ -538,7 +538,7 @@ func TestChamferBreaksNestingRefused(t *testing.T) {
 	_, body := plateWithDiskHole(t, 3, 3, 1)
 
 	convex := decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)), decad.Convex())
-	_, err := decad.Chamfer(t.Context(), body, convex, units.Millimeters(20))
+	_, err := decad.Chamfer(body, convex, units.Millimeters(20)).Do(t.Context())
 	require.Error(t, err, `a chamfer that leaves the hole outside the outer loop must be refused`)
 	require.ErrorIs(t, err, decad.ErrDegenerate,
 		`a hole proven outside the bevelled outer loop is nesting decidably broken: ErrDegenerate`)
@@ -557,7 +557,7 @@ func TestChamferClearOfHoleBuilds(t *testing.T) {
 	doc, body := plateWithDiskHole(t, 50, 50, 5)
 
 	convex := decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)), decad.Convex())
-	chamfered, err := decad.Chamfer(t.Context(), body, convex, units.Millimeters(5))
+	chamfered, err := decad.Chamfer(body, convex, units.Millimeters(5)).Do(t.Context())
 	require.NoError(t, err, `a chamfer clear of the hole must build`)
 	requireManifold(t, chamfered)
 

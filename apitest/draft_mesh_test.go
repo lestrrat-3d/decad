@@ -373,7 +373,7 @@ func TestDraftMeshOfBodyDraft(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	box := plainBox(t, doc, decad.Along)
-	got, err := decad.Draft(t.Context(), box, decad.Faces(decad.Walls(box)), capNeutral(box, decad.CapEnd), units.Degrees(5))
+	got, err := decad.Draft(box, decad.Faces(decad.Walls(box)), capNeutral(box, decad.CapEnd), units.Degrees(5)).Do(t.Context())
 	require.NoError(t, err)
 	mesh, err := got.Tessellate(t.Context(), units.Millimeters(0.1))
 	require.NoError(t, err)

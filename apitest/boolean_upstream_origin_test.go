@@ -288,7 +288,7 @@ func TestModifyResultsDropUpstreamRoles(t *testing.T) {
 		boss := levelBox(t, doc, 20, 10, 40, 30, 20, 10)
 		u, err := decad.Union(box, boss).Do(t.Context())
 		require.NoError(t, err)
-		shelled, err := decad.Shell(t.Context(), u, decad.Faces(decad.FaceCreatedBy(decad.CapEnd(boss))), units.Millimeters(2))
+		shelled, err := decad.Shell(u, decad.Faces(decad.FaceCreatedBy(decad.CapEnd(boss))), units.Millimeters(2)).Do(t.Context())
 		require.NoError(t, err)
 		moved, err := decad.Transform(t.Context(), shelled, move)
 		require.NoError(t, err)
@@ -304,8 +304,8 @@ func TestModifyResultsDropUpstreamRoles(t *testing.T) {
 		upright := levelBox(t, doc, 0, 0, 8, 40, 0, 50)
 		u, err := decad.Union(base, upright).Do(t.Context())
 		require.NoError(t, err)
-		filleted, err := decad.Fillet(t.Context(), u,
-			decad.Edges(decad.ParallelTo(r3.NewVec(0, 1, 0)), decad.EndpointAt(r3.NewVec(8, 0, 8))).Exactly(1), units.Millimeters(2))
+		filleted, err := decad.Fillet(u,
+			decad.Edges(decad.ParallelTo(r3.NewVec(0, 1, 0)), decad.EndpointAt(r3.NewVec(8, 0, 8))).Exactly(1), units.Millimeters(2)).Do(t.Context())
 		require.NoError(t, err)
 		moved, err := decad.Transform(t.Context(), filleted, move)
 		require.NoError(t, err)
@@ -338,8 +338,8 @@ func TestFacetedNestedBossShellTakesAnInheritedCapBoss(t *testing.T) {
 	top, err := decad.Faces(decad.FaceCreatedBy(decad.CapEnd(narrow))).Exactly(1).SelectFaces(joined)
 	require.NoError(t, err)
 	require.Contains(t, top[0].Origins(), decad.CapEnd(boss))
-	shell, err := decad.Shell(t.Context(), joined,
-		decad.Faces(decad.FaceCreatedBy(decad.CapEnd(boss))).Exactly(1), units.Millimeters(1))
+	shell, err := decad.Shell(joined,
+		decad.Faces(decad.FaceCreatedBy(decad.CapEnd(boss))).Exactly(1), units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := shell.Volume()
 	require.NoError(t, err)

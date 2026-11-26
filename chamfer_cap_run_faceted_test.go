@@ -146,7 +146,7 @@ func TestChamferKeyholeRimRunOnMeshBoolean(t *testing.T) {
 				t.Run(fmt.Sprintf("r %v w %v flat %v d %v slot first %v", k.r, k.w, k.flat, d, slotFirst), func(t *testing.T) {
 					t.Parallel()
 					body := k.facetedBody(t, slotFirst)
-					out, err := decad.Chamfer(t.Context(), body, k.rimOf(t, body), units.Millimeters(d))
+					out, err := decad.Chamfer(body, k.rimOf(t, body), units.Millimeters(d)).Do(t.Context())
 					require.NoError(t, err)
 					require.True(t, out.IsSolid())
 					m, err := out.Volume()
@@ -171,7 +171,7 @@ func TestChamferKeyholeRimRunThenCut(t *testing.T) {
 	const d = 0.5
 	k := keyhole{4, 0.5, 3}
 	body, doc := k.facetedBodyIn(t, true)
-	out, err := decad.Chamfer(t.Context(), body, k.rimOf(t, body), units.Millimeters(d))
+	out, err := decad.Chamfer(body, k.rimOf(t, body), units.Millimeters(d)).Do(t.Context())
 	require.NoError(t, err)
 	cut, err := decad.Cut(out, box(t, doc, [3]float64{-3, -6, -1}, [3]float64{3, -5, 6})).Do(t.Context())
 	require.NoError(t, err)
@@ -209,7 +209,7 @@ func TestChamferKeyholeRimRunRefusesAnotherFaceInReach(t *testing.T) {
 				body, err = decad.Cut(body, box(t, doc, tool.lo, tool.hi)).Do(t.Context())
 			}
 			require.NoError(t, err)
-			_, err = decad.Chamfer(t.Context(), body, k.rimOf(t, body), units.Millimeters(0.5))
+			_, err = decad.Chamfer(body, k.rimOf(t, body), units.Millimeters(0.5)).Do(t.Context())
 			require.ErrorIs(t, err, decad.ErrUnsupported)
 			require.Equal(t, []*decad.Body{body}, doc.Bodies())
 		})

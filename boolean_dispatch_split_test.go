@@ -76,7 +76,7 @@ func TestBooleanDispatchAnalyticPrefix(t *testing.T) {
 		require.NoError(t, err)
 		prism, err := Extrude(t.Context(), doc, s, s.Profiles()[0], Distance{D: units.Millimeters(20), Dir: Along})
 		require.NoError(t, err)
-		box, err := Fillet(t.Context(), prism, Edges(ParallelTo(r3.NewVec(0, 0, 1))).Exactly(4), units.Millimeters(3))
+		box, err := Fillet(prism, Edges(ParallelTo(r3.NewVec(0, 0, 1))).Exactly(4), units.Millimeters(3)).Do(t.Context())
 		require.NoError(t, err)
 
 		ts, err := w.CreateSketch(w.XZ())

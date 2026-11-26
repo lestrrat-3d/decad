@@ -47,8 +47,8 @@ func TestBrepRouteEFilletEndFacesAgree(t *testing.T) {
 		for _, x := range []float64{-3.5, 3.5} {
 			for _, y := range []float64{box.y0, box.y0 + 3.6} {
 				body := xzBox(t, box.y0, box.z0, box.z1)
-				out, err := decad.Fillet(t.Context(), body, decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)),
-					decad.EndpointAt(r3.NewVec(x, y, box.z0))).Exactly(1), units.Millimeters(r))
+				out, err := decad.Fillet(body, decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)),
+					decad.EndpointAt(r3.NewVec(x, y, box.z0))).Exactly(1), units.Millimeters(r)).Do(t.Context())
 				require.NoError(t, err, "edge at x = %g, y = %g", x, y)
 
 				// The box loses the corner region over the edge's length.
@@ -139,8 +139,8 @@ func TestBrepRouteEFilletObliqueBossEdges(t *testing.T) {
 				require.NoError(t, err)
 				before, err := body.Volume()
 				require.NoError(t, err)
-				out, err := decad.Fillet(t.Context(), body, decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)),
-					decad.EndpointAt(r3.NewVec(corner[0], corner[1], 25))).Exactly(1), units.Millimeters(r))
+				out, err := decad.Fillet(body, decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)),
+					decad.EndpointAt(r3.NewVec(corner[0], corner[1], 25))).Exactly(1), units.Millimeters(r)).Do(t.Context())
 				require.NoError(t, err, "lean %g, top %g, corner %v", lean, top, corner)
 				after, err := out.Volume()
 				require.NoError(t, err)

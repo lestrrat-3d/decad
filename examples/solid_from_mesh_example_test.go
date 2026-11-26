@@ -93,7 +93,7 @@ f 4 5 8
 	}
 	// The edge along z at the (2, 2) corner.
 	edge := decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)), decad.EndpointAt(r3.NewVec(2, 2, 0)))
-	rounded, err := decad.Fillet(context.Background(), cube, edge, units.Millimeters(0.5))
+	rounded, err := decad.Fillet(cube, edge, units.Millimeters(0.5)).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to fillet: %s\n", err)
 		return

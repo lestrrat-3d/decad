@@ -35,7 +35,7 @@ func TestEveryVertexBoundIsALength(t *testing.T) {
 		}, true},
 		{`cap-loop chamfer`, func(t *testing.T) *decad.Body {
 			_, box := capBlendBox(t)
-			chamfered, err := decad.Chamfer(t.Context(), box, capLoopEdges(box), units.Millimeters(1))
+			chamfered, err := decad.Chamfer(box, capLoopEdges(box), units.Millimeters(1)).Do(t.Context())
 			require.NoError(t, err)
 			return chamfered
 		}, false},

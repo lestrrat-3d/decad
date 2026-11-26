@@ -184,7 +184,7 @@ func TestSweepChainCompositeNSpanThickenSquare(t *testing.T) {
 			doc := decad.New()
 			sheet, err := decad.Sweep(t.Context(), doc, s, chain, tc.path(t))
 			require.NoError(t, err)
-			solid, err := decad.Thicken(t.Context(), sheet, units.Millimeters(tc.thickness))
+			solid, err := decad.Thicken(sheet, units.Millimeters(tc.thickness)).Do(t.Context())
 			require.NoError(t, err)
 			require.Equal(t, decad.BodySolid, solid.Kind())
 			require.True(t, solid.IsSolid())
@@ -232,7 +232,7 @@ func TestSweepChainCompositeNonradialHalfCircle(t *testing.T) {
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.ErrorContains(t, err, "one cardinal line and one positive half-circle")
 	// The generated ribbon section needs axis-parallel source lines.
-	_, err = decad.Thicken(t.Context(), sheet, units.Millimeters(1))
+	_, err = decad.Thicken(sheet, units.Millimeters(1)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.ErrorContains(t, err, "the open walk is not axis-parallel")
 	require.Len(t, doc.Bodies(), 1)
@@ -338,8 +338,7 @@ func TestSweepChainCompositeThickenRadialGate(t *testing.T) {
 			doc := decad.New()
 			sheet, err := decad.Sweep(t.Context(), doc, s, chain, path)
 			require.NoError(t, err)
-			solid, err := decad.Thicken(t.Context(), sheet, units.Millimeters(tc.thickness),
-				decad.WithThickenSide(tc.side))
+			solid, err := decad.Thicken(sheet, units.Millimeters(tc.thickness)).Side(tc.side).Do(t.Context())
 			if tc.volume == 0 {
 				require.ErrorIs(t, err, decad.ErrUnsupported)
 				require.ErrorContains(t, err, "the swept offset reaches the revolve axis")

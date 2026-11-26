@@ -113,14 +113,14 @@ func testObliqueBossJunctionFilletPublicWorkflow(t *testing.T, tiltAxis r3.Vec) 
 	if selected, err := query.SelectEdges(joined); err != nil || len(selected) != 1 {
 		t.Fatalf("junction query selected %d edges: %v", len(selected), err)
 	}
-	if _, err := Fillet(ctx, joined, query, units.Millimeters(1.1)); !errors.Is(err, ErrUnsupported) {
+	if _, err := Fillet(joined, query, units.Millimeters(1.1)).Do(ctx); !errors.Is(err, ErrUnsupported) {
 		t.Fatalf("oversize junction fillet: got %v, want ErrUnsupported", err)
 	}
 	before, err := joined.Volume()
 	if err != nil {
 		t.Fatal(err)
 	}
-	filleted, err := Fillet(ctx, joined, query, units.Millimeters(0.5))
+	filleted, err := Fillet(joined, query, units.Millimeters(0.5)).Do(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}

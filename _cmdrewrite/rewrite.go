@@ -52,11 +52,41 @@ func (c *callSite) isCall(e ast.Expr, name string) bool {
 	return fname == name && qual == c.pkg
 }
 
+// option reports whether e is a call of a decad function in the qualifier
+// form this file uses, and returns its name and the source text of its
+// arguments (from the first to the last, with line breaks and comments).
+func (c *callSite) option(e ast.Expr) (name, argText string, args []ast.Expr, ok bool) {
+	call, isCall := e.(*ast.CallExpr)
+	if !isCall || call.Ellipsis.IsValid() {
+		return "", "", nil, false
+	}
+	fname, qual := callee(call.Fun, c.pkg, c.pkg == "")
+	if fname == "" || qual != c.pkg {
+		return "", "", nil, false
+	}
+	if len(call.Args) > 0 {
+		argText = c.spanOf(call.Args[0], call.Args[len(call.Args)-1])
+	}
+	return fname, argText, call.Args, true
+}
+
 // rule rewrites one function call. It returns the replacement text, or a
 // reason it cannot.
 type rule func(c *callSite) (string, string)
 
 var families = map[string]map[string]rule{
+	"modify": {
+		"Fillet":       ruleModify("Fillet", 3, optionMethods{"TangentChain": {"TangentChain", 0}}),
+		"Chamfer":      ruleModify("Chamfer", 3, optionMethods{"TangentChain": {"TangentChain", 0}, "Asymmetric": {"Asymmetric", 2}}),
+		"FilletChord":  ruleModify("FilletChord", 3, nil),
+		"ChamferAngle": ruleModify("ChamferAngle", 5, nil),
+		"Draft":        ruleModify("Draft", 4, nil),
+		"Offset":       ruleModify("Offset", 2, optionMethods{"Side": {"Side", 1}}),
+		"Thicken":      ruleModify("Thicken", 2, optionMethods{"Side": {"Side", 1}}),
+		"MoveFace":     ruleModify("MoveFace", 3, nil),
+		"ConeFromFace": ruleModify("ConeFromFace", 3, nil),
+		"Shell":        ruleShell,
+	},
 	"booleans": {
 		"Union":        ruleUnion,
 		"Cut":          ruleBinary("Cut"),
@@ -277,4 +307,77 @@ func callee(fun ast.Expr, pkgName string, bare bool) (string, string) {
 		}
 	}
 	return "", ""
+}
+
+// optionMethods maps an option constructor to the command method that
+// replaces it and the number of arguments the option takes.
+type optionMethods map[string]struct {
+	method string
+	nargs  int
+}
+
+// ruleModify: Fillet(ctx, b, sel, r, decad.TangentChain()) ->
+// Fillet(b, sel, r).TangentChain().Do(ctx). mandatory counts the arguments
+// after ctx that become constructor arguments; every later argument must be a
+// call of one of the options in methods, with the argument count the method
+// takes.
+func ruleModify(name string, mandatory int, methods optionMethods) rule {
+	return func(c *callSite) (string, string) {
+		if c.ellipsis || len(c.args) < mandatory+1 {
+			return "", name + " call with a spread option list or too few arguments"
+		}
+		call := fmt.Sprintf("%s(%s)", qualify(c.pkg, name), c.span(1, mandatory))
+		chain, why := c.optionChain(name, c.args[mandatory+1:], methods)
+		if why != "" {
+			return "", why
+		}
+		return call + chain + ".Do(" + c.text(c.args[0]) + ")", ""
+	}
+}
+
+// optionChain turns the option arguments into a method chain, or reports the
+// first option it cannot map.
+func (c *callSite) optionChain(name string, opts []ast.Expr, methods optionMethods) (string, string) {
+	chain := ""
+	for _, opt := range opts {
+		oname, argText, args, ok := c.option(opt)
+		m, known := methods[oname]
+		if !ok || !known || len(args) != m.nargs {
+			return "", name + " option " + c.text(opt) + " has no command method rule"
+		}
+		chain += "." + m.method + "(" + argText + ")"
+	}
+	return chain, ""
+}
+
+// ruleShell: Shell(ctx, b, sel, t, opts...) -> Shell(b, sel, t)...Do(ctx).
+// ShellClosed() turns the call into ShellClosed(b, t), which takes no
+// selector, so the selector argument must be the literal nil.
+func ruleShell(c *callSite) (string, string) {
+	if c.ellipsis || len(c.args) < 4 {
+		return "", "Shell call with a spread option list or too few arguments"
+	}
+	methods := optionMethods{"Sense": {"Sense", 1}, "FaceThickness": {"FaceThickness", 2}}
+	var rest []ast.Expr
+	closed := false
+	for _, opt := range c.args[4:] {
+		if oname, _, args, ok := c.option(opt); ok && oname == "ShellClosed" && len(args) == 0 {
+			closed = true
+			continue
+		}
+		rest = append(rest, opt)
+	}
+	chain, why := c.optionChain("Shell", rest, methods)
+	if why != "" {
+		return "", why
+	}
+	ctx := c.text(c.args[0])
+	if !closed {
+		return fmt.Sprintf("%s(%s)%s.Do(%s)", qualify(c.pkg, "Shell"), c.span(1, 3), chain, ctx), ""
+	}
+	if id, ok := c.args[2].(*ast.Ident); !ok || id.Name != "nil" {
+		return "", "Shell with ShellClosed and a selector that is not the literal nil"
+	}
+	return fmt.Sprintf("%s(%s, %s)%s.Do(%s)", qualify(c.pkg, "ShellClosed"),
+		c.text(c.args[1]), c.text(c.args[3]), chain, ctx), ""
 }

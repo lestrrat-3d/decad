@@ -95,7 +95,7 @@ func TestRevolveShellSideOpening(t *testing.T) {
 		// ρ ∈ [6, 10]: ∫ρ dA = 750 − 576 = 174, a channel open outward.
 		doc := decad.New()
 		ring := revolveMeridian(t, doc, ringMeridian, decad.FullRevolution{})
-		shelled, err := decad.Shell(t.Context(), ring, sideFace(t, ring, cylinderOfRadius10()), units.Millimeters(1))
+		shelled, err := decad.Shell(ring, sideFace(t, ring, cylinderOfRadius10()), units.Millimeters(1)).Do(t.Context())
 		require.NoError(t, err)
 		require.Equal(t, []*decad.Body{shelled}, doc.Bodies())
 		requireManifold(t, shelled)
@@ -114,8 +114,7 @@ func TestRevolveShellSideOpening(t *testing.T) {
 		// corners (5π/4 − 1/3 each).
 		doc := decad.New()
 		ring := revolveMeridian(t, doc, ringMeridian, decad.FullRevolution{})
-		shelled, err := decad.Shell(t.Context(), ring, sideFace(t, ring, cylinderOfRadius10()), units.Millimeters(1),
-			decad.WithShellSense(decad.Outward))
+		shelled, err := decad.Shell(ring, sideFace(t, ring, cylinderOfRadius10()), units.Millimeters(1)).Sense(decad.Outward).Do(t.Context())
 		require.NoError(t, err)
 		requireManifold(t, shelled)
 		decadtest.MeasuresVolume(t, shelled, fullTurnVolume(165-2.0/3+5*math.Pi/2))
@@ -127,7 +126,7 @@ func TestRevolveShellSideOpening(t *testing.T) {
 		// offset ends on the axis at z = 2. π·(10²·20 − 8²·18).
 		doc := decad.New()
 		cyl := revolveMeridian(t, doc, cylinderMeridian, decad.FullRevolution{})
-		shelled, err := decad.Shell(t.Context(), cyl, sideFace(t, cyl, planeAtU(20)), units.Millimeters(2))
+		shelled, err := decad.Shell(cyl, sideFace(t, cyl, planeAtU(20)), units.Millimeters(2)).Do(t.Context())
 		require.NoError(t, err)
 		requireManifold(t, shelled)
 		require.Len(t, shelled.Shells(), 1)
@@ -153,7 +152,7 @@ func TestRevolveShellSideOpening(t *testing.T) {
 			c, ok := s.(decad.Cone)
 			return ok && math.Abs(c.Origin.X-20) < 1e-9
 		}
-		shelled, err := decad.Shell(t.Context(), body, sideFace(t, body, apexAt20), units.Millimeters(1))
+		shelled, err := decad.Shell(body, sideFace(t, body, apexAt20), units.Millimeters(1)).Do(t.Context())
 		require.NoError(t, err)
 		requireManifold(t, shelled)
 		const prec = 400
@@ -191,8 +190,7 @@ func TestRevolveShellSideOpening(t *testing.T) {
 		// (10π + 8/3).
 		doc := decad.New()
 		cyl := revolveMeridian(t, doc, cylinderMeridian, decad.FullRevolution{})
-		shelled, err := decad.Shell(t.Context(), cyl, sideFace(t, cyl, planeAtU(20)), units.Millimeters(2),
-			decad.WithShellSense(decad.Outward))
+		shelled, err := decad.Shell(cyl, sideFace(t, cyl, planeAtU(20)), units.Millimeters(2)).Sense(decad.Outward).Do(t.Context())
 		require.NoError(t, err)
 		requireManifold(t, shelled)
 		decadtest.MeasuresVolume(t, shelled, fullTurnVolume(540+8.0/3+10*math.Pi))
@@ -209,7 +207,7 @@ func TestRevolveShellSideOpening(t *testing.T) {
 		}
 		require.NotNil(t, outer)
 		sel := decad.Faces(decad.NormalTo(r3.NewVec(0, 0, 1))).Or(decad.FaceCreatedBy(outer.Origins()[0]))
-		shelled, err := decad.Shell(t.Context(), ring, sel, units.Millimeters(1))
+		shelled, err := decad.Shell(ring, sel, units.Millimeters(1)).Do(t.Context())
 		require.NoError(t, err)
 		requireManifold(t, shelled)
 		decadtest.MeasuresVolume(t, shelled, halfTurnVolume(174))
@@ -226,7 +224,7 @@ func TestRevolveShellSideOpening(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
 		ring := revolveMeridian(t, doc, ringMeridian, decad.FullRevolution{})
-		shelled, err := decad.Shell(t.Context(), ring, sideFace(t, ring, cylinderOfRadius10()), units.Millimeters(1))
+		shelled, err := decad.Shell(ring, sideFace(t, ring, cylinderOfRadius10()), units.Millimeters(1)).Do(t.Context())
 		require.NoError(t, err)
 		rotation, err := r3.Rotation(r3.NewVec(1, 2, 3), units.Degrees(37))
 		require.NoError(t, err)
@@ -243,14 +241,14 @@ func TestRevolveShellSideOpeningRefusals(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
 		ring := revolveMeridian(t, doc, ringMeridian, decad.FullRevolution{})
-		_, err := decad.Shell(t.Context(), ring, decad.Faces(decad.Planar()), units.Millimeters(1))
+		_, err := decad.Shell(ring, decad.Faces(decad.Planar()), units.Millimeters(1)).Do(t.Context())
 		requireShellRefused(t, doc, ring, err, decad.ErrUnsupported, `one connected run`)
 	})
 	t.Run("every side face", func(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
 		ring := revolveMeridian(t, doc, ringMeridian, decad.FullRevolution{})
-		_, err := decad.Shell(t.Context(), ring, decad.Faces(), units.Millimeters(1))
+		_, err := decad.Shell(ring, decad.Faces(), units.Millimeters(1)).Do(t.Context())
 		requireShellRefused(t, doc, ring, err, decad.ErrUnsupported, `not all of them`)
 	})
 	t.Run("a removed walk shorter than the wall", func(t *testing.T) {
@@ -259,7 +257,7 @@ func TestRevolveShellSideOpeningRefusals(t *testing.T) {
 		// the tread's outer end would run past the tread (SO2).
 		doc := decad.New()
 		step := revolveMeridian(t, doc, [][2]float64{{0, 5}, {20, 5}, {20, 10}, {18, 10}, {18, 11}, {0, 11}}, decad.FullRevolution{})
-		_, err := decad.Shell(t.Context(), step, sideFace(t, step, cylinderOfRadius10()), units.Millimeters(3))
+		_, err := decad.Shell(step, sideFace(t, step, cylinderOfRadius10()), units.Millimeters(3)).Do(t.Context())
 		requireShellRefused(t, doc, step, err, decad.ErrUnsupported, `past the far end of the removed walk`)
 	})
 	t.Run("a run between two kept walks on the axis", func(t *testing.T) {
@@ -268,7 +266,7 @@ func TestRevolveShellSideOpeningRefusals(t *testing.T) {
 		// two disks would each keep a wall of their own.
 		doc := decad.New()
 		cyl := revolveMeridian(t, doc, cylinderMeridian, decad.FullRevolution{})
-		_, err := decad.Shell(t.Context(), cyl, sideFace(t, cyl, cylinderOfRadius10()), units.Millimeters(1))
+		_, err := decad.Shell(cyl, sideFace(t, cyl, cylinderOfRadius10()), units.Millimeters(1)).Do(t.Context())
 		requireShellRefused(t, doc, cyl, err, decad.ErrUnsupported, `two wall regions`)
 	})
 }
@@ -360,7 +358,7 @@ func TestRevolveShellSlantedRim(t *testing.T) {
 		removed := sideFace(t, body, planeAtU(0)).
 			Or(decad.FaceCreatedBy(sideRole(t, body, planeAtU(5)))).
 			Or(decad.FaceCreatedBy(sideRole(t, body, cylinder20)))
-		shelled, err := decad.Shell(t.Context(), body, removed, units.Millimeters(2.375), decad.WithShellSense(decad.Outward))
+		shelled, err := decad.Shell(body, removed, units.Millimeters(2.375)).Sense(decad.Outward).Do(t.Context())
 		require.NoError(t, err)
 		requireManifold(t, shelled)
 		decadtest.MeasuresVolume(t, shelled, fullTurnVolume(140.2734375))
@@ -384,7 +382,7 @@ func TestRevolveShellSlantedRim(t *testing.T) {
 		// 150 − 86.0625 = 1023/16.
 		doc := decad.New()
 		body := revolveMeridian(t, doc, slantedMeridian, decad.FullRevolution{})
-		shelled, err := decad.Shell(t.Context(), body, coneAndTop(t, body), units.Millimeters(1.5))
+		shelled, err := decad.Shell(body, coneAndTop(t, body), units.Millimeters(1.5)).Do(t.Context())
 		require.NoError(t, err)
 		requireManifold(t, shelled)
 		require.Len(t, shelled.Shells(), 1, `the opening leaves no void`)
@@ -411,8 +409,7 @@ func TestRevolveShellSlantedRim(t *testing.T) {
 		// z ∈ [0, 1] (6.28125), and the triangle up to the corner (3.09375).
 		doc := decad.New()
 		body := revolveMeridian(t, doc, slantedMeridian, decad.FullRevolution{})
-		shelled, err := decad.Shell(t.Context(), body, coneAndTop(t, body), units.Millimeters(0.75),
-			decad.WithShellSense(decad.Outward))
+		shelled, err := decad.Shell(body, coneAndTop(t, body), units.Millimeters(0.75)).Sense(decad.Outward).Do(t.Context())
 		require.NoError(t, err)
 		requireManifold(t, shelled)
 		decadtest.MeasuresVolume(t, shelled, fullTurnVolume(33.515625+1.125*math.Pi))
@@ -425,7 +422,7 @@ func TestRevolveShellSlantedRim(t *testing.T) {
 		// 49/3 + 290.265625/4.5, so the wall's is 19919/288.
 		doc := decad.New()
 		body := revolveMeridian(t, doc, slantedMeridian, decad.FullRevolution{})
-		shelled, err := decad.Shell(t.Context(), body, sideFace(t, body, planeAtU(6)), units.Millimeters(1))
+		shelled, err := decad.Shell(body, sideFace(t, body, planeAtU(6)), units.Millimeters(1)).Do(t.Context())
 		require.NoError(t, err)
 		requireManifold(t, shelled)
 		decadtest.MeasuresVolume(t, shelled, fullTurnVolume(19919.0/288))
@@ -440,7 +437,7 @@ func TestRevolveShellSlantedRim(t *testing.T) {
 		// height L = 20 − √5 under that radius, ∫ρ dA = L³/24.
 		doc := decad.New()
 		cone := revolveMeridian(t, doc, coneMeridian, decad.FullRevolution{})
-		shelled, err := decad.Shell(t.Context(), cone, sideFace(t, cone, planeAtU(0)), units.Millimeters(1))
+		shelled, err := decad.Shell(cone, sideFace(t, cone, planeAtU(0)), units.Millimeters(1)).Do(t.Context())
 		require.NoError(t, err)
 		requireManifold(t, shelled)
 		l := 20 - math.Sqrt(5)
@@ -458,12 +455,12 @@ func TestRevolveShellSlantedRim(t *testing.T) {
 	lift := 2 * (125 - 24*math.Sqrt(24)) / 3
 	for _, tc := range []struct {
 		name string
-		opts []decad.ShellOption
+		set  []shellSetting
 		want float64
 		rho  float64
 	}{
 		{"arc rim inward", nil, strip + lift, 7},
-		{"arc rim outward", []decad.ShellOption{decad.WithShellSense(decad.Outward)}, strip - lift, 5},
+		{"arc rim outward", []shellSetting{outwardSetting()}, strip - lift, 5},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -471,7 +468,7 @@ func TestRevolveShellSlantedRim(t *testing.T) {
 			s, p := beadSketch(t)
 			bead, err := decad.Revolve(t.Context(), doc, s, p, uAxis, decad.FullRevolution{})
 			require.NoError(t, err)
-			shelled, err := decad.Shell(t.Context(), bead, sideFace(t, bead, torusSurface), units.Millimeters(1), tc.opts...)
+			shelled, err := applyShell(bead, sideFace(t, bead, torusSurface), units.Millimeters(1), tc.set...).Do(t.Context())
 			require.NoError(t, err)
 			requireManifold(t, shelled)
 			decadtest.MeasuresVolume(t, shelled, fullTurnVolume(tc.want))
@@ -509,7 +506,7 @@ func TestRevolveShellSlantedRimRefusals(t *testing.T) {
 		// Inward 3.5 mm the cut lies 3.5/0.6 along the 5 mm cone (SO2).
 		doc := decad.New()
 		body := revolveMeridian(t, doc, slantedMeridian, decad.FullRevolution{})
-		_, err := decad.Shell(t.Context(), body, coneAndTop(t, body), units.Millimeters(3.5))
+		_, err := decad.Shell(body, coneAndTop(t, body), units.Millimeters(3.5)).Do(t.Context())
 		requireShellRefused(t, doc, body, err, decad.ErrUnsupported, `past the far end of the removed walk`)
 	})
 	t.Run("a rim landing on the corner arc", func(t *testing.T) {
@@ -519,7 +516,7 @@ func TestRevolveShellSlantedRimRefusals(t *testing.T) {
 		// the cylinder has no length left (S11a).
 		doc := decad.New()
 		body := revolveMeridian(t, doc, slantedMeridian, decad.FullRevolution{})
-		_, err := decad.Shell(t.Context(), body, coneAndTop(t, body), units.Millimeters(1.5), decad.WithShellSense(decad.Outward))
+		_, err := decad.Shell(body, coneAndTop(t, body), units.Millimeters(1.5)).Sense(decad.Outward).Do(t.Context())
 		requireShellRefused(t, doc, body, err, decad.ErrUnsupported, `drops a section feature`)
 	})
 	t.Run("a removed walk tangent to the kept one", func(t *testing.T) {
@@ -531,13 +528,13 @@ func TestRevolveShellSlantedRimRefusals(t *testing.T) {
 		// zone refuses it.
 		doc := decad.New()
 		ring := revolveMeridian(t, doc, [][2]float64{{0, 5}, {20, 5}, {23, 9}, {19, 13}, {0, 13}}, decad.FullRevolution{})
-		filleted, err := decad.Fillet(t.Context(), ring, decad.Edges(decad.Circular(), decad.Convex()), units.Millimeters(0.5))
+		filleted, err := decad.Fillet(ring, decad.Edges(decad.Circular(), decad.Convex()), units.Millimeters(0.5)).Do(t.Context())
 		require.NoError(t, err)
 		shoulder := func(s decad.Surface) bool {
 			tor, ok := s.(decad.Torus)
 			return ok && tor.Center.X > 21.5
 		}
-		_, err = decad.Shell(t.Context(), filleted, sideFace(t, filleted, shoulder), units.Millimeters(0.25))
+		_, err = decad.Shell(filleted, sideFace(t, filleted, shoulder), units.Millimeters(0.25)).Do(t.Context())
 		requireShellRefused(t, doc, filleted, err, decad.ErrUnsupported, `smooth or cusped`)
 	})
 }

@@ -73,10 +73,10 @@ func sb7FrontTopEdge() *decad.EdgeQuery {
 func TestSB7TangentJunctionNamesChain(t *testing.T) {
 	t.Parallel()
 	u := sb7RoundedBoss(t)
-	_, err := decad.Fillet(t.Context(), u, sb7FrontTopEdge(), units.Millimeters(1.5))
+	_, err := decad.Fillet(u, sb7FrontTopEdge(), units.Millimeters(1.5)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	requireReasonLeads(t, err, `the selected edge ends at the tangent junction 30,15,20 `)
-	require.Contains(t, err.Error(), `whose continuation is not selected; WithTangentChain selects the whole chain (brep-modify SB7)`)
+	require.Contains(t, err.Error(), `whose continuation is not selected; TangentChain selects the whole chain (brep-modify SB7)`)
 
 	// The named workaround builds: plate + boss minus the rim fillet strip,
 	// 4 straight sides of 20 mm and 4 quarter arcs of radius 5 whose
@@ -86,7 +86,7 @@ func TestSB7TangentJunctionNamesChain(t *testing.T) {
 	cen := r * (10 - 3*math.Pi) / (3 * (4 - math.Pi))
 	v0 := 48000 + (900-(4-math.Pi)*25)*10
 	want := v0 - area*(80+2*math.Pi*(5-cen))
-	got, err := decad.Fillet(t.Context(), u, sb7FrontTopEdge(), units.Millimeters(r), decad.WithTangentChain())
+	got, err := decad.Fillet(u, sb7FrontTopEdge(), units.Millimeters(r)).TangentChain().Do(t.Context())
 	require.NoError(t, err)
 	vol, err := got.Volume()
 	require.NoError(t, err)
@@ -107,8 +107,8 @@ func TestSB7NonTangentJunctionKeepsCurvedFaceText(t *testing.T) {
 	})
 	sel := decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0)),
 		decad.EndpointAt(r3.NewVec(30, 20, 20)), decad.EndpointAt(r3.NewVec(40, 20, 20))).Exactly(1)
-	_, err := decad.Fillet(t.Context(), u, sel, units.Millimeters(1))
+	_, err := decad.Fillet(u, sel, units.Millimeters(1)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Contains(t, err.Error(), `is a curved face, not a plane across the axis (brep-modify SB7)`)
-	require.NotContains(t, err.Error(), `WithTangentChain`)
+	require.NotContains(t, err.Error(), `TangentChain`)
 }

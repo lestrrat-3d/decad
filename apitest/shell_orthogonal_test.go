@@ -29,7 +29,7 @@ func TestShellOpensABoxMeshSolid(t *testing.T) {
 	t.Parallel()
 	doc, block := blockSolid(t, r3.NewVec(0, 0, 0), r3.NewVec(10, 8, 6))
 	top := decad.Faces(decad.Facing(r3.NewVec(0, 0, 1)))
-	out, err := decad.Shell(t.Context(), block, top, units.Millimeters(1))
+	out, err := decad.Shell(block, top, units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, []*decad.Body{out}, doc.Bodies())
 	volume, err := out.Volume()
@@ -51,7 +51,7 @@ func TestShellOpensABoxMeshSolid(t *testing.T) {
 func TestShellHollowsAClosedBoxMeshSolid(t *testing.T) {
 	t.Parallel()
 	_, block := blockSolid(t, r3.NewVec(0, 0, 0), r3.NewVec(10, 8, 6))
-	out, err := decad.Shell(t.Context(), block, nil, units.Millimeters(1), decad.WithNoOpenings())
+	out, err := decad.ShellClosed(block, units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := out.Volume()
 	require.NoError(t, err)
@@ -66,9 +66,9 @@ func TestShellOfAMeshSolidRefusals(t *testing.T) {
 	_, block := blockSolid(t, r3.NewVec(0, 0, 0), r3.NewVec(10, 8, 6))
 	top := decad.Faces(decad.Facing(r3.NewVec(0, 0, 1)))
 	// Walls that meet leave no cavity: the block is 6 thick in z and t = 3 takes the cavity to nothing.
-	_, err := decad.Shell(t.Context(), block, nil, units.Millimeters(3), decad.WithNoOpenings())
+	_, err := decad.ShellClosed(block, units.Millimeters(3)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrDegenerate)
-	_, err = decad.Shell(t.Context(), block, top, units.Millimeters(0))
+	_, err = decad.Shell(block, top, units.Millimeters(0)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 	// A slanted face is not orthogonal: the tetrahedron keeps the refusal of every other receiver.
 	facets := importTetrahedron()
@@ -76,7 +76,7 @@ func TestShellOfAMeshSolidRefusals(t *testing.T) {
 	require.NoError(t, err)
 	body, err := decad.SolidFromMesh(t.Context(), decad.New(), tet)
 	require.NoError(t, err)
-	_, err = decad.Shell(t.Context(), body, decad.Faces(decad.Facing(r3.NewVec(0, 0, -1))), units.Millimeters(0.05))
+	_, err = decad.Shell(body, decad.Faces(decad.Facing(r3.NewVec(0, 0, -1))), units.Millimeters(0.05)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 }
 
@@ -111,7 +111,7 @@ func lPrismSolid(t *testing.T) *decad.Body {
 func TestShellOpensAnLShapedMeshSolid(t *testing.T) {
 	t.Parallel()
 	l := lPrismSolid(t)
-	out, err := decad.Shell(t.Context(), l, decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))), units.Millimeters(0.5))
+	out, err := decad.Shell(l, decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))), units.Millimeters(0.5)).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := out.Volume()
 	require.NoError(t, err)
@@ -132,7 +132,7 @@ func TestShellGrowsOutwardFromAMeshSolid(t *testing.T) {
 	t.Parallel()
 	doc, block := blockSolid(t, r3.NewVec(0, 0, 0), r3.NewVec(10, 8, 6))
 	top := decad.Faces(decad.Facing(r3.NewVec(0, 0, 1)))
-	out, err := decad.Shell(t.Context(), block, top, units.Millimeters(1), decad.WithShellSense(decad.Outward))
+	out, err := decad.Shell(block, top, units.Millimeters(1)).Sense(decad.Outward).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, []*decad.Body{out}, doc.Bodies())
 	volume, err := out.Volume()
@@ -150,8 +150,7 @@ func TestShellGrowsOutwardFromAMeshSolid(t *testing.T) {
 	wall, err := out.LocatePoint(t.Context(), r3.NewVec(-0.5, 4, 3), units.Millimeters(0.01))
 	require.NoError(t, err)
 	require.Equal(t, decad.PointInside, wall)
-	closed, err := decad.Shell(t.Context(), mustSolid(t, r3.NewVec(0, 0, 0), r3.NewVec(10, 8, 6)), nil, units.Millimeters(1),
-		decad.WithNoOpenings(), decad.WithShellSense(decad.Outward))
+	closed, err := decad.ShellClosed(mustSolid(t, r3.NewVec(0, 0, 0), r3.NewVec(10, 8, 6)), units.Millimeters(1)).Sense(decad.Outward).Do(t.Context())
 	require.NoError(t, err)
 	cv, err := closed.Volume()
 	require.NoError(t, err)
@@ -168,7 +167,7 @@ func TestShellCenteredStraddlesAMeshSolidSurface(t *testing.T) {
 	t.Parallel()
 	doc, block := blockSolid(t, r3.NewVec(0, 0, 0), r3.NewVec(10, 8, 6))
 	// Closed: the 12 x 10 x 8 dilation less the 8 x 6 x 4 erosion, 2 mm thick centred on the surface.
-	out, err := decad.Shell(t.Context(), block, nil, units.Millimeters(2), decad.WithNoOpenings(), decad.WithShellSense(decad.Centered))
+	out, err := decad.ShellClosed(block, units.Millimeters(2)).Sense(decad.Centered).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, []*decad.Body{out}, doc.Bodies())
 	volume, err := out.Volume()
@@ -191,7 +190,7 @@ func TestShellCenteredStraddlesAMeshSolidSurface(t *testing.T) {
 	require.Len(t, out.Shells(), 2, "an outer skin and the void's")
 	// Open at the top: no wall stands over the original top.
 	_, block2 := blockSolid(t, r3.NewVec(0, 0, 0), r3.NewVec(10, 8, 6))
-	open, err := decad.Shell(t.Context(), block2, decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))), units.Millimeters(2), decad.WithShellSense(decad.Centered))
+	open, err := decad.Shell(block2, decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))), units.Millimeters(2)).Sense(decad.Centered).Do(t.Context())
 	require.NoError(t, err)
 	ov, err := open.Volume()
 	require.NoError(t, err)
@@ -204,14 +203,17 @@ func TestShellCenteredStraddlesAMeshSolidSurface(t *testing.T) {
 func TestShellCenteredRefusals(t *testing.T) {
 	t.Parallel()
 	_, block := blockSolid(t, r3.NewVec(0, 0, 0), r3.NewVec(10, 8, 6))
-	_, err := decad.Shell(t.Context(), block, nil, units.Millimeters(20), decad.WithNoOpenings(), decad.WithShellSense(decad.Centered))
+	_, err := decad.ShellClosed(block, units.Millimeters(20)).Sense(decad.Centered).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrDegenerate, "walls whose inner halves meet")
-	_, err = decad.Shell(t.Context(), block, nil, units.Millimeters(2), decad.WithNoOpenings(),
-		decad.WithShellSense(decad.Centered), decad.WithShellSense(decad.Inward))
-	require.Error(t, err)
+	// A later Sense replaces an earlier one, so Centered then Inward is an Inward shell.
+	inward, err := decad.ShellClosed(block, units.Millimeters(2)).Sense(decad.Centered).Sense(decad.Inward).Do(t.Context())
+	require.NoError(t, err)
+	iv, err := inward.Volume()
+	require.NoError(t, err)
+	require.LessOrEqual(t, math.Abs(iv.Value.Base()-(480-6*4*2)), iv.Bound.Base()+1e-9)
 	doc := decad.New()
 	prism := boxBody(t, doc, 30, 0, 40, 8, 6)
-	_, err = decad.Shell(t.Context(), prism, decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))), units.Millimeters(1), decad.WithShellSense(decad.Centered))
+	_, err = decad.Shell(prism, decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))), units.Millimeters(1)).Sense(decad.Centered).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported, "a prism has no centered route")
 	require.Equal(t, "Centered", decad.Centered.String())
 }

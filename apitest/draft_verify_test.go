@@ -183,7 +183,7 @@ func TestDraftUndercutBodyDraft(t *testing.T) {
 	doc := decad.New()
 	box, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(boxHeight), Dir: decad.Along})
 	require.NoError(t, err)
-	b, err := decad.Draft(t.Context(), box, decad.Faces(decad.Walls(box)), capNeutral(box, decad.CapStart), units.Degrees(5))
+	b, err := decad.Draft(box, decad.Faces(decad.Walls(box)), capNeutral(box, decad.CapStart), units.Degrees(5)).Do(t.Context())
 	require.NoError(t, err)
 
 	report, br := draftSurvey(t, doc, b, r3.NewVec(0, 0, 1))

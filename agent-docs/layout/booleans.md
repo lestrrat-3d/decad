@@ -31,8 +31,8 @@ Boolean files and modify operations. The rules for rows live in `agent-docs/layo
 
 | Path | Responsibility |
 |---|---|
-| `fillet.go` | `Fillet`: options, selector, tangent chain and thickness gates, then `internal/brepmodify/` builds the fillet. See modify §6. |
-| `chamfer.go` | `Chamfer`: options, selector, tangent chain (extended without the option too), asymmetric reference and setback gates, then `internal/brepmodify/` builds the chamfer. See modify §7. Whole cap-loop runs: modify-reach §8.3.2. Chains across planes: retained-modify-reach §15b. |
+| `fillet.go` | `Fillet` and `FilletCommand`: the `TangentChain` method, selector and thickness gates, then `internal/brepmodify/` builds the fillet. See modify §6. |
+| `chamfer.go` | `Chamfer` and `ChamferCommand`: the `TangentChain` and `Asymmetric` methods, selector, tangent chain (extended without the method too), asymmetric reference and setback gates, then `internal/brepmodify/` builds the chamfer. See modify §7. Whole cap-loop runs: modify-reach §8.3.2. Chains across planes: retained-modify-reach §15b. |
 | `rim_extension.go` | Publishes a straight Chamfer ending on a tangent cylindrical support. See modify design. |
 | `rim_extension_history.go` | Binds held faces to their original extrusions and ruled cutting tool for a straight Chamfer. See modify design. |
 | `rim_outer_native.go` | Binds the terminal profile arc on the original flange when the cap joins a concentric cone heel. |
@@ -46,14 +46,14 @@ Boolean files and modify operations. The rules for rows live in `agent-docs/layo
 | `native_rim_surface.go` | Builds the finite chamfer band and verifies the edited shell before publication. |
 | `native_rim_chart.go` | Checks angular coverage, orientation, and the cone approximation bound. |
 | `chamfer_wedges.go` | `chamferByWedges`: several convex edges of an axis-square mesh solid that share corners, chamfered as the solid less each edge's wedge, with the fit check on the grid. See orthogonal Boolean B17. |
-| `fillet_chord.go` | Public `FilletChord`: reads the chord, gates each edge as right-angled, then calls `Fillet` with the radius. See fillet-chord design. |
+| `fillet_chord.go` | Public `FilletChord` and `FilletChordCommand`: reads the chord, gates each edge as right-angled, then calls the `Fillet` implementation with the radius. See fillet-chord design. |
 | `edge_dihedral.go` | `Edge.planarDihedral`, the angle across the corner of a convex or concave planar edge that `ChamferAngle` and `FilletChord` share. |
-| `chamfer_angle.go` | Public `ChamferAngle`: reads the angle, gates each edge as right-angled, then calls `Chamfer` with the second setback. See chamfer-angle design. |
-| `modify_options.go` | Public reach option tiers, codec adapters and asymmetric reference resolution (SX3). See modify-reach §2, §6. |
-| `move_face.go` | Public `MoveFace`: gates on a faceted receiver and one selected face, then `internal/orthoshell/` presses the face and `solidFromMeshBody` makes the result. See orthogonal-move design. |
+| `chamfer_angle.go` | Public `ChamferAngle` and `ChamferAngleCommand`: reads the angle, gates each edge as right-angled, then calls the `Chamfer` implementation with the second setback. See chamfer-angle design. |
+| `modify_options.go` | The `TangentChain` and `Asymmetric` settings the Fillet and Chamfer commands share, `errNilBody` and asymmetric reference resolution (SX3). See modify-reach §2, §6. |
+| `move_face.go` | Public `MoveFace` and `MoveFaceCommand`: gates on a faceted receiver and one selected face, then `internal/orthoshell/` presses the face and `solidFromMeshBody` makes the result. See orthogonal-move design. |
 | `quarter_turn.go` | Public `QuarterTurn`: exact quarter turns of a faceted solid about a world axis by exchanging coordinates, each sum proved exact. See orthogonal-boolean design B10. |
 | `boolean_orthogonal.go` | Pair handle and result adapters for `internal/booleandispatch`; many-body admission and `internal/orthoshell/` grid assembly. See orthogonal-boolean design. |
 | `shell_orthogonal.go` | The orthogonal-polyhedron route of `Shell`: gates on a faceted receiver, then `internal/orthoshell/` builds the walls and `solidFromMeshBody` makes them the result. See orthogonal-shell design. |
-| `shell.go` | Public `ShellOption`, `ShellSense` and `Shell`: options, selector and thickness gates, then `internal/brepmodify/` builds the shell. Also `shellTol`. See modify §7–§9 and Table R. |
+| `shell.go` | Public `ShellSense`, `Shell`, `ShellCommand`, `ShellClosed`, `ShellClosedCommand` and the `Sense` and `FaceThickness` settings both commands share: method values, selector and thickness gates, then `internal/brepmodify/` builds the shell. Also `shellTol`. See modify §7–§9 and Table R. |
 | `brep_modify.go` | The prism cap faces a modify op classifies against, the modify commit, and the conversions to `internal/brepmodify/`, which owns the brep and stacked receiver routes. See brep-modify. |
-| `brep_modify_partial.go` | `WithTangentChain`'s public handles, selectors and refusals over `internal/tangentchain/`. See modify-reach §5. |
+| `brep_modify_partial.go` | `TangentChain`'s public handles, selectors and refusals over `internal/tangentchain/`. See modify-reach §5. |

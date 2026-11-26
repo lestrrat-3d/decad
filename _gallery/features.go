@@ -310,7 +310,7 @@ func filletShot(ctx context.Context, chord units.Value) ([]solidlens.Model, erro
 	if err != nil {
 		return nil, err
 	}
-	rounded, err := decad.Fillet(ctx, plate, decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1))), units.Millimeters(16))
+	rounded, err := decad.Fillet(plate, decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1))), units.Millimeters(16)).Do(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("fillet the plate: %w", err)
 	}
@@ -324,7 +324,7 @@ func chamferShot(ctx context.Context, chord units.Value) ([]solidlens.Model, err
 	if err != nil {
 		return nil, err
 	}
-	bevelled, err := decad.Chamfer(ctx, plate, decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1))), units.Millimeters(16))
+	bevelled, err := decad.Chamfer(plate, decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1))), units.Millimeters(16)).Do(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("chamfer the plate: %w", err)
 	}
@@ -338,7 +338,7 @@ func capChamferShot(ctx context.Context, chord units.Value) ([]solidlens.Model, 
 	if err != nil {
 		return nil, err
 	}
-	bevelled, err := decad.Chamfer(ctx, plate, decad.Edges(decad.CreatedBy(decad.CapEnd(plate))), units.Millimeters(10))
+	bevelled, err := decad.Chamfer(plate, decad.Edges(decad.CreatedBy(decad.CapEnd(plate))), units.Millimeters(10)).Do(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("chamfer the cap loop: %w", err)
 	}
@@ -368,7 +368,7 @@ func trayBodyAtThickness(ctx context.Context, thickness float64) (*decad.Body, e
 	if err != nil {
 		return nil, err
 	}
-	tray, err := decad.Shell(ctx, block, decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))), units.Millimeters(thickness))
+	tray, err := decad.Shell(block, decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))), units.Millimeters(thickness)).Do(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("shell the block: %w", err)
 	}

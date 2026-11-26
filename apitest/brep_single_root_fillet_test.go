@@ -32,7 +32,7 @@ func TestBrepSingleBossRootFilletAddsMaterial(t *testing.T) {
 
 	root := decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0)),
 		decad.EndpointAt(r3.NewVec(-5, -5, 5))).Exactly(1)
-	got, err := decad.Fillet(t.Context(), joined, root, units.Millimeters(1))
+	got, err := decad.Fillet(joined, root, units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	after, err := got.Volume()
 	require.NoError(t, err)
@@ -51,7 +51,7 @@ func TestBrepSingleBossTopEdgeFilletKeepsRouteE(t *testing.T) {
 	joined := squareBossOnPlate(t)
 	top := decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0)),
 		decad.EndpointAt(r3.NewVec(-5, -5, 10))).Exactly(1)
-	got, err := decad.Fillet(t.Context(), joined, top, units.Millimeters(1))
+	got, err := decad.Fillet(joined, top, units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	after, err := got.Volume()
 	require.NoError(t, err)
@@ -64,6 +64,6 @@ func TestBrepSingleBossTopEdgeFilletKeepsRouteE(t *testing.T) {
 func TestBrepIndependentBossRootEdgesRefuseRouteEWedge(t *testing.T) {
 	testIndependentBossRootRefusal(t, func(ctx context.Context, body *decad.Body, selector decad.EdgeSelector,
 		amount units.Value) (*decad.Body, error) {
-		return decad.Fillet(ctx, body, selector, amount)
+		return decad.Fillet(body, selector, amount).Do(ctx)
 	})
 }

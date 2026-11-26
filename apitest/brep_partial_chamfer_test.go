@@ -21,7 +21,7 @@ func TestBrepChamferAllStraightOuterEdges(t *testing.T) {
 	selected := decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0))).
 		Or(decad.ParallelTo(r3.NewVec(0, 1, 0))).
 		Or(decad.ParallelTo(r3.NewVec(0, 0, 1))).Exactly(12)
-	got, err := decad.Chamfer(t.Context(), bar, selected, units.Millimeters(1))
+	got, err := decad.Chamfer(bar, selected, units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	requireEveryEdgeOnTwoFaces(t, got)
 	require.Len(t, got.Faces(), 19)
@@ -80,9 +80,9 @@ func TestBrepChamferAllStraightOuterEdgesSetbackAdmission(t *testing.T) {
 	selected := decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0))).
 		Or(decad.ParallelTo(r3.NewVec(0, 1, 0))).
 		Or(decad.ParallelTo(r3.NewVec(0, 0, 1))).Exactly(12)
-	_, err := decad.Chamfer(t.Context(), bar, selected, units.Millimeters(0.1))
+	_, err := decad.Chamfer(bar, selected, units.Millimeters(0.1)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
-	got, err := decad.Chamfer(t.Context(), bar, selected, units.Millimeters(0.5))
+	got, err := decad.Chamfer(bar, selected, units.Millimeters(0.5)).Do(t.Context())
 	require.NoError(t, err)
 	mesh, err := got.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
 	require.NoError(t, err)
@@ -125,7 +125,7 @@ func TestBrepChamferAllStraightOuterEdgesPlacement(t *testing.T) {
 				selected := decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0))).
 					Or(decad.ParallelTo(r3.NewVec(0, 1, 0))).
 					Or(decad.ParallelTo(r3.NewVec(0, 0, 1))).Exactly(12)
-				got, err := decad.Chamfer(t.Context(), bar, selected, units.Millimeters(1))
+				got, err := decad.Chamfer(bar, selected, units.Millimeters(1)).Do(t.Context())
 				require.NoError(t, err)
 				originalRoles := map[string]bool{}
 				for _, face := range got.Faces() {
@@ -181,7 +181,7 @@ func TestBrepChamferAllStraightOuterEdgesPlacementComposition(t *testing.T) {
 	selected := decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0))).
 		Or(decad.ParallelTo(r3.NewVec(0, 1, 0))).
 		Or(decad.ParallelTo(r3.NewVec(0, 0, 1))).Exactly(12)
-	got, err := decad.Chamfer(t.Context(), bar, selected, units.Millimeters(1))
+	got, err := decad.Chamfer(bar, selected, units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	move, err := r3.Translation(r3.NewVec(5, 0, 0))
 	require.NoError(t, err)
@@ -215,7 +215,7 @@ func TestBrepChamferAllStraightOuterEdgesPlacementRefusal(t *testing.T) {
 			selected := decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0))).
 				Or(decad.ParallelTo(r3.NewVec(0, 1, 0))).
 				Or(decad.ParallelTo(r3.NewVec(0, 0, 1))).Exactly(12)
-			got, err := decad.Chamfer(t.Context(), bar, selected, units.Millimeters(1))
+			got, err := decad.Chamfer(bar, selected, units.Millimeters(1)).Do(t.Context())
 			require.NoError(t, err)
 			_, err = decad.Copy(t.Context(), got, decad.WithCopyPlacement(tc.pose))
 			require.ErrorIs(t, err, decad.ErrUnsupported)
@@ -239,7 +239,7 @@ func TestBrepPartialChamferCrossDrilledBar(t *testing.T) {
 	corner := r3.NewVec(40, 0, 20)
 	selected := decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0)), decad.EndpointAt(corner)).
 		Or(decad.ParallelTo(r3.NewVec(0, 0, 1)), decad.EndpointAt(corner)).Exactly(2)
-	got, err := decad.Chamfer(t.Context(), bar, selected, units.Millimeters(1))
+	got, err := decad.Chamfer(bar, selected, units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	requireEveryEdgeOnTwoFaces(t, got)
 	require.Len(t, got.Faces(), 9)
@@ -319,7 +319,7 @@ func TestBrepPartialChamferBlindPocket(t *testing.T) {
 	corner := r3.NewVec(30, 18, 12)
 	selected := decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0)), decad.EndpointAt(corner)).
 		Or(decad.ParallelTo(r3.NewVec(0, 1, 0)), decad.EndpointAt(corner)).Exactly(2)
-	got, err := decad.Chamfer(t.Context(), pocket, selected, units.Millimeters(0.5))
+	got, err := decad.Chamfer(pocket, selected, units.Millimeters(0.5)).Do(t.Context())
 	require.NoError(t, err)
 	requireEveryEdgeOnTwoFaces(t, got)
 	require.Len(t, chamferLoopPatches(got), 2)
@@ -344,7 +344,7 @@ func TestBrepPartialChamferMirroredCrossDrilledBar(t *testing.T) {
 	corner := r3.NewVec(0, 20, 20)
 	selected := decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0)), decad.EndpointAt(corner)).
 		Or(decad.ParallelTo(r3.NewVec(0, 0, 1)), decad.EndpointAt(corner)).Exactly(2)
-	got, err := decad.Chamfer(t.Context(), bar, selected, units.Millimeters(0.5))
+	got, err := decad.Chamfer(bar, selected, units.Millimeters(0.5)).Do(t.Context())
 	require.NoError(t, err)
 	requireEveryEdgeOnTwoFaces(t, got)
 	require.Len(t, chamferLoopPatches(got), 2)
@@ -393,7 +393,7 @@ func TestBrepChamferAllStraightOuterEdgesStagedSurvey(t *testing.T) {
 	selected := decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0))).
 		Or(decad.ParallelTo(r3.NewVec(0, 1, 0))).
 		Or(decad.ParallelTo(r3.NewVec(0, 0, 1))).Exactly(12)
-	got, err := decad.Chamfer(t.Context(), bar, selected, units.Millimeters(1))
+	got, err := decad.Chamfer(bar, selected, units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))
 	require.NoError(t, err)
@@ -414,7 +414,7 @@ func TestBrepPartialChamferStagedSurvey(t *testing.T) {
 	corner := r3.NewVec(40, 0, 20)
 	selected := decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0)), decad.EndpointAt(corner)).
 		Or(decad.ParallelTo(r3.NewVec(0, 0, 1)), decad.EndpointAt(corner)).Exactly(2)
-	got, err := decad.Chamfer(t.Context(), bar, selected, units.Millimeters(1))
+	got, err := decad.Chamfer(bar, selected, units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))
 	require.NoError(t, err)

@@ -277,21 +277,21 @@ func TestMeshSolidShellAndOffsetAgreeWithTheCubeByCubeErosionAndDilation(t *test
 			continue
 		}
 		// A closed inward shell one cube thick keeps the cubes the erosion takes away.
-		if out, err := decad.Shell(t.Context(), b, nil, units.Millimeters(1), decad.WithNoOpenings()); err == nil {
+		if out, err := decad.ShellClosed(b, units.Millimeters(1)).Do(t.Context()); err == nil {
 			shelled++
 			got, bound := volumeOf(t, out)
 			require.InDelta(t, float64(c.count()-c.eroded()), got, bound+1e-9, "shell of %d cubes", c.count())
 		}
 		doc = decad.New()
 		b, _ = c.solid(t, doc)
-		if out, err := decad.Offset(t.Context(), b, units.Millimeters(1)); err == nil {
+		if out, err := decad.Offset(b, units.Millimeters(1)).Do(t.Context()); err == nil {
 			grown++
 			got, bound := volumeOf(t, out)
 			require.InDelta(t, float64(c.grown()), got, bound+1e-9, "growing %d cubes", c.count())
 		}
 		doc = decad.New()
 		b, _ = c.solid(t, doc)
-		if out, err := decad.Offset(t.Context(), b, units.Millimeters(1), decad.WithOffsetSide(decad.OffsetNegative)); err == nil {
+		if out, err := decad.Offset(b, units.Millimeters(1)).Side(decad.OffsetNegative).Do(t.Context()); err == nil {
 			shrunk++
 			got, bound := volumeOf(t, out)
 			require.InDelta(t, float64(c.eroded()), got, bound+1e-9, "shrinking %d cubes", c.count())

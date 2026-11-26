@@ -91,7 +91,7 @@ func windowRimQuery(t *testing.T, body *decad.Body, z0, z1 float64) *decad.EdgeQ
 func wheelFilletedAndBored(t *testing.T) *decad.Body {
 	t.Helper()
 	wheel := wheelUnion(t, capChamferWindows, capChamferTeeth)
-	filleted, err := decad.Fillet(t.Context(), wheel, rootEdges(capChamferTeeth), units.Millimeters(wheelRoot))
+	filleted, err := decad.Fillet(wheel, rootEdges(capChamferTeeth), units.Millimeters(wheelRoot)).Do(t.Context())
 	require.NoError(t, err)
 	doc := filleted.Document()
 	w := sketch.NewWorld()
@@ -111,14 +111,14 @@ func TestDisplacedCapChamferWheelWindows(t *testing.T) {
 	t.Parallel()
 	bored := wheelFilletedAndBored(t)
 	query := windowRimQuery(t, bored, 0, wheelHeight)
-	chamfered, err := decad.Chamfer(t.Context(), bored, query, units.Millimeters(capChamferSize))
+	chamfered, err := decad.Chamfer(bored, query, units.Millimeters(capChamferSize)).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, "decad.displacedCapBlendPayload", decadtest.PayloadClass(chamfered))
 	requireAnalyticCurves(t, chamfered)
 	require.True(t, chamfered.IsSolid())
 
 	drawn := wheelInPlace(t, capChamferWindows, capChamferTeeth, true, true)
-	drawnChamfered, err := decad.Chamfer(t.Context(), drawn, windowRimQuery(t, drawn, 0, wheelHeight), units.Millimeters(capChamferSize))
+	drawnChamfered, err := decad.Chamfer(drawn, windowRimQuery(t, drawn, 0, wheelHeight), units.Millimeters(capChamferSize)).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, "decad.capBlendPayload", decadtest.PayloadClass(drawnChamfered))
 
@@ -142,7 +142,7 @@ func TestDisplacedCapChamferWheelWindows(t *testing.T) {
 func chamferedWheel(t *testing.T) *decad.Body {
 	t.Helper()
 	bored := wheelFilletedAndBored(t)
-	chamfered, err := decad.Chamfer(t.Context(), bored, windowRimQuery(t, bored, 0, wheelHeight), units.Millimeters(capChamferSize))
+	chamfered, err := decad.Chamfer(bored, windowRimQuery(t, bored, 0, wheelHeight), units.Millimeters(capChamferSize)).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, "decad.displacedCapBlendPayload", decadtest.PayloadClass(chamfered))
 	return chamfered
@@ -186,13 +186,13 @@ func TestDisplacedCapChamferReaders(t *testing.T) {
 	doc := chamfered.Document()
 
 	t.Run("a later modify op refuses with SX10", func(t *testing.T) {
-		_, err := decad.Chamfer(t.Context(), chamfered, decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1))), units.Millimeters(0.1))
+		_, err := decad.Chamfer(chamfered, decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1))), units.Millimeters(0.1)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.Contains(t, err.Error(), "does not yet compose another modify op onto a cap-loop chamfer result")
-		_, err = decad.Fillet(t.Context(), chamfered, decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1))), units.Millimeters(0.1))
+		_, err = decad.Fillet(chamfered, decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1))), units.Millimeters(0.1)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.Contains(t, err.Error(), "does not yet compose another modify op onto a cap-loop chamfer result")
-		_, err = decad.Shell(t.Context(), chamfered, decad.Faces(decad.FaceCreatedBy(decad.CapStart(chamfered))), units.Millimeters(0.5))
+		_, err = decad.Shell(chamfered, decad.Faces(decad.FaceCreatedBy(decad.CapStart(chamfered))), units.Millimeters(0.5)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.Contains(t, err.Error(), "does not yet compose another modify op onto a cap-loop chamfer result")
 	})

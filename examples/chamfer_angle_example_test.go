@@ -43,7 +43,7 @@ func Example_chamfer_angle() {
 	edge := decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)),
 		decad.EndpointAt(r3.NewVec(40, 20, 0))).Exactly(1)
 	wall := decad.Faces(decad.Facing(r3.NewVec(1, 0, 0)))
-	beveled, err := decad.ChamferAngle(context.Background(), plate, edge, units.Millimeters(4), wall, units.Degrees(45))
+	beveled, err := decad.ChamferAngle(plate, edge, units.Millimeters(4), wall, units.Degrees(45)).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to chamfer: %s\n", err)
 		return
@@ -95,7 +95,7 @@ func Example_chamfer_angle_hexagon() {
 	// degrees to that face, so the bevel meets the other face 2 mm from the edge.
 	edge := decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)), decad.EndpointAt(r3.NewVec(10, 0, 0))).Exactly(1)
 	reference := decad.Faces(decad.Facing(r3.NewVec(math.Cos(math.Pi/6), -math.Sin(math.Pi/6), 0)))
-	beveled, err := decad.ChamferAngle(context.Background(), prism, edge, units.Millimeters(2), reference, units.Degrees(30))
+	beveled, err := decad.ChamferAngle(prism, edge, units.Millimeters(2), reference, units.Degrees(30)).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to chamfer: %s\n", err)
 		return

@@ -118,7 +118,7 @@ func TestChamferTangentLineArcOutline(t *testing.T) {
 		plate := roundedTrianglePlate(t, doc, world, plateOrbit, plateRadius)
 		q, n := planeLoopEdges(t, plate, z, func(l *decad.Loop, _ []*decad.Edge) bool { return l.IsOuter() })
 		require.Equal(t, 6, n)
-		out, err := decad.Chamfer(t.Context(), plate, q.Exactly(n), units.Millimeters(0.5))
+		out, err := decad.Chamfer(plate, q.Exactly(n), units.Millimeters(0.5)).Do(t.Context())
 		require.NoError(t, err)
 		requireChamferRemoved(t, plate, out, roundedPlateOutline())
 	}
@@ -155,7 +155,7 @@ func TestChamferTangentOutlineAfterPinUnion(t *testing.T) {
 	for _, z := range []float64{0, 3} {
 		q, n := planeLoopEdges(t, carrier, z, func(l *decad.Loop, _ []*decad.Edge) bool { return l.IsOuter() })
 		require.Equal(t, 6, n)
-		out, err := decad.Chamfer(t.Context(), carrier, q.Exactly(n), units.Millimeters(0.5))
+		out, err := decad.Chamfer(carrier, q.Exactly(n), units.Millimeters(0.5)).Do(t.Context())
 		require.NoError(t, err)
 		requireChamferRemoved(t, carrier, out, roundedPlateOutline())
 		carrier = out
@@ -215,7 +215,7 @@ func TestChamferWindowLoops(t *testing.T) {
 	cover := windowedFrame(t, doc, world)
 	q, n := planeLoopEdges(t, cover, 0, func(l *decad.Loop, e []*decad.Edge) bool { return !l.IsOuter() && len(e) > 1 })
 	require.Equal(t, 12, n)
-	out, err := decad.Chamfer(t.Context(), cover, q.Exactly(n), units.Millimeters(0.5))
+	out, err := decad.Chamfer(cover, q.Exactly(n), units.Millimeters(0.5)).Do(t.Context())
 	require.NoError(t, err)
 	requireChamferRemoved(t, cover, out, windowLoopsLength())
 }
@@ -255,7 +255,7 @@ func TestChamferWindowLoopsAfterBossUnion(t *testing.T) {
 		{3, func(l *decad.Loop, e []*decad.Edge) bool { return !l.IsOuter() && len(e) > 1 }, windowLoopsLength()},
 	} {
 		q, n := planeLoopEdges(t, cover, step.z, step.keep)
-		out, err := decad.Chamfer(t.Context(), cover, q.Exactly(n), units.Millimeters(0.5))
+		out, err := decad.Chamfer(cover, q.Exactly(n), units.Millimeters(0.5)).Do(t.Context())
 		require.NoError(t, err, "z=%g", step.z)
 		requireChamferRemoved(t, cover, out, step.run)
 		// The cutters are held exactly to within a few microns, so cutting the windows adds at most a few microns to
@@ -328,7 +328,7 @@ func TestChamferWindowLoopsRefusals(t *testing.T) {
 		t.Parallel()
 		cover := windowedCoverWithBoss(t)
 		q, n := planeLoopEdges(t, cover, 0, func(l *decad.Loop, e []*decad.Edge) bool { return !l.IsOuter() && len(e) > 1 })
-		_, err := decad.Chamfer(t.Context(), cover, q.Exactly(n), units.Millimeters(3))
+		_, err := decad.Chamfer(cover, q.Exactly(n), units.Millimeters(3)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 	})
 	t.Run("part of a loop", func(t *testing.T) {
@@ -336,7 +336,7 @@ func TestChamferWindowLoopsRefusals(t *testing.T) {
 		cover := windowedCoverWithBoss(t)
 		q, n := planeLoopEdgesUpTo(t, cover, 0, func(l *decad.Loop, e []*decad.Edge) bool { return !l.IsOuter() && len(e) > 1 }, 11)
 		require.Equal(t, 11, n)
-		_, err := decad.Chamfer(t.Context(), cover, q.Exactly(n), units.Millimeters(0.5))
+		_, err := decad.Chamfer(cover, q.Exactly(n), units.Millimeters(0.5)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 	})
 }

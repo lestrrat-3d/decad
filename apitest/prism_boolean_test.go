@@ -493,7 +493,7 @@ func TestPrismUnionDownstreamFilletAndWallSurvey(t *testing.T) {
 	got, err := decad.Union(a, b).Do(t.Context())
 	require.NoError(t, err)
 
-	filleted, err := decad.Fillet(t.Context(), got, verticalConvexEdge(), units.Millimeters(1))
+	filleted, err := decad.Fillet(got, verticalConvexEdge(), units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	filletVol, err := filleted.Volume()
 	require.NoError(t, err)
@@ -515,7 +515,7 @@ func TestPrismUnionDownstreamFilletAndWallSurvey(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, tookMeshPath(cutGot), "the analytic reduction must still own this pair")
 
-	cutFilleted, err := decad.Fillet(t.Context(), cutGot, verticalConvexEdge(), units.Millimeters(1))
+	cutFilleted, err := decad.Fillet(cutGot, verticalConvexEdge(), units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	cutVol, err := cutFilleted.Volume()
 	require.NoError(t, err)
@@ -553,7 +553,7 @@ func TestPrismUnionDownstreamFilletAndWallSurvey(t *testing.T) {
 	require.NoError(t, err)
 	fillUnion, err := decad.Union(fillA, fillB).Do(t.Context())
 	require.NoError(t, err)
-	rounded, err := decad.Fillet(t.Context(), fillUnion, decad.Edges().AtLeast(1), units.Millimeters(1))
+	rounded, err := decad.Fillet(fillUnion, decad.Edges().AtLeast(1), units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	roundedVolume, err := rounded.Volume()
 	require.NoError(t, err)

@@ -39,7 +39,7 @@ func Example_shell() {
 	// Remove the top face (the one facing +Z) and leave 5 mm walls. The
 	// result is an open box.
 	top := decad.Faces(decad.Planar(), decad.Facing(r3.NewVec(0, 0, 1)))
-	box, err := decad.Shell(context.Background(), block, top, units.Millimeters(5))
+	box, err := decad.Shell(block, top, units.Millimeters(5)).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to shell: %s\n", err)
 		return

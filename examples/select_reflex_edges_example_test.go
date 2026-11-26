@@ -64,7 +64,7 @@ func Example_selectReflexEdges() {
 		roots[0].Wedge(), roots[0].IsConvex(), roots[0].Start().Position().Value.Z)
 
 	// Round the boss root with a 2 mm fillet. The fillet adds material.
-	rounded, err := decad.Fillet(ctx, part, decad.Edges(decad.Reflex()).Exactly(4), units.Millimeters(2))
+	rounded, err := decad.Fillet(part, decad.Edges(decad.Reflex()).Exactly(4), units.Millimeters(2)).Do(ctx)
 	if err != nil {
 		fmt.Printf("failed to fillet: %s\n", err)
 		return

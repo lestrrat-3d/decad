@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/extent"
+	"github.com/lestrrat-3d/decad/internal/opcommand"
 	"github.com/lestrrat-3d/decad/internal/orthoshell"
 	"github.com/lestrrat-3d/decad/internal/thickenbuild"
 
@@ -35,13 +36,6 @@ import (
 // offset2d.OffsetProfile, offset2d.AuditOffsetSectionBudget, the exact-generation gate and the
 // whole-interval certification of thicken_axis.go — runs unchanged.
 
-// OffsetOption configures which side of a sheet the offset is taken on.
-type OffsetOption interface{ offsetOption() }
-
-type offsetSideOption struct{ side OffsetSide }
-
-func (offsetSideOption) offsetOption() {}
-
 // OffsetSide names the side of the source sheet the offset sheet is placed on.
 // It is its own two-value type rather than a reuse of [ThickenSide]: an offset
 // publishes ONE surface and two surfaces are two calls, so there is no centered
@@ -57,14 +51,11 @@ const (
 	OffsetNegative
 )
 
-// WithOffsetSide selects the side the offset sheet is placed on.
-func WithOffsetSide(side OffsetSide) OffsetOption { return offsetSideOption{side: side} }
-
 // Offset returns a second sheet whose every face lies at the stated normal
 // distance from the source face of b it came from, LEAVING b LIVE.
 //
 // distance is a strictly positive [units.Value] of kind Length; its sign never
-// chooses a side, and [WithOffsetSide] does, the last occurrence winning. A
+// chooses a side, and [OffsetCommand.Side] does, the last call winning. A
 // recorded planar patch offsets by translation along its own frame normal; a
 // profile-fed prism sheet offsets by the certified per-feature section offset
 // of agent-docs/modify-design.md §8, growing a radius-distance arc at each convex
@@ -74,17 +65,52 @@ func WithOffsetSide(side OffsetSide) OffsetOption { return offsetSideOption{side
 // and inward for OffsetNegative, the neighbouring faces extended or trimmed to meet, and the result is a second
 // solid; any other solid is ErrUnsupported.
 //
-// A nil context, a nil b or an option this package did not mint is
+// A nil context given to Do, a nil b or a side that is neither value is
 // ErrDegenerate, as is a zero distance; a wrong-kind, non-finite or negative distance keeps
 // sectionrecord.MagnitudeIn's own sentinel (R40). A retired b is ErrRetiredBody (R41).
 // A refusal registers nothing and retires nothing, so b is live
 // after a refusal exactly as it is after a success.
-func Offset(ctx context.Context, b *Body, distance units.Value,
-	opts ...OffsetOption) (result *Body, retErr error) {
-	defer func() { retErr = operationError(OperationOffset, retErr) }()
-	if ctx == nil {
-		return nil, fmt.Errorf(`%w: a nil context cannot control an offset`, ErrDegenerate)
+func Offset(b *Body, distance units.Value) *OffsetCommand {
+	return &OffsetCommand{b: b, distance: distance}
+}
+
+// OffsetCommand offsets a sheet or an axis-square solid. Build it with
+// [Offset].
+type OffsetCommand struct {
+	state    opcommand.State            // consumed flag and first recorded fault
+	b        *Body                      // stored as given
+	distance units.Value                // the normal distance, gated at Do
+	side     opcommand.Slot[OffsetSide] // set by Side
+}
+
+// Side selects the side the offset sheet is placed on. Without it the side is
+// [OffsetPositive]. A value that is neither side is ErrDegenerate, returned by
+// Do. A second call replaces the first.
+func (c *OffsetCommand) Side(side OffsetSide) *OffsetCommand {
+	var err error
+	if side < OffsetPositive || side > OffsetNegative {
+		err = fmt.Errorf(`%w: unknown offset side %d`, ErrDegenerate, side)
 	}
+	c.side.Set(side, err)
+	return c
+}
+
+// Do builds the offset and leaves the body live, or returns the error of the
+// first gate that refuses. A nil ctx is ErrDegenerate, and a second call
+// returns ErrConsumed.
+func (c *OffsetCommand) Do(ctx context.Context) (*Body, error) {
+	return runCommand(ctx, &c.state, OperationOffset, c.run)
+}
+
+func (c *OffsetCommand) run(ctx context.Context) (*Body, error) {
+	side, sideErr := c.side.Get()
+	return offset(ctx, c.b, c.distance, side, sideErr)
+}
+
+// offset is Offset's implementation. ctx is not nil, and the errors it
+// returns carry no operation tag (agent-docs/command-api-design.md §11).
+// sideErr is the fault of the Side call.
+func offset(ctx context.Context, b *Body, distance units.Value, side OffsetSide, sideErr error) (*Body, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -95,16 +121,8 @@ func Offset(ctx context.Context, b *Body, distance units.Value,
 	if err := d.requireLive(b); err != nil {
 		return nil, err
 	}
-	side := OffsetPositive
-	for _, raw := range opts {
-		o, ok := raw.(offsetSideOption)
-		if !ok {
-			return nil, fmt.Errorf(`%w: the offset option is not a decad offset option (%T)`, ErrDegenerate, raw)
-		}
-		if o.side < OffsetPositive || o.side > OffsetNegative {
-			return nil, fmt.Errorf(`%w: unknown offset side %d`, ErrDegenerate, o.side)
-		}
-		side = o.side
+	if sideErr != nil {
+		return nil, subjectError(OperationOffset, "Side", sideErr)
 	}
 	dmm, dDelta, err := extent.MagnitudeInBounded(distance, units.Length, units.Millimeter, "the offset distance")
 	if err != nil {
@@ -123,7 +141,7 @@ func Offset(ctx context.Context, b *Body, distance units.Value,
 	if err != nil {
 		return nil, err
 	}
-	result = bodyHandle(node)
+	result := bodyHandle(node)
 	if err := d.requireLive(b); err != nil {
 		return nil, err
 	}

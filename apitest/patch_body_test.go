@@ -529,7 +529,7 @@ func TestBodyPatchContextCancellationLeavesDocumentUnchanged(t *testing.T) {
 func TestBodyPatchCopyKeepsBandNormalBound(t *testing.T) {
 	t.Parallel()
 	body := concentricDiskWithHole(t, 4, 1.5, 6)
-	chamfered, err := decad.Chamfer(t.Context(), body, capLoopEdgesOn(body, true), units.Millimeters(0.5))
+	chamfered, err := decad.Chamfer(body, capLoopEdgesOn(body, true), units.Millimeters(0.5)).Do(t.Context())
 	require.NoError(t, err)
 	sheets, err := decad.Unstitch(t.Context(), chamfered)
 	require.NoError(t, err)

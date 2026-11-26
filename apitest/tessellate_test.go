@@ -135,7 +135,7 @@ func TestTessellatePayloadClasses(t *testing.T) {
 
 	t.Run("cup", func(t *testing.T) {
 		_, box := shellBox(t)
-		cup, err := decad.Shell(t.Context(), box, topCap(box), units.Millimeters(5))
+		cup, err := decad.Shell(box, topCap(box), units.Millimeters(5)).Do(t.Context())
 		require.NoError(t, err)
 		mesh, err := cup.Tessellate(t.Context(), units.Millimeters(1))
 		require.NoError(t, err)
@@ -172,7 +172,7 @@ func TestTessellatePayloadClasses(t *testing.T) {
 
 	t.Run("cap-loop chamfer", func(t *testing.T) {
 		_, box := capBlendBox(t)
-		chamfered, err := decad.Chamfer(t.Context(), box, capLoopEdges(box), units.Millimeters(5))
+		chamfered, err := decad.Chamfer(box, capLoopEdges(box), units.Millimeters(5)).Do(t.Context())
 		require.NoError(t, err)
 		mesh, err := chamfered.Tessellate(t.Context(), units.Millimeters(1))
 		require.NoError(t, err)

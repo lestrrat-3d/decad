@@ -58,7 +58,7 @@ import (
 func chamferedBlock(t *testing.T, doc *decad.Document) (*decad.Body, float64) {
 	t.Helper()
 	box := boxBody(t, doc, -6, -6, 6, 6, 12)
-	block, err := decad.Chamfer(t.Context(), box, capLoopEdges(box), units.Millimeters(.1))
+	block, err := decad.Chamfer(box, capLoopEdges(box), units.Millimeters(.1)).Do(t.Context())
 	require.NoError(t, err)
 	mesh, err := block.Tessellate(t.Context(), units.Millimeters(1))
 	require.NoError(t, err)
@@ -525,7 +525,7 @@ func partsBinBottle(t *testing.T, doc *decad.Document) *decad.Body {
 func partsBinCup(t *testing.T, doc *decad.Document) *decad.Body {
 	t.Helper()
 	box := boxBody(t, doc, -12, -8, 12, 8, 16)
-	cup, err := decad.Shell(t.Context(), box, topCap(box), units.Millimeters(2))
+	cup, err := decad.Shell(box, topCap(box), units.Millimeters(2)).Do(t.Context())
 	require.NoError(t, err)
 	return cup
 }
@@ -691,7 +691,7 @@ func TestHeldMeshAdmitsEveryPayload(t *testing.T) {
 	// The 2.1 mm chamfer's feet are not dyadic: its δ is the rounding of its
 	// offset contour.
 	box := boxBody(t, doc, -6, -6, 6, 6, 12)
-	block, err := decad.Chamfer(t.Context(), box, capLoopEdges(box), units.Millimeters(2.1))
+	block, err := decad.Chamfer(box, capLoopEdges(box), units.Millimeters(2.1)).Do(t.Context())
 	require.NoError(t, err)
 	chamfered, err := doc.ContactPair(t.Context(), floor, block, r3.Identity(), up, req)
 	require.NoError(t, err)
@@ -788,7 +788,7 @@ func TestHeldChordValidation(t *testing.T) {
 func tiltedBlock(t *testing.T, doc *decad.Document, y0, setback float64) (*decad.Body, float64) {
 	t.Helper()
 	box := boxBody(t, doc, -6, y0, 6, y0+12, 12)
-	block, err := decad.Chamfer(t.Context(), box, capLoopEdges(box), units.Millimeters(setback))
+	block, err := decad.Chamfer(box, capLoopEdges(box), units.Millimeters(setback)).Do(t.Context())
 	require.NoError(t, err)
 	mesh, err := block.Tessellate(t.Context(), units.Millimeters(1))
 	require.NoError(t, err)

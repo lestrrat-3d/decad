@@ -322,7 +322,7 @@ func runFilletCase(t *testing.T, fc filletCase, plan filletPlan, r float64, s *s
 	count := len(edges)
 	require.Positivef(t, count, "%s/%s selected no corner", fc.name, plan.name)
 
-	filleted, err := decad.Fillet(t.Context(), body, plan.sel(), units.Millimeters(r))
+	filleted, err := decad.Fillet(body, plan.sel(), units.Millimeters(r)).Do(t.Context())
 	if err != nil {
 		// Refuse: a known sentinel, and the document is untouched.
 		require.Truef(t, errors.Is(err, decad.ErrDegenerate) || errors.Is(err, decad.ErrUnsupported),
@@ -485,7 +485,7 @@ func TestFilletScaleInvariant(t *testing.T) {
 			for i, k := range scales {
 				_, body := fc.build(t, k)
 				r := spec.frac * fc.convexMaxR * k
-				_, err := decad.Fillet(t.Context(), body, convexLateral(), units.Millimeters(r))
+				_, err := decad.Fillet(body, convexLateral(), units.Millimeters(r)).Do(t.Context())
 				verdicts[i] = err == nil
 				if err != nil {
 					require.Truef(t, errors.Is(err, decad.ErrDegenerate) || errors.Is(err, decad.ErrUnsupported),
@@ -531,7 +531,7 @@ func FuzzFillet(f *testing.F) {
 		body, err := decad.Extrude(t.Context(), doc, s, pickProfile(t, s, 4, 0), decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
 		require.NoError(t, err)
 
-		filleted, err := decad.Fillet(t.Context(), body, convexLateral(), units.Millimeters(r))
+		filleted, err := decad.Fillet(body, convexLateral(), units.Millimeters(r)).Do(t.Context())
 		if err != nil {
 			require.Truef(t, errors.Is(err, decad.ErrDegenerate) || errors.Is(err, decad.ErrUnsupported),
 				"w=%g h=%g r=%g refused with an unexpected error: %v", w, h, r, err)

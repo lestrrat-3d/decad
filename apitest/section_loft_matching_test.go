@@ -127,7 +127,7 @@ func TestSectionMatchingLoftRefusesFilletRewrite(t *testing.T) {
 	require.NoError(t, err)
 	corner := decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)),
 		decad.EndpointAt(r3.NewVec(-5, -5, 0))).Exactly(1)
-	rounded, err := decad.Fillet(t.Context(), source, corner, units.Millimeters(1))
+	rounded, err := decad.Fillet(source, corner, units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	frame, err := r3.NewFrame(r3.NewVec(0, 0, 1), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	require.NoError(t, err)

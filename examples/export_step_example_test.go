@@ -80,7 +80,7 @@ func Example_export_step_cavity() {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return
 	}
-	hollow, err := decad.Shell(context.Background(), cube, nil, units.Millimeters(3), decad.WithNoOpenings())
+	hollow, err := decad.ShellClosed(cube, units.Millimeters(3)).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to shell: %s\n", err)
 		return

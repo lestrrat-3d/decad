@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/brepmodify"
 	"github.com/lestrrat-3d/decad/internal/extent"
+	"github.com/lestrrat-3d/decad/internal/opcommand"
 
 	"github.com/lestrrat-3d/units"
 )
@@ -29,7 +30,7 @@ import (
 // and the blend-role machinery (topobuild.AddBlendRoles) — via the common cornerBlend.
 //
 // The setback d is measured along the adjacent boundary curve, d from the
-// corner along EACH walk; WithAsymmetricChamfer instead sets back d along the
+// corner along EACH walk; Asymmetric instead sets back d along the
 // walk whose wall is the edge's reference face and its other distance along
 // the other walk (agent-docs/modify-design.md Part R §6). There is NO S5 gate: a
 // chord exists between any two distinct feet, so the fillet's no-blend-centre
@@ -47,15 +48,11 @@ import (
 // which the fillet does not: a selection covering every geometric edge of one
 // or more COMPLETE prism cap loops builds a cap-loop chamfer through
 // capblend.go instead of this file's corner rewrite, at an equal setback or,
-// under WithAsymmetricChamfer, at the two setbacks each cap's reference face
+// under Asymmetric, at the two setbacks each cap's reference face
 // picks (§8.3.1). A single straight cap edge takes route E through the
 // prism's face view or the bounded cutter when its terminal walls are
 // oblique. Other partial cap selections and mixed cap/lateral selections
 // are SX4 (ErrUnsupported).
-
-// ChamferOption configures Chamfer: WithTangentChain and
-// WithAsymmetricChamfer (agent-docs/modify-design.md Part R §2).
-type ChamferOption interface{ chamferOption() }
 
 // Chamfer bevels the selected lateral edges of a straight prism with a straight
 // chord set back a distance d along each adjacent wall, returning the new body
@@ -84,8 +81,8 @@ type ChamferOption interface{ chamferOption() }
 // reference roles remain unsupported; other Sweep kinds are S3 (ErrUnsupported).
 // A receiver outside the admitted classes is S3 (ErrUnsupported).
 //
-// WithTangentChain expands the edges sel resolves to as Fillet's does
-// (agent-docs/modify-design.md Part R §5). WithAsymmetricChamfer sets each edge back
+// TangentChain expands the edges sel resolves to as Fillet's does
+// (agent-docs/modify-design.md Part R §5). Asymmetric sets each edge back
 // d across its reference face and the option's other distance across the
 // other adjacent face (§6), on a prism's lateral edges and a revolve's
 // junctions alike; each setback faces the S6 audit on its own walk. On a
@@ -120,7 +117,7 @@ type ChamferOption interface{ chamferOption() }
 // share no one base plane, such as the rim of a bar rounded about z at one end and about y at the other, is cut by
 // the bevel's section swept along the chain (§15b), with the same readings.
 //
-// Without WithTangentChain a selected edge that ends at a proven tangent junction still takes its continuation, as
+// Without TangentChain a selected edge that ends at a proven tangent junction still takes its continuation, as
 // the target CAD's chamfer does (agent-docs/modify-design.md Part R §5.1): the selection grows to the whole chain. An
 // expansion the oracle cannot decide leaves the selection as named.
 //
@@ -177,14 +174,69 @@ type ChamferOption interface{ chamferOption() }
 // oblique, split or on both sides of the loop's face is SL2, and a band
 // reaching a far face end is SX7 (each ErrUnsupported); a setback that
 // empties a loop's offset is SX6 (ErrDegenerate).
-func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value,
-	opts ...ChamferOption) (result *Body, retErr error) {
-	defer func() { retErr = operationError(OperationChamfer, retErr) }()
-	// Geometry work can take time, so callers need a context that can cancel it.
-	// The body needs a document because a successful chamfer replaces that body there.
-	if ctx == nil {
-		return nil, fmt.Errorf(`%w: a nil context cannot control a chamfer`, ErrDegenerate)
+func Chamfer(b *Body, sel EdgeSelector, d units.Value) *ChamferCommand {
+	c := &ChamferCommand{b: b, sel: copyEdgeSelector(sel), d: d}
+	if b == nil {
+		c.state.Record("body", errNilBody)
 	}
+	return c
+}
+
+// ChamferCommand bevels edges of a body. Build it with [Chamfer].
+type ChamferCommand struct {
+	state opcommand.State     // consumed flag and first recorded fault
+	b     *Body               // stored as given
+	sel   EdgeSelector        // copied at Chamfer
+	d     units.Value         // the setback, gated at Do
+	chain tangentChainSetting // set by TangentChain
+	asym  asymmetricChamferSetting
+}
+
+// TangentChain expands the edges the selector resolves to as
+// [FilletCommand.TangentChain] does (agent-docs/modify-design.md Part R §5).
+func (c *ChamferCommand) TangentChain() *ChamferCommand { c.chain.set(); return c }
+
+// Asymmetric sets back the chamfer's positional distance across reference and
+// otherDistance across the other face adjacent to each selected edge
+// (agent-docs/modify-design.md Part R §6). The method copies reference when
+// it is called, so a later change to the caller's query does not reach the
+// chamfer. reference resolves against the receiver after tangent expansion,
+// and every chamfered edge must have exactly one adjacent face in it, and
+// every face it resolves to must touch a chamfered edge; anything else is
+// ErrCardinality. otherDistance is a length magnitude gated like the
+// positional distance. A second call replaces the first.
+func (c *ChamferCommand) Asymmetric(reference FaceSelector, otherDistance units.Value) *ChamferCommand {
+	c.asym.set(reference, otherDistance)
+	return c
+}
+
+// Do bevels the edges and retires the body, or returns the error of the first
+// gate that refuses, leaving the body live. A nil ctx is ErrDegenerate, and a
+// second call returns ErrConsumed.
+func (c *ChamferCommand) Do(ctx context.Context) (*Body, error) {
+	return runCommand(ctx, &c.state, OperationChamfer, c.run)
+}
+
+func (c *ChamferCommand) run(ctx context.Context) (*Body, error) {
+	a, err := c.asym.slot.Get()
+	o := chamferSettings{tangentChain: c.chain.on, asymErr: err}
+	if c.asym.slot.IsSet() {
+		o.asym = &a
+	}
+	return chamfer(ctx, c.b, c.sel, c.d, o)
+}
+
+// chamferSettings is the folded form of a chamfer's methods. asymErr is the
+// fault of the Asymmetric call, refused where the option decode refused it.
+type chamferSettings struct {
+	tangentChain bool
+	asym         *asymmetricChamferOpts
+	asymErr      error
+}
+
+// chamfer is Chamfer's implementation. ctx is not nil, and the errors it
+// returns carry no operation tag (agent-docs/command-api-design.md §11).
+func chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value, o chamferSettings) (*Body, error) {
 	if b == nil || b.n.Doc == nil {
 		return nil, fmt.Errorf(`%w: the body belongs to no document`, ErrDegenerate)
 	}
@@ -199,9 +251,8 @@ func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value,
 	if err := refuseSheetOperand(b, "Chamfer"); err != nil {
 		return nil, err
 	}
-	o, err := decodeChamferOptions(opts)
-	if err != nil {
-		return nil, err
+	if o.asymErr != nil {
+		return nil, subjectError(OperationChamfer, "Asymmetric", o.asymErr)
 	}
 	// Convert the requested length to millimeters. Keep the conversion's error
 	// bound too, so later geometry checks do not assume the number is exact.
@@ -231,7 +282,7 @@ func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value,
 	}
 	// A tangent edge on an overlapping cylinder ends the exposed run at its
 	// support. Establish this from both original solids before growing a chain.
-	if !o.TangentChain && o.Asymmetric == nil && len(edges) == 1 && dDelta == 0 {
+	if !o.tangentChain && o.asym == nil && len(edges) == 1 && dDelta == 0 {
 		out, ok, err := extendStraightRim(ctx, doc, b, edgeNodes(edges)[0], dmm)
 		if err != nil {
 			return nil, err
@@ -255,7 +306,7 @@ func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value,
 	// Reach stage 2 (agent-docs/modify-design.md Part R §4/§5): the seed query's
 	// cardinality has been enforced above; the tangent chain expands it. Expand
 	// first so every added edge can also receive an asymmetric reference face.
-	if o.TangentChain {
+	if o.tangentChain {
 		if edges, err = expandTangentChain(ctx, b, sel, edges); err != nil {
 			return nil, err
 		}
@@ -268,13 +319,13 @@ func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value,
 	// Reach stage 3 (§6, SX3): the asymmetric reference resolves against the
 	// receiver, after expansion, to one adjacent face per chamfered edge.
 	var asym *brepmodify.Asymmetric
-	if o.Asymmetric != nil {
-		refs, err := resolveAsymmetricReference(b, o.Asymmetric, edges)
+	if o.asym != nil {
+		refs, err := resolveAsymmetricReference(b, o.asym, edges)
 		if err != nil {
 			return nil, err
 		}
-		asym = &brepmodify.Asymmetric{Body: &b.n, Refs: refs, D: dmm, Other: o.Asymmetric.OtherMM,
-			DDelta: dDelta, OtherDelta: o.Asymmetric.OtherDelta}
+		asym = &brepmodify.Asymmetric{Body: &b.n, Refs: refs, D: dmm, Other: o.asym.OtherMM,
+			DDelta: dDelta, OtherDelta: o.asym.OtherDelta}
 	}
 
 	res, err := brepmodify.Chamfer(ctx, envOf(b.n.Doc, documentHandle(b.n.Doc).producerID(ctx)), &b.n, brepmodify.ChamferCall{
@@ -283,7 +334,7 @@ func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value,
 	if err != nil {
 		// Convex edges of an axis-square solid that share a corner have no route of their own: the solid less the wedge of
 		// each edge is their chamfer (agent-docs/orthogonal-design.md B17).
-		if errors.Is(err, ErrUnsupported) && asym == nil && !o.TangentChain {
+		if errors.Is(err, ErrUnsupported) && asym == nil && !o.tangentChain {
 			if out, handled, werr := chamferByWedges(ctx, doc, b, edges, dmm); werr != nil {
 				return nil, werr
 			} else if handled {
@@ -321,7 +372,7 @@ func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value,
 				return commitResult(ctx, OperationChamfer, b, res)
 			}
 		}
-		if errors.Is(err, ErrUnsupported) && asym == nil && !o.TangentChain && len(edges) == 1 && dDelta == 0 {
+		if errors.Is(err, ErrUnsupported) && asym == nil && !o.tangentChain && len(edges) == 1 && dDelta == 0 {
 			rr, ok, re := upperNativeRim(ctx, doc, b, edgeNodes(edges)[0], dmm)
 			if !ok && re == nil {
 				rr, ok, re = alignedNativeRim(ctx, doc, b, edgeNodes(edges)[0], dmm)

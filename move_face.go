@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/opcommand"
 	"github.com/lestrrat-3d/decad/internal/orthoshell"
 	"github.com/lestrrat-3d/units"
 )
@@ -22,13 +23,39 @@ import (
 // exactly one planar face of b, otherwise ErrDegenerate. distance is a signed length: zero is
 // ErrDegenerate and a wrong unit kind ErrUnitKind. A face that would move into material, or inward
 // out through the opposite wall, or leave no solid, is ErrDegenerate. The new coordinate is the
-// float sum of the face's plane and distance. A nil context, body or selector is ErrDegenerate. The
+// float sum of the face's plane and distance. A nil context given to Do, a nil body or a nil selector is ErrDegenerate. The
 // result is a mesh solid, so its axis faces keep their exact planes.
-func MoveFace(ctx context.Context, b *Body, sel FaceSelector, distance units.Value) (result *Body, retErr error) {
-	defer func() { retErr = operationError(OperationMoveFace, retErr) }()
-	if ctx == nil {
-		return nil, fmt.Errorf(`%w: a nil context cannot control a face move`, ErrDegenerate)
+func MoveFace(b *Body, sel FaceSelector, distance units.Value) *MoveFaceCommand {
+	c := &MoveFaceCommand{b: b, sel: copyFaceSelector(sel), distance: distance}
+	if b == nil {
+		c.state.Record("body", errNilBody)
 	}
+	return c
+}
+
+// MoveFaceCommand moves one face of a body along its normal. Build it with
+// [MoveFace]. It has no method.
+type MoveFaceCommand struct {
+	state    opcommand.State // consumed flag and first recorded fault
+	b        *Body           // stored as given
+	sel      FaceSelector    // copied at MoveFace
+	distance units.Value     // the signed move, gated at Do
+}
+
+// Do moves the face and retires the body, or returns the error of the first
+// gate that refuses, leaving the body live. A nil ctx is ErrDegenerate, and a
+// second call returns ErrConsumed.
+func (c *MoveFaceCommand) Do(ctx context.Context) (*Body, error) {
+	return runCommand(ctx, &c.state, OperationMoveFace, c.run)
+}
+
+func (c *MoveFaceCommand) run(ctx context.Context) (*Body, error) {
+	return moveFace(ctx, c.b, c.sel, c.distance)
+}
+
+// moveFace is MoveFace's implementation. ctx is not nil, and the errors it
+// returns carry no operation tag (agent-docs/command-api-design.md §11).
+func moveFace(ctx context.Context, b *Body, sel FaceSelector, distance units.Value) (*Body, error) {
 	if b == nil || b.n.Doc == nil {
 		return nil, fmt.Errorf(`%w: the body belongs to no document`, ErrDegenerate)
 	}
@@ -89,6 +116,9 @@ func MoveFace(ctx context.Context, b *Body, sel FaceSelector, distance units.Val
 	}
 	moved, err := solidFromMeshBody(ctx, d, mesh)
 	if err != nil {
+		if cerr := ctx.Err(); cerr != nil {
+			return nil, cerr
+		}
 		return nil, fmt.Errorf("%w: the moved solid is not one the evaluator can prove: %s", ErrUnsupported, err)
 	}
 	return commitModifyResult(ctx, OperationMoveFace, b, moved)

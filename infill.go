@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/modifyoption"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -112,9 +113,9 @@ func infillWithSkin(ctx context.Context, b *Body, spec InfillSpec) (result *Body
 		return nil, err
 	}
 	temporaries = append(temporaries, fillSource)
-	skin, err := Shell(ctx, skinSource, nil, spec.Skin, WithNoOpenings())
+	skin, err := shell(ctx, skinSource, nil, spec.Skin, modifyoption.ShellConfig{NoOpenings: true}, nil)
 	if err != nil {
-		return nil, fmt.Errorf("decad: the infill skin: %w", err)
+		return nil, fmt.Errorf("decad: the infill skin: %w", operationError(OperationShell, err))
 	}
 	temporaries = append(temporaries, skin)
 	interior := spec

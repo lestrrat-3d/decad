@@ -21,7 +21,7 @@ func filletedCapCut(t *testing.T) *decad.Body {
 	body, err := decad.Extrude(ctx, doc, s, shortStepProfile(t, s), decad.Distance{D: units.Millimeters(6), Dir: decad.Along})
 	require.NoError(t, err)
 	loops := decad.Edges(decad.OuterLoopOf(decad.CapStart(body))).Or(decad.OuterLoopOf(decad.CapEnd(body)))
-	body, err = decad.Fillet(ctx, body, loops, units.Millimeters(1))
+	body, err = decad.Fillet(body, loops, units.Millimeters(1)).Do(ctx)
 	require.NoError(t, err)
 	c := shortStepSketch(t, r3.Vec{Z: -1}, r3.Vec{X: 1}, r3.Vec{Y: 1})
 	c.AddConstraint(sketch.NewRadius(c.CreateCircle(c.Origin(), 3), 3))

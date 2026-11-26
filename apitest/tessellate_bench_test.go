@@ -179,7 +179,7 @@ func BenchmarkTessPrismBox(b *testing.B) { runTess(b, benchBox()) }
 func BenchmarkTessPrismBoxCold(b *testing.B) { runColdTess(b, benchBox) }
 
 func BenchmarkTessPrismFillet(b *testing.B) {
-	body := must(decad.Fillet(b.Context(), benchBox(), decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1))), units.Millimeters(6)))
+	body := must(decad.Fillet(benchBox(), decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1))), units.Millimeters(6)).Do(b.Context()))
 	runTess(b, body)
 }
 
@@ -206,26 +206,26 @@ func BenchmarkTessPrismFreeformCold(b *testing.B) {
 }
 
 func BenchmarkTessCup(b *testing.B) {
-	body := must(decad.Shell(b.Context(), benchBox(), decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))).Exactly(1), units.Millimeters(4)))
+	body := must(decad.Shell(benchBox(), decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))).Exactly(1), units.Millimeters(4)).Do(b.Context()))
 	runTess(b, body)
 }
 
 func BenchmarkTessCupCold(b *testing.B) {
 	runColdTess(b, func() *decad.Body {
-		return must(decad.Shell(b.Context(), benchBox(), decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))).Exactly(1), units.Millimeters(4)))
+		return must(decad.Shell(benchBox(), decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))).Exactly(1), units.Millimeters(4)).Do(b.Context()))
 	})
 }
 
 func BenchmarkTessCapBlend(b *testing.B) {
 	box := benchBox()
-	body := must(decad.Chamfer(b.Context(), box, decad.Edges(decad.CreatedBy(decad.CapEnd(box))), units.Millimeters(3)))
+	body := must(decad.Chamfer(box, decad.Edges(decad.CreatedBy(decad.CapEnd(box))), units.Millimeters(3)).Do(b.Context()))
 	runTess(b, body)
 }
 
 func BenchmarkTessCapBlendCold(b *testing.B) {
 	runColdTess(b, func() *decad.Body {
 		box := benchBox()
-		return must(decad.Chamfer(b.Context(), box, decad.Edges(decad.CreatedBy(decad.CapEnd(box))), units.Millimeters(3)))
+		return must(decad.Chamfer(box, decad.Edges(decad.CreatedBy(decad.CapEnd(box))), units.Millimeters(3)).Do(b.Context()))
 	})
 }
 

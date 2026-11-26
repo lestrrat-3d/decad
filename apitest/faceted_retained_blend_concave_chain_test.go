@@ -59,8 +59,8 @@ func roundedBoss(t *testing.T) *decad.Body {
 	w, doc := sketch.NewWorld(), decad.New()
 	plate := rectBox(t, w, doc, 0, 0, 40, 40, 10)
 	boss := rectBox(t, w, doc, 10, 10, 30, 30, 12)
-	boss, err := decad.Fillet(t.Context(), boss, decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1))).Exactly(4),
-		units.Millimeters(concaveR))
+	boss, err := decad.Fillet(boss, decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1))).Exactly(4),
+		units.Millimeters(concaveR)).Do(t.Context())
 	require.NoError(t, err)
 	out, err := decad.Union(plate, placed(t, boss, 8)).Do(t.Context())
 	require.NoError(t, err)
@@ -73,8 +73,8 @@ func pocketWithCube(t *testing.T, y0, z0, side float64) *decad.Body {
 	t.Helper()
 	w, doc := sketch.NewWorld(), decad.New()
 	plate := rectBox(t, w, doc, 0, 0, 40, 40, 10)
-	tool, err := decad.Fillet(t.Context(), rectBox(t, w, doc, 10, 10, 30, 30, 20),
-		decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1))).Exactly(4), units.Millimeters(concaveR))
+	tool, err := decad.Fillet(rectBox(t, w, doc, 10, 10, 30, 30, 20),
+		decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1))).Exactly(4), units.Millimeters(concaveR)).Do(t.Context())
 	require.NoError(t, err)
 	pocket, err := decad.Cut(plate, placed(t, tool, 5)).Do(t.Context())
 	require.NoError(t, err)
@@ -175,7 +175,7 @@ func TestFacetedRetainedBlendConcaveChain(t *testing.T) {
 		before, err := pocket.Volume()
 		require.NoError(t, err)
 		const r = concaveFilletR
-		out, err := decad.Fillet(t.Context(), pocket, floorFront(5), units.Millimeters(r), decad.WithTangentChain())
+		out, err := decad.Fillet(pocket, floorFront(5), units.Millimeters(r)).TangentChain().Do(t.Context())
 		require.NoError(t, err)
 		after, err := out.Volume()
 		require.NoError(t, err)
@@ -196,7 +196,7 @@ func TestFacetedRetainedBlendConcaveChain(t *testing.T) {
 		pocket := roundedPocket(t, true)
 		before, err := pocket.Volume()
 		require.NoError(t, err)
-		out, err := decad.Chamfer(t.Context(), pocket, floorFront(5), units.Millimeters(1), decad.WithTangentChain())
+		out, err := decad.Chamfer(pocket, floorFront(5), units.Millimeters(1)).TangentChain().Do(t.Context())
 		require.NoError(t, err)
 		after, err := out.Volume()
 		require.NoError(t, err)
@@ -211,8 +211,8 @@ func TestFacetedRetainedBlendConcaveChain(t *testing.T) {
 		// by the placed tool's start cap, which the Cut keeps.
 		w, doc := sketch.NewWorld(), decad.New()
 		plate := rectBox(t, w, doc, 0, 0, 40, 40, 10)
-		tool, err := decad.Fillet(t.Context(), rectBox(t, w, doc, 10, 10, 30, 30, 20),
-			decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1))).Exactly(4), units.Millimeters(concaveR))
+		tool, err := decad.Fillet(rectBox(t, w, doc, 10, 10, 30, 30, 20),
+			decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1))).Exactly(4), units.Millimeters(concaveR)).Do(t.Context())
 		require.NoError(t, err)
 		tool = placed(t, tool, 5)
 		pocket, err := decad.Cut(plate, tool).Do(t.Context())
@@ -220,8 +220,7 @@ func TestFacetedRetainedBlendConcaveChain(t *testing.T) {
 		before, err := pocket.Volume()
 		require.NoError(t, err)
 		floor := decad.Faces(decad.FaceCreatedBy(decad.CapStart(tool))).Exactly(1)
-		out, err := decad.Chamfer(t.Context(), pocket, floorFront(5), units.Millimeters(2), decad.WithTangentChain(),
-			decad.WithAsymmetricChamfer(floor, units.Millimeters(1)))
+		out, err := decad.Chamfer(pocket, floorFront(5), units.Millimeters(2)).TangentChain().Asymmetric(floor, units.Millimeters(1)).Do(t.Context())
 		require.NoError(t, err)
 		after, err := out.Volume()
 		require.NoError(t, err)
@@ -236,7 +235,7 @@ func TestFacetedRetainedBlendConcaveChain(t *testing.T) {
 		before, err := joined.Volume()
 		require.NoError(t, err)
 		const r = concaveFilletR
-		out, err := decad.Fillet(t.Context(), joined, floorFront(10), units.Millimeters(r), decad.WithTangentChain())
+		out, err := decad.Fillet(joined, floorFront(10), units.Millimeters(r)).TangentChain().Do(t.Context())
 		require.NoError(t, err)
 		after, err := out.Volume()
 		require.NoError(t, err)
@@ -272,7 +271,7 @@ func TestFacetedRetainedBlendConcaveChain(t *testing.T) {
 			outline = outline.Or(decad.EndpointAt(p), decad.EndpointAt(q))
 		}
 		require.Equal(t, 8, named)
-		out, err := decad.Fillet(t.Context(), pocket, outline.Exactly(8), units.Millimeters(concaveFilletR))
+		out, err := decad.Fillet(pocket, outline.Exactly(8), units.Millimeters(concaveFilletR)).Do(t.Context())
 		require.NoError(t, err)
 		after, err := out.Volume()
 		require.NoError(t, err)
@@ -289,7 +288,7 @@ func TestFacetedRetainedBlendConcaveChain(t *testing.T) {
 	t.Run("a pocket shallower than the radius is refused", func(t *testing.T) {
 		t.Parallel()
 		pocket := roundedPocketAt(t, true, 9.2)
-		_, err := decad.Fillet(t.Context(), pocket, floorFront(9.2), units.Millimeters(1), decad.WithTangentChain())
+		_, err := decad.Fillet(pocket, floorFront(9.2), units.Millimeters(1)).TangentChain().Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 		require.ErrorContains(t, err, "the blend consumes the wall")
 	})
@@ -297,7 +296,7 @@ func TestFacetedRetainedBlendConcaveChain(t *testing.T) {
 	t.Run("a radius that reaches the arcs' axes is refused", func(t *testing.T) {
 		t.Parallel()
 		pocket := roundedPocket(t, true)
-		_, err := decad.Fillet(t.Context(), pocket, floorFront(5), units.Millimeters(3), decad.WithTangentChain())
+		_, err := decad.Fillet(pocket, floorFront(5), units.Millimeters(3)).TangentChain().Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 		require.ErrorContains(t, err, "the blend reaches the rim's axis")
 	})
@@ -306,8 +305,7 @@ func TestFacetedRetainedBlendConcaveChain(t *testing.T) {
 		t.Parallel()
 		// The cube lies wholly between the floor's front corner and the
 		// fillet's arc, clear of the floor and the wall.
-		_, err := decad.Fillet(t.Context(), pocketWithCube(t, 10.05, 5.05, 0.1), floorFront(5), units.Millimeters(1),
-			decad.WithTangentChain())
+		_, err := decad.Fillet(pocketWithCube(t, 10.05, 5.05, 0.1), floorFront(5), units.Millimeters(1)).TangentChain().Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "the blended mesh fails its held audit")
 		require.ErrorContains(t, err, "a result shell has inconsistent orientation")
@@ -318,8 +316,7 @@ func TestFacetedRetainedBlendConcaveChain(t *testing.T) {
 		joined := pocketWithCube(t, 20, 5.05, 0.1)
 		before, err := joined.Volume()
 		require.NoError(t, err)
-		out, err := decad.Fillet(t.Context(), joined, floorFront(5), units.Millimeters(concaveFilletR),
-			decad.WithTangentChain())
+		out, err := decad.Fillet(joined, floorFront(5), units.Millimeters(concaveFilletR)).TangentChain().Do(t.Context())
 		require.NoError(t, err)
 		after, err := out.Volume()
 		require.NoError(t, err)
@@ -332,8 +329,8 @@ func TestFacetedRetainedBlendConcaveChain(t *testing.T) {
 		// Only the cube's lower front edge reaches into the fill: its corner
 		// (y, z) = (10.25, 5.25) lies between the floor's front corner and the
 		// fillet's arc, and the rest of the cube lies in the void beyond it.
-		_, err := decad.Fillet(t.Context(), pocketWithCube(t, 10.25, 5.25, 1), floorFront(5),
-			units.Millimeters(concaveFilletR), decad.WithTangentChain())
+		_, err := decad.Fillet(pocketWithCube(t, 10.25, 5.25, 1), floorFront(5),
+			units.Millimeters(concaveFilletR)).TangentChain().Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "the blend meets another facet of the body")
 		requireContactX(t, err, 15, 17)

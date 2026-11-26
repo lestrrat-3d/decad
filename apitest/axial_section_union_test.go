@@ -163,7 +163,7 @@ func TestAxialSectionUnionFinishes(t *testing.T) {
 	require.InDelta(t, v0.Value.Base()-math.Pi*0.8*0.8*height, bv.Value.Base(), v0.Bound.Base()+bv.Bound.Base())
 
 	caps := decad.Edges(decad.OuterLoopOf(decad.CapStart(bored))).Or(decad.OuterLoopOf(decad.CapEnd(bored)))
-	chamfered, err := decad.Chamfer(t.Context(), bored, caps, units.Millimeters(0.03))
+	chamfered, err := decad.Chamfer(bored, caps, units.Millimeters(0.03)).Do(t.Context())
 	require.NoError(t, err)
 	cv, err := chamfered.Volume()
 	require.NoError(t, err)
@@ -369,9 +369,9 @@ func TestAxialSectionUnionCounterboreRimChamfers(t *testing.T) {
 
 	v0, err := cut.Volume()
 	require.NoError(t, err)
-	chamfered, err := decad.Chamfer(t.Context(), cut,
+	chamfered, err := decad.Chamfer(cut,
 		decad.Edges(decad.EndpointAt(rim.Start().Position().Value), decad.Circular()).Exactly(1),
-		units.Millimeters(setback))
+		units.Millimeters(setback)).Do(t.Context())
 	require.NoError(t, err)
 	require.True(t, chamfered.IsSolid())
 	v1, err := chamfered.Volume()

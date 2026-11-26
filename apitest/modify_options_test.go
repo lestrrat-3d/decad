@@ -24,7 +24,7 @@ import (
 // instead of refusing SX2; assigning the
 // positional distance to the arriving walk regardless of the reference face
 // sends the reference-swap and revolve tests red (the two feet trade
-// places); skipping the deep copy in WithAsymmetricChamfer sends both
+// places); skipping the deep copy in Asymmetric sends both
 // selector-copy subtests red, and sharing the caller's branch list with spare
 // capacity sends the union one red; and resolving the reference without the
 // one-face-per-edge count builds the dual and extra references.
@@ -107,106 +107,111 @@ func volumeMM3(t *testing.T, b *decad.Body) float64 {
 	return mm3
 }
 
-func TestModifyOptionGates(t *testing.T) {
+func TestModifyMethodsLastCallWins(t *testing.T) {
 	t.Parallel()
-	t.Run("NilOption", func(t *testing.T) {
-		doc, box := filletBox(t)
-		_, err := decad.Fillet(t.Context(), box, verticalEdges(), units.Millimeters(5), nil)
-		require.ErrorIs(t, err, decad.ErrDegenerate)
-		_, err = decad.Chamfer(t.Context(), box, verticalEdges(), units.Millimeters(5), nil)
-		require.ErrorIs(t, err, decad.ErrDegenerate)
-		_, err = decad.Shell(t.Context(), box, decad.Faces(decad.FaceCreatedBy(decad.CapEnd(box))), units.Millimeters(5), nil)
-		require.ErrorIs(t, err, decad.ErrDegenerate)
-		require.Equal(t, []*decad.Body{box}, doc.Bodies())
+	t.Run("AsymmetricReplacesAnInvalidFirstCall", func(t *testing.T) {
+		_, box := filletBox(t)
+		ref := decad.Faces(decad.Facing(r3.NewVec(1, 0, 0)))
+		want := mustChamfer(t, box, cornerEdge(), 3, asymmetric(ref, units.Millimeters(5)))
+		_, box2 := filletBox(t)
+		got := mustChamfer(t, box2, cornerEdge(), 3, asymmetric(ref, units.Millimeters(0)), asymmetric(ref, units.Millimeters(5)))
+		require.Equal(t, volumeMM3(t, want), volumeMM3(t, got))
+		require.Equal(t, chamferFeet(t, want), chamferFeet(t, got))
 	})
-	t.Run("DuplicateAsymmetric", func(t *testing.T) {
+	t.Run("AsymmetricLastValueIsTheOneApplied", func(t *testing.T) {
+		_, box := filletBox(t)
+		ref := decad.Faces(decad.Facing(r3.NewVec(1, 0, 0)))
+		out := mustChamfer(t, box, cornerEdge(), 3, asymmetric(ref, units.Millimeters(5)), asymmetric(ref, units.Millimeters(7)))
+		require.Equal(t, []r3.Vec{r3.NewVec(93, 60, 0), r3.NewVec(100, 57, 0)}, chamferFeet(t, out))
+	})
+	t.Run("AsymmetricInvalidLastCallIsRefused", func(t *testing.T) {
 		doc, box := filletBox(t)
 		ref := decad.Faces(decad.Facing(r3.NewVec(1, 0, 0)))
-		_, err := decad.Chamfer(t.Context(), box, verticalEdges(), units.Millimeters(3),
-			decad.WithAsymmetricChamfer(ref, units.Millimeters(5)),
-			decad.WithAsymmetricChamfer(ref, units.Millimeters(5)))
+		_, err := decad.Chamfer(box, cornerEdge(), units.Millimeters(3)).
+			Asymmetric(ref, units.Millimeters(5)).Asymmetric(ref, units.Millimeters(0)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrDegenerate)
-		require.ErrorContains(t, err, "SX1")
 		require.Equal(t, []*decad.Body{box}, doc.Bodies())
 	})
-	t.Run("ContradictorySense", func(t *testing.T) {
-		doc, box := filletBox(t)
-		_, err := decad.Shell(t.Context(), box, decad.Faces(decad.FaceCreatedBy(decad.CapEnd(box))), units.Millimeters(5),
-			decad.WithShellSense(decad.Inward), decad.WithShellSense(decad.Outward))
-		require.ErrorIs(t, err, decad.ErrDegenerate)
-		require.ErrorContains(t, err, "SX1")
-		require.Equal(t, []*decad.Body{box}, doc.Bodies())
-	})
-	t.Run("RepeatedSameIntent", func(t *testing.T) {
+	t.Run("SenseTakesTheLastCall", func(t *testing.T) {
 		_, box := filletBox(t)
-		cup, err := decad.Shell(t.Context(), box, decad.Faces(decad.FaceCreatedBy(decad.CapEnd(box))), units.Millimeters(5),
-			decad.WithShellSense(decad.Outward), decad.WithShellSense(decad.Outward))
+		cup, err := decad.Shell(box, decad.Faces(decad.FaceCreatedBy(decad.CapEnd(box))), units.Millimeters(5)).
+			Sense(decad.Inward).Sense(decad.Outward).Do(t.Context())
 		require.NoError(t, err)
 		// Outward: the dilated section — the plate, a 5 mm band along its
 		// 320 mm perimeter and four quarter disks at its corners — over
 		// [−5, 20], less the original box.
 		decadtest.MeasuresVolume(t, cup, units.CubicMillimeters((100*60+5*320+25*math.Pi)*25-100*60*20), decadtest.Within(units.CubicMillimeters(1e-6)))
-
+	})
+	t.Run("SenseInvalidLastCallIsRefused", func(t *testing.T) {
+		doc, box := filletBox(t)
+		_, err := decad.Shell(box, decad.Faces(decad.FaceCreatedBy(decad.CapEnd(box))), units.Millimeters(5)).
+			Sense(decad.Outward).Sense(decad.ShellSense(9)).Do(t.Context())
+		require.ErrorIs(t, err, decad.ErrDegenerate)
+		require.Equal(t, []*decad.Body{box}, doc.Bodies())
+	})
+	t.Run("TangentChainTwiceIsOnce", func(t *testing.T) {
 		_, slot := slotBody(t, [2]float64{10, 5})
-		once := volumeMM3(t, mustChamfer(t, slot, slotSeed(slot), 2, decad.WithTangentChain(), decad.WithTangentChain()))
+		once := volumeMM3(t, mustChamfer(t, slot, slotSeed(slot), 2, tangentChain(), tangentChain()))
 		_, slot2 := slotBody(t, [2]float64{10, 5})
-		require.Equal(t, once, volumeMM3(t, mustChamfer(t, slot2, slotSeed(slot2), 2, decad.WithTangentChain())))
+		require.Equal(t, once, volumeMM3(t, mustChamfer(t, slot2, slotSeed(slot2), 2, tangentChain())))
 	})
 	t.Run("OtherDistanceGates", func(t *testing.T) {
 		doc, box := filletBox(t)
 		ref := decad.Faces(decad.Facing(r3.NewVec(1, 0, 0)))
 		for _, other := range []units.Value{units.Millimeters(0), units.Millimeters(-1), units.Degrees(3)} {
-			_, err := decad.Chamfer(t.Context(), box, cornerEdge(), units.Millimeters(3), decad.WithAsymmetricChamfer(ref, other))
+			_, err := decad.Chamfer(box, cornerEdge(), units.Millimeters(3)).Asymmetric(ref, other).Do(t.Context())
 			require.Error(t, err)
 		}
 		require.Equal(t, []*decad.Body{box}, doc.Bodies())
 	})
 }
 
-func mustChamfer(t *testing.T, b *decad.Body, sel decad.EdgeSelector, d float64, opts ...decad.ChamferOption) *decad.Body {
+// chamferSetting is one method call of a ChamferCommand.
+type chamferSetting func(*decad.ChamferCommand) *decad.ChamferCommand
+
+func tangentChain() chamferSetting { return (*decad.ChamferCommand).TangentChain }
+
+func asymmetric(reference decad.FaceSelector, other units.Value) chamferSetting {
+	return func(c *decad.ChamferCommand) *decad.ChamferCommand { return c.Asymmetric(reference, other) }
+}
+
+func mustChamfer(t *testing.T, b *decad.Body, sel decad.EdgeSelector, d float64, settings ...chamferSetting) *decad.Body {
 	t.Helper()
-	out, err := decad.Chamfer(t.Context(), b, sel, units.Millimeters(d), opts...)
+	cmd := decad.Chamfer(b, sel, units.Millimeters(d))
+	for _, set := range settings {
+		cmd = set(cmd)
+	}
+	out, err := cmd.Do(t.Context())
 	require.NoError(t, err)
 	return out
 }
 
 func TestShellNoOpenings(t *testing.T) {
 	t.Parallel()
-	t.Run("NilSelectorAccepted", func(t *testing.T) {
-		// The option lifts base S16's nil-selector refusal: a hole-free prism
-		// builds its closed shell (reach BX5), through a nil selector and a
-		// typed nil alike.
-		var typedNil *decad.FaceQuery
-		for _, sel := range []decad.FaceSelector{nil, typedNil} {
-			doc, box := filletBox(t)
-			closed, err := decad.Shell(t.Context(), box, sel, units.Millimeters(5), decad.WithNoOpenings())
-			require.NoError(t, err)
-			require.Len(t, closed.Shells(), 2)
-			require.Equal(t, []*decad.Body{closed}, doc.Bodies())
-		}
-	})
-	t.Run("NilSelectorWithoutOption", func(t *testing.T) {
-		_, box := filletBox(t)
-		_, err := decad.Shell(t.Context(), box, nil, units.Millimeters(5))
-		require.ErrorIs(t, err, decad.ErrDegenerate)
-	})
-	t.Run("SelectorConflicts", func(t *testing.T) {
+	t.Run("TakesNoSelector", func(t *testing.T) {
+		// ShellClosed names no face to remove: a hole-free prism builds its
+		// closed shell (reach BX5).
 		doc, box := filletBox(t)
-		_, err := decad.Shell(t.Context(), box, decad.Faces(decad.FaceCreatedBy(decad.CapEnd(box))), units.Millimeters(5), decad.WithNoOpenings())
+		closed, err := decad.ShellClosed(box, units.Millimeters(5)).Do(t.Context())
+		require.NoError(t, err)
+		require.Len(t, closed.Shells(), 2)
+		require.Equal(t, []*decad.Body{closed}, doc.Bodies())
+	})
+	t.Run("ShellWithoutSelector", func(t *testing.T) {
+		_, box := filletBox(t)
+		_, err := decad.Shell(box, nil, units.Millimeters(5)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrDegenerate)
-		require.ErrorContains(t, err, "SX1")
-		require.Equal(t, []*decad.Body{box}, doc.Bodies())
 	})
 	t.Run("Revolve", func(t *testing.T) {
 		// A partial turn's closed shell keeps both angular caps (SX8); a full
 		// turn's builds (revolve_shell_test.go).
 		doc := decad.New()
 		partial := revolveMeridian(t, doc, shaftMeridian, halfTurn)
-		_, err := decad.Shell(t.Context(), partial, nil, units.Millimeters(1), decad.WithNoOpenings())
+		_, err := decad.ShellClosed(partial, units.Millimeters(1)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "SX8")
 		full := revolveMeridian(t, doc, shaftMeridian, decad.FullRevolution{})
-		closed, err := decad.Shell(t.Context(), full, nil, units.Millimeters(1), decad.WithNoOpenings())
+		closed, err := decad.ShellClosed(full, units.Millimeters(1)).Do(t.Context())
 		require.NoError(t, err)
 		require.Equal(t, []*decad.Body{partial, closed}, doc.Bodies())
 	})
@@ -232,14 +237,14 @@ func TestShellNoOpenings(t *testing.T) {
 		require.NotNil(t, holed)
 		// Outward, a hole whose radius the thickness reaches fills in, which
 		// the offset refuses as a dropped feature (S11a).
-		_, err = decad.Shell(t.Context(), holed, nil, units.Millimeters(5), decad.WithNoOpenings(), decad.WithShellSense(decad.Outward))
+		_, err = decad.ShellClosed(holed, units.Millimeters(5)).Sense(decad.Outward).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "drops a section feature")
 		require.Equal(t, []*decad.Body{holed}, doc.Bodies())
 		// A thinner outward wall builds: the 40² section dilated by 2 (its
 		// corners rounded, the hole shrunk to radius 3) over 14, less the
 		// receiver.
-		closed, err := decad.Shell(t.Context(), holed, nil, units.Millimeters(2), decad.WithNoOpenings(), decad.WithShellSense(decad.Outward))
+		closed, err := decad.ShellClosed(holed, units.Millimeters(2)).Sense(decad.Outward).Do(t.Context())
 		require.NoError(t, err)
 		requireVolumeNear(t, closed, (1920+4*math.Pi-9*math.Pi)*14-(1600-25*math.Pi)*10)
 		require.Len(t, closed.Shells(), 2)
@@ -253,7 +258,7 @@ func TestTangentChainSlotCapLoop(t *testing.T) {
 
 	// Exactly(1) holds on the seed; the line→arc→line→arc chain then expands
 	// it to the whole top loop, which builds the cap-loop chamfer.
-	chained := mustChamfer(t, slot, slotSeed(slot), d, decad.WithTangentChain())
+	chained := mustChamfer(t, slot, slotSeed(slot), d, tangentChain())
 	requireManifold(t, chained)
 
 	// Without the option the seed ends at tangent junctions, so Chamfer takes
@@ -287,7 +292,7 @@ func TestTangentChainOvalArcArc(t *testing.T) {
 	const h, d = slotHeight, 1.0
 	oval := ovalBody(t)
 	seed := decad.Edges(decad.CreatedBy(decad.CapEnd(oval)), decad.EndpointAt(r3.NewVec(6, 4, h)), decad.EndpointAt(r3.NewVec(-6, 4, h))).Exactly(1)
-	chained := mustChamfer(t, oval, seed, d, decad.WithTangentChain())
+	chained := mustChamfer(t, oval, seed, d, tangentChain())
 	requireManifold(t, chained)
 
 	// Pappus per arc: the removed triangle d²/2 at radius R − d/3 over the
@@ -313,7 +318,7 @@ func TestTangentChainNearTangentStops(t *testing.T) {
 	// to the top wall and stops at both near-tangent joins: three of the four
 	// top edges, a partial loop.
 	doc, slot := slotBody(t, [2]float64{9.9, 5})
-	_, err := decad.Chamfer(t.Context(), slot, slotSeed(slot), units.Millimeters(1), decad.WithTangentChain())
+	_, err := decad.Chamfer(slot, slotSeed(slot), units.Millimeters(1)).TangentChain().Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.ErrorContains(t, err, "only part of a cap loop")
 	require.NotContains(t, err.Error(), "SX2")
@@ -326,10 +331,10 @@ func TestTangentChainUndecidedRefused(t *testing.T) {
 	// cross product is exactly nonzero and below the oracle's noise floor, so
 	// the continuation is undecided — SX2, never a silent stop.
 	doc, slot := slotBody(t, [2]float64{9.9999999999, 5})
-	_, err := decad.Chamfer(t.Context(), slot, slotSeed(slot), units.Millimeters(1), decad.WithTangentChain())
+	_, err := decad.Chamfer(slot, slotSeed(slot), units.Millimeters(1)).TangentChain().Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.ErrorContains(t, err, "SX2")
-	_, err = decad.Fillet(t.Context(), slot, slotSeed(slot), units.Millimeters(1), decad.WithTangentChain())
+	_, err = decad.Fillet(slot, slotSeed(slot), units.Millimeters(1)).TangentChain().Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.ErrorContains(t, err, "SX2")
 	require.Equal(t, []*decad.Body{slot}, doc.Bodies())
@@ -381,7 +386,7 @@ func TestAsymmetricChamferFeet(t *testing.T) {
 		// sit 3 down the first and 5 back along the second.
 		_, box := filletBox(t)
 		out := mustChamfer(t, box, cornerEdge(), 3,
-			decad.WithAsymmetricChamfer(decad.Faces(decad.Facing(r3.NewVec(1, 0, 0))), units.Millimeters(5)))
+			asymmetric(decad.Faces(decad.Facing(r3.NewVec(1, 0, 0))), units.Millimeters(5)))
 		requireManifold(t, out)
 		require.Equal(t, []r3.Vec{r3.NewVec(95, 60, 0), r3.NewVec(100, 57, 0)}, chamferFeet(t, out))
 		decadtest.MeasuresVolume(t, out, units.CubicMillimeters(100*60*h-3*5/2.0*h), decadtest.Exactly())
@@ -389,7 +394,7 @@ func TestAsymmetricChamferFeet(t *testing.T) {
 	t.Run("ReferenceSwapsTheDistances", func(t *testing.T) {
 		_, box := filletBox(t)
 		out := mustChamfer(t, box, cornerEdge(), 3,
-			decad.WithAsymmetricChamfer(decad.Faces(decad.Facing(r3.NewVec(0, 1, 0))), units.Millimeters(5)))
+			asymmetric(decad.Faces(decad.Facing(r3.NewVec(0, 1, 0))), units.Millimeters(5)))
 		require.Equal(t, []r3.Vec{r3.NewVec(97, 60, 0), r3.NewVec(100, 55, 0)}, chamferFeet(t, out))
 		decadtest.MeasuresVolume(t, out, units.CubicMillimeters(100*60*h-3*5/2.0*h), decadtest.Exactly())
 	})
@@ -399,7 +404,7 @@ func TestAsymmetricChamferFeet(t *testing.T) {
 		// along its y wall.
 		_, box := filletBox(t)
 		out := mustChamfer(t, box, verticalEdges(), 3,
-			decad.WithAsymmetricChamfer(decad.Faces(decad.NormalTo(r3.NewVec(1, 0, 0))), units.Millimeters(5)))
+			asymmetric(decad.Faces(decad.NormalTo(r3.NewVec(1, 0, 0))), units.Millimeters(5)))
 		requireManifold(t, out)
 		require.Equal(t, []r3.Vec{
 			r3.NewVec(0, 3, 0), r3.NewVec(0, 57, 0), r3.NewVec(5, 0, 0), r3.NewVec(5, 60, 0),
@@ -411,7 +416,7 @@ func TestAsymmetricChamferFeet(t *testing.T) {
 		// A quarter inch is 6.35 mm; the y = 60 foot lands at 100 − 6.35.
 		_, box := filletBox(t)
 		out := mustChamfer(t, box, cornerEdge(), 3,
-			decad.WithAsymmetricChamfer(decad.Faces(decad.Facing(r3.NewVec(1, 0, 0))), units.Inches(0.25)))
+			asymmetric(decad.Faces(decad.Facing(r3.NewVec(1, 0, 0))), units.Inches(0.25)))
 		feet := chamferFeet(t, out)
 		require.Len(t, feet, 2)
 		require.InDelta(t, 100-6.35, feet[0].X, 1e-12)
@@ -420,15 +425,16 @@ func TestAsymmetricChamferFeet(t *testing.T) {
 	})
 	t.Run("UnionSelectorDeepCopy", func(t *testing.T) {
 		// Four lateral edges and a two-branch union naming the x = 0 and
-		// x = 100 walls. After the option copied it, the caller adds a branch
+		// x = 100 walls. After the method copied it, the caller adds a branch
 		// naming the y = 60 wall (which would give two corners two reference
 		// faces) and asserts a count the union never meets; the chamfer
 		// resolves the copy, both branches and its own Exactly(2).
 		_, box := filletBox(t)
 		ref := decad.Faces(decad.Facing(r3.NewVec(-1, 0, 0))).Or(decad.Facing(r3.NewVec(1, 0, 0))).Exactly(2)
-		opt := decad.WithAsymmetricChamfer(ref, units.Millimeters(5))
+		cmd := decad.Chamfer(box, verticalEdges(), units.Millimeters(3)).Asymmetric(ref, units.Millimeters(5))
 		ref.Or(decad.Facing(r3.NewVec(0, 1, 0))).Exactly(7)
-		out := mustChamfer(t, box, verticalEdges(), 3, opt)
+		out, err := cmd.Do(t.Context())
+		require.NoError(t, err)
 		require.Equal(t, []r3.Vec{
 			r3.NewVec(0, 3, 0), r3.NewVec(0, 57, 0), r3.NewVec(5, 0, 0), r3.NewVec(5, 60, 0),
 			r3.NewVec(95, 0, 0), r3.NewVec(95, 60, 0), r3.NewVec(100, 3, 0), r3.NewVec(100, 57, 0),
@@ -436,13 +442,14 @@ func TestAsymmetricChamferFeet(t *testing.T) {
 		decadtest.MeasuresVolume(t, out, units.CubicMillimeters(100*60*h-4*7.5*h), decadtest.Exactly())
 	})
 	t.Run("SelectorDeepCopy", func(t *testing.T) {
-		// The caller's query changes after the option copied it; the chamfer
+		// The caller's query changes after the method copied it; the chamfer
 		// resolves the copy.
 		_, box := filletBox(t)
 		ref := decad.Faces(decad.Facing(r3.NewVec(1, 0, 0)))
-		opt := decad.WithAsymmetricChamfer(ref, units.Millimeters(5))
+		cmd := decad.Chamfer(box, cornerEdge(), units.Millimeters(3)).Asymmetric(ref, units.Millimeters(5))
 		ref.Exactly(7)
-		out := mustChamfer(t, box, cornerEdge(), 3, opt)
+		out, err := cmd.Do(t.Context())
+		require.NoError(t, err)
 		require.Equal(t, []r3.Vec{r3.NewVec(95, 60, 0), r3.NewVec(100, 57, 0)}, chamferFeet(t, out))
 	})
 }
@@ -462,7 +469,7 @@ func TestAsymmetricChamferReferenceRefused(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			doc, box := filletBox(t)
-			_, err := decad.Chamfer(t.Context(), box, cornerEdge(), units.Millimeters(3), decad.WithAsymmetricChamfer(tc.ref, units.Millimeters(5)))
+			_, err := decad.Chamfer(box, cornerEdge(), units.Millimeters(3)).Asymmetric(tc.ref, units.Millimeters(5)).Do(t.Context())
 			require.ErrorIs(t, err, tc.want)
 			require.Equal(t, []*decad.Body{box}, doc.Bodies(), `a refused chamfer leaves the receiver live`)
 		})
@@ -476,13 +483,13 @@ func TestAsymmetricChamferOverrunEachSide(t *testing.T) {
 	// faces S6 on its own wall.
 	for _, c := range []struct{ d, other float64 }{{61, 5}, {3, 101}} {
 		doc, box := filletBox(t)
-		_, err := decad.Chamfer(t.Context(), box, cornerEdge(), units.Millimeters(c.d), decad.WithAsymmetricChamfer(ref, units.Millimeters(c.other)))
+		_, err := decad.Chamfer(box, cornerEdge(), units.Millimeters(c.d)).Asymmetric(ref, units.Millimeters(c.other)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported, `d=%v other=%v`, c.d, c.other)
 		require.Equal(t, []*decad.Body{box}, doc.Bodies())
 	}
 	// Both setbacks fit: 59 and 99 build.
 	_, box := filletBox(t)
-	_, err := decad.Chamfer(t.Context(), box, cornerEdge(), units.Millimeters(59), decad.WithAsymmetricChamfer(ref, units.Millimeters(99)))
+	_, err := decad.Chamfer(box, cornerEdge(), units.Millimeters(59)).Asymmetric(ref, units.Millimeters(99)).Do(t.Context())
 	require.NoError(t, err)
 }
 
@@ -491,7 +498,7 @@ func TestAsymmetricChamferRepeatable(t *testing.T) {
 	run := func() (float64, []r3.Vec) {
 		_, box := filletBox(t)
 		out := mustChamfer(t, box, cornerEdge(), 3,
-			decad.WithAsymmetricChamfer(decad.Faces(decad.Facing(r3.NewVec(1, 0, 0))), units.Millimeters(5)), decad.WithTangentChain())
+			asymmetric(decad.Faces(decad.Facing(r3.NewVec(1, 0, 0))), units.Millimeters(5)), tangentChain())
 		return volumeMM3(t, out), chamferFeet(t, out)
 	}
 	v1, f1 := run()
@@ -525,7 +532,7 @@ func TestAsymmetricChamferRevolveJunction(t *testing.T) {
 		}
 		require.NotEmpty(t, ref.Role)
 		out := mustChamfer(t, shaft, concaveJunctions(), 1,
-			decad.WithAsymmetricChamfer(decad.Faces(decad.FaceCreatedBy(ref)), units.Millimeters(3)))
+			asymmetric(decad.Faces(decad.FaceCreatedBy(ref)), units.Millimeters(3)))
 		requireManifold(t, out)
 		// The added triangle has legs 1 and 3 and area 3/2. Along the shoulder
 		// plane the leg runs in ρ, along the journal in z, so the centroid's
@@ -557,8 +564,7 @@ func TestAsymmetricChamferOnPrismCapEdge(t *testing.T) {
 			edge := decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0)),
 				decad.EndpointAt(r3.NewVec(0, 0, 10))).Exactly(1)
 			face := planeFacing(t, box, tc.normal, r3.NewVec(0, 0, 10))
-			result, err := decad.Chamfer(t.Context(), box, edge, units.Millimeters(2),
-				decad.WithAsymmetricChamfer(decad.Faces(decad.FaceCreatedBy(face.Origins()[0])), units.Millimeters(3)))
+			result, err := decad.Chamfer(box, edge, units.Millimeters(2)).Asymmetric(decad.Faces(decad.FaceCreatedBy(face.Origins()[0])), units.Millimeters(3)).Do(t.Context())
 			require.NoError(t, err)
 			require.Equal(t, []*decad.Body{result}, doc.Bodies())
 			volume, err := result.Volume()
@@ -606,8 +612,7 @@ func TestAsymmetricChamferOnObliquePrismCapEdge(t *testing.T) {
 				}
 				require.NotSame(t, top, ref)
 			}
-			result, err := decad.Chamfer(t.Context(), part, edge, units.Millimeters(1),
-				decad.WithAsymmetricChamfer(decad.Faces(decad.FaceCreatedBy(ref.Origins()[0])), units.Millimeters(1.5)))
+			result, err := decad.Chamfer(part, edge, units.Millimeters(1)).Asymmetric(decad.Faces(decad.FaceCreatedBy(ref.Origins()[0])), units.Millimeters(1.5)).Do(t.Context())
 			require.NoError(t, err)
 			require.Equal(t, []*decad.Body{result}, doc.Bodies())
 			volume, err := result.Volume()
@@ -656,8 +661,7 @@ func TestAsymmetricChamferOnBrepStraightEdge(t *testing.T) {
 			edge := decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)), decad.EndpointAt(r3.NewVec(40, 0, 0))).Exactly(1)
 			refFace := planeFacing(t, part, tc.normal, r3.NewVec(40, 0, 0))
 			reference := decad.Faces(decad.FaceCreatedBy(refFace.Origins()[0]))
-			beveled, err := decad.Chamfer(t.Context(), part, edge, units.Millimeters(2),
-				decad.WithAsymmetricChamfer(reference, units.Millimeters(3)))
+			beveled, err := decad.Chamfer(part, edge, units.Millimeters(2)).Asymmetric(reference, units.Millimeters(3)).Do(t.Context())
 			require.NoError(t, err)
 			require.Equal(t, []*decad.Body{beveled}, doc.Bodies())
 			volume, err := beveled.Volume()
@@ -693,8 +697,7 @@ func TestAsymmetricChamferOnBrepRestatedEndFaces(t *testing.T) {
 	edge := decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0)),
 		decad.EndpointAt(r3.NewVec(0, 0, 0))).Exactly(1)
 	bottom := planeFacing(t, part, r3.NewVec(0, 0, -1), r3.NewVec(0, 0, 0))
-	result, err := decad.Chamfer(t.Context(), part, edge, units.Millimeters(2),
-		decad.WithAsymmetricChamfer(decad.Faces(decad.FaceCreatedBy(bottom.Origins()[0])), units.Millimeters(3)))
+	result, err := decad.Chamfer(part, edge, units.Millimeters(2)).Asymmetric(decad.Faces(decad.FaceCreatedBy(bottom.Origins()[0])), units.Millimeters(3)).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := result.Volume()
 	require.NoError(t, err)
@@ -736,8 +739,7 @@ func TestAsymmetricChamferOnBrepLoop(t *testing.T) {
 					}
 				}
 			}
-			result, err := decad.Chamfer(t.Context(), part, loopEdgeQuery(loop), units.Millimeters(1.5),
-				decad.WithAsymmetricChamfer(reference, units.Millimeters(2)))
+			result, err := decad.Chamfer(part, loopEdgeQuery(loop), units.Millimeters(1.5)).Asymmetric(reference, units.Millimeters(2)).Do(t.Context())
 			require.NoError(t, err)
 			require.Equal(t, []*decad.Body{result}, doc.Bodies())
 			volume, err := result.Volume()
@@ -758,8 +760,7 @@ func TestAsymmetricChamferOnBrepLoopSideOverrun(t *testing.T) {
 	part := roundedDrilledPlate(t)
 	doc := part.Document()
 	top := planeFacing(t, part, r3.NewVec(0, 0, 1), r3.NewVec(0, 0, 20))
-	_, err := decad.Chamfer(t.Context(), part, loopEdgeQuery(top.Loops()[0]), units.Millimeters(1.5),
-		decad.WithAsymmetricChamfer(decad.Faces(decad.FaceCreatedBy(top.Origins()[0])), units.Millimeters(20)))
+	_, err := decad.Chamfer(part, loopEdgeQuery(top.Loops()[0]), units.Millimeters(1.5)).Asymmetric(decad.Faces(decad.FaceCreatedBy(top.Origins()[0])), units.Millimeters(20)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.ErrorContains(t, err, "SX7")
 	require.Equal(t, []*decad.Body{part}, doc.Bodies())
@@ -798,8 +799,7 @@ func TestAsymmetricChamferOnStackedLoop(t *testing.T) {
 					}
 				}
 			}
-			result, err := decad.Chamfer(t.Context(), pocket, loopEdgeQuery(loop), units.Millimeters(1.5),
-				decad.WithAsymmetricChamfer(reference, units.Millimeters(2)))
+			result, err := decad.Chamfer(pocket, loopEdgeQuery(loop), units.Millimeters(1.5)).Asymmetric(reference, units.Millimeters(2)).Do(t.Context())
 			require.NoError(t, err)
 			require.Equal(t, []*decad.Body{result}, doc.Bodies())
 			volume, err := result.Volume()
@@ -822,8 +822,7 @@ func TestAsymmetricChamferOnStackedEdge(t *testing.T) {
 	edge := decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)),
 		decad.EndpointAt(r3.NewVec(0, 0, 0))).Exactly(1)
 	front := planeFacing(t, pocket, r3.NewVec(0, -1, 0), r3.NewVec(0, 0, 0))
-	result, err := decad.Chamfer(t.Context(), pocket, edge, units.Millimeters(1),
-		decad.WithAsymmetricChamfer(decad.Faces(decad.FaceCreatedBy(front.Origins()[0])), units.Millimeters(2)))
+	result, err := decad.Chamfer(pocket, edge, units.Millimeters(1)).Asymmetric(decad.Faces(decad.FaceCreatedBy(front.Origins()[0])), units.Millimeters(2)).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := result.Volume()
 	require.NoError(t, err)

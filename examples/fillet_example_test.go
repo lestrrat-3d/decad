@@ -39,8 +39,8 @@ func Example_fillet() {
 
 	// Round the four vertical edges with a 10 mm radius. Each rounded corner
 	// becomes a cylindrical face, so the box gains four faces.
-	rounded, err := decad.Fillet(context.Background(), box,
-		decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1))), units.Millimeters(10))
+	rounded, err := decad.Fillet(box,
+		decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1))), units.Millimeters(10)).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to fillet: %s\n", err)
 		return

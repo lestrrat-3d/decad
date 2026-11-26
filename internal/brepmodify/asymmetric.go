@@ -10,7 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/topo"
 )
 
-// Asymmetric is a resolved WithAsymmetricChamfer: the receiver whose
+// Asymmetric is a resolved ChamferCommand.Asymmetric call: the receiver whose
 // face roles map a reference face to a walk of the recorded section, each
 // chamfered edge's reference face, and the two distances in millimetres —
 // d, the positional distance, across the reference face, and other across

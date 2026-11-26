@@ -25,7 +25,7 @@ func TestFacetedPrismUnionUntouchedOuterEdgeFillet(t *testing.T) {
 		decad.EndpointAt(r3.Vec{X: -10, Y: -10, Z: 0}),
 		decad.EndpointAt(r3.Vec{X: -10, Y: -10, Z: 10}),
 	).Exactly(1)
-	filleted, err := decad.Fillet(t.Context(), joined, selector, units.Millimeters(1))
+	filleted, err := decad.Fillet(joined, selector, units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	mesh, err := filleted.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
 	require.NoError(t, err)
@@ -56,7 +56,7 @@ func TestFacetedPrismUnionFilletReversedSources(t *testing.T) {
 		decad.EndpointAt(r3.Vec{X: -7, Y: 9, Z: 1}),
 		decad.EndpointAt(r3.Vec{X: -7, Y: 9, Z: 9}),
 	).Exactly(1)
-	filleted, err := decad.Fillet(t.Context(), joined, selector, units.Millimeters(1))
+	filleted, err := decad.Fillet(joined, selector, units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	mesh, err := filleted.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
 	require.NoError(t, err)
@@ -78,7 +78,7 @@ func TestFacetedPrismUnionFilletRefusesToolInCornerBand(t *testing.T) {
 		decad.EndpointAt(r3.Vec{X: -10, Y: -10, Z: 0}),
 		decad.EndpointAt(r3.Vec{X: -10, Y: -10, Z: 10}),
 	).Exactly(1)
-	_, err = decad.Fillet(t.Context(), joined, selector, units.Millimeters(1))
+	_, err = decad.Fillet(joined, selector, units.Millimeters(1)).Do(t.Context())
 	require.True(t, errors.Is(err, decad.ErrUnsupported), "fillet returned %v", err)
 }
 
@@ -105,7 +105,7 @@ func TestFacetedPrismUnionFilletOfPlacedUnionTakesTheRetainedRoute(t *testing.T)
 	// The placed Union keeps no source relation, so the prism route declines;
 	// the edge is a straight edge between two retained planes, which
 	// agent-docs/modify-design.md Part E blends from the tags.
-	filleted, err := decad.Fillet(t.Context(), joined, selector, units.Millimeters(1))
+	filleted, err := decad.Fillet(joined, selector, units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	after, err := filleted.Volume()
 	require.NoError(t, err)

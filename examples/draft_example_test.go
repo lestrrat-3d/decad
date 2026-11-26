@@ -41,9 +41,9 @@ func Example_draft() {
 	// face on the sketch plane, so the bottom keeps its 20 x 20 mm size and
 	// the top shrinks. (To draft only some walls, narrow the first query,
 	// for example with decad.Facing.)
-	drafted, err := decad.Draft(context.Background(), block, decad.Faces(decad.Walls(block)),
+	drafted, err := decad.Draft(block, decad.Faces(decad.Walls(block)),
 		decad.NeutralFace{Body: block, Face: decad.Faces(decad.FaceCreatedBy(decad.CapStart(block)))},
-		units.Degrees(5))
+		units.Degrees(5)).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to draft: %s\n", err)
 		return

@@ -49,7 +49,7 @@ func TestChamferCapRunShallowEnd(t *testing.T) {
 				body := polyBody(t, sx, c.pts)
 				n := len(c.pts)
 				sel := topEdges(lineEdge(sx, c.pts[0], c.pts[1]), lineEdge(sx, c.pts[n-1], c.pts[0]))
-				out, err := decad.Chamfer(t.Context(), body, sel, units.Millimeters(d))
+				out, err := decad.Chamfer(body, sel, units.Millimeters(d)).Do(t.Context())
 				require.NoError(t, err)
 				require.True(t, out.IsSolid())
 				end := turnAt(c.pts[0], c.pts[1], c.pts[2])
@@ -156,7 +156,7 @@ func TestChamferCapRunsWithSharedCornerAndShallowEnds(t *testing.T) {
 				n++
 			}
 			require.Equal(t, 10, n, "the face's long runs hold ten edges")
-			out, err := decad.Chamfer(t.Context(), body, q.Exactly(n), units.Millimeters(d))
+			out, err := decad.Chamfer(body, q.Exactly(n), units.Millimeters(d)).Do(t.Context())
 			require.NoError(t, err)
 			require.True(t, out.IsSolid())
 			before, err := body.Volume()

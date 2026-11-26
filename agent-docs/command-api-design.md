@@ -103,7 +103,7 @@ command's unexported implementation owns steps 4–6.
 |---|---|
 | A1 | **Constructors and methods only store copied values.** They never read document state, body liveness, a profile's staleness, `ctx`, or another argument. |
 | A2 | A slice argument is copied with `slices.Clone` at the call. A variadic slot is copied too, so a caller's later write to its slice changes nothing. |
-| A3 | A selector query is deep-copied at the call, branch by branch, as `WithAsymmetricChamfer` copies its reference today (`modify_options.go`): `Or`, `Exactly` and `AtLeast` change a query in place (`selector.go`). A selector that is not a decad query is stored as given; the selector gate refuses it at `Do` without calling it. |
+| A3 | A selector query is deep-copied at the call, branch by branch, as `ChamferCommand.Asymmetric` copies its reference (`modify_options.go`, `copyFaceQuery` in `selector.go`): `Or`, `Exactly` and `AtLeast` change a query in place (`selector.go`). A selector that is not a decad query is stored as given; the selector gate refuses it at `Do` without calling it. |
 | A4 | Bodies, sketches, profiles, chains, paths and meshes are stored as pointers. Liveness, foreign-document, stale-profile and selector-resolution checks run at `Do` against the live document (`agent-docs/modify-design.md` §4 order). A profile is never snapshotted at build time. |
 | A5 | **A constructor or method records a fault only when both hold.** Its own argument shows the fault without reading anything else (A1), and the operation's documented gate order reports that fault ahead of every check that reads document state, liveness, `ctx.Err()` or another argument. Example: `Union` with fewer than two bodies is recorded, because `Union` refuses the count right after the nil-ctx check today. |
 | A6 | Every other invalid value is stored and refused by the operation's own gate at `Do`, in today's position. Example: a negative `Fillet` radius is stored, and S15 refuses it after the S17 liveness gate. |
@@ -119,11 +119,11 @@ or method return an error.
 | Rule | Statement |
 |---|---|
 | M1 | A method has a pointer receiver, changes the command and returns the same pointer, so `cmd.TangentChain()` written as a statement changes `cmd` rather than a dropped copy. |
-| M2 | **A second call replaces the earlier value.** This holds for every method. Today's `ErrDegenerate` for a repeated `WithAsymmetricChamfer`, `WithPathCount` or `WithConeTangentEnd` has no command counterpart. |
+| M2 | **A second call replaces the earlier value.** This holds for every method. A repeated `Asymmetric` replaces the earlier reference and distance, and today's `ErrDegenerate` for a repeated `WithPathCount` or `WithConeTangentEnd` has no command counterpart. `Shell.FaceThickness(normal, t)` names one world axis direction per call, so a repeat for that direction replaces its thickness and calls for other directions add to it. |
 | M3 | **Exclusive alternatives are one method taking a sealed variant.** `Copy(src).Place(p CopyPlacement)` takes `CopyTransform`, `CopyRotation` or `CopyLiftTranslation`, so the type system allows one placement. |
 | M4 | **A required choice is a sealed constructor argument**, as `Extent` and `PatternSpec` already are: `PathPattern(b, path, stations PathStations)` with `PathCount` or `PathSpacing`. |
 | M5 | A dependent option takes its parent's slot: `PathPattern(...).Follow()` or `.FollowAbout(pivot)`. Both write the one follow slot, and the last call wins (M2). |
-| M6 | **An option that changes the result kind or what a mandatory argument means is its own constructor.** `WithJoin` becomes `MirroredJoin(b, plane)`, `WithNoOpenings` becomes `ShellClosed(b, t)`, and `WithConeTangentEnd` becomes `LoftFacesToCone(sections, cone, radial)`. |
+| M6 | **An option that changes the result kind or what a mandatory argument means is its own constructor.** `WithJoin` becomes `MirroredJoin(b, plane)`, `ShellClosed(b, t)` is the shell that keeps every face and takes no selector, and `WithConeTangentEnd` becomes `LoftFacesToCone(sections, cone, radial)`. |
 | M7 | **A twin whose mandatory size means another quantity stays its own constructor.** `FilletChord(b, sel, chord)` sizes by chord, and `ChamferAngle(b, sel, d, reference, angle)` has its own gate order (`chamfer_angle.go`). |
 | M8 | **A twin that exists only because the parent had no option slot folds into a method.** the refined union is `Union(bodies...).RefineTo(bound)`, and `LoftSectionsWithCircularCorrespondence(d, c, sections...)` becomes `LoftSections(d, sections...).CircularCorrespondence(c)`. The fold keeps the twin's gates, result identities and history exactly. |
 | M9 | A conflict between two different methods is refused at `Do` with today's sentinel: `Taper` with `SurfaceResult` stays `ErrUnsupported` (`extrude.go`). |
@@ -260,8 +260,8 @@ name its methods and special rules.
 
 - Booleans: `Union.RefineTo` is the refined union (M8). Cut and Intersect each declare `MatchingFaces` (§6).
 - Modify ops: Fillet and Chamfer each declare `TangentChain` (§6). Chamfer has `Asymmetric(reference, other)`.
-  Shell has `Sense` and `FaceThickness`. Offset and Thicken have `Side`. `ShellClosed` replaces `WithNoOpenings`
-  (M6). `Draft` has no method.
+  Shell and `ShellClosed` each have `Sense` and `FaceThickness`. Offset and Thicken have `Side`. `ShellClosed(b, t)`
+  is the closed shell (M6). `FilletChord`, `ChamferAngle`, `Draft`, `MoveFace` and `ConeFromFace` have no method.
 - Sketch-fed features: Extrude, Revolve, Sweep and Loft each declare `SurfaceResult` (§6, M11). The other methods
   are `Extrude.Taper`, `Loft.Alignment`, `Loft.Splits`, `Sweep.MitredJoins`, `Sweep.SectionScale`, `Sweep.Twist`,
   `Coil.LeftHand`, `Emboss.RimFillet`, `Emboss.Draft`, `WebPath.Draft` and `WebPath.Overrun`.

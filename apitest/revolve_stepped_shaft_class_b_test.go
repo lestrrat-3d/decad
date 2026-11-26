@@ -194,10 +194,10 @@ func TestSteppedShaftClassBBlendsRefuse(t *testing.T) {
 		}
 	}
 	require.NotNil(t, edge, `the flat has a long edge`)
-	_, err = decad.Fillet(t.Context(), cut, edge.Exactly(1), units.Millimeters(1))
+	_, err = decad.Fillet(cut, edge.Exactly(1), units.Millimeters(1)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.ErrorContains(t, err, `brep-modify SB1`)
-	_, err = decad.Chamfer(t.Context(), cut, edge.Exactly(1), units.Millimeters(1))
+	_, err = decad.Chamfer(cut, edge.Exactly(1), units.Millimeters(1)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.ErrorContains(t, err, `brep-modify SB1`)
 }

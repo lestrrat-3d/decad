@@ -1101,7 +1101,7 @@ func TestVerifyDiagnosticsUndecidedClearance(t *testing.T) {
 	// clearance kernel stages the cup payload, so the requested gap is
 	// unmeasured — DiagUndecidedClearance, never an unsupported-pair code.
 	doc, box1 := shellBox(t)
-	cup1, err := decad.Shell(t.Context(), box1, topCap(box1), units.Millimeters(5))
+	cup1, err := decad.Shell(box1, topCap(box1), units.Millimeters(5)).Do(t.Context())
 	require.NoError(t, err)
 	far, err := r3.Translation(r3.NewVec(500, 0, 0))
 	require.NoError(t, err)
@@ -1110,7 +1110,7 @@ func TestVerifyDiagnosticsUndecidedClearance(t *testing.T) {
 	s2, p2 := plateSketch(t)
 	box2, err := decad.Extrude(t.Context(), doc, s2, p2, decad.Distance{D: units.Millimeters(shellBoxHeight), Dir: decad.Along})
 	require.NoError(t, err)
-	_, err = decad.Shell(t.Context(), box2, topCap(box2), units.Millimeters(5))
+	_, err = decad.Shell(box2, topCap(box2), units.Millimeters(5)).Do(t.Context())
 	require.NoError(t, err)
 
 	// No clearance asked: the box test alone proves the pair apart, so neither
@@ -1408,14 +1408,14 @@ func TestVerifyComputedToFaceDiameterThreshold(t *testing.T) {
 
 	t.Run("cup", func(t *testing.T) {
 		doc, pin, heldDiameter := computedToFacePin(t)
-		cup, err := decad.Shell(t.Context(), pin, topCap(pin), units.Millimeters(1))
+		cup, err := decad.Shell(pin, topCap(pin), units.Millimeters(1)).Do(t.Context())
 		require.NoError(t, err)
 		requireComputedToFaceDiameterThresholds(t, doc, cup, heldDiameter)
 	})
 
 	t.Run("cap blend", func(t *testing.T) {
 		doc, pin, heldDiameter := computedToFacePin(t)
-		chamfered, err := decad.Chamfer(t.Context(), pin, capLoopEdges(pin), units.Millimeters(1))
+		chamfered, err := decad.Chamfer(pin, capLoopEdges(pin), units.Millimeters(1)).Do(t.Context())
 		require.NoError(t, err)
 		requireComputedToFaceDiameterThresholds(t, doc, chamfered, heldDiameter)
 	})
@@ -1430,7 +1430,7 @@ func TestVerifyComputedToFaceDiameterThreshold(t *testing.T) {
 func TestVerifyCupWithinToleranceIsSound(t *testing.T) {
 	t.Parallel()
 	doc, box := shellBox(t)
-	cup, err := decad.Shell(t.Context(), box, topCap(box), units.Millimeters(5))
+	cup, err := decad.Shell(box, topCap(box), units.Millimeters(5)).Do(t.Context())
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context())
@@ -1469,7 +1469,7 @@ func TestVerifyCupWithinToleranceIsSound(t *testing.T) {
 func TestVerifyCapBlendChamferAreaVolumeCentroidAllPass(t *testing.T) {
 	t.Parallel()
 	doc, box := capBlendBox(t)
-	_, err := decad.Chamfer(t.Context(), box, capLoopEdges(box), units.Millimeters(5))
+	_, err := decad.Chamfer(box, capLoopEdges(box), units.Millimeters(5)).Do(t.Context())
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context())

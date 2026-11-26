@@ -21,7 +21,7 @@ func TestChamferOfEightEdgesSharingCornersRemovesTheirWedges(t *testing.T) {
 	doc := decad.New()
 	b := blockIn(t, doc, r3.NewVec(0, 0, 0), r3.NewVec(20, 20, 10))
 	// The eight edges of the top and bottom faces are 20 mm long; each corner of the box has two of them.
-	out, err := decad.Chamfer(t.Context(), b, decad.Edges(decad.Convex(), decad.LongerThan(units.Millimeters(15))), units.Millimeters(1))
+	out, err := decad.Chamfer(b, decad.Edges(decad.Convex(), decad.LongerThan(units.Millimeters(15))), units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, []*decad.Body{out}, doc.Bodies())
 	volume, err := out.Volume()
@@ -49,7 +49,7 @@ func TestChamferOfEveryEdgeOfABoxLeavesTheCornersAsCutByThreePlanes(t *testing.T
 	t.Parallel()
 	doc := decad.New()
 	b := blockIn(t, doc, r3.NewVec(0, 0, 0), r3.NewVec(20, 20, 10))
-	out, err := decad.Chamfer(t.Context(), b, decad.Edges(decad.Convex()), units.Millimeters(1))
+	out, err := decad.Chamfer(b, decad.Edges(decad.Convex()), units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := out.Volume()
 	require.NoError(t, err)
@@ -62,7 +62,7 @@ func TestChamferOfEdgesSharingCornersRefusesWhatItWouldOvercut(t *testing.T) {
 	doc := decad.New()
 	b := blockIn(t, doc, r3.NewVec(0, 0, 0), r3.NewVec(20, 20, 10))
 	// A setback deeper than the 10 mm the box is tall: the wedge would be wider than the material behind its edge.
-	_, err := decad.Chamfer(t.Context(), b, decad.Edges(decad.Convex(), decad.LongerThan(units.Millimeters(15))), units.Millimeters(11))
+	_, err := decad.Chamfer(b, decad.Edges(decad.Convex(), decad.LongerThan(units.Millimeters(15))), units.Millimeters(11)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Equal(t, []*decad.Body{b}, doc.Bodies(), "a refusal leaves the box live")
 }
@@ -84,7 +84,7 @@ func TestChamferOfEdgesMeetingAtAReflexCornerRemovesTheirWedges(t *testing.T) {
 	doc := decad.New()
 	l := lShape(t, doc)
 	sel := decad.Edges(decad.Convex(), decad.EndpointAt(r3.NewVec(10, 10, 10)))
-	out, err := decad.Chamfer(t.Context(), l, sel, units.Millimeters(1))
+	out, err := decad.Chamfer(l, sel, units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, []*decad.Body{out}, doc.Bodies())
 	volume, err := out.Volume()
@@ -105,7 +105,7 @@ func TestChamferOfEdgesMeetingAtAReflexCornerRefusesALugInTheirBand(t *testing.T
 	joined, err := decad.Union(lShape(t, doc), lug).Do(t.Context())
 	require.NoError(t, err)
 	sel := decad.Edges(decad.Convex(), decad.EndpointAt(r3.NewVec(10, 10, 10)))
-	_, err = decad.Chamfer(t.Context(), joined, sel, units.Millimeters(1))
+	_, err = decad.Chamfer(joined, sel, units.Millimeters(1)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Equal(t, []*decad.Body{joined}, doc.Bodies(), "a refusal leaves the body live")
 }
@@ -125,7 +125,7 @@ func TestChamferOfAPocketsFloorEdgesFillsTheirWedges(t *testing.T) {
 	pocket := pocketSlab(t, doc)
 	// The four 10 mm floor edges end in the pocket's walls; the 5 mm wall corners end at the open mouth.
 	sel := decad.Edges(decad.Concave(), decad.LongerThan(units.Millimeters(7)))
-	out, err := decad.Chamfer(t.Context(), pocket, sel, units.Millimeters(1))
+	out, err := decad.Chamfer(pocket, sel, units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, []*decad.Body{out}, doc.Bodies())
 	volume, err := out.Volume()
@@ -153,7 +153,7 @@ func TestChamferOfEveryEdgeOfAPocketStopsFlushAtTheMouth(t *testing.T) {
 	// The four wall corners end at the pocket's mouth, where the fill's tool stops flush with the slab's top; the
 	// four floor edges run on into the walls. All eight together are 8500 + 30 − 3 mm³, as in the floor-only case less
 	// what the three wedges meeting at each floor corner share.
-	out, err := decad.Chamfer(t.Context(), pocket, decad.Edges(decad.Concave()), units.Millimeters(1))
+	out, err := decad.Chamfer(pocket, decad.Edges(decad.Concave()), units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, []*decad.Body{out}, doc.Bodies())
 	volume, err := out.Volume()
@@ -172,8 +172,8 @@ func TestChamferOfAGrooveRunsFlushOutOfBothEnds(t *testing.T) {
 	tool := blockIn(t, doc, r3.NewVec(-1, 10, 5), r3.NewVec(31, 20, 12))
 	groove, err := decad.Cut(slab, tool).Do(t.Context())
 	require.NoError(t, err)
-	out, err := decad.Chamfer(t.Context(), groove, decad.Edges(decad.Concave(), decad.LongerThan(units.Millimeters(20))),
-		units.Millimeters(1))
+	out, err := decad.Chamfer(groove, decad.Edges(decad.Concave(), decad.LongerThan(units.Millimeters(20))),
+		units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := out.Volume()
 	require.NoError(t, err)
@@ -187,8 +187,8 @@ func TestChamferOfConcaveEdgesLargerThanTheirWallsIsRefused(t *testing.T) {
 	doc := decad.New()
 	pocket := pocketSlab(t, doc)
 	// The pocket's walls are 5 mm tall, so a 6 mm fill up the wall would stand above the slab.
-	_, err := decad.Chamfer(t.Context(), pocket, decad.Edges(decad.Concave(), decad.LongerThan(units.Millimeters(7))),
-		units.Millimeters(6))
+	_, err := decad.Chamfer(pocket, decad.Edges(decad.Concave(), decad.LongerThan(units.Millimeters(7))),
+		units.Millimeters(6)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Equal(t, []*decad.Body{pocket}, doc.Bodies(), "a refusal leaves the pocket live")
 }

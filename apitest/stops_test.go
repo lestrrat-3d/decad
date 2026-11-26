@@ -651,7 +651,7 @@ func TestExtrudeThroughAllCupStop(t *testing.T) {
 	// Hollow the plate into a cup (one cap removed): the box is retired, so the
 	// cup is the only live body the pin's sweep can meet. The outer prism still
 	// spans z ∈ [0, 20], so the through-all stop must resolve to 20.
-	cup, err := decad.Shell(t.Context(), box, topCap(box), units.Millimeters(5))
+	cup, err := decad.Shell(box, topCap(box), units.Millimeters(5)).Do(t.Context())
 	require.NoError(t, err)
 	require.NotContains(t, doc.Bodies(), box)
 
@@ -677,7 +677,7 @@ func TestExtrudeThroughAllSideCupStop(t *testing.T) {
 	doc := decad.New()
 	box, err := decad.Extrude(t.Context(), doc, s, plateProf, decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
 	require.NoError(t, err)
-	cup, err := decad.Shell(t.Context(), box, topCap(box), units.Millimeters(5))
+	cup, err := decad.Shell(box, topCap(box), units.Millimeters(5)).Do(t.Context())
 	require.NoError(t, err)
 
 	pin, err := decad.Extrude(t.Context(), doc, s, pinProf, decad.TwoSided{
@@ -843,10 +843,9 @@ func TestExtrudeToFaceInheritsCapBlendComputedLevelBound(t *testing.T) {
 		Offset: units.Millimeters(-shortBy),
 	})
 	require.NoError(t, err)
-	chamfered, err := decad.Chamfer(t.Context(), pin,
+	chamfered, err := decad.Chamfer(pin,
 		decad.Edges(decad.CreatedBy(decad.CapStart(pin))),
-		units.Millimeters(shortBy),
-	)
+		units.Millimeters(shortBy)).Do(t.Context())
 	require.NoError(t, err)
 
 	third, err := decad.Extrude(t.Context(), doc, s, pinProfile, decad.ToFace{

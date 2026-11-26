@@ -52,7 +52,7 @@ func TestOrthogonalWallSurveyFindsAThinFinAndAShelledWall(t *testing.T) {
 	// A 1 mm wall of a cup: the shell's wall is the thinnest.
 	cupDoc := decad.New()
 	block := blockIn(t, cupDoc, r3.NewVec(0, 0, 0), r3.NewVec(40, 30, 20))
-	_, err := decad.Shell(t.Context(), block, decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))), units.Millimeters(1))
+	_, err := decad.Shell(block, decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))), units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	report := wallReport(t, cupDoc, 2)
 	d, thin := wallDiagnostic(report, decad.DiagWallTooThin)

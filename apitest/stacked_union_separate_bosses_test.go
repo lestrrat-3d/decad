@@ -182,7 +182,7 @@ func TestStackedUnionSeparateBossesFillet(t *testing.T) {
 	doc := decad.New()
 	joined := separateBossesCases()[0].join(t, doc)
 	const r = 1.0
-	filleted, err := decad.Fillet(t.Context(), joined, decad.Edges(decad.Circular()).Exactly(6), units.Millimeters(r))
+	filleted, err := decad.Fillet(joined, decad.Edges(decad.Circular()).Exactly(6), units.Millimeters(r)).Do(t.Context())
 	require.NoError(t, err)
 	var tori int
 	for _, f := range filleted.Faces() {

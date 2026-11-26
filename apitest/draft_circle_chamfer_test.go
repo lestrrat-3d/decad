@@ -14,7 +14,7 @@ import (
 func TestDraftCircleEndRimChamferVerified(t *testing.T) {
 	t.Parallel()
 	base := draftedDisk(t, r3.NewVec(0, 0, 0), 5)
-	beveled, err := decad.Chamfer(t.Context(), base, draftedDiskEndRim(base), units.Millimeters(1))
+	beveled, err := decad.Chamfer(base, draftedDiskEndRim(base), units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	checkDraftCircleModifyRoles(t, beveled,
 		map[decad.SurfaceKind]int{decad.KindCone: 2, decad.KindPlane: 2}, "chamfer(")
@@ -60,7 +60,7 @@ func TestDraftCircleEndRimChamferPlacement(t *testing.T) {
 	require.NoError(t, err)
 	placed, err := decad.Copy(t.Context(), base, decad.WithCopyPlacement(shift))
 	require.NoError(t, err)
-	beveled, err := decad.Chamfer(t.Context(), placed, draftedDiskEndRim(placed), units.Millimeters(1))
+	beveled, err := decad.Chamfer(placed, draftedDiskEndRim(placed), units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	checkDraftCircleModifyRoles(t, beveled,
 		map[decad.SurfaceKind]int{decad.KindCone: 2, decad.KindPlane: 2}, "chamfer(")
@@ -83,21 +83,20 @@ func TestDraftCircleEndRimChamferPlacement(t *testing.T) {
 func TestDraftCircleEndRimChamferRefusalsLeaveSourceLive(t *testing.T) {
 	t.Parallel()
 	base := draftedDisk(t, r3.NewVec(0, 0, 0), 5)
-	_, err := decad.Chamfer(t.Context(), base, draftedDiskEndRim(base), units.Millimeters(8))
+	_, err := decad.Chamfer(base, draftedDiskEndRim(base), units.Millimeters(8)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrDegenerate)
-	_, err = decad.Chamfer(t.Context(), base,
+	_, err = decad.Chamfer(base,
 		decad.Edges(decad.CreatedBy(decad.CapStart(base)), decad.Circular()).Exactly(1),
-		units.Millimeters(1))
+		units.Millimeters(1)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
-	_, err = decad.Chamfer(t.Context(), base, draftedDiskEndRim(base), units.Millimeters(1),
-		decad.WithAsymmetricChamfer(decad.Faces(decad.FaceCreatedBy(decad.CapEnd(base))),
-			units.Millimeters(2)))
+	_, err = decad.Chamfer(base, draftedDiskEndRim(base), units.Millimeters(1)).Asymmetric(decad.Faces(decad.FaceCreatedBy(decad.CapEnd(base))),
+		units.Millimeters(2)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
-	_, err = decad.Chamfer(t.Context(), base, draftedDiskEndRim(base), units.Millimeters(1))
+	_, err = decad.Chamfer(base, draftedDiskEndRim(base), units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 
 	flare := draftedDisk(t, r3.NewVec(0, 0, 0), -5)
-	_, err = decad.Chamfer(t.Context(), flare, draftedDiskEndRim(flare), units.Millimeters(1))
+	_, err = decad.Chamfer(flare, draftedDiskEndRim(flare), units.Millimeters(1)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 
 	s, p := taperSketch(t, r3.NewVec(0, 0, 0), 1, func(s *sketch.Sketch) {
@@ -107,8 +106,8 @@ func TestDraftCircleEndRimChamferRefusalsLeaveSourceLive(t *testing.T) {
 		s.Fix(c)
 	})
 	annulus := taperExtrude(t, decad.New(), s, p, 10, 5, decad.Along)
-	_, err = decad.Chamfer(t.Context(), annulus,
+	_, err = decad.Chamfer(annulus,
 		decad.Edges(decad.OuterLoopOf(decad.CapEnd(annulus)), decad.Circular()).Exactly(1),
-		units.Millimeters(1))
+		units.Millimeters(1)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 }

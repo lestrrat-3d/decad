@@ -87,7 +87,7 @@ func TestFacetedShortStepArc(t *testing.T) {
 	require.Equal(t, 2, loops, "the window has a loop on each plate face")
 	require.Equal(t, 8, arcs, "each loop holds four rounds")
 
-	out, err := decad.Chamfer(ctx, body, sel.Exactly(16), units.Millimeters(0.5))
+	out, err := decad.Chamfer(body, sel.Exactly(16), units.Millimeters(0.5)).Do(ctx)
 	require.NoError(t, err)
 	require.True(t, out.IsSolid())
 }
@@ -175,7 +175,7 @@ func TestFacetedShortStepArcAtCapRound(t *testing.T) {
 	block := shortStepPrism(t, doc, r3.Vec{X: left}, r3.Vec{Y: 1}, r3.Vec{Z: 1},
 		[][2]float64{{front, floor}, {back, floor}, {back, top}, {front, top}}, []float64{3, 3, 3, 3}, 51)
 	caps := decad.Edges(decad.OuterLoopOf(decad.CapStart(block))).Or(decad.OuterLoopOf(decad.CapEnd(block)))
-	block, err := decad.Fillet(ctx, block, caps, units.Millimeters(2))
+	block, err := decad.Fillet(block, caps, units.Millimeters(2)).Do(ctx)
 	require.NoError(t, err)
 	cavity := shortStepPrism(t, doc, r3.Vec{X: left + 9.8}, r3.Vec{Y: 1}, r3.Vec{Z: 1},
 		[][2]float64{{front + 9.8, floor + 5}, {back - 9.8, floor + 5}, {back - 9.8, top + 1}, {front + 9.8, top + 1}},

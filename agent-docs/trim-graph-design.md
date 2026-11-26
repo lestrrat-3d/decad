@@ -30,7 +30,7 @@ with bounds), run the modify operation on the graph, mesh only the faces it chan
 
 Success criteria:
 
-- Increment 1: `Shell(ctx, b, nil, t, WithNoOpenings())` builds the closed inward shell of a convex mesh Boolean
+- Increment 1: `ShellClosed(b, t).Do(ctx)` builds the closed inward shell of a convex mesh Boolean
   result with planar faces (the 45° bevelled plate of `apitest/faceted_retained_blend_test.go`). Its volume equals
   the closed form within the published bound, its void shell has one `Plane` face per outer face, and
   `Tessellate(VerifyAll)` passes.
@@ -83,7 +83,7 @@ polygons, so every face-moving operation refuses on a mesh result.
 | Row | Refusal site |
 |---|---|
 | Modify: "`Shell` of a mesh Boolean result outside the two-prism nested-boss Union route" | `internal/brepmodify/shell.go` "this evaluator shells a straight prism or its one-line Sweep reduction only" |
-| Modify: "Closed shell (`WithNoOpenings`) outside a full revolve, a straight prism…" (faceted part) | `internal/stackedshell/closed_refusal.go` `RefuseClosed`, "this evaluator modifies no faceted boolean result" (SX9) |
+| Modify: "Closed shell (`ShellClosed`) outside a full revolve, a straight prism…" (faceted part) | `internal/stackedshell/closed_refusal.go` `RefuseClosed`, "this evaluator modifies no faceted boolean result" (SX9) |
 | Feature: "`Draft` of a mesh Boolean result" | `internal/draftrecord/gates.go` (SD23) |
 | Sheets: "`Offset` of a solid other than an axis-square faceted one" | `offset.go` `offsetSolid` |
 | Also consider: "Direct edits: … move a face of a solid that is not an orthogonal mesh solid" | `move_face.go` (orthogonal only) |
@@ -629,7 +629,7 @@ Each increment is one PR carrying its tests and the doc changes.
 
 | Inc | Lands | `missing-features.md` rows | Gate to start the next |
 |---|---|---|---|
-| 1 | Lift, planar `anasurf`, planar `facemesh`, `trimrebuild`, closed inward Shell of a convex planar receiver | "Closed shell (`WithNoOpenings`) outside …" narrows | `TestTrimGraphClosedShell` green on CI |
+| 1 | Lift, planar `anasurf`, planar `facemesh`, `trimrebuild`, closed inward Shell of a convex planar receiver | "Closed shell (`ShellClosed`) outside …" narrows | `TestTrimGraphClosedShell` green on CI |
 | 2 | Shell openings on convex planar receivers | "`Shell` of a mesh Boolean result …" narrows | Task 9 test green |
 | 3a | Cylinder and sphere pieces and charts, Claim T, outward convex shell | both Shell rows narrow | a `design-doc-reviewer` pass on trim §5 with no blocking issue before merge; Task 13 tests green |
 | 3b | Curved receivers with closed-form curves; cone and torus charts | both Shell rows narrow | its tests green |
@@ -680,7 +680,7 @@ of Component 6; the PR that implements one adds its tasks here first.
   "`Shell` of a mesh Boolean result …"), `agent-docs/trim-graph-design.md` (increment 2 lands).
 - **What:** end-to-end test and doc rows.
 - **Depends on:** 8.
-- **Tests:** `Shell(ctx, beveled, Faces(Facing(r3.NewVec(0, 0, 1))), 1 mm)`: the cavity section in `(y, z)` is
+- **Tests:** `Shell(beveled, Faces(Facing(r3.NewVec(0, 0, 1))), 1 mm).Do(ctx)`: the cavity section in `(y, z)` is
   `(1, 1), (19, 1), (19, 20), (2 + √2, 20), (1, 19 − √2)` over `x ∈ [1, 39]`, so the volume is
   `15920 − 38·(342 − (1 + √2)²/2)` within the published bound; the top lip face has two loops; removing the bevel
   face and the top together (adjacent) returns `ErrUnsupported` with the existing refusal text (declined).

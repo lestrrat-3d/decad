@@ -48,8 +48,8 @@ func Example_shell_plate_with_holes() {
 	}
 
 	// Remove both flat faces (those normal to Z) and keep 3 mm walls.
-	bands, err := decad.Shell(context.Background(), block,
-		decad.Faces(decad.NormalTo(r3.NewVec(0, 0, 1))), units.Millimeters(3))
+	bands, err := decad.Shell(block,
+		decad.Faces(decad.NormalTo(r3.NewVec(0, 0, 1))), units.Millimeters(3)).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to shell: %s\n", err)
 		return

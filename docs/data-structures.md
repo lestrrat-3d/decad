@@ -312,6 +312,17 @@ returns `decad.ErrConsumed`.
 | `decad.CutCommand` | struct | The target, the tool and the `CutCommand.MatchingFaces` declaration. `Do` returns `*decad.Body`. | `decad.Cut` |
 | `decad.IntersectCommand` | struct | The two operands and the `IntersectCommand.MatchingFaces` declaration. `Do` returns `*decad.Body`. | `decad.Intersect` |
 | `decad.RefineCommand` | struct | The source body and the refinement bound. `Do` returns `*decad.Body`. | `decad.Refine` |
+| `decad.FilletCommand` | struct | The body, the edge selector, the radius and the `FilletCommand.TangentChain` declaration. `Do` returns `*decad.Body`. | `decad.Fillet` |
+| `decad.ChamferCommand` | struct | The body, the edge selector, the setback, the `ChamferCommand.TangentChain` declaration and the `ChamferCommand.Asymmetric` reference and second distance. `Do` returns `*decad.Body`. | `decad.Chamfer` |
+| `decad.FilletChordCommand` | struct | The body, the edge selector and the chord length. `Do` returns `*decad.Body`. | `decad.FilletChord` |
+| `decad.ChamferAngleCommand` | struct | The body, the edge selector, the distance, the reference face selector and the angle. `Do` returns `*decad.Body`. | `decad.ChamferAngle` |
+| `decad.ShellCommand` | struct | The body, the face selector naming the openings, the thickness, the `ShellCommand.Sense` wall sense and the `ShellCommand.FaceThickness` thickness of each world axis direction. `Do` returns `*decad.Body`. | `decad.Shell` |
+| `decad.ShellClosedCommand` | struct | The body, the thickness and the `ShellClosedCommand.Sense` and `ShellClosedCommand.FaceThickness` settings. A closed shell removes no face. `Do` returns `*decad.Body`. | `decad.ShellClosed` |
+| `decad.DraftCommand` | struct | The body, the wall selector, the neutral plane and the angle. `Do` returns `*decad.Body`. | `decad.Draft` |
+| `decad.OffsetCommand` | struct | The sheet or axis-square solid, the distance and the `OffsetCommand.Side` side. `Do` returns the second body and leaves the first live. | `decad.Offset` |
+| `decad.ThickenCommand` | struct | The sheet, the thickness and the `ThickenCommand.Side` side. `Do` returns `*decad.Body`. | `decad.Thicken` |
+| `decad.MoveFaceCommand` | struct | The body, the face selector and the signed distance. `Do` returns `*decad.Body`. | `decad.MoveFace` |
+| `decad.ConeFromFaceCommand` | struct | The Revolve body, the face selector and the far plane. `Do` returns the cone and leaves the Revolve live. | `decad.ConeFromFace` |
 
 ### Options
 
@@ -326,10 +337,6 @@ other sections return them.
 | `decad.LoftOption`, `decad.ChainLoftOption` | `decad.Loft`, `decad.LoftChain` |
 | `decad.LoftFacesOption` | `decad.LoftFaces` |
 | `decad.CoilOption` | `decad.Coil` |
-| `decad.FilletOption`, `decad.ChamferOption`, `decad.FilletChamferOption` | `decad.Fillet`, `decad.Chamfer` |
-| `decad.ShellOption` | `decad.Shell` |
-| `decad.DraftOption` | `decad.Draft` |
-| `decad.OffsetOption`, `decad.ThickenOption` | `decad.Offset`, `decad.Thicken` |
 | `decad.RibOption` | `decad.WebPath` |
 | `decad.CopyOption`, `decad.MirrorOption` | `decad.Copy`, `decad.Mirrored` |
 | `decad.SurfaceResultOption` | Every feature that `decad.WithSurfaceResult` reaches. |

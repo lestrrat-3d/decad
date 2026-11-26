@@ -47,8 +47,8 @@ func Example_fillet_revolved_shoulder() {
 
 	// The shoulder's inside corner is the only circular edge that is
 	// concave, so that query selects it. Round it with a 2 mm radius.
-	rounded, err := decad.Fillet(context.Background(), shaft,
-		decad.Edges(decad.Circular(), decad.Concave()), units.Millimeters(2))
+	rounded, err := decad.Fillet(shaft,
+		decad.Edges(decad.Circular(), decad.Concave()), units.Millimeters(2)).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to fillet: %s\n", err)
 		return

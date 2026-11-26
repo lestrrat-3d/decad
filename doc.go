@@ -135,9 +135,9 @@
 //	  empty result (disjoint intersect, emptied cut)          ErrBooleanFailed
 //	Fillet/Chamfer  straight prism, lateral edges             builds
 //	Fillet/Chamfer  revolve meridian junction edges           builds
-//	Fillet/Chamfer  WithTangentChain over proven G1 joins     builds
+//	Fillet/Chamfer  TangentChain over proven G1 joins         builds
 //	  a tangent chain that branches or cannot be decided      ErrUnsupported
-//	Chamfer       WithAsymmetricChamfer, prism lateral edge,
+//	Chamfer       Asymmetric, prism lateral edge,
 //	  revolve junction or complete prism cap loop(s)          builds
 //	  asymmetric brep independent straight-edge chamfer       builds
 //	  asymmetric brep complete-loop chamfer                    builds
@@ -175,8 +175,8 @@
 //	Shell         positive-taper circular draft, far cap removed
 //	              inward                                         builds
 //	Shell         partial revolve, both angular caps removed  builds
-//	Shell         full revolve, WithNoOpenings (closed)       builds
-//	Shell         hole-free prism, WithNoOpenings (closed)    builds
+//	Shell         full revolve, ShellClosed (closed)          builds
+//	Shell         hole-free prism, ShellClosed (closed)       builds
 //	Shell         revolve, one run of side faces removed (and
 //	              both angular caps), any line or arc corner  builds
 //	Shell         hole-free prism, one run of side faces
@@ -190,7 +190,7 @@
 //	    rim past the removed walk's far end                   ErrUnsupported
 //	  holed meridian, or one meeting the axis twice           ErrUnsupported
 //	  offset reaching across the axis                         ErrUnsupported
-//	  WithNoOpenings on other receivers                       ErrUnsupported
+//	  ShellClosed on other receivers                          ErrUnsupported
 //	Fillet/Chamfer/Shell  brep or stacked boolean result that
 //	                      reads as a prism along an axis      builds
 //	Shell         brep read as a prism cut by through tools,
@@ -245,10 +245,10 @@
 //	  a chorded free-form wall past the fixed work budget     ErrUnsupported
 //
 // Options: Revolve accepts WithSurfaceResult for a sheet result.
-// WithTangentChain expands a Fillet's or Chamfer's edges
-// across proven tangent continuations, WithAsymmetricChamfer gives a Chamfer
-// two setbacks, WithShellSense picks a shell's wall sense, WithNoOpenings asks
-// for a closed shell (built for a full revolve, a hole-free prism and an
+// The TangentChain method expands a Fillet's or Chamfer's edges
+// across proven tangent continuations, Asymmetric gives a Chamfer
+// two setbacks, Sense picks a shell's wall sense, and ShellClosed builds
+// a closed shell (built for a full revolve, a hole-free prism and an
 // inward nested rectangular-slab Union; [ErrUnsupported] elsewhere),
 // and WithTaper drafts an extrude's walls by a signed angle, a positive one
 // narrowing the body away from the sketch plane (agent-docs/modify-design.md Part D); a

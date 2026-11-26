@@ -38,7 +38,7 @@ func Example_offset_sheet() {
 
 	// Grow the sheet outward by 3 mm. Each corner becomes a rounded wall so
 	// the new sheet stays 3 mm from the old one everywhere.
-	grown, err := decad.Offset(context.Background(), sheet, units.Millimeters(3))
+	grown, err := decad.Offset(sheet, units.Millimeters(3)).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to offset: %s\n", err)
 		return

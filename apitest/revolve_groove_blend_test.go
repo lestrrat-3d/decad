@@ -60,7 +60,7 @@ func TestRevolveGrooveCornerBlends(t *testing.T) {
 		const r = 0.3
 		doc := decad.New()
 		grooved := groovedShaft(t, doc)
-		filleted, err := decad.Fillet(t.Context(), grooved, concaveJunctions().Exactly(3), units.Millimeters(r))
+		filleted, err := decad.Fillet(grooved, concaveJunctions().Exactly(3), units.Millimeters(r)).Do(t.Context())
 		require.NoError(t, err)
 		requireManifold(t, filleted)
 		require.Len(t, blendFaces(t, filleted, "fillet"), 3)
@@ -76,7 +76,7 @@ func TestRevolveGrooveCornerBlends(t *testing.T) {
 		const d = 0.3
 		doc := decad.New()
 		grooved := groovedShaft(t, doc)
-		chamfered, err := decad.Chamfer(t.Context(), grooved, concaveJunctions().Exactly(3), units.Millimeters(d))
+		chamfered, err := decad.Chamfer(grooved, concaveJunctions().Exactly(3), units.Millimeters(d)).Do(t.Context())
 		require.NoError(t, err)
 		requireManifold(t, chamfered)
 		require.Len(t, blendFaces(t, chamfered, "chamfer"), 3)
@@ -105,7 +105,7 @@ func TestRevolveGrooveCornerBlends(t *testing.T) {
 			(3*(7.5*7.5-49)/2 + 2*(49-6.5*6.5)/2 + 2*quarter*(7-drop))
 		doc := decad.New()
 		grooved := groovedShaft(t, doc)
-		shelled, err := decad.Shell(t.Context(), grooved, nil, units.Millimeters(t5), decad.WithNoOpenings())
+		shelled, err := decad.ShellClosed(grooved, units.Millimeters(t5)).Do(t.Context())
 		require.NoError(t, err)
 		requireManifold(t, shelled)
 		decadtest.MeasuresVolume(t, shelled, fullTurnVolume(groovedShaftQ-cavity))
@@ -164,10 +164,10 @@ func TestRevolveGrooveDisplacedMeridianRefuses(t *testing.T) {
 			require.NoError(t, err)
 			decadtest.MeasuresVolume(t, grooved, fullTurnVolume(tc.volQ))
 			const msg = `cannot integrate a region over a meridian carrying its own section displacement`
-			_, err = decad.Fillet(t.Context(), grooved, concaveJunctions(), units.Millimeters(0.3))
+			_, err = decad.Fillet(grooved, concaveJunctions(), units.Millimeters(0.3)).Do(t.Context())
 			require.ErrorIs(t, err, decad.ErrUnsupported)
 			require.Contains(t, err.Error(), msg)
-			_, err = decad.Shell(t.Context(), grooved, nil, units.Millimeters(0.3), decad.WithNoOpenings())
+			_, err = decad.ShellClosed(grooved, units.Millimeters(0.3)).Do(t.Context())
 			requireShellRefused(t, doc, grooved, err, decad.ErrUnsupported, msg)
 		})
 	}

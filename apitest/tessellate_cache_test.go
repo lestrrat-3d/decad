@@ -123,7 +123,7 @@ func TestTessellationCachePayloadClasses(t *testing.T) {
 		{name: "prism", body: holedPlateBody},
 		{name: "cup", body: func(t *testing.T) *decad.Body {
 			_, box := shellBox(t)
-			body, err := decad.Shell(t.Context(), box, topCap(box), units.Millimeters(5))
+			body, err := decad.Shell(box, topCap(box), units.Millimeters(5)).Do(t.Context())
 			require.NoError(t, err)
 			return body
 		}},
@@ -147,7 +147,7 @@ func TestTessellationCachePayloadClasses(t *testing.T) {
 		}},
 		{name: "cap blend", body: func(t *testing.T) *decad.Body {
 			_, box := capBlendBox(t)
-			body, err := decad.Chamfer(t.Context(), box, capLoopEdges(box), units.Millimeters(5))
+			body, err := decad.Chamfer(box, capLoopEdges(box), units.Millimeters(5)).Do(t.Context())
 			require.NoError(t, err)
 			return body
 		}},

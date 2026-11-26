@@ -25,7 +25,7 @@ func TestFacetedPrismUnionUntouchedOuterEdgeChamfer(t *testing.T) {
 		decad.EndpointAt(r3.Vec{X: -10, Y: -10, Z: 0}),
 		decad.EndpointAt(r3.Vec{X: -10, Y: -10, Z: 10}),
 	).Exactly(1)
-	chamfered, err := decad.Chamfer(t.Context(), joined, selector, units.Millimeters(1))
+	chamfered, err := decad.Chamfer(joined, selector, units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, []*decad.Body{chamfered}, doc.Bodies())
 	require.Equal(t, 1, countRolePrefix(chamfered, "chamfer("))
@@ -57,7 +57,7 @@ func TestFacetedPrismUnionChamferReversedSources(t *testing.T) {
 		decad.EndpointAt(r3.Vec{X: -10, Y: 10, Z: 0}),
 		decad.EndpointAt(r3.Vec{X: -10, Y: 10, Z: 10}),
 	).Exactly(1)
-	chamfered, err := decad.Chamfer(t.Context(), joined, selector, units.Millimeters(1))
+	chamfered, err := decad.Chamfer(joined, selector, units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	before, err := joined.Volume()
 	require.NoError(t, err)
@@ -86,7 +86,7 @@ func TestFacetedPrismUnionChamferRefusesToolInCornerBand(t *testing.T) {
 		decad.EndpointAt(r3.Vec{X: -10, Y: -10, Z: 0}),
 		decad.EndpointAt(r3.Vec{X: -10, Y: -10, Z: 10}),
 	).Exactly(1)
-	chamfered, err := decad.Chamfer(t.Context(), joined, selector, units.Millimeters(1))
+	chamfered, err := decad.Chamfer(joined, selector, units.Millimeters(1)).Do(t.Context())
 	require.True(t, errors.Is(err, decad.ErrUnsupported), "chamfer returned %v", err)
 	require.Nil(t, chamfered)
 	require.Equal(t, []*decad.Body{joined}, doc.Bodies())
@@ -115,7 +115,7 @@ func TestFacetedPrismUnionChamferOfPlacedUnionTakesTheRetainedRoute(t *testing.T
 	// The placed Union keeps no source relation, so the prism route declines;
 	// the edge is a straight edge between two retained planes, which
 	// agent-docs/modify-design.md Part E blends from the tags.
-	chamfered, err := decad.Chamfer(t.Context(), placed, selector, units.Millimeters(1))
+	chamfered, err := decad.Chamfer(placed, selector, units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	after, err := chamfered.Volume()
 	require.NoError(t, err)
@@ -143,7 +143,7 @@ func TestFacetedPrismUnionChamferOfEdgeBesideFarLugBuilds(t *testing.T) {
 	require.NoError(t, err)
 	// The edge's cutter stands clear of the lug on the far side of the box, so the chamfer of runs of a face's loop
 	// builds it: a 0.3 mm bevel along a 10 mm edge removes 0.3^2 * 10 / 2 = 0.45 mm³.
-	chamfered, err := decad.Chamfer(t.Context(), joined, selector, units.Millimeters(0.3))
+	chamfered, err := decad.Chamfer(joined, selector, units.Millimeters(0.3)).Do(t.Context())
 	require.NoError(t, err)
 	after, err := chamfered.Volume()
 	require.NoError(t, err)

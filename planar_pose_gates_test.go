@@ -83,7 +83,7 @@ func TestPlanarPoseAdmissionGates(t *testing.T) {
 func roundedBoxBody(t *testing.T, doc *Document) *Body {
 	t.Helper()
 	body := internalBoxBody(t, doc, 0, 0, 10, 10, 10)
-	rounded, err := Fillet(t.Context(), body, Edges(), units.Millimeters(1))
+	rounded, err := Fillet(body, Edges(), units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	return rounded
 }

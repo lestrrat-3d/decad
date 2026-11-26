@@ -39,7 +39,7 @@ func TestVerifySameSetDenotedLevels(t *testing.T) {
 				b, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], d)
 				require.NoError(t, err)
 				if tc.cup {
-					b, err = decad.Shell(t.Context(), b, decad.Faces(decad.FaceCreatedBy(decad.CapEnd(b))), units.Millimeters(1))
+					b, err = decad.Shell(b, decad.Faces(decad.FaceCreatedBy(decad.CapEnd(b))), units.Millimeters(1)).Do(t.Context())
 					require.NoError(t, err)
 				}
 				return b

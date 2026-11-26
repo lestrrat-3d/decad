@@ -161,7 +161,7 @@ func TestFacetedRetainedBlendSphereRim(t *testing.T) {
 		require.NoError(t, err)
 		beforeArea, err := cut.Area()
 		require.NoError(t, err)
-		blended, err := decad.Fillet(t.Context(), cut, discRim(t, cut), units.Millimeters(r))
+		blended, err := decad.Fillet(cut, discRim(t, cut), units.Millimeters(r)).Do(t.Context())
 		require.NoError(t, err)
 		after, err := blended.Volume()
 		require.NoError(t, err)
@@ -206,7 +206,7 @@ func TestFacetedRetainedBlendSphereRim(t *testing.T) {
 		require.NoError(t, err)
 		beforeArea, err := cut.Area()
 		require.NoError(t, err)
-		blended, err := decad.Chamfer(t.Context(), cut, discRim(t, cut), units.Millimeters(d))
+		blended, err := decad.Chamfer(cut, discRim(t, cut), units.Millimeters(d)).Do(t.Context())
 		require.NoError(t, err)
 		after, err := blended.Volume()
 		require.NoError(t, err)
@@ -248,8 +248,7 @@ func TestFacetedRetainedBlendSphereRim(t *testing.T) {
 		cut := flatBall(t, 0, 0)
 		before, err := cut.Volume()
 		require.NoError(t, err)
-		blended, err := decad.Chamfer(t.Context(), cut, discRim(t, cut), units.Millimeters(dA),
-			decad.WithAsymmetricChamfer(decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))), units.Millimeters(dB)))
+		blended, err := decad.Chamfer(cut, discRim(t, cut), units.Millimeters(dA)).Asymmetric(decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))), units.Millimeters(dB)).Do(t.Context())
 		require.NoError(t, err)
 		after, err := blended.Volume()
 		require.NoError(t, err)
@@ -285,7 +284,7 @@ func TestFacetedRetainedBlendSphereRim(t *testing.T) {
 		require.NoError(t, err)
 		before, err := slice.Volume()
 		require.NoError(t, err)
-		blended, err := decad.Fillet(t.Context(), slice, decad.Edges(decad.Circular()).Exactly(2), units.Millimeters(r))
+		blended, err := decad.Fillet(slice, decad.Edges(decad.Circular()).Exactly(2), units.Millimeters(r)).Do(t.Context())
 		require.NoError(t, err)
 		after, err := blended.Volume()
 		require.NoError(t, err)
@@ -312,7 +311,7 @@ func TestFacetedRetainedBlendSphereRim(t *testing.T) {
 		// The ball must clear the plane and stay inside the sphere:
 		// R − r > r − h, so r < (R + h)/2 = 0.5.
 		cut := flatBall(t, 0, 0)
-		_, err := decad.Fillet(t.Context(), cut, discRim(t, cut), units.Millimeters(0.6))
+		_, err := decad.Fillet(cut, discRim(t, cut), units.Millimeters(0.6)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 		require.ErrorContains(t, err, "no ball of that radius touches both faces")
 	})
@@ -324,8 +323,7 @@ func TestFacetedRetainedBlendSphereRim(t *testing.T) {
 		// (π/2 + atan2(h, ρ0))·R; the plane takes 0.2 mm and the sphere 0.1 mm
 		// past the pole.
 		pole := ballR * (math.Pi/2 + math.Atan2(ballCut, rim))
-		_, err := decad.Chamfer(t.Context(), cut, discRim(t, cut), units.Millimeters(0.2),
-			decad.WithAsymmetricChamfer(decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))), units.Millimeters(pole+0.1)))
+		_, err := decad.Chamfer(cut, discRim(t, cut), units.Millimeters(0.2)).Asymmetric(decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))), units.Millimeters(pole+0.1)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 		require.ErrorContains(t, err, "the blend reaches past the sphere's pole")
 	})
@@ -333,8 +331,7 @@ func TestFacetedRetainedBlendSphereRim(t *testing.T) {
 	t.Run("a plane setback past the rim's axis", func(t *testing.T) {
 		t.Parallel()
 		cut := flatBall(t, 0, 0)
-		_, err := decad.Chamfer(t.Context(), cut, discRim(t, cut), units.Millimeters(rim+0.1),
-			decad.WithAsymmetricChamfer(decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))), units.Millimeters(0.2)))
+		_, err := decad.Chamfer(cut, discRim(t, cut), units.Millimeters(rim+0.1)).Asymmetric(decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))), units.Millimeters(0.2)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 		require.ErrorContains(t, err, "the blend reaches the rim's axis")
 	})
@@ -349,7 +346,7 @@ func TestFacetedRetainedBlendSphereRim(t *testing.T) {
 		require.NoError(t, err)
 		cut, err := decad.Cut(turned, ballCap(t, sc, ballCut)).Do(t.Context())
 		require.NoError(t, err)
-		_, err = decad.Fillet(t.Context(), cut, chordRim(t, cut), units.Millimeters(0.3))
+		_, err = decad.Fillet(cut, chordRim(t, cut), units.Millimeters(0.3)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "a face whose tag is not proven to be exactly the surface its revolve record denotes")
 	})
@@ -359,7 +356,7 @@ func TestFacetedRetainedBlendSphereRim(t *testing.T) {
 		// The half-disk's centre sits 5e-10 off the axis: the chord snaps onto
 		// it and the tag's centre is on the axis, but the record's is not.
 		cut := flatBall(t, 0, 5e-10)
-		_, err := decad.Fillet(t.Context(), cut, chordRim(t, cut), units.Millimeters(0.3))
+		_, err := decad.Fillet(cut, chordRim(t, cut), units.Millimeters(0.3)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "a face whose tag is not proven to be exactly the surface its revolve record denotes")
 	})
@@ -369,7 +366,7 @@ func TestFacetedRetainedBlendSphereRim(t *testing.T) {
 		// About x = 0.1 the recorded radius 2.1 − 0.1 is no float, so the record
 		// holds an interval and the tag's 2 is not provably it.
 		cut := flatBall(t, 0.1, 0)
-		_, err := decad.Chamfer(t.Context(), cut, chordRim(t, cut), units.Millimeters(0.3))
+		_, err := decad.Chamfer(cut, chordRim(t, cut), units.Millimeters(0.3)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "a face whose tag is not proven to be exactly the surface its revolve record denotes")
 	})
@@ -490,14 +487,13 @@ func TestFacetedRetainedBlendSphereRimSides(t *testing.T) {
 			var want sideBlend
 			if tc.fillet {
 				want = sideFillet(tc.up, tc.size)
-				blended, err = decad.Fillet(t.Context(), body, discRim(t, body), units.Millimeters(tc.size))
+				blended, err = decad.Fillet(body, discRim(t, body), units.Millimeters(tc.size)).Do(t.Context())
 			} else if tc.other > 0 {
 				want = sideChamfer(tc.up, tc.size, tc.other)
-				blended, err = decad.Chamfer(t.Context(), body, discRim(t, body), units.Millimeters(tc.size),
-					decad.WithAsymmetricChamfer(decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))), units.Millimeters(tc.other)))
+				blended, err = decad.Chamfer(body, discRim(t, body), units.Millimeters(tc.size)).Asymmetric(decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))), units.Millimeters(tc.other)).Do(t.Context())
 			} else {
 				want = sideChamfer(tc.up, tc.size, tc.size)
-				blended, err = decad.Chamfer(t.Context(), body, discRim(t, body), units.Millimeters(tc.size))
+				blended, err = decad.Chamfer(body, discRim(t, body), units.Millimeters(tc.size)).Do(t.Context())
 			}
 			require.NoError(t, err)
 			after, err := blended.Volume()

@@ -72,8 +72,8 @@ func TestDraftOneWall(t *testing.T) {
 	const deg = 5.0
 	doc := decad.New()
 	box := plainBox(t, doc, decad.Along)
-	got, err := decad.Draft(t.Context(), box, decad.Faces(decad.Walls(box), decad.Facing(r3.NewVec(1, 0, 0))),
-		capNeutral(box, decad.CapStart), units.Degrees(deg))
+	got, err := decad.Draft(box, decad.Faces(decad.Walls(box), decad.Facing(r3.NewVec(1, 0, 0))),
+		capNeutral(box, decad.CapStart), units.Degrees(deg)).Do(t.Context())
 	require.NoError(t, err)
 	requireManifold(t, got)
 	require.Len(t, got.Faces(), 6)
@@ -153,7 +153,7 @@ func TestDraftNotchWall(t *testing.T) {
 	l, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(h)})
 	require.NoError(t, err)
 	notch := pickWalls(t, l, func(f *decad.Face) bool { return hasVertexAt(f, 10, 10) && hasVertexAt(f, 10, 20) })
-	got, err := decad.Draft(t.Context(), l, notch, capNeutral(l, decad.CapStart), units.Degrees(deg))
+	got, err := decad.Draft(l, notch, capNeutral(l, decad.CapStart), units.Degrees(deg)).Do(t.Context())
 	require.NoError(t, err)
 	requireManifold(t, got)
 	require.Len(t, got.Faces(), 8)
@@ -180,7 +180,7 @@ func TestDraftHoleAlone(t *testing.T) {
 	ring, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(h)})
 	require.NoError(t, err)
 	hole := pickWalls(t, ring, func(f *decad.Face) bool { return hasRole(f, "side(1,0)") })
-	got, err := decad.Draft(t.Context(), ring, hole, capNeutral(ring, decad.CapStart), units.Degrees(deg))
+	got, err := decad.Draft(ring, hole, capNeutral(ring, decad.CapStart), units.Degrees(deg)).Do(t.Context())
 	require.NoError(t, err)
 	requireManifold(t, got)
 
@@ -235,8 +235,8 @@ func TestDraftSubsetChargesTheTangentSpan(t *testing.T) {
 	s, p := taperSketch(t, r3.NewVec(0, 0, 0), 0, drawSquare(0, a))
 	box, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(h)})
 	require.NoError(t, err)
-	got, err := decad.Draft(t.Context(), box, decad.Faces(decad.Walls(box), decad.Facing(r3.NewVec(1, 0, 0))),
-		capNeutral(box, decad.CapStart), units.Degrees(deg))
+	got, err := decad.Draft(box, decad.Faces(decad.Walls(box), decad.Facing(r3.NewVec(1, 0, 0))),
+		capNeutral(box, decad.CapStart), units.Degrees(deg)).Do(t.Context())
 	require.NoError(t, err)
 	u := bfSub(bf(a/2), bfMul(bf(h), taperTan(deg)))
 	for _, sv := range []float64{-1, 1} {
@@ -250,14 +250,14 @@ func TestDraftSubsetVerify(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	box := plainBox(t, doc, decad.Along)
-	one, err := decad.Draft(t.Context(), box, decad.Faces(decad.Walls(box), decad.Facing(r3.NewVec(1, 0, 0))),
-		capNeutral(box, decad.CapStart), units.Degrees(5))
+	one, err := decad.Draft(box, decad.Faces(decad.Walls(box), decad.Facing(r3.NewVec(1, 0, 0))),
+		capNeutral(box, decad.CapStart), units.Degrees(5)).Do(t.Context())
 	require.NoError(t, err)
 	s, p := taperSketch(t, r3.NewVec(0, 0, 0), 1, drawRing(12, 5))
 	ring, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Against})
 	require.NoError(t, err)
-	hole, err := decad.Draft(t.Context(), ring, pickWalls(t, ring, func(f *decad.Face) bool { return hasRole(f, "side(1,0)") }),
-		capNeutral(ring, decad.CapEnd), units.Degrees(5))
+	hole, err := decad.Draft(ring, pickWalls(t, ring, func(f *decad.Face) bool { return hasRole(f, "side(1,0)") }),
+		capNeutral(ring, decad.CapEnd), units.Degrees(5)).Do(t.Context())
 	require.NoError(t, err)
 	report, err := doc.Verify(t.Context())
 	require.NoError(t, err)
@@ -293,13 +293,13 @@ func TestDraftSubsetRefusals(t *testing.T) {
 		text string
 	}{
 		{"SD4 one straight wall of a slot", func() error {
-			_, err := decad.Draft(t.Context(), slot, decad.Faces(decad.Walls(slot), decad.Facing(r3.NewVec(0, 1, 0))),
-				capNeutral(slot, decad.CapStart), units.Degrees(3))
+			_, err := decad.Draft(slot, decad.Faces(decad.Walls(slot), decad.Facing(r3.NewVec(0, 1, 0))),
+				capNeutral(slot, decad.CapStart), units.Degrees(3)).Do(t.Context())
 			return err
 		}, decad.ErrUnsupported, "select both walls or neither (draft SD4)"},
 		{"SD21 empty selection", func() error {
-			_, err := decad.Draft(t.Context(), box, decad.Faces(decad.Walls(box), decad.Facing(r3.NewVec(0, 0, 1))),
-				capNeutral(box, decad.CapStart), units.Degrees(5))
+			_, err := decad.Draft(box, decad.Faces(decad.Walls(box), decad.Facing(r3.NewVec(0, 0, 1))),
+				capNeutral(box, decad.CapStart), units.Degrees(5)).Do(t.Context())
 			return err
 		}, decad.ErrNoMatch, ""},
 	}
@@ -315,9 +315,9 @@ func TestDraftSubsetRefusals(t *testing.T) {
 
 	// Both straight walls together still meet the semicircles at mixed G1
 	// joins; the whole slot drafts as F3 does.
-	_, err = decad.Draft(t.Context(), slot, decad.Faces(decad.Walls(slot), decad.Planar()), capNeutral(slot, decad.CapStart), units.Degrees(3))
+	_, err = decad.Draft(slot, decad.Faces(decad.Walls(slot), decad.Planar()), capNeutral(slot, decad.CapStart), units.Degrees(3)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
-	_, err = decad.Draft(t.Context(), slot, decad.Faces(decad.Walls(slot)), capNeutral(slot, decad.CapStart), units.Degrees(3))
+	_, err = decad.Draft(slot, decad.Faces(decad.Walls(slot)), capNeutral(slot, decad.CapStart), units.Degrees(3)).Do(t.Context())
 	require.NoError(t, err)
 }
 
@@ -337,14 +337,14 @@ func TestDraftSubsetMesh(t *testing.T) {
 	const ro, ri, h, deg = 10.0, 4.0, 10.0, 5.0
 	doc := decad.New()
 	box := plainBox(t, doc, decad.Along)
-	one, err := decad.Draft(t.Context(), box, decad.Faces(decad.Walls(box), decad.Facing(r3.NewVec(1, 0, 0))),
-		capNeutral(box, decad.CapStart), units.Degrees(deg))
+	one, err := decad.Draft(box, decad.Faces(decad.Walls(box), decad.Facing(r3.NewVec(1, 0, 0))),
+		capNeutral(box, decad.CapStart), units.Degrees(deg)).Do(t.Context())
 	require.NoError(t, err)
 	s, p := taperSketch(t, r3.NewVec(0, 0, 0), 1, drawRing(ro, ri))
 	ring, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(h)})
 	require.NoError(t, err)
-	hole, err := decad.Draft(t.Context(), ring, pickWalls(t, ring, func(f *decad.Face) bool { return hasRole(f, "side(1,0)") }),
-		capNeutral(ring, decad.CapStart), units.Degrees(deg))
+	hole, err := decad.Draft(ring, pickWalls(t, ring, func(f *decad.Face) bool { return hasRole(f, "side(1,0)") }),
+		capNeutral(ring, decad.CapStart), units.Degrees(deg)).Do(t.Context())
 	require.NoError(t, err)
 	sq, sp := taperSketch(t, r3.NewVec(0, 0, 0), 0, drawSquare(0, boxSide))
 	f1 := taperExtrude(t, doc, sq, sp, boxHeight, deg, decad.Along)
@@ -408,8 +408,8 @@ func TestDraftSubsetUndercut(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	box := plainBox(t, doc, decad.Along)
-	got, err := decad.Draft(t.Context(), box, decad.Faces(decad.Walls(box), decad.Facing(r3.NewVec(1, 0, 0))),
-		capNeutral(box, decad.CapStart), units.Degrees(5))
+	got, err := decad.Draft(box, decad.Faces(decad.Walls(box), decad.Facing(r3.NewVec(1, 0, 0))),
+		capNeutral(box, decad.CapStart), units.Degrees(5)).Do(t.Context())
 	require.NoError(t, err)
 	var moved *decad.Face
 	for _, f := range draftWalls(got) {

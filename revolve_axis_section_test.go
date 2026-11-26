@@ -540,8 +540,8 @@ func TestSectionAboutAxisRefusals(t *testing.T) {
 		doc := New()
 		blank := coneGapHub(t, doc, [][2]float64{{5, 0}, {15, 0}, {15, 10}, {12, 6}, {7, 1}})
 		before, producer := doc.Bodies(), doc.producerAt(t.Context())
-		_, err := ConeFromFace(t.Context(), blank, coneFromFaceSelector(t, blank, planePoint{U: 1, V: 3},
-			planePoint{V: 6}), units.Millimeters(-1))
+		_, err := ConeFromFace(blank, coneFromFaceSelector(t, blank, planePoint{U: 1, V: 3},
+			planePoint{V: 6}), units.Millimeters(-1)).Do(t.Context())
 		require.ErrorIs(t, err, ErrUnsupported)
 		require.ErrorContains(t, err, "about X")
 		require.Equal(t, before, doc.Bodies())

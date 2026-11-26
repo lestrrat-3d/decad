@@ -100,7 +100,7 @@ func TestStackedUnionUnequalBlocksRootFillet(t *testing.T) {
 			sel = sel.Or(preds...)
 		}
 	}
-	got, err := decad.Fillet(t.Context(), body, sel.Exactly(4), units.Millimeters(1))
+	got, err := decad.Fillet(body, sel.Exactly(4), units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	requireEveryEdgeOnTwoFaces(t, got)
 	before, err := body.Volume()

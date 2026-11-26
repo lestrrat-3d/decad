@@ -47,7 +47,7 @@ func wrapBlockHeight(t *testing.T, w *sketch.World, doc *decad.Document, corners
 			sel = sel.Or(up, decad.EndpointAt(r3.NewVec(20, 16, 0)))
 		}
 		var err error
-		block, err = decad.Fillet(t.Context(), block, sel.Exactly(corners), units.Millimeters(wrapR))
+		block, err = decad.Fillet(block, sel.Exactly(corners), units.Millimeters(wrapR)).Do(t.Context())
 		require.NoError(t, err)
 	}
 	out, err := decad.Union(plate, placed(t, block, 9)).Do(t.Context())
@@ -90,7 +90,7 @@ func TestFacetedRetainedBlendChainBaseWrap(t *testing.T) {
 		before, err := joined.Volume()
 		require.NoError(t, err)
 		const r = 1.0
-		out, err := decad.Fillet(t.Context(), joined, wrapRoot(), units.Millimeters(r), decad.WithTangentChain())
+		out, err := decad.Fillet(joined, wrapRoot(), units.Millimeters(r)).TangentChain().Do(t.Context())
 		require.NoError(t, err)
 		after, err := out.Volume()
 		require.NoError(t, err)
@@ -116,7 +116,7 @@ func TestFacetedRetainedBlendChainBaseWrap(t *testing.T) {
 			block := wrapBlockHeight(t, sketch.NewWorld(), decad.New(), 2, 2.25)
 			before, err := block.Volume()
 			require.NoError(t, err)
-			out, err := decad.Fillet(t.Context(), block, wrapRoot(), units.Millimeters(radius), decad.WithTangentChain())
+			out, err := decad.Fillet(block, wrapRoot(), units.Millimeters(radius)).TangentChain().Do(t.Context())
 			require.NoError(t, err)
 			after, err := out.Volume()
 			require.NoError(t, err)
@@ -130,7 +130,7 @@ func TestFacetedRetainedBlendChainBaseWrap(t *testing.T) {
 		joined := wrapBlock(t, 2)
 		before, err := joined.Volume()
 		require.NoError(t, err)
-		out, err := decad.Chamfer(t.Context(), joined, wrapRoot(), units.Millimeters(1), decad.WithTangentChain())
+		out, err := decad.Chamfer(joined, wrapRoot(), units.Millimeters(1)).TangentChain().Do(t.Context())
 		require.NoError(t, err)
 		after, err := out.Volume()
 		require.NoError(t, err)
@@ -148,7 +148,7 @@ func TestFacetedRetainedBlendChainBaseWrap(t *testing.T) {
 		before, err := joined.Volume()
 		require.NoError(t, err)
 		const r = 1.0
-		out, err := decad.Fillet(t.Context(), joined, wrapRoot(), units.Millimeters(r), decad.WithTangentChain())
+		out, err := decad.Fillet(joined, wrapRoot(), units.Millimeters(r)).TangentChain().Do(t.Context())
 		require.NoError(t, err)
 		after, err := out.Volume()
 		require.NoError(t, err)
@@ -162,8 +162,7 @@ func TestFacetedRetainedBlendChainBaseWrap(t *testing.T) {
 		t.Parallel()
 		// The box crosses x = 10 inside the cap at the first corner and misses
 		// the strip's other parts.
-		_, err := decad.Fillet(t.Context(), wrapBlockWithCube(t, 2, 9, 10.05, 9.85), wrapRoot(), units.Millimeters(1),
-			decad.WithTangentChain())
+		_, err := decad.Fillet(wrapBlockWithCube(t, 2, 9, 10.05, 9.85), wrapRoot(), units.Millimeters(1)).TangentChain().Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "the cap an end face takes meets another facet of the body at")
 	})
@@ -173,7 +172,7 @@ func TestFacetedRetainedBlendChainBaseWrap(t *testing.T) {
 		w, doc := sketch.NewWorld(), decad.New()
 		joined, err := decad.Union(wrapBlockIn(t, w, doc, 2), placed(t, rectBox(t, w, doc, 9.5, 8.5, 10.5, 9.5, 5), 9)).Do(t.Context())
 		require.NoError(t, err)
-		_, err = decad.Fillet(t.Context(), joined, wrapRoot(), units.Millimeters(1), decad.WithTangentChain())
+		_, err = decad.Fillet(joined, wrapRoot(), units.Millimeters(1)).TangentChain().Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 		require.ErrorContains(t, err, "the blend consumes the base face")
 	})
@@ -184,7 +183,7 @@ func TestFacetedRetainedBlendChainBaseWrap(t *testing.T) {
 		before, err := joined.Volume()
 		require.NoError(t, err)
 		const r = 1.0
-		out, err := decad.Fillet(t.Context(), joined, wrapRoot(), units.Millimeters(r), decad.WithTangentChain())
+		out, err := decad.Fillet(joined, wrapRoot(), units.Millimeters(r)).TangentChain().Do(t.Context())
 		require.NoError(t, err)
 		after, err := out.Volume()
 		require.NoError(t, err)
@@ -206,8 +205,8 @@ func TestFacetedRetainedBlendChainBaseWrap(t *testing.T) {
 		} {
 			t.Run(c.name, func(t *testing.T) {
 				t.Parallel()
-				_, err := decad.Fillet(t.Context(), wrapBlockWithCube(t, 0, c.x0, c.x1, 9.85), wrapRoot(),
-					units.Millimeters(1))
+				_, err := decad.Fillet(wrapBlockWithCube(t, 0, c.x0, c.x1, 9.85), wrapRoot(),
+					units.Millimeters(1)).Do(t.Context())
 				require.ErrorIs(t, err, decad.ErrUnsupported)
 				require.Regexp(t, `the cap an end face takes meets another facet of the body at `+c.at, err.Error())
 			})
@@ -220,7 +219,7 @@ func TestFacetedRetainedBlendChainBaseWrap(t *testing.T) {
 		before, err := joined.Volume()
 		require.NoError(t, err)
 		const r = 1.0
-		out, err := decad.Fillet(t.Context(), joined, wrapRoot(), units.Millimeters(r))
+		out, err := decad.Fillet(joined, wrapRoot(), units.Millimeters(r)).Do(t.Context())
 		require.NoError(t, err)
 		after, err := out.Volume()
 		require.NoError(t, err)

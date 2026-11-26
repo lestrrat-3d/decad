@@ -112,7 +112,7 @@ func TestFacetedRetainedBlendParallelCylinders(t *testing.T) {
 		before, err := b.Volume()
 		require.NoError(t, err)
 		const r = 1.0
-		filleted, err := decad.Fillet(t.Context(), b, pairEdge(t, b), units.Millimeters(r))
+		filleted, err := decad.Fillet(b, pairEdge(t, b), units.Millimeters(r)).Do(t.Context())
 		require.NoError(t, err)
 		after, err := filleted.Volume()
 		require.NoError(t, err)
@@ -139,7 +139,7 @@ func TestFacetedRetainedBlendParallelCylinders(t *testing.T) {
 		before, err := b.Volume()
 		require.NoError(t, err)
 		const d = 0.7
-		chamfered, err := decad.Chamfer(t.Context(), b, pairEdge(t, b), units.Millimeters(d))
+		chamfered, err := decad.Chamfer(b, pairEdge(t, b), units.Millimeters(d)).Do(t.Context())
 		require.NoError(t, err)
 		after, err := chamfered.Volume()
 		require.NoError(t, err)
@@ -176,8 +176,8 @@ func TestFacetedRetainedBlendParallelCylinders(t *testing.T) {
 		require.NoError(t, err)
 		// The valley is concave, so it must end on a face that is reflex at the
 		// corner. The boss top is, but the plate's top face is convex there.
-		_, err = decad.Fillet(t.Context(), b,
-			straightEdge(t, b, r3.NewVec(pairCorner[0], pairCorner[1], 20), r3.NewVec(0, 0, 1)), units.Millimeters(1))
+		_, err = decad.Fillet(b,
+			straightEdge(t, b, r3.NewVec(pairCorner[0], pairCorner[1], 20), r3.NewVec(0, 0, 1)), units.Millimeters(1)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 	})
 
@@ -222,8 +222,8 @@ func TestFacetedRetainedBlendParallelCylinders(t *testing.T) {
 			found = true
 			_, isLine := e.Curve().(decad.Line3)
 			require.False(t, isLine)
-			out, err := decad.Fillet(t.Context(), b, decad.Edges(decad.EndpointAt(e.Start().Position().Value),
-				decad.EndpointAt(e.End().Position().Value)).AtLeast(1), units.Millimeters(0.5))
+			out, err := decad.Fillet(b, decad.Edges(decad.EndpointAt(e.Start().Position().Value),
+				decad.EndpointAt(e.End().Position().Value)).AtLeast(1), units.Millimeters(0.5)).Do(t.Context())
 			if err != nil || e.Start().Position().Value != e.End().Position().Value {
 				require.ErrorIs(t, err, decad.ErrUnsupported)
 				break

@@ -44,7 +44,7 @@ func TestRevolveQuarterCapRadialRimFilletVerified(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			doc, source := rimQuarterCylinder(t, tc.xlo, tc.xhi, tc.radius, 90)
-			out, err := decad.Fillet(t.Context(), source, quarterRim(tc.xhi), units.Millimeters(tc.fillet))
+			out, err := decad.Fillet(source, quarterRim(tc.xhi), units.Millimeters(tc.fillet)).Do(t.Context())
 			require.NoError(t, err)
 			require.Equal(t, []*decad.Body{out}, doc.Bodies())
 			require.Len(t, out.Faces(), 6)
@@ -109,7 +109,7 @@ func TestRevolveQuarterCapRadialRimFilletRefusesOtherSources(t *testing.T) {
 			if tc.selectStart {
 				x = tc.xlo
 			}
-			_, err := decad.Fillet(t.Context(), source, quarterRim(x), units.Millimeters(tc.fillet))
+			_, err := decad.Fillet(source, quarterRim(x), units.Millimeters(tc.fillet)).Do(t.Context())
 			require.ErrorIs(t, err, decad.ErrUnsupported)
 			require.Equal(t, []*decad.Body{source}, doc.Bodies())
 		})
@@ -124,7 +124,7 @@ func TestRevolveQuarterCapRadialRimFilletMeasurements(t *testing.T) {
 	t.Parallel()
 	const length, radius, fillet = 10.0, 8.0, 1.0
 	_, source := rimQuarterCylinder(t, 0, length, radius, 90)
-	out, err := decad.Fillet(t.Context(), source, quarterRim(length), units.Millimeters(fillet))
+	out, err := decad.Fillet(source, quarterRim(length), units.Millimeters(fillet)).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := out.Volume()
 	require.NoError(t, err)

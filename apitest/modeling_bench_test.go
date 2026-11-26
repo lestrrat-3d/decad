@@ -476,7 +476,7 @@ func BenchmarkModelingThickenPatch(b *testing.B) {
 		patch, err := decad.PatchProfile(b.Context(), doc, s, profile)
 		require.NoError(b, err)
 		b.StartTimer()
-		body, err := decad.Thicken(b.Context(), patch, units.Millimeters(2))
+		body, err := decad.Thicken(patch, units.Millimeters(2)).Do(b.Context())
 		if err != nil {
 			b.Fatal(err)
 		}

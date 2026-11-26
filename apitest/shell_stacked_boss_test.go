@@ -19,8 +19,8 @@ func TestShellCenteredStackedBoss(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, stack.Faces(), 11)
 
-	shelled, err := decad.Shell(t.Context(), stack, decad.Faces(decad.FaceCreatedBy(decad.CapEnd(stack))).Exactly(1),
-		units.Millimeters(1))
+	shelled, err := decad.Shell(stack, decad.Faces(decad.FaceCreatedBy(decad.CapEnd(stack))).Exactly(1),
+		units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := shelled.Volume()
 	require.NoError(t, err)
@@ -83,8 +83,8 @@ func TestShellStackedBossClearanceRefusal(t *testing.T) {
 			boss := boxBodyAtZ(t, doc, tc.bossX0, -5, tc.bossX1, 5, 5, 5)
 			stack, err := decad.Union(plate, boss).Do(t.Context())
 			require.NoError(t, err)
-			_, err = decad.Shell(t.Context(), stack, decad.Faces(decad.FaceCreatedBy(decad.CapEnd(stack))).Exactly(1),
-				units.Millimeters(tc.thickness))
+			_, err = decad.Shell(stack, decad.Faces(decad.FaceCreatedBy(decad.CapEnd(stack))).Exactly(1),
+				units.Millimeters(tc.thickness)).Do(t.Context())
 			require.ErrorIs(t, err, decad.ErrUnsupported)
 			_, err = stack.Volume()
 			require.NoError(t, err, "a refused shell leaves its source live")
@@ -99,8 +99,8 @@ func TestShellOffsetRectangularBoss(t *testing.T) {
 	boss := boxBodyAtZ(t, doc, -2, -4, 6, 2, 6, 4)
 	stack, err := decad.Union(plate, boss).Do(t.Context())
 	require.NoError(t, err)
-	shell, err := decad.Shell(t.Context(), stack, decad.Faces(decad.FaceCreatedBy(decad.CapEnd(stack))).Exactly(1),
-		units.Millimeters(1))
+	shell, err := decad.Shell(stack, decad.Faces(decad.FaceCreatedBy(decad.CapEnd(stack))).Exactly(1),
+		units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	v, err := shell.Volume()
 	require.NoError(t, err)
@@ -141,8 +141,8 @@ func TestShellStackedBossOpenAtBottom(t *testing.T) {
 	doc := decad.New()
 	stack, err := decad.Union(boxBody(t, doc, -10, -10, 10, 10, 5), boxBodyAtZ(t, doc, -5, -5, 5, 5, 5, 5)).Do(t.Context())
 	require.NoError(t, err)
-	shell, err := decad.Shell(t.Context(), stack, decad.Faces(decad.FaceCreatedBy(decad.CapStart(stack))).Exactly(1),
-		units.Millimeters(1))
+	shell, err := decad.Shell(stack, decad.Faces(decad.FaceCreatedBy(decad.CapStart(stack))).Exactly(1),
+		units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	v, err := shell.Volume()
 	require.NoError(t, err)
@@ -194,8 +194,8 @@ func TestShellStackedBossOpenAtBottomOffCentre(t *testing.T) {
 	doc := decad.New()
 	stack, err := decad.Union(boxBody(t, doc, -12, -10, 8, 10, 6), boxBodyAtZ(t, doc, -2, -4, 6, 2, 6, 4)).Do(t.Context())
 	require.NoError(t, err)
-	shell, err := decad.Shell(t.Context(), stack, decad.Faces(decad.FaceCreatedBy(decad.CapStart(stack))).Exactly(1),
-		units.Millimeters(1))
+	shell, err := decad.Shell(stack, decad.Faces(decad.FaceCreatedBy(decad.CapStart(stack))).Exactly(1),
+		units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	v, err := shell.Volume()
 	require.NoError(t, err)
@@ -233,8 +233,8 @@ func TestShellStackedBossOpenAtBottomRefusesCollapsedCavity(t *testing.T) {
 			stack, err := decad.Union(boxBody(t, doc, -10, -10, 10, 10, tc.plateHeight), boxBodyAtZ(t, doc, -10+tc.bossOff, -10+tc.bossOff, 10-tc.bossOff, 10-tc.bossOff,
 				tc.plateHeight, tc.bossHeight)).Do(t.Context())
 			require.NoError(t, err)
-			shell, err := decad.Shell(t.Context(), stack,
-				decad.Faces(decad.FaceCreatedBy(decad.CapStart(stack))).Exactly(1), units.Millimeters(1))
+			shell, err := decad.Shell(stack,
+				decad.Faces(decad.FaceCreatedBy(decad.CapStart(stack))).Exactly(1), units.Millimeters(1)).Do(t.Context())
 			require.Nil(t, shell)
 			require.ErrorIs(t, err, decad.ErrUnsupported)
 			_, err = stack.Volume()
@@ -270,8 +270,8 @@ func TestShellStackedWrongCapRefuses(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			stack := tc.build(t, decad.New())
-			_, err := decad.Shell(t.Context(), stack, decad.Faces(decad.FaceCreatedBy(decad.CapStart(stack))).Exactly(1),
-				units.Millimeters(1))
+			_, err := decad.Shell(stack, decad.Faces(decad.FaceCreatedBy(decad.CapStart(stack))).Exactly(1),
+				units.Millimeters(1)).Do(t.Context())
 			require.ErrorIs(t, err, decad.ErrUnsupported)
 			_, err = stack.Volume()
 			require.NoError(t, err, "a refused shell leaves its source live")

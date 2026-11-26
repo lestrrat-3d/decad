@@ -141,19 +141,19 @@ func TestRetainedLineChamferExact(t *testing.T) {
 	// chamfered cuts the socket, chamfers sel by d and returns the result with the volumes before and after.
 	// options builds the chamfer's options from the lips' face feature.
 	chamfered := func(t *testing.T, x4, x6 float64, sel EdgeSelector, d float64,
-		options func(lips FeatureRef) []ChamferOption) (out *Body, before, after Measurement) {
+		options func(lips FeatureRef, c *ChamferCommand) *ChamferCommand) (out *Body, before, after Measurement) {
 		t.Helper()
 		sc := newStripScene()
 		cut, lips := sc.lipSocket(t, x4, x6)
 		requireZeroBounds(t, cut)
-		var opts []ChamferOption
+		cmd := Chamfer(cut, sel, units.Millimeters(d))
 		if options != nil {
-			opts = options(lips)
+			cmd = options(lips, cmd)
 		}
 		var err error
 		before, err = cut.Volume()
 		require.NoError(t, err)
-		out, err = Chamfer(t.Context(), cut, sel, units.Millimeters(d), opts...)
+		out, err = cmd.Do(t.Context())
 		require.NoError(t, err)
 		after, err = out.Volume()
 		require.NoError(t, err)
@@ -172,8 +172,8 @@ func TestRetainedLineChamferExact(t *testing.T) {
 		t.Parallel()
 		// Both walls square, so both lips are exact; the bottom face is the reference of each.
 		out, before, after := chamfered(t, 5, 5, lipEdges(-5, 5), 0.5,
-			func(lips FeatureRef) []ChamferOption {
-				return []ChamferOption{WithAsymmetricChamfer(Faces(FaceCreatedBy(lips)), units.Millimeters(0.25))}
+			func(lips FeatureRef, c *ChamferCommand) *ChamferCommand {
+				return c.Asymmetric(Faces(FaceCreatedBy(lips)), units.Millimeters(0.25))
 			})
 		requireZeroBounds(t, out)
 		require.Equal(t, before.Bound.Mag(), after.Bound.Mag())
@@ -247,7 +247,7 @@ func TestRetainedLineChamferExact(t *testing.T) {
 		before, err := cut.Volume()
 		require.NoError(t, err)
 		sel := Edges(EndpointAt(r3.NewVec(0, 0, 0)), ParallelTo(r3.NewVec(0, 0, 1))).Exactly(1)
-		out, err := Chamfer(t.Context(), cut, sel, units.Millimeters(1.25))
+		out, err := Chamfer(cut, sel, units.Millimeters(1.25)).Do(t.Context())
 		require.NoError(t, err)
 		after, err := out.Volume()
 		require.NoError(t, err)

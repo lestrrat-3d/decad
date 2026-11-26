@@ -272,7 +272,7 @@ func TestCarrierRecordWheelUnionFilletAndBore(t *testing.T) {
 	roots, err := rootEdges(teeth).SelectEdges(wheel)
 	require.NoError(t, err)
 	require.Len(t, roots, 2*teeth)
-	filleted, err := decad.Fillet(t.Context(), wheel, rootEdges(teeth), units.Millimeters(wheelRoot))
+	filleted, err := decad.Fillet(wheel, rootEdges(teeth), units.Millimeters(wheelRoot)).Do(t.Context())
 	require.NoError(t, err)
 	requireAnalyticEdges(t, filleted)
 	// Each fillet adds the corner area r² less the arc's quarter disc where the
@@ -365,7 +365,7 @@ func TestCarrierRecordHoledPlateWithTranslatedBlocks(t *testing.T) {
 	require.Greater(t, jv.Bound.Base(), 0.0, "the copies' rounding is charged")
 
 	roots := decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)), decad.Reflex()).Exactly(2 * blocks)
-	filleted, err := decad.Fillet(t.Context(), joined, roots, units.Millimeters(r))
+	filleted, err := decad.Fillet(joined, roots, units.Millimeters(r)).Do(t.Context())
 	require.NoError(t, err)
 	requireAnalyticEdges(t, filleted)
 	fv, err := filleted.Volume()
@@ -446,7 +446,7 @@ func TestCarrierRecordDiscWithTeeth(t *testing.T) {
 			require.NoError(t, err)
 			require.InDelta(t, drawn.Value.Base(), got.Value.Base(), got.Bound.Base()+drawn.Bound.Base())
 
-			filleted, err := decad.Fillet(t.Context(), wheel, rootEdges(teeth), units.Millimeters(wheelRoot))
+			filleted, err := decad.Fillet(wheel, rootEdges(teeth), units.Millimeters(wheelRoot)).Do(t.Context())
 			require.NoError(t, err)
 			requireAnalyticEdges(t, filleted)
 			fv, err := filleted.Volume()

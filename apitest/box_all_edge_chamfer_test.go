@@ -31,7 +31,7 @@ func allEdges() *decad.EdgeQuery { return decad.Edges(decad.Convex()).Exactly(12
 func TestChamferAllEdgesOfBareBox(t *testing.T) {
 	t.Parallel()
 	doc, box := bareBox(t)
-	out, err := decad.Chamfer(t.Context(), box, allEdges(), units.Millimeters(1))
+	out, err := decad.Chamfer(box, allEdges(), units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, []*decad.Body{out}, doc.Bodies())
 	// L*L*L - 2d^2 (Lx+Ly+Lz) + 6 d^3: twelve wedges, minus the overlaps the
@@ -49,7 +49,7 @@ func TestChamferAllEdgesOfBareBox(t *testing.T) {
 func TestChamferAllEdgesOfBareBoxMeshes(t *testing.T) {
 	t.Parallel()
 	_, box := bareBox(t)
-	out, err := decad.Chamfer(t.Context(), box, allEdges(), units.Millimeters(2))
+	out, err := decad.Chamfer(box, allEdges(), units.Millimeters(2)).Do(t.Context())
 	require.NoError(t, err)
 	mesh, err := out.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
 	require.NoError(t, err)
@@ -62,7 +62,7 @@ func TestChamferAllEdgesOfBareBoxMeshes(t *testing.T) {
 func TestChamferAllEdgesOfBareBoxStaysPlaced(t *testing.T) {
 	t.Parallel()
 	doc, box := bareBox(t)
-	out, err := decad.Chamfer(t.Context(), box, allEdges(), units.Millimeters(1))
+	out, err := decad.Chamfer(box, allEdges(), units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	// A quarter turn about x takes y to z and z to -y. Its matrix is exact, as the
 	// route needs, and it is not a turn that keeps a bore along y.
@@ -81,7 +81,7 @@ func TestChamferAllEdgesOfBareBoxStaysPlaced(t *testing.T) {
 func TestChamferAllEdgesOfBareBoxIsSound(t *testing.T) {
 	t.Parallel()
 	doc, box := bareBox(t)
-	out, err := decad.Chamfer(t.Context(), box, allEdges(), units.Millimeters(1))
+	out, err := decad.Chamfer(box, allEdges(), units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	report := decadtest.Verify(t, doc)
 	// The area is a sum of square roots of two, so the report holds it as
@@ -106,7 +106,7 @@ func TestChamferAllEdgesOfBareBoxRefusals(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			doc, box := bareBox(t)
-			_, err := decad.Chamfer(t.Context(), box, allEdges(), tc.d)
+			_, err := decad.Chamfer(box, allEdges(), tc.d).Do(t.Context())
 			require.ErrorIs(t, err, decad.ErrUnsupported)
 			require.ErrorContains(t, err, tc.text)
 			require.Equal(t, []*decad.Body{box}, doc.Bodies(), "a refused chamfer leaves the box live")
@@ -120,7 +120,7 @@ func TestChamferPartOfBareBoxEdgesStaysRefused(t *testing.T) {
 	t.Parallel()
 	_, box := bareBox(t)
 	eight := decad.Edges(decad.ParallelTo(r3.Vec{X: 1})).Or(decad.ParallelTo(r3.Vec{Z: 1})).Exactly(8)
-	_, err := decad.Chamfer(t.Context(), box, eight, units.Millimeters(1))
+	_, err := decad.Chamfer(box, eight, units.Millimeters(1)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.ErrorContains(t, err, "mixes lateral edges")
 }
@@ -130,7 +130,7 @@ func TestChamferPartOfBareBoxEdgesStaysRefused(t *testing.T) {
 func TestChamferAllEdgesOfCrossDrilledBarKeepsItsBore(t *testing.T) {
 	t.Parallel()
 	_, bar := crossDrilledBar(t)
-	out, err := decad.Chamfer(t.Context(), bar, allEdges(), units.Millimeters(1))
+	out, err := decad.Chamfer(bar, allEdges(), units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	decadtest.HasSurfaceKinds(t, out, map[decad.SurfaceKind]int{decad.KindPlane: 18, decad.KindCylinder: 1})
 }

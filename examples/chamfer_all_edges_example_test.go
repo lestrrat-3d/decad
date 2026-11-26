@@ -40,8 +40,8 @@ func Example_chamfer_all_edges() {
 
 	// Select every convex edge, and ask for exactly twelve so a mistake in the
 	// query fails here. Cut each one back 1 mm on both sides.
-	beveled, err := decad.Chamfer(context.Background(), box,
-		decad.Edges(decad.Convex()).Exactly(12), units.Millimeters(1))
+	beveled, err := decad.Chamfer(box,
+		decad.Edges(decad.Convex()).Exactly(12), units.Millimeters(1)).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to chamfer: %s\n", err)
 		return

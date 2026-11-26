@@ -286,7 +286,7 @@ func TestRetainedSaddleFillet(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			body, _ := saddleShaft(t, tc.r, 0)
-			out, err := decad.Fillet(t.Context(), body, saddleMouths(t, body, tc.r, 0), units.Millimeters(tc.rho))
+			out, err := decad.Fillet(body, saddleMouths(t, body, tc.r, 0), units.Millimeters(tc.rho)).Do(t.Context())
 			require.NoError(t, err)
 			kinds := map[string]int{}
 			for _, f := range out.Faces() {
@@ -312,7 +312,7 @@ func TestRetainedSaddleFillet(t *testing.T) {
 			// near cut points depends on map order. The Fillet retired the
 			// first body, so the shaft is built again.
 			body, _ = saddleShaft(t, tc.r, 0)
-			again, err := decad.Fillet(t.Context(), body, saddleMouths(t, body, tc.r, 0), units.Millimeters(tc.rho))
+			again, err := decad.Fillet(body, saddleMouths(t, body, tc.r, 0), units.Millimeters(tc.rho)).Do(t.Context())
 			require.NoError(t, err)
 			first, err := out.Tessellate(t.Context(), units.Millimeters(0.1))
 			require.NoError(t, err)
@@ -332,7 +332,7 @@ func TestRetainedSaddleFillet(t *testing.T) {
 			Face: decad.Faces(decad.Cylindrical()), At: r3.NewVec(40, 0, saddleR),
 			Diameter: units.Millimeters(6), Depth: decad.ThroughHole{}})
 		require.NoError(t, err)
-		out, err := decad.Fillet(t.Context(), body, saddleMouths(t, body, 3, 0), units.Millimeters(1.5))
+		out, err := decad.Fillet(body, saddleMouths(t, body, 3, 0), units.Millimeters(1.5)).Do(t.Context())
 		require.NoError(t, err)
 		requireFilletedMouths(t, body, out, saddleBlend{R: saddleR, r: 3, rho: 1.5}, true, []float64{1, -1}, saddleWorld)
 	})
@@ -375,21 +375,21 @@ func TestRetainedSaddleFilletRefusals(t *testing.T) {
 	t.Run("a ball that cannot fit between the walls", func(t *testing.T) {
 		t.Parallel()
 		body, _ := saddleShaft(t, 3, 0)
-		_, err := decad.Fillet(t.Context(), body, saddleMouths(t, body, 3, 0), units.Millimeters(3.5))
+		_, err := decad.Fillet(body, saddleMouths(t, body, 3, 0), units.Millimeters(3.5)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 		require.ErrorContains(t, err, "no ball of that radius touches both walls of the saddle")
 	})
 	t.Run("a pipe that folds", func(t *testing.T) {
 		t.Parallel()
 		body, _ := saddleShaft(t, 3, 0)
-		_, err := decad.Fillet(t.Context(), body, saddleMouths(t, body, 3, 0), units.Millimeters(3.4))
+		_, err := decad.Fillet(body, saddleMouths(t, body, 3, 0), units.Millimeters(3.4)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "folds: the pipe is not regular there")
 	})
 	t.Run("a pin off the shaft's axis", func(t *testing.T) {
 		t.Parallel()
 		body, _ := saddleShaft(t, 3, 0.5)
-		_, err := decad.Fillet(t.Context(), body, saddleMouths(t, body, 3, 0.5), units.Millimeters(0.5))
+		_, err := decad.Fillet(body, saddleMouths(t, body, 3, 0.5), units.Millimeters(0.5)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, crossingCylindersReason)
 	})
@@ -400,7 +400,7 @@ func TestRetainedSaddleFilletRefusals(t *testing.T) {
 		sc := newRetentionScene()
 		body, err := decad.Intersect(saddleRevolve(t, sc), saddlePin(t, sc, 3, 0)).Do(t.Context())
 		require.NoError(t, err)
-		_, err = decad.Fillet(t.Context(), body, saddleMouths(t, body, 3, 0), units.Millimeters(0.5))
+		_, err = decad.Fillet(body, saddleMouths(t, body, 3, 0), units.Millimeters(0.5)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, crossingCylindersReason)
 	})
@@ -413,7 +413,7 @@ func TestRetainedSaddleFilletRefusals(t *testing.T) {
 		body, err := decad.Boss(t.Context(), rod, decad.BossSpec{Face: decad.Faces(decad.Cylindrical()),
 			At: r3.NewVec(15, 0, 10), Diameter: units.Millimeters(10), Height: units.Millimeters(1)})
 		require.NoError(t, err)
-		_, err = decad.Fillet(t.Context(), body, decad.Edges(decad.Concave()).Exactly(1), units.Millimeters(1))
+		_, err = decad.Fillet(body, decad.Edges(decad.Concave()).Exactly(1), units.Millimeters(1)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "another face of the body comes within the saddle fillet's reach")
 	})
@@ -435,17 +435,17 @@ func TestRetainedSaddleFilletRefusals(t *testing.T) {
 			}
 		}
 		require.NotNil(t, sel)
-		_, err := decad.Chamfer(t.Context(), body, sel, units.Millimeters(0.5))
+		_, err := decad.Chamfer(body, sel, units.Millimeters(0.5)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, crossingCylindersReason)
-		_, err = decad.Fillet(t.Context(), body, sel, units.Millimeters(0.5))
+		_, err = decad.Fillet(body, sel, units.Millimeters(0.5)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, crossingCylindersReason)
 	})
 	t.Run("a flat milled beside the mouth", func(t *testing.T) {
 		t.Parallel()
 		body := saddleShaftWithFlatBesideMouth(t)
-		_, err := decad.Fillet(t.Context(), body, saddleMouths(t, body, 3, 0), units.Millimeters(1.5))
+		_, err := decad.Fillet(body, saddleMouths(t, body, 3, 0), units.Millimeters(1.5)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "another face of the body comes within the saddle fillet's reach")
 	})
@@ -510,7 +510,7 @@ func TestRetainedSaddleFilletExtrudeShaft(t *testing.T) {
 				n++
 			}
 			require.Equal(t, len(signs), n, "the selected mouths of the cross hole")
-			out, err := decad.Fillet(t.Context(), body, q.Exactly(n), units.Millimeters(rho))
+			out, err := decad.Fillet(body, q.Exactly(n), units.Millimeters(rho)).Do(t.Context())
 			require.NoError(t, err)
 			// One mouth's 18.6 mm³ does not exceed the Extrude bodies' bounds;
 			// two mouths' does.
@@ -565,7 +565,7 @@ func TestRetainedSaddleFilletOutside(t *testing.T) {
 			n++
 		}
 		require.Equal(t, 2, n, "both mouths of the crossing bores")
-		out, err := decad.Fillet(t.Context(), body, q.Exactly(2), units.Millimeters(0.5))
+		out, err := decad.Fillet(body, q.Exactly(2), units.Millimeters(0.5)).Do(t.Context())
 		require.NoError(t, err)
 		requireFilletedMouths(t, body, out, saddleBlend{R: 5, r: 3, rho: 0.5, outside: true}, false,
 			[]float64{1, -1}, func(p r3.Vec, sign float64) r3.Vec { return r3.NewVec(40+sign*p.X, 30+sign*p.Y, 10+p.Z) })
@@ -579,7 +579,7 @@ func TestRetainedSaddleFilletOutside(t *testing.T) {
 		body, err := decad.Boss(t.Context(), rod, decad.BossSpec{Face: decad.Faces(decad.Cylindrical()),
 			At: r3.NewVec(15, 0, 10), Diameter: units.Millimeters(10), Height: units.Millimeters(8)})
 		require.NoError(t, err)
-		out, err := decad.Fillet(t.Context(), body, decad.Edges(decad.Concave()).Exactly(1), units.Millimeters(1))
+		out, err := decad.Fillet(body, decad.Edges(decad.Concave()).Exactly(1), units.Millimeters(1)).Do(t.Context())
 		require.NoError(t, err)
 		requireFilletedMouths(t, body, out, saddleBlend{R: 15, r: 5, rho: 1, outside: true, adds: true}, false,
 			[]float64{1}, func(p r3.Vec, _ float64) r3.Vec { return r3.NewVec(p.X, p.Y, 10+p.Z) })
@@ -592,7 +592,7 @@ func TestRetainedSaddleFilletOutside(t *testing.T) {
 		sc := newRetentionScene()
 		body, err := decad.Union(saddleRevolve(t, sc), saddlePin(t, sc, 3, 0)).Do(t.Context())
 		require.NoError(t, err)
-		out, err := decad.Fillet(t.Context(), body, saddleMouths(t, body, 3, 0), units.Millimeters(1.5))
+		out, err := decad.Fillet(body, saddleMouths(t, body, 3, 0), units.Millimeters(1.5)).Do(t.Context())
 		require.NoError(t, err)
 		requireFilletedMouths(t, body, out, saddleBlend{R: saddleR, r: 3, rho: 1.5, outside: true, adds: true}, false,
 			[]float64{1, -1}, saddleWorld)

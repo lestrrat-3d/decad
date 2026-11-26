@@ -376,7 +376,7 @@ func TestPrismUnionChainedSecondOperandReexpressionAccumulatesDisplacement(t *te
 	require.Greater(t, volume.Bound.Base(), firstVolume.Bound.Base(),
 		"B's existing displacement and its new re-expression allowance must both reach the result")
 
-	_, err = decad.Fillet(t.Context(), chained, decad.Edges().AtLeast(1), units.Millimeters(1))
+	_, err = decad.Fillet(chained, decad.Edges().AtLeast(1), units.Millimeters(1)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 }
 
@@ -394,7 +394,7 @@ func TestPrismUnionDisplacedSectionRefusesTheSectionRewrites(t *testing.T) {
 	got, err := decad.Union(a, b).Do(t.Context())
 	require.NoError(t, err)
 
-	_, err = decad.Fillet(t.Context(), got, verticalConvexEdge(), units.Millimeters(1))
+	_, err = decad.Fillet(got, verticalConvexEdge(), units.Millimeters(1)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.ErrorContains(t, err, "proven displacement")
 }

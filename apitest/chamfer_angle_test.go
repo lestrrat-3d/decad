@@ -31,8 +31,8 @@ func TestChamferAngleSetsTheOtherDistance(t *testing.T) {
 		t.Run("", func(t *testing.T) {
 			t.Parallel()
 			doc, block := angleBlock(t)
-			out, err := decad.ChamferAngle(t.Context(), block, angleCornerEdge(), units.Millimeters(2),
-				decad.Faces(decad.Facing(r3.NewVec(1, 0, 0))), units.Degrees(deg))
+			out, err := decad.ChamferAngle(block, angleCornerEdge(), units.Millimeters(2),
+				decad.Faces(decad.Facing(r3.NewVec(1, 0, 0))), units.Degrees(deg)).Do(t.Context())
 			require.NoError(t, err)
 			require.Equal(t, []*decad.Body{out}, doc.Bodies())
 			// The bevel removes a right triangle with legs 2 and 2·tan(angle), 10 mm tall.
@@ -51,11 +51,11 @@ func TestChamferAngleHonoursTheReferenceFace(t *testing.T) {
 	t.Parallel()
 	_, a := angleBlock(t)
 	_, b := angleBlock(t)
-	outA, err := decad.ChamferAngle(t.Context(), a, angleCornerEdge(), units.Millimeters(2),
-		decad.Faces(decad.Facing(r3.NewVec(1, 0, 0))), units.Degrees(30))
+	outA, err := decad.ChamferAngle(a, angleCornerEdge(), units.Millimeters(2),
+		decad.Faces(decad.Facing(r3.NewVec(1, 0, 0))), units.Degrees(30)).Do(t.Context())
 	require.NoError(t, err)
-	outB, err := decad.ChamferAngle(t.Context(), b, angleCornerEdge(), units.Millimeters(2),
-		decad.Faces(decad.Facing(r3.NewVec(0, 1, 0))), units.Degrees(30))
+	outB, err := decad.ChamferAngle(b, angleCornerEdge(), units.Millimeters(2),
+		decad.Faces(decad.Facing(r3.NewVec(0, 1, 0))), units.Degrees(30)).Do(t.Context())
 	require.NoError(t, err)
 	ca, err := outA.Centroid()
 	require.NoError(t, err)
@@ -86,7 +86,7 @@ func TestChamferAngleRefusals(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			doc, block := angleBlock(t)
-			_, err := decad.ChamferAngle(t.Context(), block, angleCornerEdge(), tc.d, tc.ref, tc.angle)
+			_, err := decad.ChamferAngle(block, angleCornerEdge(), tc.d, tc.ref, tc.angle).Do(t.Context())
 			require.Error(t, err)
 			require.ErrorIs(t, err, tc.want)
 			require.Equal(t, []*decad.Body{block}, doc.Bodies(), "a refused chamfer leaves the block live and alone")

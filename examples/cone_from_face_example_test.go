@@ -55,8 +55,8 @@ func Example_cone_from_face() {
 
 	// Build the full cone from that face. The last argument is the far plane,
 	// as an X coordinate below the origin, where the cone stops.
-	cone, err := decad.ConeFromFace(context.Background(), part,
-		decad.Faces(decad.FaceCreatedBy(side)).Exactly(1), units.Millimeters(-5))
+	cone, err := decad.ConeFromFace(part,
+		decad.Faces(decad.FaceCreatedBy(side)).Exactly(1), units.Millimeters(-5)).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to build cone: %s\n", err)
 		return

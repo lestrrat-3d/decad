@@ -21,7 +21,7 @@ func TestFilletOfThreeEdgesAtABoxCornerEndsInASphere(t *testing.T) {
 		Or(decad.EndpointAt(corner), decad.ParallelTo(y)).Or(decad.EndpointAt(corner), decad.ParallelTo(z))
 	doc := decad.New()
 	box := blockIn(t, doc, r3.NewVec(0, 0, 0), r3.NewVec(20, 20, 10))
-	out, err := decad.Fillet(t.Context(), box, three, units.Millimeters(2))
+	out, err := decad.Fillet(box, three, units.Millimeters(2)).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, []*decad.Body{out}, doc.Bodies())
 	// Each edge loses (L − r) r²(1 − π/4) beyond the corner cube, which loses r³ less the sphere octant πr³/6.
@@ -54,7 +54,7 @@ func TestFilletOfEveryEdgeOfAMeshBoxRoundsAllEightCorners(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	box := blockIn(t, doc, r3.NewVec(0, 0, 0), r3.NewVec(20, 20, 10))
-	out, err := decad.Fillet(t.Context(), box, decad.Edges(), units.Millimeters(2))
+	out, err := decad.Fillet(box, decad.Edges(), units.Millimeters(2)).Do(t.Context())
 	require.NoError(t, err)
 	// Twelve edges of length L − 2r (four each of 20, 20 and 10) and eight corner cubes.
 	k := 1 - math.Pi/4
@@ -73,7 +73,7 @@ func TestFilletOfEdgesAtACornerRefusesAnEdgeShorterThanTwoRadii(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	box := blockIn(t, doc, r3.NewVec(0, 0, 0), r3.NewVec(20, 20, 3))
-	_, err := decad.Fillet(t.Context(), box, decad.Edges(), units.Millimeters(2))
+	_, err := decad.Fillet(box, decad.Edges(), units.Millimeters(2)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Equal(t, []*decad.Body{box}, doc.Bodies())
 }

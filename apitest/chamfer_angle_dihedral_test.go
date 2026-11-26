@@ -54,7 +54,7 @@ func TestChamferAngleOnAHexagonEdge(t *testing.T) {
 			t.Parallel()
 			doc, prism := hexPrism(t)
 			const d = 2.0
-			out, err := decad.ChamferAngle(t.Context(), prism, hexEdge(), units.Millimeters(d), hexReference(), units.Degrees(tc.angle))
+			out, err := decad.ChamferAngle(prism, hexEdge(), units.Millimeters(d), hexReference(), units.Degrees(tc.angle)).Do(t.Context())
 			require.NoError(t, err)
 			require.Equal(t, []*decad.Body{out}, doc.Bodies())
 			// The faces meet at 120 degrees, so the bevel meets the other face
@@ -80,8 +80,8 @@ func TestChamferAngleOnAnAcuteEdge(t *testing.T) {
 	prism := rightTrianglePrism(t, doc)
 	edge := decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)), decad.EndpointAt(r3.NewVec(20, 0, 0))).Exactly(1)
 	const d = 2.0
-	out, err := decad.ChamferAngle(t.Context(), prism, edge, units.Millimeters(d),
-		decad.Faces(decad.Facing(r3.NewVec(0, -1, 0))), units.Degrees(30))
+	out, err := decad.ChamferAngle(prism, edge, units.Millimeters(d),
+		decad.Faces(decad.Facing(r3.NewVec(0, -1, 0))), units.Degrees(30)).Do(t.Context())
 	require.NoError(t, err)
 	// The faces meet at 45 degrees at (20, 0): the bottom face runs along -x from the
 	// edge and the hypotenuse up and to the left. The bevel is 30 degrees to the bottom.
@@ -97,13 +97,13 @@ func TestChamferAngleRefusesWhatHasNoSecondDistance(t *testing.T) {
 	prism := rightTrianglePrism(t, doc)
 	edge := decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)), decad.EndpointAt(r3.NewVec(20, 0, 0))).Exactly(1)
 	// At 45 degrees a bevel 140 degrees from the face never meets the other face.
-	_, err := decad.ChamferAngle(t.Context(), prism, edge, units.Millimeters(2),
-		decad.Faces(decad.Facing(r3.NewVec(0, -1, 0))), units.Degrees(140))
+	_, err := decad.ChamferAngle(prism, edge, units.Millimeters(2),
+		decad.Faces(decad.Facing(r3.NewVec(0, -1, 0))), units.Degrees(140)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 	// All three vertical edges meet at 45, 45 and 90 degrees, so they take different distances.
 	all := decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)))
-	_, err = decad.ChamferAngle(t.Context(), prism, all, units.Millimeters(2),
-		decad.Faces(decad.Facing(r3.NewVec(0, -1, 0))), units.Degrees(30))
+	_, err = decad.ChamferAngle(prism, all, units.Millimeters(2),
+		decad.Faces(decad.Facing(r3.NewVec(0, -1, 0))), units.Degrees(30)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Equal(t, []*decad.Body{prism}, doc.Bodies(), "a refused chamfer leaves the prism live and alone")
 }
@@ -126,7 +126,7 @@ func TestChamferAngleBevelsAConcaveEdge(t *testing.T) {
 	for _, deg := range []float64{30, 60} {
 		doc, prism := polygonPrism(t, pts)
 		edge := decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)), decad.EndpointAt(r3.NewVec(10, 5, 0))).Exactly(1)
-		out, err := decad.ChamferAngle(t.Context(), prism, edge, units.Millimeters(2), ref, units.Degrees(deg))
+		out, err := decad.ChamferAngle(prism, edge, units.Millimeters(2), ref, units.Degrees(deg)).Do(t.Context())
 		require.NoError(t, err)
 		require.Equal(t, []*decad.Body{out}, doc.Bodies())
 		theta := deg * math.Pi / 180
@@ -141,7 +141,7 @@ func TestFilletChordOnAHexagonEdge(t *testing.T) {
 	t.Parallel()
 	doc, prism := hexPrism(t)
 	const chord = 2.0
-	out, err := decad.FilletChord(t.Context(), prism, hexEdge(), units.Millimeters(chord))
+	out, err := decad.FilletChord(prism, hexEdge(), units.Millimeters(chord)).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, []*decad.Body{out}, doc.Bodies())
 	// The faces meet at 120 degrees, so the arc turns 60 and its radius is
@@ -158,7 +158,7 @@ func TestFilletChordOnEverySideEdgeOfTheHexagon(t *testing.T) {
 	// The six vertical edges all meet at 120 degrees, so they give one radius.
 	all := decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)))
 	const chord = 2.0
-	out, err := decad.FilletChord(t.Context(), prism, all, units.Millimeters(chord))
+	out, err := decad.FilletChord(prism, all, units.Millimeters(chord)).Do(t.Context())
 	require.NoError(t, err)
 	removed := chord * chord * (1/math.Tan(math.Pi/3) - (math.Pi-2*math.Pi/3)/2) * 10
 	decadtest.MeasuresVolume(t, out, units.CubicMillimeters(hexArea*10-6*removed), decadtest.WithinRel(units.Scalar(1e-6)))
@@ -170,7 +170,7 @@ func TestFilletChordRoundsAConcaveEdge(t *testing.T) {
 	reflex := decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)), decad.EndpointAt(r3.NewVec(10, 10, 0))).Exactly(1)
 	// A right-angled corner's arc turns 90 degrees, so a chord of 2√2 is a radius of 2. The
 	// round fills (1 − π/4)·r² of the open corner.
-	out, err := decad.FilletChord(t.Context(), lshape, reflex, units.Millimeters(2*math.Sqrt2))
+	out, err := decad.FilletChord(lshape, reflex, units.Millimeters(2*math.Sqrt2)).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, []*decad.Body{out}, doc.Bodies())
 	decadtest.MeasuresVolume(t, out, units.CubicMillimeters((300+(1-math.Pi/4)*4)*10),
@@ -182,7 +182,7 @@ func TestFilletChordRefusesMixedAngles(t *testing.T) {
 	doc := decad.New()
 	prism := rightTrianglePrism(t, doc)
 	all := decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)))
-	_, err := decad.FilletChord(t.Context(), prism, all, units.Millimeters(2))
+	_, err := decad.FilletChord(prism, all, units.Millimeters(2)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported, "edges at 45, 45 and 90 degrees need different radii")
 	require.Equal(t, []*decad.Body{prism}, doc.Bodies())
 }

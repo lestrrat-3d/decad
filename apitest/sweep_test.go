@@ -137,7 +137,7 @@ func TestSweepLineStagesModify(t *testing.T) {
 	body, err := decad.Sweep(t.Context(), doc, s, profile, path)
 	require.NoError(t, err)
 
-	_, err = decad.Fillet(t.Context(), body, decad.Edges().AtLeast(1), units.Millimeters(1))
+	_, err = decad.Fillet(body, decad.Edges().AtLeast(1), units.Millimeters(1)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Equal(t, []*decad.Body{body}, doc.Bodies())
 }

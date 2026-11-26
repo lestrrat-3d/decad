@@ -340,12 +340,14 @@ func Stitch(ctx context.Context, bodies ...*Body) (*Body, error)
 func Unstitch(ctx context.Context, b *Body) ([]*Body, error)
 
 // Turn an admitted sheet into a solid (§16).
-func (b *Body) Thicken(ctx context.Context, thickness units.Value, opts ...ThickenOption) (*Body, error)
-func WithThickenSide(side ThickenSide) ThickenOption
+func Thicken(b *Body, thickness units.Value) *ThickenCommand
+func (c *ThickenCommand) Side(side ThickenSide) *ThickenCommand
+func (c *ThickenCommand) Do(ctx context.Context) (*Body, error)
 
 // A second sheet at a stated normal distance from an admitted sheet (§17).
-func (b *Body) Offset(ctx context.Context, distance units.Value, opts ...OffsetOption) (*Body, error)
-func WithOffsetSide(side OffsetSide) OffsetOption
+func Offset(b *Body, distance units.Value) *OffsetCommand
+func (c *OffsetCommand) Side(side OffsetSide) *OffsetCommand
+func (c *OffsetCommand) Do(ctx context.Context) (*Body, error)
 
 // A sheet from one open sketch curve. §13 owns all four; Extrude, Sweep and
 // Revolve take the chain through Section (§13.2).
@@ -2187,8 +2189,8 @@ reverses a decision already taken.
 | `agent-docs/api-design.md` §6 | `Body` gains `Kind()`; `Volume`/`Centroid`'s `ErrNotSolid` gains the by-kind reading (§8); `Lump`'s gloss becomes "a connected piece of a body"; `FaceShell` gains `IsOpen`; `Edge` gains `IsFree` |
 | `agent-docs/api-design.md` §6.1 | `Edge.Faces()`'s `len != 2` gloss gains the per-kind reading (§2.2) |
 | `agent-docs/api-design.md` §8 | the v1 feature vocabulary gains `Patch`, `Stitch`, `Unstitch` and `WithSurfaceResult`; the signatures land beside the existing ones |
-| `agent-docs/api-design.md` §8 | `Thicken`, `ThickenSide` and `WithThickenSide` add §16's sheet-to-solid path under §6's consuming-body rule |
-| `agent-docs/api-design.md` §8 | `Offset`, `OffsetSide` and `WithOffsetSide` add §17's sheet-to-sheet path under §6's NON-consuming rule, the one `Copy` already takes |
+| `agent-docs/api-design.md` §8 | `Thicken`, `ThickenSide` and `Side` add §16's sheet-to-solid path under §6's consuming-body rule |
+| `agent-docs/api-design.md` §8 | `Offset`, `OffsetSide` and `Side` add §17's sheet-to-sheet path under §6's NON-consuming rule, the one `Copy` already takes |
 | `agent-docs/api-design.md` §9 | the predicate list gains `Free()`, and the rendering table gains its `free` token |
 | `agent-docs/api-design.md` §13 | the v1 non-goal list keeps sheet-metal, and names §1.2's staged commands, §1.3's permanent refusals and §1.4's unstaged one, so the list stays the whole of what is out |
 | `agent-docs/evaluator-design.md` §3 | the `Lump` row states "connected piece"; the topology-model rules gain the free-edge reading |
@@ -3024,25 +3026,25 @@ increment adds, and `.github/test-shards-apitest.txt` one for every `apitest/` t
 ### 16.1 Entry point, side and receivers
 
 ```go
-func (b *Body) Thicken(ctx context.Context, thickness units.Value,
-    opts ...ThickenOption) (*Body, error)
+func Thicken(b *Body, thickness units.Value) *ThickenCommand
+func (c *ThickenCommand) Side(side ThickenSide) *ThickenCommand
+func (c *ThickenCommand) Do(ctx context.Context) (*Body, error)
 
-type ThickenOption interface{ thickenOption() }
 type ThickenSide int
 const (
     ThickenPositive ThickenSide = iota // default: along each source face's positive normal
     ThickenNegative                    // opposite the positive normal
     ThickenCentered                    // half the magnitude on each side
 )
-func WithThickenSide(side ThickenSide) ThickenOption
 ```
 
 `thickness` is a strictly positive `units.Value` of kind Length. Its sign never
-chooses a side. `WithThickenSide` is a sealed option, admits exactly one of the
-three values above, and the last occurrence wins as `WithShellSense` does.
-An unknown or nil option and a nil context are `ErrDegenerate`. A cancelled
+chooses a side. `Side` is a method, admits exactly one of the
+three values above, and the last call wins as `Sense` does. A value outside them is
+`ErrDegenerate` naming `Side`, returned by `Do` at the gate that reads the method values.
+A nil context given to `Do` is `ErrDegenerate`. A cancelled
 context returns `ctx.Err()` unchanged before commit. The default positive
-side makes a call without options deterministic; the caller can name the
+side makes a call without a `Side` call deterministic; the caller can name the
 negative or centered side without first reversing a sheet.
 
 The source sheet's positive side is §2.3's built orientation. A
@@ -3574,26 +3576,25 @@ under §1.3's permanent one.
 ### 17.1 Entry point, side and receivers
 
 ```go
-func (b *Body) Offset(ctx context.Context, distance units.Value,
-    opts ...OffsetOption) (*Body, error)
+func Offset(b *Body, distance units.Value) *OffsetCommand
+func (c *OffsetCommand) Side(side OffsetSide) *OffsetCommand
+func (c *OffsetCommand) Do(ctx context.Context) (*Body, error)
 
-type OffsetOption interface{ offsetOption() }
 type OffsetSide int
 const (
     OffsetPositive OffsetSide = iota // default: along each source face's positive normal
     OffsetNegative                   // opposite the positive normal
 )
-func WithOffsetSide(side OffsetSide) OffsetOption
 ```
 
 **`Offset` returns a second sheet whose every face lies at the stated normal
 distance from the source face it came from.** `distance` is a strictly positive
 `units.Value` of kind Length, and its sign never chooses a side, exactly as
-`Thicken`'s thickness does not (§16.1). `WithOffsetSide` is a sealed option,
-admits exactly the two values above, and the last occurrence wins as
-`WithThickenSide` does. There is no centered value: an offset publishes one
-surface, and two surfaces are two calls. An unknown or nil option and a nil
-context are `ErrDegenerate`; a cancelled context returns `ctx.Err()` unchanged
+`Thicken`'s thickness does not (§16.1). `Side` is a method,
+admits exactly the two values above, and the last call wins as
+`Thicken`'s `Side` does. There is no centered value: an offset publishes one
+surface, and two surfaces are two calls. A value outside the two is
+`ErrDegenerate` naming `Side`, as is a nil context given to `Do`; a cancelled context returns `ctx.Err()` unchanged
 before commit.
 
 **The receiver stays LIVE.** Offset depends on its source and consumes nothing:

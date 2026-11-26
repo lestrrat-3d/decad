@@ -87,7 +87,7 @@ func TestLoftFilletAtALineMeetingACircleFragment(t *testing.T) {
 	}
 	require.Equal(t, 2, found, "both corner edges are on the joined body")
 
-	rounded, err := decad.Fillet(t.Context(), joined, sel, units.Millimeters(radius))
+	rounded, err := decad.Fillet(joined, sel, units.Millimeters(radius)).Do(t.Context())
 	require.NoError(t, err)
 	v1, err := rounded.Volume()
 	require.NoError(t, err)
@@ -125,8 +125,8 @@ func TestLoftFilletLargeRadiusRestsOnTheBladeTop(t *testing.T) {
 	v0, err := joined.Volume()
 	require.NoError(t, err)
 	corner := [2]float64{halfWidth, math.Sqrt(discR*discR - halfWidth*halfWidth)}
-	rounded, err := decad.Fillet(t.Context(), joined, cornerEdges(t, joined, [][2]float64{corner}),
-		units.Millimeters(radius))
+	rounded, err := decad.Fillet(joined, cornerEdges(t, joined, [][2]float64{corner}),
+		units.Millimeters(radius)).Do(t.Context())
 	require.NoError(t, err)
 	require.True(t, rounded.IsSolid())
 	v1, err := rounded.Volume()
@@ -200,7 +200,7 @@ func TestLoftFilletCircleFragmentRefusals(t *testing.T) {
 		next := 2*math.Pi/n - half
 		sel := cornerEdges(t, joined, [][2]float64{{r * math.Cos(half), r * math.Sin(half)},
 			{r * math.Cos(next), r * math.Sin(next)}})
-		_, err = decad.Fillet(t.Context(), joined, sel, units.Millimeters(0.45))
+		_, err = decad.Fillet(joined, sel, units.Millimeters(0.45)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "outside its circle fragment")
 	})
@@ -218,7 +218,7 @@ func TestLoftFilletCircleFragmentRefusals(t *testing.T) {
 			}
 		}
 		require.NotNil(t, sel, "an axial edge on the circle's far side")
-		_, err = decad.Fillet(t.Context(), joined, sel, units.Millimeters(0.3))
+		_, err = decad.Fillet(joined, sel, units.Millimeters(0.3)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 	})
 }
@@ -330,7 +330,7 @@ func TestLoftFilletRollsPastAShortLine(t *testing.T) {
 			require.NoError(t, err)
 			v0, err := joined.Volume()
 			require.NoError(t, err)
-			rounded, err := decad.Fillet(t.Context(), joined, cornerEdges(t, joined, corners), units.Millimeters(tc.radius))
+			rounded, err := decad.Fillet(joined, cornerEdges(t, joined, corners), units.Millimeters(tc.radius)).Do(t.Context())
 			require.NoError(t, err)
 			require.True(t, rounded.IsSolid())
 			v1, err := rounded.Volume()
@@ -473,7 +473,7 @@ func TestLoftFilletRestsOnTheLineFlankVertex(t *testing.T) {
 			require.NoError(t, err)
 			v0, err := joined.Volume()
 			require.NoError(t, err)
-			rounded, err := decad.Fillet(t.Context(), joined, cornerEdges(t, joined, corners), units.Millimeters(tc.radius))
+			rounded, err := decad.Fillet(joined, cornerEdges(t, joined, corners), units.Millimeters(tc.radius)).Do(t.Context())
 			require.NoError(t, err)
 			require.True(t, rounded.IsSolid())
 			v1, err := rounded.Volume()
@@ -521,7 +521,7 @@ func TestLoftFilletEveryCornerOfLobesOnADisc(t *testing.T) {
 	require.NoError(t, err)
 	v0, err := joined.Volume()
 	require.NoError(t, err)
-	rounded, err := decad.Fillet(t.Context(), joined, cornerEdges(t, joined, corners), units.Millimeters(radius))
+	rounded, err := decad.Fillet(joined, cornerEdges(t, joined, corners), units.Millimeters(radius)).Do(t.Context())
 	require.NoError(t, err)
 	v1, err := rounded.Volume()
 	require.NoError(t, err)
@@ -541,7 +541,7 @@ func TestLoftFilletEveryCornerOfLobesOnADisc(t *testing.T) {
 	if _, err := caps.SelectEdges(bored); err != nil {
 		caps = decad.Edges(decad.OuterLoopOf(decad.CapStart(rounded))).Or(decad.OuterLoopOf(decad.CapEnd(rounded)))
 	}
-	chamfered, err := decad.Chamfer(t.Context(), bored, caps, units.Millimeters(0.02))
+	chamfered, err := decad.Chamfer(bored, caps, units.Millimeters(0.02)).Do(t.Context())
 	require.NoError(t, err)
 	cv, err := chamfered.Volume()
 	require.NoError(t, err)

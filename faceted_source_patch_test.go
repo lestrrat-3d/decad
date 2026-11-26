@@ -32,8 +32,8 @@ func (sc *slabScene) roundedBox(ctx context.Context, t *testing.T) *Body {
 	box, err := Extrude(ctx, sc.doc, s, s.Profiles()[0],
 		Distance{D: units.Millimeters(20), Dir: Along})
 	require.NoError(t, err)
-	rounded, err := Fillet(ctx, box,
-		Edges(ParallelTo(r3.NewVec(0, 0, 1))).Exactly(4), units.Millimeters(3))
+	rounded, err := Fillet(box,
+		Edges(ParallelTo(r3.NewVec(0, 0, 1))).Exactly(4), units.Millimeters(3)).Do(ctx)
 	require.NoError(t, err)
 	return rounded
 }

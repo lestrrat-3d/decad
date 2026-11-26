@@ -57,7 +57,7 @@ func TestCapBlendCutAfterTangentArcChamfer(t *testing.T) {
 	doc := decad.New()
 	body := tangentArcPlate(t, doc)
 	loops := decad.Edges(decad.OuterLoopOf(decad.CapStart(body))).Or(decad.OuterLoopOf(decad.CapEnd(body)))
-	chamfered, err := decad.Chamfer(ctx, body, loops, units.Millimeters(0.5))
+	chamfered, err := decad.Chamfer(body, loops, units.Millimeters(0.5)).Do(ctx)
 	require.NoError(t, err)
 	before, err := chamfered.Volume()
 	require.NoError(t, err)

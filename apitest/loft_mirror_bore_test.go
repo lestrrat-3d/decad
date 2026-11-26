@@ -19,8 +19,8 @@ func roundedMirrorJoin(t *testing.T, half, twist float64) *decad.Body {
 	t.Helper()
 	g := newTwistedGear(5, 20*math.Pi/180, 0.05)
 	body, bottom, top := g.loft(t, half, twist, 0)
-	rounded, err := decad.Fillet(t.Context(), body, rungQuery(bottom, top, half).Exactly(len(bottom)),
-		units.Millimeters(0.25))
+	rounded, err := decad.Fillet(body, rungQuery(bottom, top, half).Exactly(len(bottom)),
+		units.Millimeters(0.25)).Do(t.Context())
 	require.NoError(t, err)
 	end, err := r3.NewFrame(r3.Vec{Z: half}, r3.Vec{X: 1}, r3.Vec{Y: 1})
 	require.NoError(t, err)

@@ -47,15 +47,14 @@ func TestThickenCompositeSweepSheetBuildsExactSolid(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, decad.BodySheet, sheet.Kind())
 
-			solid, err := decad.Thicken(t.Context(), sheet, units.Millimeters(tc.mm),
-				decad.WithThickenSide(tc.side))
+			solid, err := decad.Thicken(sheet, units.Millimeters(tc.mm)).Side(tc.side).Do(t.Context())
 			require.NoError(t, err)
 			require.Equal(t, decad.BodySolid, solid.Kind())
 			require.True(t, solid.IsSolid())
 			require.Len(t, solid.Lumps(), 1)
 			require.Len(t, doc.Bodies(), 1)
 			require.Same(t, solid, doc.Bodies()[0])
-			_, err = decad.Thicken(t.Context(), sheet, units.Millimeters(tc.mm))
+			_, err = decad.Thicken(sheet, units.Millimeters(tc.mm)).Do(t.Context())
 			require.ErrorIs(t, err, decad.ErrRetiredBody)
 			for _, edge := range solid.Edges() {
 				require.Len(t, edge.Faces(), 2)
@@ -97,7 +96,7 @@ func TestThickenCompositeSweepSheetRefusesAxisContact(t *testing.T) {
 			sheet, err := decad.Sweep(t.Context(), doc, s, profile, compositeThickenPath(t),
 				decad.WithSurfaceResult())
 			require.NoError(t, err)
-			_, err = decad.Thicken(t.Context(), sheet, units.Millimeters(tc.mm))
+			_, err = decad.Thicken(sheet, units.Millimeters(tc.mm)).Do(t.Context())
 			require.ErrorIs(t, err, decad.ErrUnsupported)
 			require.Contains(t, err.Error(), "reaches the revolve axis")
 			require.Len(t, doc.Bodies(), 1)
@@ -117,7 +116,7 @@ func TestThickenCompositeSweepSheetKeepsR24(t *testing.T) {
 		sheet, err := decad.Sweep(t.Context(), doc, s, profile, compositeThickenPath(t),
 			decad.WithSurfaceResult())
 		require.NoError(t, err)
-		_, err = decad.Thicken(t.Context(), sheet, units.Millimeters(0.2))
+		_, err = decad.Thicken(sheet, units.Millimeters(0.2)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.Same(t, sheet, doc.Bodies()[0])
 	})
@@ -132,7 +131,7 @@ func TestThickenCompositeSweepSheetKeepsR24(t *testing.T) {
 		require.NoError(t, err)
 		placed, err := decad.Transform(t.Context(), sheet, move)
 		require.NoError(t, err)
-		_, err = decad.Thicken(t.Context(), placed, units.Millimeters(0.2))
+		_, err = decad.Thicken(placed, units.Millimeters(0.2)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.Equal(t, decad.BodySheet, placed.Kind())
 	})

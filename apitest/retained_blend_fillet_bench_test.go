@@ -77,7 +77,7 @@ func BenchmarkFacetedRetainedBlendFourSideFillet(b *testing.B) {
 		}
 		selector = selector.Exactly(4)
 		b.StartTimer()
-		_, err = decad.Fillet(b.Context(), body, selector, units.Millimeters(2))
+		_, err = decad.Fillet(body, selector, units.Millimeters(2)).Do(b.Context())
 		b.StopTimer()
 		if err != nil {
 			b.Fatal(err)
@@ -129,7 +129,7 @@ func BenchmarkRetainedLineChamfer(b *testing.B) {
 		lips := decad.Edges(decad.EndpointAt(r3.NewVec(-5, 0, 0)), decad.ParallelTo(r3.NewVec(0, 1, 0))).
 			Or(decad.EndpointAt(r3.NewVec(5, 0, 0)), decad.ParallelTo(r3.NewVec(0, 1, 0))).Exactly(2)
 		b.StartTimer()
-		_, err := decad.Chamfer(b.Context(), socket, lips, units.Millimeters(0.5))
+		_, err := decad.Chamfer(socket, lips, units.Millimeters(0.5)).Do(b.Context())
 		b.StopTimer()
 		if err != nil {
 			b.Fatal(err)

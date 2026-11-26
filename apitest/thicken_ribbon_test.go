@@ -57,8 +57,7 @@ func TestThickenRibbonStraight(t *testing.T) {
 			t.Parallel()
 			_, ribbon := thickenRibbonOf(t, [][2]float64{{0, 0}, {40, 0}})
 			require.Equal(t, decad.BodySheet, ribbon.Kind())
-			solid, err := decad.Thicken(t.Context(), ribbon, units.Millimeters(tc.thicknes),
-				decad.WithThickenSide(tc.side))
+			solid, err := decad.Thicken(ribbon, units.Millimeters(tc.thicknes)).Side(tc.side).Do(t.Context())
 			require.NoError(t, err)
 			require.Equal(t, decad.BodySolid, solid.Kind())
 			require.True(t, solid.IsSolid())
@@ -79,7 +78,7 @@ func TestThickenRibbonCorner(t *testing.T) {
 	t.Run("outward", func(t *testing.T) {
 		t.Parallel()
 		_, ribbon := thickenRibbonOf(t, [][2]float64{{0, 0}, {40, 0}, {40, 30}})
-		solid, err := decad.Thicken(t.Context(), ribbon, units.Millimeters(2))
+		solid, err := decad.Thicken(ribbon, units.Millimeters(2)).Do(t.Context())
 		require.NoError(t, err)
 		require.Len(t, solid.Faces(), 9)
 		volume, err := solid.Volume()
@@ -94,8 +93,7 @@ func TestThickenRibbonCorner(t *testing.T) {
 	t.Run("inward", func(t *testing.T) {
 		t.Parallel()
 		_, ribbon := thickenRibbonOf(t, [][2]float64{{0, 0}, {40, 0}, {40, 30}})
-		solid, err := decad.Thicken(t.Context(), ribbon, units.Millimeters(2),
-			decad.WithThickenSide(decad.ThickenNegative))
+		solid, err := decad.Thicken(ribbon, units.Millimeters(2)).Side(decad.ThickenNegative).Do(t.Context())
 		require.NoError(t, err)
 		require.Len(t, solid.Faces(), 8)
 		decadtest.MeasuresVolume(t, solid, units.CubicMillimeters(1360), decadtest.Exactly())
@@ -114,8 +112,7 @@ func TestThickenRibbonNeck(t *testing.T) {
 	t.Run("contact refuses", func(t *testing.T) {
 		t.Parallel()
 		doc, ribbon := thickenRibbonOf(t, neck)
-		_, err := decad.Thicken(t.Context(), ribbon, units.Millimeters(3),
-			decad.WithThickenSide(decad.ThickenNegative))
+		_, err := decad.Thicken(ribbon, units.Millimeters(3)).Side(decad.ThickenNegative).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.Contains(t, err.Error(), "the offset interval contains a nonadjacent line contact")
 		require.Len(t, doc.Bodies(), 1)
@@ -125,8 +122,7 @@ func TestThickenRibbonNeck(t *testing.T) {
 	t.Run("clear builds", func(t *testing.T) {
 		t.Parallel()
 		_, ribbon := thickenRibbonOf(t, neck)
-		solid, err := decad.Thicken(t.Context(), ribbon, units.Millimeters(1),
-			decad.WithThickenSide(decad.ThickenNegative))
+		solid, err := decad.Thicken(ribbon, units.Millimeters(1)).Side(decad.ThickenNegative).Do(t.Context())
 		require.NoError(t, err)
 		require.Len(t, solid.Faces(), 10)
 		decadtest.MeasuresVolume(t, solid, units.CubicMillimeters(220), decadtest.Exactly())

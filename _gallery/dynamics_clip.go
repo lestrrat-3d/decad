@@ -868,7 +868,7 @@ func shelledCup(ctx context.Context, doc *decad.Document) (*decad.Body, error) {
 	if err != nil {
 		return nil, err
 	}
-	return decad.Shell(ctx, box, decad.Faces(decad.FaceCreatedBy(decad.CapEnd(box))), units.Millimeters(2))
+	return decad.Shell(box, decad.Faces(decad.FaceCreatedBy(decad.CapEnd(box))), units.Millimeters(2)).Do(ctx)
 }
 
 // chamferedBlock is a 12 mm cube on z = 0 with its top loop chamfered
@@ -878,7 +878,7 @@ func chamferedBlock(ctx context.Context, doc *decad.Document) (*decad.Body, erro
 	if err != nil {
 		return nil, err
 	}
-	return decad.Chamfer(ctx, box, decad.Edges(decad.CreatedBy(decad.CapEnd(box))), units.Millimeters(2.3))
+	return decad.Chamfer(box, decad.Edges(decad.CreatedBy(decad.CapEnd(box))), units.Millimeters(2.3)).Do(ctx)
 }
 
 // fixedPolygon sketches the closed polygon corners on plane, every corner

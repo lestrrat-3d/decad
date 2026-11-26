@@ -71,7 +71,7 @@ func chargedHolePlate(t *testing.T, doc *decad.Document) *decad.Body {
 		Diameter: units.Millimeters(14), Height: units.Millimeters(1)})
 	require.NoError(t, err)
 	edge := decad.Edges(decad.EndpointAt(r3.Vec{X: -12, Y: -14, Z: 5}), decad.Circular()).Exactly(1)
-	filleted, err := decad.Fillet(t.Context(), out, edge, units.Millimeters(0.5))
+	filleted, err := decad.Fillet(out, edge, units.Millimeters(0.5)).Do(t.Context())
 	require.NoError(t, err)
 	return filleted
 }

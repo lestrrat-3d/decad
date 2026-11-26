@@ -209,9 +209,9 @@ func TestFacetedRetainedBlendArcExtends(t *testing.T) {
 				}
 				var out *decad.Body
 				if fillet {
-					out, err = decad.Fillet(t.Context(), body, seed, units.Millimeters(size))
+					out, err = decad.Fillet(body, seed, units.Millimeters(size)).Do(t.Context())
 				} else {
-					out, err = decad.Chamfer(t.Context(), body, seed, units.Millimeters(size))
+					out, err = decad.Chamfer(body, seed, units.Millimeters(size)).Do(t.Context())
 				}
 				require.NoError(t, err)
 
@@ -276,14 +276,14 @@ func TestFacetedRetainedBlendArcExtends(t *testing.T) {
 		require.NoError(t, err)
 		body, err = decad.Cut(body, zCylinderAt(t, sc, -0.5, 0, 0.25, -10, 10)).Do(t.Context())
 		require.NoError(t, err)
-		_, err = decad.Fillet(t.Context(), body, earArc(t, body), units.Millimeters(1))
+		_, err = decad.Fillet(body, earArc(t, body), units.Millimeters(1)).Do(t.Context())
 		require.ErrorContains(t, err, "another part of the wall lies within the blend's reach of the edge")
 	})
 
 	t.Run("a blend too large for the rib's end face is refused", func(t *testing.T) {
 		t.Parallel()
 		body := earBody(t)
-		_, err := decad.Fillet(t.Context(), body, earArc(t, body), units.Millimeters(2.5))
+		_, err := decad.Fillet(body, earArc(t, body), units.Millimeters(2.5)).Do(t.Context())
 		require.ErrorContains(t, err, "the blend consumes the plane beside the arc")
 	})
 
@@ -307,7 +307,7 @@ func TestFacetedRetainedBlendArcExtends(t *testing.T) {
 			}
 		}
 		require.NotNil(t, seed)
-		_, err = decad.Fillet(t.Context(), body, seed, units.Millimeters(1))
+		_, err = decad.Fillet(body, seed, units.Millimeters(1)).Do(t.Context())
 		require.ErrorContains(t, err, "the cap an end face takes meets another facet of the body")
 	})
 }

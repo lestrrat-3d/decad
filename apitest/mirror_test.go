@@ -187,7 +187,7 @@ func TestMirroredCopyEveryPayload(t *testing.T) {
 		}},
 		{Name: "cap blend", Build: func(t *testing.T, sc *mirrorScene) *decad.Body {
 			box := sc.box(t, sc.w.XY(), 0, 0, 20, 10, mirrorAlong(10))
-			body, err := decad.Chamfer(t.Context(), box, capLoopEdges(box), units.Millimeters(2))
+			body, err := decad.Chamfer(box, capLoopEdges(box), units.Millimeters(2)).Do(t.Context())
 			require.NoError(t, err)
 			return body
 		}},

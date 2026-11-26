@@ -108,7 +108,7 @@ func TestPrismGroupSixHoleCut(t *testing.T) {
 	require.Len(t, report.Bodies, 1)
 	require.NotNil(t, report.Bodies[0].Wall.Minimum, "the wall survey measures the holed plate")
 
-	filleted, err := decad.Fillet(t.Context(), got, verticalConvexEdge(), units.Millimeters(1))
+	filleted, err := decad.Fillet(got, verticalConvexEdge(), units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	filletVolume, err := filleted.Volume()
 	require.NoError(t, err)

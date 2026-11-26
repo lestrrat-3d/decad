@@ -119,7 +119,7 @@ func TestFacetedRetainedBlend(t *testing.T) {
 		_, bored := boredPlate(t)
 		before, err := bored.Volume()
 		require.NoError(t, err)
-		filleted, err := decad.Fillet(t.Context(), bored, rimAt(t, bored, 20), units.Millimeters(1))
+		filleted, err := decad.Fillet(bored, rimAt(t, bored, 20), units.Millimeters(1)).Do(t.Context())
 		require.NoError(t, err)
 		after, err := filleted.Volume()
 		require.NoError(t, err)
@@ -195,7 +195,7 @@ func TestFacetedRetainedBlend(t *testing.T) {
 		const r, rim = 1.0, 3.0
 		before, err := bored.Volume()
 		require.NoError(t, err)
-		filleted, err := decad.Fillet(t.Context(), bored, rimAt(t, bored, 20), units.Millimeters(r))
+		filleted, err := decad.Fillet(bored, rimAt(t, bored, 20), units.Millimeters(r)).Do(t.Context())
 		require.NoError(t, err)
 		after, err := filleted.Volume()
 		require.NoError(t, err)
@@ -206,7 +206,7 @@ func TestFacetedRetainedBlend(t *testing.T) {
 		before, err = bored.Volume()
 		require.NoError(t, err)
 		const d = 0.5
-		chamfered, err := decad.Chamfer(t.Context(), bored, rimAt(t, bored, 20), units.Millimeters(d))
+		chamfered, err := decad.Chamfer(bored, rimAt(t, bored, 20), units.Millimeters(d)).Do(t.Context())
 		require.NoError(t, err)
 		after, err = chamfered.Volume()
 		require.NoError(t, err)
@@ -218,7 +218,7 @@ func TestFacetedRetainedBlend(t *testing.T) {
 		_, bored := boredPlate(t)
 		before, err := bored.Volume()
 		require.NoError(t, err)
-		chamfered, err := decad.Chamfer(t.Context(), bored, rimAt(t, bored, 20), units.Millimeters(1))
+		chamfered, err := decad.Chamfer(bored, rimAt(t, bored, 20), units.Millimeters(1)).Do(t.Context())
 		require.NoError(t, err)
 		after, err := chamfered.Volume()
 		require.NoError(t, err)
@@ -242,7 +242,7 @@ func TestFacetedRetainedBlend(t *testing.T) {
 		_, bored := boredPlate(t)
 		before, err := bored.Volume()
 		require.NoError(t, err)
-		both, err := decad.Fillet(t.Context(), bored, decad.Edges(decad.Circular()).Exactly(2), units.Millimeters(1))
+		both, err := decad.Fillet(bored, decad.Edges(decad.Circular()).Exactly(2), units.Millimeters(1)).Do(t.Context())
 		require.NoError(t, err)
 		after, err := both.Volume()
 		require.NoError(t, err)
@@ -262,7 +262,7 @@ func TestFacetedRetainedBlend(t *testing.T) {
 		_, bored := boredPlate(t)
 		before, err := bored.Volume()
 		require.NoError(t, err)
-		filleted, err := decad.Fillet(t.Context(), bored, rimAt(t, bored, 0), units.Millimeters(1))
+		filleted, err := decad.Fillet(bored, rimAt(t, bored, 0), units.Millimeters(1)).Do(t.Context())
 		require.NoError(t, err)
 		after, err := filleted.Volume()
 		require.NoError(t, err)
@@ -276,7 +276,7 @@ func TestFacetedRetainedBlend(t *testing.T) {
 		require.NoError(t, err)
 		before, err := joined.Volume()
 		require.NoError(t, err)
-		filleted, err := decad.Fillet(t.Context(), joined, rimAt(t, joined, 20), units.Millimeters(1))
+		filleted, err := decad.Fillet(joined, rimAt(t, joined, 20), units.Millimeters(1)).Do(t.Context())
 		require.NoError(t, err)
 		after, err := filleted.Volume()
 		require.NoError(t, err)
@@ -332,7 +332,7 @@ func TestFacetedRetainedBlend(t *testing.T) {
 		require.NoError(t, err)
 		before, err := drilled.Volume()
 		require.NoError(t, err)
-		filleted, err := decad.Fillet(t.Context(), drilled, rimAt(t, drilled, 20.001), units.Millimeters(1))
+		filleted, err := decad.Fillet(drilled, rimAt(t, drilled, 20.001), units.Millimeters(1)).Do(t.Context())
 		require.NoError(t, err)
 		after, err := filleted.Volume()
 		require.NoError(t, err)
@@ -348,7 +348,7 @@ func TestFacetedRetainedBlend(t *testing.T) {
 		require.NoError(t, err)
 		before, err := pocketed.Volume()
 		require.NoError(t, err)
-		filleted, err := decad.Fillet(t.Context(), pocketed, rimAt(t, pocketed, 10.001), units.Millimeters(1))
+		filleted, err := decad.Fillet(pocketed, rimAt(t, pocketed, 10.001), units.Millimeters(1)).Do(t.Context())
 		require.NoError(t, err)
 		after, err := filleted.Volume()
 		require.NoError(t, err)
@@ -360,7 +360,7 @@ func TestFacetedRetainedBlend(t *testing.T) {
 	t.Run("the result is an ordinary retained body", func(t *testing.T) {
 		t.Parallel()
 		sc, bored := boredPlate(t)
-		top, err := decad.Fillet(t.Context(), bored, rimAt(t, bored, 20), units.Millimeters(1))
+		top, err := decad.Fillet(bored, rimAt(t, bored, 20), units.Millimeters(1)).Do(t.Context())
 		require.NoError(t, err)
 		// The blended face's boundary vertices lie within their bounds of the
 		// exact torus.
@@ -383,7 +383,7 @@ func TestFacetedRetainedBlend(t *testing.T) {
 			require.Positive(t, checked)
 		}
 		// A second blend on the other mouth, a Boolean and a placement all take it.
-		both, err := decad.Fillet(t.Context(), top, rimAt(t, top, 0), units.Millimeters(1))
+		both, err := decad.Fillet(top, rimAt(t, top, 0), units.Millimeters(1)).Do(t.Context())
 		require.NoError(t, err)
 		cut, err := decad.Cut(both, sc.tool(t, 33)).Do(t.Context())
 		require.NoError(t, err)
@@ -411,24 +411,24 @@ func TestFacetedRetainedBlend(t *testing.T) {
 		t.Parallel()
 		// The face between the bore and the nearest plate edge is 6 mm wide.
 		_, bored := boredPlate(t)
-		_, err := decad.Fillet(t.Context(), bored, rimAt(t, bored, 20), units.Millimeters(6.5))
+		_, err := decad.Fillet(bored, rimAt(t, bored, 20), units.Millimeters(6.5)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrDegenerate, "the blend consumes the face")
 		_, bored = boredPlate(t)
-		_, err = decad.Fillet(t.Context(), bored, rimAt(t, bored, 20), units.Millimeters(6))
+		_, err = decad.Fillet(bored, rimAt(t, bored, 20), units.Millimeters(6)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported, "the held bounds cannot show it fits")
 		_, bored = boredPlate(t)
 		// Three plate edges meet at one corner, which a sphere octant rounds: 39 + 19 + 19 mm of strip beyond the corner
 		// cube, which loses r³ less the octant's πr³/6.
 		before, err := bored.Volume()
 		require.NoError(t, err)
-		corner, err := decad.Fillet(t.Context(), bored, decad.Edges(decad.EndpointAt(r3.NewVec(0, 0, 0))).Exactly(3),
-			units.Millimeters(1))
+		corner, err := decad.Fillet(bored, decad.Edges(decad.EndpointAt(r3.NewVec(0, 0, 0))).Exactly(3),
+			units.Millimeters(1)).Do(t.Context())
 		require.NoError(t, err)
 		after, err := corner.Volume()
 		require.NoError(t, err)
 		requireVolumeChange(t, before, after, 77*(1-math.Pi/4)+1-math.Pi/6)
 		_, bored = boredPlate(t)
-		_, err = decad.Fillet(t.Context(), bored, rimAt(t, bored, 20), units.Millimeters(-1))
+		_, err = decad.Fillet(bored, rimAt(t, bored, 20), units.Millimeters(-1)).Do(t.Context())
 		require.Error(t, err)
 	})
 }
@@ -502,8 +502,8 @@ func TestFacetedRetainedBlendStraight(t *testing.T) {
 		_, bored := boredPlate(t)
 		before, err := bored.Volume()
 		require.NoError(t, err)
-		filleted, err := decad.Fillet(t.Context(), bored, straightEdge(t, bored, r3.NewVec(0, 0, 0), r3.NewVec(0, 0, 1)),
-			units.Millimeters(2))
+		filleted, err := decad.Fillet(bored, straightEdge(t, bored, r3.NewVec(0, 0, 0), r3.NewVec(0, 0, 1)),
+			units.Millimeters(2)).Do(t.Context())
 		require.NoError(t, err)
 		after, err := filleted.Volume()
 		require.NoError(t, err)
@@ -524,8 +524,8 @@ func TestFacetedRetainedBlendStraight(t *testing.T) {
 		require.True(t, mesh.VolumeVerified())
 
 		_, bored = boredPlate(t)
-		chamfered, err := decad.Chamfer(t.Context(), bored, straightEdge(t, bored, r3.NewVec(0, 0, 0), r3.NewVec(0, 0, 1)),
-			units.Millimeters(2))
+		chamfered, err := decad.Chamfer(bored, straightEdge(t, bored, r3.NewVec(0, 0, 0), r3.NewVec(0, 0, 1)),
+			units.Millimeters(2)).Do(t.Context())
 		require.NoError(t, err)
 		afterChamfer, err := chamfered.Volume()
 		require.NoError(t, err)
@@ -537,8 +537,8 @@ func TestFacetedRetainedBlendStraight(t *testing.T) {
 		_, bored := boredPlate(t)
 		before, err := bored.Volume()
 		require.NoError(t, err)
-		filleted, err := decad.Fillet(t.Context(), bored, straightEdge(t, bored, r3.NewVec(0, 0, 20), r3.NewVec(1, 0, 0)),
-			units.Millimeters(2))
+		filleted, err := decad.Fillet(bored, straightEdge(t, bored, r3.NewVec(0, 0, 20), r3.NewVec(1, 0, 0)),
+			units.Millimeters(2)).Do(t.Context())
 		require.NoError(t, err)
 		after, err := filleted.Volume()
 		require.NoError(t, err)
@@ -587,8 +587,8 @@ func TestFacetedRetainedBlendStraight(t *testing.T) {
 				cut := stepped(t)
 				before, err := cut.Volume()
 				require.NoError(t, err)
-				filleted, err := decad.Fillet(t.Context(), cut,
-					straightEdge(t, cut, r3.NewVec(30, 0, tc.z), r3.NewVec(0, 1, 0)), units.Millimeters(r))
+				filleted, err := decad.Fillet(cut,
+					straightEdge(t, cut, r3.NewVec(30, 0, tc.z), r3.NewVec(0, 1, 0)), units.Millimeters(r)).Do(t.Context())
 				require.NoError(t, err)
 				after, err := filleted.Volume()
 				require.NoError(t, err)
@@ -607,8 +607,8 @@ func TestFacetedRetainedBlendStraight(t *testing.T) {
 		before, err := beveled.Volume()
 		require.NoError(t, err)
 		const phi, r = math.Pi / 4, 3.0
-		filleted, err := decad.Fillet(t.Context(), beveled, straightEdge(t, beveled, r3.NewVec(0, 2, 20), r3.NewVec(1, 0, 0)),
-			units.Millimeters(r))
+		filleted, err := decad.Fillet(beveled, straightEdge(t, beveled, r3.NewVec(0, 2, 20), r3.NewVec(1, 0, 0)),
+			units.Millimeters(r)).Do(t.Context())
 		require.NoError(t, err)
 		after, err := filleted.Volume()
 		require.NoError(t, err)
@@ -652,8 +652,8 @@ func TestFacetedRetainedBlendStraight(t *testing.T) {
 			cut := wedgedPlate(t, tc.plane, tc.corners, 80, tc.move)
 			before, err := cut.Volume()
 			require.NoError(t, err)
-			filleted, err := decad.Fillet(t.Context(), cut,
-				straightEdge(t, cut, r3.NewVec(40, 0, 20), r3.NewVec(1, 0, 0)), units.Millimeters(r))
+			filleted, err := decad.Fillet(cut,
+				straightEdge(t, cut, r3.NewVec(40, 0, 20), r3.NewVec(1, 0, 0)), units.Millimeters(r)).Do(t.Context())
 			require.NoError(t, err)
 			after, err := filleted.Volume()
 			require.NoError(t, err)
@@ -703,8 +703,8 @@ func TestFacetedRetainedBlendStraight(t *testing.T) {
 		before, err := bored.Volume()
 		require.NoError(t, err)
 		const r = 2.0
-		filleted, err := decad.Fillet(t.Context(), bored, straightEdge(t, bored, r3.NewVec(10, 0, 10), r3.NewVec(0, 1, 0)),
-			units.Millimeters(r))
+		filleted, err := decad.Fillet(bored, straightEdge(t, bored, r3.NewVec(10, 0, 10), r3.NewVec(0, 1, 0)),
+			units.Millimeters(r)).Do(t.Context())
 		require.NoError(t, err)
 		after, err := filleted.Volume()
 		require.NoError(t, err)
@@ -759,8 +759,8 @@ func TestFacetedRetainedBlendStraight(t *testing.T) {
 		joined := build(t)
 		before, err := joined.Volume()
 		require.NoError(t, err)
-		filleted, err := decad.Fillet(t.Context(), joined, straightEdge(t, joined, r3.NewVec(10, 5, 20), r3.NewVec(1, 0, 0)),
-			units.Millimeters(r))
+		filleted, err := decad.Fillet(joined, straightEdge(t, joined, r3.NewVec(10, 5, 20), r3.NewVec(1, 0, 0)),
+			units.Millimeters(r)).Do(t.Context())
 		require.NoError(t, err)
 		after, err := filleted.Volume()
 		require.NoError(t, err)
@@ -800,8 +800,8 @@ func TestFacetedRetainedBlendStraight(t *testing.T) {
 		joined = build(t)
 		before, err = joined.Volume()
 		require.NoError(t, err)
-		both, err := decad.Fillet(t.Context(), joined,
-			decad.Edges(decad.Concave(), decad.ParallelTo(r3.NewVec(1, 0, 0))).Exactly(2), units.Millimeters(r))
+		both, err := decad.Fillet(joined,
+			decad.Edges(decad.Concave(), decad.ParallelTo(r3.NewVec(1, 0, 0))).Exactly(2), units.Millimeters(r)).Do(t.Context())
 		require.NoError(t, err)
 		afterBoth, err := both.Volume()
 		require.NoError(t, err)
@@ -810,8 +810,8 @@ func TestFacetedRetainedBlendStraight(t *testing.T) {
 		joined = build(t)
 		before, err = joined.Volume()
 		require.NoError(t, err)
-		chamfered, err := decad.Chamfer(t.Context(), joined, straightEdge(t, joined, r3.NewVec(10, 5, 20), r3.NewVec(1, 0, 0)),
-			units.Millimeters(r))
+		chamfered, err := decad.Chamfer(joined, straightEdge(t, joined, r3.NewVec(10, 5, 20), r3.NewVec(1, 0, 0)),
+			units.Millimeters(r)).Do(t.Context())
 		require.NoError(t, err)
 		afterChamfer, err := chamfered.Volume()
 		require.NoError(t, err)
@@ -822,21 +822,21 @@ func TestFacetedRetainedBlendStraight(t *testing.T) {
 		t.Parallel()
 		// The left face is 20 mm wide.
 		_, bored := boredPlate(t)
-		_, err := decad.Fillet(t.Context(), bored, straightEdge(t, bored, r3.NewVec(0, 0, 0), r3.NewVec(0, 0, 1)),
-			units.Millimeters(21))
+		_, err := decad.Fillet(bored, straightEdge(t, bored, r3.NewVec(0, 0, 0), r3.NewVec(0, 0, 1)),
+			units.Millimeters(21)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrDegenerate, "the blend consumes the face")
 		_, bored = boredPlate(t)
-		_, err = decad.Fillet(t.Context(), bored, straightEdge(t, bored, r3.NewVec(0, 0, 0), r3.NewVec(0, 0, 1)),
-			units.Millimeters(20))
+		_, err = decad.Fillet(bored, straightEdge(t, bored, r3.NewVec(0, 0, 0), r3.NewVec(0, 0, 1)),
+			units.Millimeters(20)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported, "the held bounds cannot show it fits")
 
 		// A second blend, a Boolean and a placement all take the result.
 		sc, bored := boredPlate(t)
-		first, err := decad.Fillet(t.Context(), bored, straightEdge(t, bored, r3.NewVec(0, 0, 0), r3.NewVec(0, 0, 1)),
-			units.Millimeters(2))
+		first, err := decad.Fillet(bored, straightEdge(t, bored, r3.NewVec(0, 0, 0), r3.NewVec(0, 0, 1)),
+			units.Millimeters(2)).Do(t.Context())
 		require.NoError(t, err)
-		second, err := decad.Fillet(t.Context(), first, straightEdge(t, first, r3.NewVec(40, 20, 0), r3.NewVec(0, 0, 1)),
-			units.Millimeters(2))
+		second, err := decad.Fillet(first, straightEdge(t, first, r3.NewVec(40, 20, 0), r3.NewVec(0, 0, 1)),
+			units.Millimeters(2)).Do(t.Context())
 		require.NoError(t, err)
 		cut, err := decad.Cut(second, sc.tool(t, 33)).Do(t.Context())
 		require.NoError(t, err)
@@ -948,8 +948,8 @@ func TestFacetedRetainedBlendCylinderLine(t *testing.T) {
 		beforeArea, err := grooved.Area()
 		require.NoError(t, err)
 		const r = 1.0
-		filleted, err := decad.Fillet(t.Context(), grooved, straightEdge(t, grooved, r3.NewVec(0, k[0], 20), r3.NewVec(1, 0, 0)),
-			units.Millimeters(r))
+		filleted, err := decad.Fillet(grooved, straightEdge(t, grooved, r3.NewVec(0, k[0], 20), r3.NewVec(1, 0, 0)),
+			units.Millimeters(r)).Do(t.Context())
 		require.NoError(t, err)
 		after, err := filleted.Volume()
 		require.NoError(t, err)
@@ -1003,8 +1003,8 @@ func TestFacetedRetainedBlendCylinderLine(t *testing.T) {
 		before, err := grooved.Volume()
 		require.NoError(t, err)
 		const d = 1.0
-		chamfered, err := decad.Chamfer(t.Context(), grooved, straightEdge(t, grooved, r3.NewVec(0, k[0], 20), r3.NewVec(1, 0, 0)),
-			units.Millimeters(d))
+		chamfered, err := decad.Chamfer(grooved, straightEdge(t, grooved, r3.NewVec(0, k[0], 20), r3.NewVec(1, 0, 0)),
+			units.Millimeters(d)).Do(t.Context())
 		require.NoError(t, err)
 		after, err := chamfered.Volume()
 		require.NoError(t, err)
@@ -1026,8 +1026,8 @@ func TestFacetedRetainedBlendCylinderLine(t *testing.T) {
 		before, err := joined.Volume()
 		require.NoError(t, err)
 		const r = 1.0
-		filleted, err := decad.Fillet(t.Context(), joined, straightEdge(t, joined, r3.NewVec(10, k[0], 20), r3.NewVec(1, 0, 0)),
-			units.Millimeters(r))
+		filleted, err := decad.Fillet(joined, straightEdge(t, joined, r3.NewVec(10, k[0], 20), r3.NewVec(1, 0, 0)),
+			units.Millimeters(r)).Do(t.Context())
 		require.NoError(t, err)
 		after, err := filleted.Volume()
 		require.NoError(t, err)
@@ -1067,8 +1067,8 @@ func TestFacetedRetainedBlendCylinderLine(t *testing.T) {
 		sc := newRetentionScene()
 		joined, err := decad.Union(rodOnPlate(t, sc), placed(t, rectBox(t, sc.w, sc.doc, 9, 6.3, 10.05, 6.4, 0.1), 20.05)).Do(t.Context())
 		require.NoError(t, err)
-		_, err = decad.Fillet(t.Context(), joined, straightEdge(t, joined, r3.NewVec(10, k[0], 20), r3.NewVec(1, 0, 0)),
-			units.Millimeters(1))
+		_, err = decad.Fillet(joined, straightEdge(t, joined, r3.NewVec(10, k[0], 20), r3.NewVec(1, 0, 0)),
+			units.Millimeters(1)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.Regexp(t, `the cap an end face takes meets another facet of the body at \{10 `, err.Error())
 	})
@@ -1078,8 +1078,8 @@ func TestFacetedRetainedBlendCylinderLine(t *testing.T) {
 		sc := newRetentionScene()
 		joined, err := decad.Union(rodOnPlate(t, sc), placed(t, rectBox(t, sc.w, sc.doc, 8, 6.3, 9, 6.4, 0.1), 20.05)).Do(t.Context())
 		require.NoError(t, err)
-		filleted, err := decad.Fillet(t.Context(), joined, straightEdge(t, joined, r3.NewVec(10, k[0], 20), r3.NewVec(1, 0, 0)),
-			units.Millimeters(1))
+		filleted, err := decad.Fillet(joined, straightEdge(t, joined, r3.NewVec(10, k[0], 20), r3.NewVec(1, 0, 0)),
+			units.Millimeters(1)).Do(t.Context())
 		require.NoError(t, err)
 		requireVerifiedMesh(t, filleted)
 		requireNoCrossingTriangles(t, filleted)
@@ -1131,7 +1131,7 @@ func TestFacetedRetainedBlendArc(t *testing.T) {
 		bored := broken(t)
 		before, err := bored.Volume()
 		require.NoError(t, err)
-		filleted, err := decad.Fillet(t.Context(), bored, topRim(t, bored), units.Millimeters(1))
+		filleted, err := decad.Fillet(bored, topRim(t, bored), units.Millimeters(1)).Do(t.Context())
 		require.NoError(t, err)
 		after, err := filleted.Volume()
 		require.NoError(t, err)
@@ -1155,7 +1155,7 @@ func TestFacetedRetainedBlendArc(t *testing.T) {
 		before, err := bored.Volume()
 		require.NoError(t, err)
 		const d = 1.0
-		chamfered, err := decad.Chamfer(t.Context(), bored, topRim(t, bored), units.Millimeters(d))
+		chamfered, err := decad.Chamfer(bored, topRim(t, bored), units.Millimeters(d)).Do(t.Context())
 		require.NoError(t, err)
 		after, err := chamfered.Volume()
 		require.NoError(t, err)
@@ -1217,7 +1217,7 @@ func TestFacetedRetainedBlendArc(t *testing.T) {
 			}
 		}
 		require.NotNil(t, sel)
-		_, err = decad.Fillet(t.Context(), flat, sel, units.Millimeters(1))
+		_, err = decad.Fillet(flat, sel, units.Millimeters(1)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 	})
 
@@ -1245,7 +1245,7 @@ func TestFacetedRetainedBlendArc(t *testing.T) {
 	t.Run("a solid crossing the cap a concave arc's end face gains is refused", func(t *testing.T) {
 		t.Parallel()
 		b, sel := cornerBore(t, -0.9, 0.1)
-		_, err := decad.Fillet(t.Context(), b, sel, units.Millimeters(1))
+		_, err := decad.Fillet(b, sel, units.Millimeters(1)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.Regexp(t, `the cap an end face takes meets another facet of the body at \{0 `, err.Error())
 	})
@@ -1255,14 +1255,14 @@ func TestFacetedRetainedBlendArc(t *testing.T) {
 		plain, plainSel := cornerBore(t, 0, 0)
 		plainBefore, err := plain.Volume()
 		require.NoError(t, err)
-		plainOut, err := decad.Fillet(t.Context(), plain, plainSel, units.Millimeters(1))
+		plainOut, err := decad.Fillet(plain, plainSel, units.Millimeters(1)).Do(t.Context())
 		require.NoError(t, err)
 		plainAfter, err := plainOut.Volume()
 		require.NoError(t, err)
 		b, sel := cornerBore(t, -1, -0.2)
 		before, err := b.Volume()
 		require.NoError(t, err)
-		out, err := decad.Fillet(t.Context(), b, sel, units.Millimeters(1))
+		out, err := decad.Fillet(b, sel, units.Millimeters(1)).Do(t.Context())
 		require.NoError(t, err)
 		after, err := out.Volume()
 		require.NoError(t, err)

@@ -123,7 +123,7 @@ func TestFacetedRetainedBlendParallelCylindersConcave(t *testing.T) {
 		before, err := b.Volume()
 		require.NoError(t, err)
 		const r = 1.0
-		filleted, err := decad.Fillet(t.Context(), b, valleyEdge(t, b), units.Millimeters(r))
+		filleted, err := decad.Fillet(b, valleyEdge(t, b), units.Millimeters(r)).Do(t.Context())
 		require.NoError(t, err)
 		after, err := filleted.Volume()
 		require.NoError(t, err)
@@ -148,7 +148,7 @@ func TestFacetedRetainedBlendParallelCylindersConcave(t *testing.T) {
 		before, err := b.Volume()
 		require.NoError(t, err)
 		const d = 0.7
-		chamfered, err := decad.Chamfer(t.Context(), b, valleyEdge(t, b), units.Millimeters(d))
+		chamfered, err := decad.Chamfer(b, valleyEdge(t, b), units.Millimeters(d)).Do(t.Context())
 		require.NoError(t, err)
 		after, err := chamfered.Volume()
 		require.NoError(t, err)
@@ -172,7 +172,7 @@ func TestFacetedRetainedBlendParallelCylindersConcave(t *testing.T) {
 	t.Run("a solid crossing the cap the valley's end face gains is refused", func(t *testing.T) {
 		t.Parallel()
 		b := valleyWithBox(t, 14.95)
-		_, err := decad.Fillet(t.Context(), b, valleyEdge(t, b), units.Millimeters(1))
+		_, err := decad.Fillet(b, valleyEdge(t, b), units.Millimeters(1)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.Regexp(t, `the cap an end face takes meets another facet of the body at \{[0-9.]+ [0-9.]+ 15\.001\}`, err.Error())
 	})
@@ -182,7 +182,7 @@ func TestFacetedRetainedBlendParallelCylindersConcave(t *testing.T) {
 		b := valleyWithBox(t, 15.2)
 		before, err := b.Volume()
 		require.NoError(t, err)
-		filleted, err := decad.Fillet(t.Context(), b, valleyEdge(t, b), units.Millimeters(1))
+		filleted, err := decad.Fillet(b, valleyEdge(t, b), units.Millimeters(1)).Do(t.Context())
 		require.NoError(t, err)
 		after, err := filleted.Volume()
 		require.NoError(t, err)
@@ -213,8 +213,7 @@ func TestFacetedRetainedBlendParallelCylindersTwoDistance(t *testing.T) {
 				}
 			}
 			require.True(t, found, "the reference bore wall exists")
-			chamfered, err := decad.Chamfer(t.Context(), b, pairEdge(t, b), units.Millimeters(dRef),
-				decad.WithAsymmetricChamfer(decad.Faces(decad.FaceCreatedBy(ref)), units.Millimeters(dOther)))
+			chamfered, err := decad.Chamfer(b, pairEdge(t, b), units.Millimeters(dRef)).Asymmetric(decad.Faces(decad.FaceCreatedBy(ref)), units.Millimeters(dOther)).Do(t.Context())
 			require.NoError(t, err)
 			after, err := chamfered.Volume()
 			require.NoError(t, err)
@@ -259,13 +258,13 @@ func TestFacetedRetainedBlendParallelCylindersGrazing(t *testing.T) {
 		run  func() error
 	}{
 		{"fillet", func() error {
-			_, err := decad.Fillet(t.Context(), b, straightEdge(t, b, r3.NewVec(ridge.X, ridge.Y, 20), r3.NewVec(0, 0, 1)),
-				units.Millimeters(0.5))
+			_, err := decad.Fillet(b, straightEdge(t, b, r3.NewVec(ridge.X, ridge.Y, 20), r3.NewVec(0, 0, 1)),
+				units.Millimeters(0.5)).Do(t.Context())
 			return err
 		}},
 		{"chamfer", func() error {
-			_, err := decad.Chamfer(t.Context(), b, straightEdge(t, b, r3.NewVec(ridge.X, ridge.Y, 20), r3.NewVec(0, 0, 1)),
-				units.Millimeters(0.5))
+			_, err := decad.Chamfer(b, straightEdge(t, b, r3.NewVec(ridge.X, ridge.Y, 20), r3.NewVec(0, 0, 1)),
+				units.Millimeters(0.5)).Do(t.Context())
 			return err
 		}},
 	} {

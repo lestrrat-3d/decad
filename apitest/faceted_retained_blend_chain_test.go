@@ -143,7 +143,7 @@ func TestFacetedRetainedBlendChain(t *testing.T) {
 		before, err := drilled.Volume()
 		require.NoError(t, err)
 		const r = 1.0
-		out, err := decad.Fillet(t.Context(), drilled, topFront(), units.Millimeters(r), decad.WithTangentChain())
+		out, err := decad.Fillet(drilled, topFront(), units.Millimeters(r)).TangentChain().Do(t.Context())
 		require.NoError(t, err)
 		after, err := out.Volume()
 		require.NoError(t, err)
@@ -162,7 +162,7 @@ func TestFacetedRetainedBlendChain(t *testing.T) {
 		t.Parallel()
 		drilled := crossDrilled(t)
 		const r = 1.0
-		out, err := decad.Fillet(t.Context(), drilled, topFront(), units.Millimeters(r), decad.WithTangentChain())
+		out, err := decad.Fillet(drilled, topFront(), units.Millimeters(r)).TangentChain().Do(t.Context())
 		require.NoError(t, err)
 		junctions := 0
 		for _, e := range out.Edges() {
@@ -195,7 +195,7 @@ func TestFacetedRetainedBlendChain(t *testing.T) {
 		before, err := drilled.Volume()
 		require.NoError(t, err)
 		const r = 1.0
-		out, err := decad.Fillet(t.Context(), drilled, xParallel(4), units.Millimeters(r), decad.WithTangentChain())
+		out, err := decad.Fillet(drilled, xParallel(4), units.Millimeters(r)).TangentChain().Do(t.Context())
 		require.NoError(t, err)
 		after, err := out.Volume()
 		require.NoError(t, err)
@@ -226,7 +226,7 @@ func TestFacetedRetainedBlendChain(t *testing.T) {
 			outline = outline.Or(decad.EndpointAt(p), decad.EndpointAt(q))
 		}
 		require.Equal(t, 8, named)
-		out, err := decad.Fillet(t.Context(), drilled, outline.Exactly(8), units.Millimeters(1))
+		out, err := decad.Fillet(drilled, outline.Exactly(8), units.Millimeters(1)).Do(t.Context())
 		require.NoError(t, err)
 		after, err := out.Volume()
 		require.NoError(t, err)
@@ -238,7 +238,7 @@ func TestFacetedRetainedBlendChain(t *testing.T) {
 		drilled := crossDrilled(t)
 		before, err := drilled.Volume()
 		require.NoError(t, err)
-		out, err := decad.Chamfer(t.Context(), drilled, topFront(), units.Millimeters(1), decad.WithTangentChain())
+		out, err := decad.Chamfer(drilled, topFront(), units.Millimeters(1)).TangentChain().Do(t.Context())
 		require.NoError(t, err)
 		after, err := out.Volume()
 		require.NoError(t, err)
@@ -251,8 +251,7 @@ func TestFacetedRetainedBlendChain(t *testing.T) {
 		drilled := crossDrilled(t)
 		before, err := drilled.Volume()
 		require.NoError(t, err)
-		out, err := decad.Chamfer(t.Context(), drilled, topFront(), units.Millimeters(2), decad.WithTangentChain(),
-			decad.WithAsymmetricChamfer(decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))), units.Millimeters(1)))
+		out, err := decad.Chamfer(drilled, topFront(), units.Millimeters(2)).TangentChain().Asymmetric(decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))), units.Millimeters(1)).Do(t.Context())
 		require.NoError(t, err)
 		after, err := out.Volume()
 		require.NoError(t, err)
@@ -266,8 +265,7 @@ func TestFacetedRetainedBlendChain(t *testing.T) {
 		before, err := drilled.Volume()
 		require.NoError(t, err)
 		bases := decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))).Or(decad.Facing(r3.NewVec(0, 0, -1)))
-		out, err := decad.Chamfer(t.Context(), drilled, xParallel(4), units.Millimeters(tp), decad.WithTangentChain(),
-			decad.WithAsymmetricChamfer(bases, units.Millimeters(tw)))
+		out, err := decad.Chamfer(drilled, xParallel(4), units.Millimeters(tp)).TangentChain().Asymmetric(bases, units.Millimeters(tw)).Do(t.Context())
 		require.NoError(t, err)
 		after, err := out.Volume()
 		require.NoError(t, err)
@@ -330,7 +328,7 @@ func TestFacetedRetainedBlendChain(t *testing.T) {
 		require.NoError(t, err)
 		cavity, err := decad.Cut(drilled, placed(t, rectBox(t, sc.w, sc.doc, 15, 0.25, 17, 1.25, 1), 18.75)).Do(t.Context())
 		require.NoError(t, err)
-		_, err = decad.Fillet(t.Context(), cavity, topFront(), units.Millimeters(1), decad.WithTangentChain())
+		_, err = decad.Fillet(cavity, topFront(), units.Millimeters(1)).TangentChain().Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "the blend meets another facet of the body")
 		requireContactX(t, err, 15, 17)
@@ -338,9 +336,9 @@ func TestFacetedRetainedBlendChain(t *testing.T) {
 
 	t.Run("one straight edge without the option names the option", func(t *testing.T) {
 		t.Parallel()
-		_, err := decad.Fillet(t.Context(), crossDrilled(t), topFront(), units.Millimeters(1))
+		_, err := decad.Fillet(crossDrilled(t), topFront(), units.Millimeters(1)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
-		require.ErrorContains(t, err, "WithTangentChain")
+		require.ErrorContains(t, err, "TangentChain")
 		require.Regexp(t, `(3|37),0,20`, err.Error())
 	})
 }

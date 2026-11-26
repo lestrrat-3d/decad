@@ -56,7 +56,7 @@ func TestPlateCollarRimChamfer(t *testing.T) {
 	before, err := body.Volume()
 	require.NoError(t, err)
 	rim := boreRim(t, body)
-	out, err := decad.Chamfer(t.Context(), body, rim.Exactly(1), units.Millimeters(0.5))
+	out, err := decad.Chamfer(body, rim.Exactly(1), units.Millimeters(0.5)).Do(t.Context())
 	require.NoError(t, err)
 	require.True(t, out.IsSolid())
 	after, err := out.Volume()

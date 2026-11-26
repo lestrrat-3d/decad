@@ -110,7 +110,7 @@ func TestLoopChamferNarrowFeatures(t *testing.T) {
 			require.Equal(t, 20, n)
 			before, err := part.Volume()
 			require.NoError(t, err)
-			out, err := decad.Chamfer(t.Context(), part, q.Exactly(n), units.Millimeters(d))
+			out, err := decad.Chamfer(part, q.Exactly(n), units.Millimeters(d)).Do(t.Context())
 			require.NoError(t, err)
 			after, err := out.Volume()
 			require.NoError(t, err)
@@ -131,6 +131,6 @@ func TestLoopChamferDartWiderThanHalf(t *testing.T) {
 	t.Parallel()
 	part := forkMeshResult(t)
 	q, n := forkCapOuterLoops(t, part)
-	_, err := decad.Chamfer(t.Context(), part, q.Exactly(n), units.Millimeters(0.6))
+	_, err := decad.Chamfer(part, q.Exactly(n), units.Millimeters(0.6)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 }

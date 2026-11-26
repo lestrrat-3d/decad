@@ -29,19 +29,19 @@ func TestOrthogonalBooleanResultTakesAFilletAndAChamfer(t *testing.T) {
 	t.Parallel()
 	outerCorner := decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)), decad.EndpointAt(r3.NewVec(0, 0, 0)))
 	const r = 1.0
-	filleted, err := decad.Fillet(t.Context(), lBracket(t), outerCorner, units.Millimeters(r))
+	filleted, err := decad.Fillet(lBracket(t), outerCorner, units.Millimeters(r)).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := filleted.Volume()
 	require.NoError(t, err)
 	require.LessOrEqual(t, math.Abs(volume.Value.Base()-(256-(1-math.Pi/4)*r*r*4)), volume.Bound.Base()+1e-12)
 	// The reflex corner at (4, 4) takes a concave fillet, which adds material.
 	inner := decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)), decad.EndpointAt(r3.NewVec(4, 4, 0)))
-	filled, err := decad.Fillet(t.Context(), lBracket(t), inner, units.Millimeters(r))
+	filled, err := decad.Fillet(lBracket(t), inner, units.Millimeters(r)).Do(t.Context())
 	require.NoError(t, err)
 	fv, err := filled.Volume()
 	require.NoError(t, err)
 	require.LessOrEqual(t, math.Abs(fv.Value.Base()-(256+(1-math.Pi/4)*r*r*4)), fv.Bound.Base()+1e-12)
-	chamfered, err := decad.Chamfer(t.Context(), lBracket(t), outerCorner, units.Millimeters(r))
+	chamfered, err := decad.Chamfer(lBracket(t), outerCorner, units.Millimeters(r)).Do(t.Context())
 	require.NoError(t, err)
 	cv, err := chamfered.Volume()
 	require.NoError(t, err)
@@ -50,7 +50,7 @@ func TestOrthogonalBooleanResultTakesAFilletAndAChamfer(t *testing.T) {
 
 func TestOrthogonalBooleanResultTakesAShell(t *testing.T) {
 	t.Parallel()
-	out, err := decad.Shell(t.Context(), lBracket(t), decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))), units.Millimeters(1))
+	out, err := decad.Shell(lBracket(t), decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))), units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := out.Volume()
 	require.NoError(t, err)

@@ -1,4 +1,5 @@
-// Package modifyoption owns the Fillet, Chamfer, and Shell option vocabulary.
+// Package modifyoption owns the Fillet, Chamfer and Shell setting values the
+// root commands fold their methods into.
 package modifyoption
 
 import (
@@ -7,94 +8,37 @@ import (
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/extent"
 	"github.com/lestrrat-3d/units"
-	"github.com/lestrrat-go/option/v3"
 )
 
-// FilletOption configures Fillet.
-type FilletOption interface {
-	option.Interface
-	filletOption()
-}
-
-// ChamferOption configures Chamfer.
-type ChamferOption interface {
-	option.Interface
-	chamferOption()
-}
-
-// FilletChamferOption is accepted by both Fillet and Chamfer.
-type FilletChamferOption interface {
-	FilletOption
-	ChamferOption
-}
-
-// ShellOption configures Shell.
-type ShellOption interface {
-	option.Interface
-	shellOption()
-}
-
-type filletChamferOption struct{ option.Interface }
-
-func (filletChamferOption) filletOption()  {}
-func (filletChamferOption) chamferOption() {}
-
-type chamferOption struct{ option.Interface }
-
-func (chamferOption) chamferOption() {}
-
-type shellOption struct{ option.Interface }
-
-func (shellOption) shellOption() {}
-
-type identTangentChain struct{}
-type identAsymmetricChamfer struct{}
-type identNoOpenings struct{}
-type identShellSense struct{}
-type identFaceThickness struct{}
-
+// The wall senses of a shell, as the root package's ShellSense numbers them.
 const (
-	shellInward = iota
-	shellOutward
-	shellCentered
+	ShellInward = iota
+	ShellOutward
+	ShellCentered
 )
 
-func shellSenseName(s int) string {
+// ShellSenseName renders a sense number for diagnostics.
+func ShellSenseName(s int) string {
 	switch s {
-	case shellInward:
+	case ShellInward:
 		return "Inward"
-	case shellOutward:
+	case ShellOutward:
 		return "Outward"
-	case shellCentered:
+	case ShellCentered:
 		return "Centered"
 	default:
 		return fmt.Sprintf("ShellSense(%d)", s)
 	}
 }
 
-// WithTangentChain expands selected edges across proven tangent continuations.
-func WithTangentChain() FilletChamferOption {
-	return filletChamferOption{option.New(identTangentChain{}, struct{}{})}
-}
-
 // Asymmetric records a copied reference selector and the second setback.
-// The decoder fills OtherMM and OtherDelta after validating Other.
+// ValidateAsymmetric fills OtherMM and OtherDelta from Other.
 type Asymmetric[Q any] struct {
 	Reference  Q
 	Foreign    string
 	Other      units.Value
 	OtherMM    float64
 	OtherDelta float64
-}
-
-// WithAsymmetricChamfer records the reference and second distance.
-func WithAsymmetricChamfer[Q any](a Asymmetric[Q]) ChamferOption {
-	return chamferOption{option.New(identAsymmetricChamfer{}, a)}
-}
-
-// WithNoOpenings asks Shell to keep every face.
-func WithNoOpenings() ShellOption {
-	return shellOption{option.New(identNoOpenings{}, struct{}{})}
 }
 
 // FaceThickness is the thickness a shell gives the walls whose outward normal is a stated world axis direction.
@@ -104,148 +48,43 @@ type FaceThickness struct {
 	T          units.Value
 }
 
-// WithFaceThickness records a wall thickness for the faces turned the way Axis and Sign say.
-func WithFaceThickness(f FaceThickness) ShellOption {
-	return shellOption{option.New(identFaceThickness{}, f)}
-}
-
-// WithShellSense records the root package's wall sense as its numeric value.
-func WithShellSense(s int) ShellOption {
-	return shellOption{option.New(identShellSense{}, s)}
-}
-
-// FilletConfig is the decoded Fillet option set.
+// FilletConfig is the Fillet setting set.
 type FilletConfig struct {
 	TangentChain bool
 }
 
-// ChamferConfig is the decoded Chamfer option set.
+// ChamferConfig is the Chamfer setting set.
 type ChamferConfig[Q any] struct {
 	TangentChain bool
 	Asymmetric   *Asymmetric[Q]
 }
 
-// ShellConfig is the decoded Shell option set.
+// ShellConfig is the Shell setting set.
 type ShellConfig struct {
 	Sense         int
 	NoOpenings    bool
 	FaceThickness []FaceThickness
 }
 
-// ErrOptionConflict reports an option list that names no single intent.
-func ErrOptionConflict(format string, args ...any) error {
-	return fmt.Errorf(`%w: `+format+` (modify-reach SX1)`, append([]any{decaderr.ErrDegenerate}, args...)...)
+// ValidateAsymmetric checks the second setback of an asymmetric chamfer and
+// returns the record with its millimetre value and error bound filled in.
+func ValidateAsymmetric[Q any](a Asymmetric[Q]) (Asymmetric[Q], error) {
+	mm, delta, err := extent.MagnitudeInBounded(a.Other, units.Length, units.Millimeter,
+		"the asymmetric chamfer's other distance")
+	if err != nil {
+		return a, err
+	}
+	if mm == 0 {
+		return a, fmt.Errorf(`%w: an asymmetric chamfer's other distance must be positive; a zero setback leaves that face where it is`, decaderr.ErrDegenerate)
+	}
+	a.OtherMM, a.OtherDelta = mm, delta
+	return a, nil
 }
 
-// DecodeFillet validates and folds Fillet options.
-func DecodeFillet(opts []FilletOption) (FilletConfig, error) {
-	var out FilletConfig
-	for _, raw := range opts {
-		if raw == nil {
-			return FilletConfig{}, fmt.Errorf(`%w: a nil option names nothing to apply`, decaderr.ErrDegenerate)
-		}
-		// An embedded interface can promote the marker onto a foreign type.
-		o, ok := raw.(filletChamferOption)
-		if !ok {
-			return FilletConfig{}, fmt.Errorf(`%w: the fillet option is not a decad fillet option (%T)`, decaderr.ErrDegenerate, raw)
-		}
-		switch ident := o.Ident().(type) {
-		case identTangentChain:
-			out.TangentChain = true
-		default:
-			return FilletConfig{}, ErrOptionConflict(`unknown fillet option identifier %T`, ident)
-		}
+// ValidateShellSense refuses a sense number that names no wall sense.
+func ValidateShellSense(s int) error {
+	if s != ShellInward && s != ShellOutward && s != ShellCentered {
+		return fmt.Errorf(`%w: unknown shell sense %d`, decaderr.ErrDegenerate, s)
 	}
-	return out, nil
-}
-
-// DecodeChamfer validates and folds Chamfer options.
-func DecodeChamfer[Q any](opts []ChamferOption) (ChamferConfig[Q], error) {
-	var out ChamferConfig[Q]
-	for _, raw := range opts {
-		if raw == nil {
-			return ChamferConfig[Q]{}, fmt.Errorf(`%w: a nil option names nothing to apply`, decaderr.ErrDegenerate)
-		}
-		var o option.Interface
-		switch v := raw.(type) {
-		case filletChamferOption:
-			o = v
-		case chamferOption:
-			o = v
-		default:
-			return ChamferConfig[Q]{}, fmt.Errorf(`%w: the chamfer option is not a decad chamfer option (%T)`, decaderr.ErrDegenerate, raw)
-		}
-		switch ident := o.Ident().(type) {
-		case identTangentChain:
-			out.TangentChain = true
-		case identAsymmetricChamfer:
-			if out.Asymmetric != nil {
-				return ChamferConfig[Q]{}, ErrOptionConflict(`WithAsymmetricChamfer is given twice; one chamfer takes one reference and one other distance`)
-			}
-			a, ok := option.Get[Asymmetric[Q]](o)
-			if !ok {
-				return ChamferConfig[Q]{}, ErrOptionConflict(`WithAsymmetricChamfer carries no reference and distance`)
-			}
-			mm, delta, err := extent.MagnitudeInBounded(a.Other, units.Length, units.Millimeter,
-				"the asymmetric chamfer's other distance")
-			if err != nil {
-				return ChamferConfig[Q]{}, err
-			}
-			if mm == 0 {
-				return ChamferConfig[Q]{}, fmt.Errorf(`%w: an asymmetric chamfer's other distance must be positive; a zero setback leaves that face where it is`, decaderr.ErrDegenerate)
-			}
-			a.OtherMM, a.OtherDelta = mm, delta
-			out.Asymmetric = &a
-		default:
-			return ChamferConfig[Q]{}, ErrOptionConflict(`unknown chamfer option identifier %T`, ident)
-		}
-	}
-	return out, nil
-}
-
-// DecodeShell validates and folds Shell options, defaulting to Inward.
-func DecodeShell(opts []ShellOption) (ShellConfig, error) {
-	out := ShellConfig{Sense: shellInward}
-	sensed := false
-	for _, raw := range opts {
-		if raw == nil {
-			return ShellConfig{}, fmt.Errorf(`%w: a nil option names nothing to apply`, decaderr.ErrDegenerate)
-		}
-		// An embedded interface can promote the marker onto a foreign type.
-		o, ok := raw.(shellOption)
-		if !ok {
-			return ShellConfig{}, fmt.Errorf(`%w: the shell option is not a decad shell option (%T)`, decaderr.ErrDegenerate, raw)
-		}
-		switch ident := o.Ident().(type) {
-		case identShellSense:
-			v, ok := option.Get[int](o)
-			if !ok {
-				return ShellConfig{}, fmt.Errorf(`%w: WithShellSense carries no sense`, decaderr.ErrDegenerate)
-			}
-			if v != shellInward && v != shellOutward && v != shellCentered {
-				return ShellConfig{}, fmt.Errorf(`%w: unknown shell sense %d`, decaderr.ErrDegenerate, v)
-			}
-			if sensed && v != out.Sense {
-				return ShellConfig{}, ErrOptionConflict(`WithShellSense names both %s and %s`,
-					shellSenseName(out.Sense), shellSenseName(v))
-			}
-			out.Sense, sensed = v, true
-		case identFaceThickness:
-			f, ok := option.Get[FaceThickness](o)
-			if !ok {
-				return ShellConfig{}, fmt.Errorf(`%w: WithShellFaceThickness carries no thickness`, decaderr.ErrDegenerate)
-			}
-			for _, have := range out.FaceThickness {
-				if have.Axis == f.Axis && have.Sign == f.Sign {
-					return ShellConfig{}, ErrOptionConflict(`WithShellFaceThickness names the same direction twice`)
-				}
-			}
-			out.FaceThickness = append(out.FaceThickness, f)
-		case identNoOpenings:
-			out.NoOpenings = true
-		default:
-			return ShellConfig{}, fmt.Errorf(`%w: unknown shell option identifier %T`, decaderr.ErrDegenerate, ident)
-		}
-	}
-	return out, nil
+	return nil
 }

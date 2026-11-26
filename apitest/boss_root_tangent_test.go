@@ -206,7 +206,7 @@ func TestBossRootTangentFork(t *testing.T) {
 	require.NoError(t, err)
 	vc, bc := volumeAndBound(t, cut)
 
-	out, err := decad.Fillet(t.Context(), cut, decad.Edges(decad.Reflex(), decad.Circular()).Exactly(1), mm(rho))
+	out, err := decad.Fillet(cut, decad.Edges(decad.Reflex(), decad.Circular()).Exactly(1), mm(rho)).Do(t.Context())
 	require.NoError(t, err)
 	require.True(t, out.IsSolid())
 	mesh := requireSolidVerified(t, out, 0.01)

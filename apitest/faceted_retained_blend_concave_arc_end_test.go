@@ -71,8 +71,8 @@ func blindArcEndPocket(t *testing.T) *decad.Body {
 	t.Helper()
 	w, doc := sketch.NewWorld(), decad.New()
 	plate := rectBox(t, w, doc, 0, 0, 40, 40, 10)
-	tool, err := decad.Fillet(t.Context(), rectBox(t, w, doc, 8, 10, 30, 30, 20),
-		decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1))).Exactly(4), units.Millimeters(concaveR))
+	tool, err := decad.Fillet(rectBox(t, w, doc, 8, 10, 30, 30, 20),
+		decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1))).Exactly(4), units.Millimeters(concaveR)).Do(t.Context())
 	require.NoError(t, err)
 	cropped, err := decad.Cut(tool, rectBox(t, w, doc, 7, 9, 10, 31, 20)).Do(t.Context())
 	require.NoError(t, err)
@@ -92,8 +92,8 @@ func bossArcEnd(t *testing.T) *decad.Body {
 	w, doc := sketch.NewWorld(), decad.New()
 	plate, err := decad.Union(rectBox(t, w, doc, 0, 0, 40, 40, 10), rectBox(t, w, doc, -10, 0, 0, 40, 30)).Do(t.Context())
 	require.NoError(t, err)
-	boss, err := decad.Fillet(t.Context(), rectBox(t, w, doc, -2, 10, 30, 30, 12),
-		decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1))).Exactly(4), units.Millimeters(concaveR))
+	boss, err := decad.Fillet(rectBox(t, w, doc, -2, 10, 30, 30, 12),
+		decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1))).Exactly(4), units.Millimeters(concaveR)).Do(t.Context())
 	require.NoError(t, err)
 	out, err := decad.Union(plate, placed(t, boss, 8)).Do(t.Context())
 	require.NoError(t, err)
@@ -129,8 +129,7 @@ func TestFacetedRetainedBlendConcaveArcEnd(t *testing.T) {
 		slot := arcEndSlot(t)
 		before, err := slot.Volume()
 		require.NoError(t, err)
-		out, err := decad.Fillet(t.Context(), slot, xEdgeAt(r3.NewVec(27, 10, 5)), units.Millimeters(concaveFilletR),
-			decad.WithTangentChain())
+		out, err := decad.Fillet(slot, xEdgeAt(r3.NewVec(27, 10, 5)), units.Millimeters(concaveFilletR)).TangentChain().Do(t.Context())
 		require.NoError(t, err)
 		after, err := out.Volume()
 		require.NoError(t, err)
@@ -145,8 +144,7 @@ func TestFacetedRetainedBlendConcaveArcEnd(t *testing.T) {
 		slot := arcEndSlot(t)
 		before, err := slot.Volume()
 		require.NoError(t, err)
-		out, err := decad.Chamfer(t.Context(), slot, xEdgeAt(r3.NewVec(27, 10, 5)), units.Millimeters(concaveFilletR),
-			decad.WithTangentChain())
+		out, err := decad.Chamfer(slot, xEdgeAt(r3.NewVec(27, 10, 5)), units.Millimeters(concaveFilletR)).TangentChain().Do(t.Context())
 		require.NoError(t, err)
 		after, err := out.Volume()
 		require.NoError(t, err)
@@ -160,8 +158,7 @@ func TestFacetedRetainedBlendConcaveArcEnd(t *testing.T) {
 		pocket := blindArcEndPocket(t)
 		before, err := pocket.Volume()
 		require.NoError(t, err)
-		out, err := decad.Fillet(t.Context(), pocket, xEdgeAt(r3.NewVec(27, 10, 5)), units.Millimeters(concaveFilletR),
-			decad.WithTangentChain())
+		out, err := decad.Fillet(pocket, xEdgeAt(r3.NewVec(27, 10, 5)), units.Millimeters(concaveFilletR)).TangentChain().Do(t.Context())
 		require.NoError(t, err)
 		after, err := out.Volume()
 		require.NoError(t, err)
@@ -176,8 +173,7 @@ func TestFacetedRetainedBlendConcaveArcEnd(t *testing.T) {
 		boss := bossArcEnd(t)
 		before, err := boss.Volume()
 		require.NoError(t, err)
-		out, err := decad.Fillet(t.Context(), boss, bossRootAt(t, boss), units.Millimeters(concaveFilletR),
-			decad.WithTangentChain())
+		out, err := decad.Fillet(boss, bossRootAt(t, boss), units.Millimeters(concaveFilletR)).TangentChain().Do(t.Context())
 		require.NoError(t, err)
 		after, err := out.Volume()
 		require.NoError(t, err)
@@ -194,8 +190,7 @@ func TestFacetedRetainedBlendConcaveArcEnd(t *testing.T) {
 		w, doc := sketch.NewWorld(), decad.New()
 		joined, err := decad.Union(arcEndSlotIn(t, w, doc), placed(t, rectBox(t, w, doc, -0.9, 10.2, 0.1, 10.3, 0.1), 5.05)).Do(t.Context())
 		require.NoError(t, err)
-		_, err = decad.Fillet(t.Context(), joined, xEdgeAt(r3.NewVec(27, 10, 5)), units.Millimeters(concaveFilletR),
-			decad.WithTangentChain())
+		_, err = decad.Fillet(joined, xEdgeAt(r3.NewVec(27, 10, 5)), units.Millimeters(concaveFilletR)).TangentChain().Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "the cap an end face takes meets another facet of the body at")
 	})
@@ -204,16 +199,15 @@ func TestFacetedRetainedBlendConcaveArcEnd(t *testing.T) {
 		t.Parallel()
 		// The end face lies 1 mm from the arcs' centres, so the plane's setback
 		// circle of radius 3 - 2 = 1 never crosses it.
-		_, err := decad.Fillet(t.Context(), arcEndSlot(t), xEdgeAt(r3.NewVec(27, 10, 5)), units.Millimeters(2),
-			decad.WithTangentChain())
+		_, err := decad.Fillet(arcEndSlot(t), xEdgeAt(r3.NewVec(27, 10, 5)), units.Millimeters(2)).TangentChain().Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "does not reach an end face")
 	})
 
 	t.Run("a convex chain's arc end on a reflex end face is refused", func(t *testing.T) {
 		t.Parallel()
-		_, err := decad.Fillet(t.Context(), ledgeOnWall(t, 8, 4), xEdgeAt(r3.NewVec(27, 10, 10)),
-			units.Millimeters(1), decad.WithTangentChain())
+		_, err := decad.Fillet(ledgeOnWall(t, 8, 4), xEdgeAt(r3.NewVec(27, 10, 10)),
+			units.Millimeters(1)).TangentChain().Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "an arc end of a tangent chain needs an end face convex at the corner")
 	})

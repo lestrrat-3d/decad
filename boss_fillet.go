@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/modifyoption"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -21,7 +22,8 @@ func filletBossRoot(ctx context.Context, body *Body, in bossRequest, radius floa
 	if err != nil {
 		return nil, err
 	}
-	return Fillet(ctx, body, edgesQuery(roots), units.Millimeters(radius))
+	out, err := fillet(ctx, body, edgesQuery(roots), units.Millimeters(radius), modifyoption.FilletConfig{})
+	return out, operationError(OperationFillet, err)
 }
 
 // edgesQuery selects exactly the given edges of a body by their endpoints and,

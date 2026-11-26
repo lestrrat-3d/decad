@@ -38,7 +38,7 @@ const chamferedPlateSetback = 5.0
 func chamferedPlate(t *testing.T) *decad.Body {
 	t.Helper()
 	_, box := capBlendBox(t)
-	chamfered, err := decad.Chamfer(t.Context(), box, capLoopEdges(box), units.Millimeters(chamferedPlateSetback))
+	chamfered, err := decad.Chamfer(box, capLoopEdges(box), units.Millimeters(chamferedPlateSetback)).Do(t.Context())
 	require.NoError(t, err)
 	return chamfered
 }
@@ -99,7 +99,7 @@ func TestTessellateCapBlendDiskFrustum(t *testing.T) {
 		tol = 0.25
 	)
 	body := circleProfile(t, r, h)
-	chamfered, err := decad.Chamfer(t.Context(), body, capLoopEdges(body), units.Millimeters(d))
+	chamfered, err := decad.Chamfer(body, capLoopEdges(body), units.Millimeters(d)).Do(t.Context())
 	require.NoError(t, err)
 	mesh, err := chamfered.Tessellate(t.Context(), units.Millimeters(tol))
 	require.NoError(t, err)
@@ -163,7 +163,7 @@ func TestTessellateCapBlendHoleWidensWithTheSetback(t *testing.T) {
 		tol = 0.2
 	)
 	body := holedPlateBody(t)
-	chamfered, err := decad.Chamfer(t.Context(), body, capLoopEdges(body), units.Millimeters(d))
+	chamfered, err := decad.Chamfer(body, capLoopEdges(body), units.Millimeters(d)).Do(t.Context())
 	require.NoError(t, err)
 	mesh, err := chamfered.Tessellate(t.Context(), units.Millimeters(tol))
 	require.NoError(t, err)
@@ -200,7 +200,7 @@ func TestTessellateCapBlendRoundedRectMiters(t *testing.T) {
 		tol = 0.4
 	)
 	body := roundedRectBody(t, 40, 30, 20, rho)
-	chamfered, err := decad.Chamfer(t.Context(), body, capLoopEdges(body), units.Millimeters(d))
+	chamfered, err := decad.Chamfer(body, capLoopEdges(body), units.Millimeters(d)).Do(t.Context())
 	require.NoError(t, err)
 	mesh, err := chamfered.Tessellate(t.Context(), units.Millimeters(tol))
 	require.NoError(t, err)
@@ -250,7 +250,7 @@ func TestTessellateCapBlendReflexApexFan(t *testing.T) {
 	t.Parallel()
 	const d = 3.0
 	body := reflexLBody(t)
-	chamfered, err := decad.Chamfer(t.Context(), body, capLoopEdges(body), units.Millimeters(d))
+	chamfered, err := decad.Chamfer(body, capLoopEdges(body), units.Millimeters(d)).Do(t.Context())
 	require.NoError(t, err)
 	mesh, err := chamfered.Tessellate(t.Context(), units.Millimeters(0.02))
 	require.NoError(t, err)
@@ -302,7 +302,7 @@ func TestTessellateCapBlendRectangularHoleApexFans(t *testing.T) {
 	body, err := decad.Extrude(t.Context(), doc, s, profile, decad.Distance{D: units.Millimeters(14), Dir: decad.Along})
 	require.NoError(t, err)
 	const d = 1.5
-	chamfered, err := decad.Chamfer(t.Context(), body, capLoopEdges(body), units.Millimeters(d))
+	chamfered, err := decad.Chamfer(body, capLoopEdges(body), units.Millimeters(d)).Do(t.Context())
 	require.NoError(t, err)
 	mesh, err := chamfered.Tessellate(t.Context(), units.Millimeters(0.05))
 	require.NoError(t, err)
@@ -478,7 +478,7 @@ func TestCapBlendBooleanRefusesMiteredBand(t *testing.T) {
 		t.Parallel()
 		requireCapBlendBooleanRefused(t, func(t *testing.T) *decad.Body {
 			body := circularSegmentBody(t, 20, 8, 16)
-			chamfered, err := decad.Chamfer(t.Context(), body, capLoopEdges(body), units.Millimeters(1))
+			chamfered, err := decad.Chamfer(body, capLoopEdges(body), units.Millimeters(1)).Do(t.Context())
 			require.NoError(t, err)
 			return chamfered
 		}, "line-line miter or an exactly tangent join")
@@ -490,7 +490,7 @@ func TestCapBlendBooleanRefusesMiteredBand(t *testing.T) {
 func TestCapBlendOverlapReadsSuspect(t *testing.T) {
 	t.Parallel()
 	body := circularSegmentBody(t, 20, 8, 16)
-	chamfered, err := decad.Chamfer(t.Context(), body, capLoopEdges(body), units.Millimeters(1))
+	chamfered, err := decad.Chamfer(body, capLoopEdges(body), units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	shift, err := r3.Translation(r3.Vec{X: 5, Y: 2, Z: 0})
 	require.NoError(t, err)
@@ -546,9 +546,9 @@ func chamferedFlangeBody(t *testing.T) (*sketch.World, *decad.Body) {
 	require.NoError(t, err)
 	drilled, err := decad.Cut(plate, cylinderAt(t, w, doc, 0, 18)).Do(t.Context())
 	require.NoError(t, err)
-	filleted, err := decad.Fillet(t.Context(), drilled, decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1))), units.Millimeters(12))
+	filleted, err := decad.Fillet(drilled, decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1))), units.Millimeters(12)).Do(t.Context())
 	require.NoError(t, err)
-	chamfered, err := decad.Chamfer(t.Context(), filleted, capLoopEdges(filleted), units.Millimeters(1))
+	chamfered, err := decad.Chamfer(filleted, capLoopEdges(filleted), units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	return w, chamfered
 }
@@ -611,7 +611,7 @@ func TestCapBlendChamferedPinAsTool(t *testing.T) {
 	plate, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(16), Dir: decad.Along})
 	require.NoError(t, err)
 	pin := cylinderAt(t, w, doc, 0, 10)
-	pin, err = decad.Chamfer(t.Context(), pin, capLoopEdges(pin), units.Millimeters(1))
+	pin, err = decad.Chamfer(pin, capLoopEdges(pin), units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 
 	got, err := decad.Cut(plate, pin).Do(t.Context())
@@ -631,7 +631,7 @@ func TestCapBlendChamferedPinAsTool(t *testing.T) {
 func TestCapBlendDiskIntersectBandDominated(t *testing.T) {
 	t.Parallel()
 	body := circleProfile(t, 10, 4)
-	chamfered, err := decad.Chamfer(t.Context(), body, capLoopEdges(body), units.Millimeters(3))
+	chamfered, err := decad.Chamfer(body, capLoopEdges(body), units.Millimeters(3)).Do(t.Context())
 	require.NoError(t, err)
 	box := boxBodyAtZ(t, chamfered.Document(), -20, -20, 20, 20, -5, 15)
 	got, err := decad.Intersect(chamfered, box).Do(t.Context())
@@ -650,7 +650,7 @@ func TestCapBlendDiskIntersectBandDominated(t *testing.T) {
 func TestCapBlendBooleanChargesTheMiterDisplacement(t *testing.T) {
 	t.Parallel()
 	doc, hexagon := manySidedPrism(t, 6)
-	chamfered, err := decad.Chamfer(t.Context(), hexagon, capLoopEdges(hexagon), units.Millimeters(2))
+	chamfered, err := decad.Chamfer(hexagon, capLoopEdges(hexagon), units.Millimeters(2)).Do(t.Context())
 	require.NoError(t, err)
 	before, err := chamfered.Volume()
 	require.NoError(t, err)

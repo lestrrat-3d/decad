@@ -194,7 +194,7 @@ func TestFacetedRetainedBlendRevolvedShaft(t *testing.T) {
 			}
 		}
 		require.NotNil(t, q)
-		_, err = decad.Fillet(t.Context(), cut, q, units.Millimeters(2))
+		_, err = decad.Fillet(cut, q, units.Millimeters(2)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 	})
 
@@ -211,9 +211,9 @@ func TestFacetedRetainedBlendRevolvedShaft(t *testing.T) {
 			size := tc.size
 			var blended *decad.Body
 			if tc.fillet {
-				blended, err = decad.Fillet(t.Context(), cut, flatEdges(t, cut), units.Millimeters(size))
+				blended, err = decad.Fillet(cut, flatEdges(t, cut), units.Millimeters(size)).Do(t.Context())
 			} else {
-				blended, err = decad.Chamfer(t.Context(), cut, flatEdges(t, cut), units.Millimeters(size))
+				blended, err = decad.Chamfer(cut, flatEdges(t, cut), units.Millimeters(size)).Do(t.Context())
 			}
 			require.NoError(t, err)
 			after, err := blended.Volume()
@@ -242,9 +242,9 @@ func TestFacetedRetainedBlendRevolvedShaft(t *testing.T) {
 			require.NoError(t, err)
 			var twin *decad.Body
 			if tc.fillet {
-				twin, err = decad.Fillet(t.Context(), twinCut, flatEdges(t, twinCut), units.Millimeters(size))
+				twin, err = decad.Fillet(twinCut, flatEdges(t, twinCut), units.Millimeters(size)).Do(t.Context())
 			} else {
-				twin, err = decad.Chamfer(t.Context(), twinCut, flatEdges(t, twinCut), units.Millimeters(size))
+				twin, err = decad.Chamfer(twinCut, flatEdges(t, twinCut), units.Millimeters(size)).Do(t.Context())
 			}
 			require.NoError(t, err)
 			twinAfter, err := twin.Volume()
@@ -312,9 +312,9 @@ func TestFacetedRetainedBlendRevolvedRim(t *testing.T) {
 				require.NoError(t, err)
 				var out *decad.Body
 				if tc.fillet {
-					out, err = decad.Fillet(t.Context(), b, endRim(t, b), units.Millimeters(r))
+					out, err = decad.Fillet(b, endRim(t, b), units.Millimeters(r)).Do(t.Context())
 				} else {
-					out, err = decad.Chamfer(t.Context(), b, endRim(t, b), units.Millimeters(r))
+					out, err = decad.Chamfer(b, endRim(t, b), units.Millimeters(r)).Do(t.Context())
 				}
 				require.NoError(t, err)
 				after, err := out.Volume()

@@ -264,9 +264,9 @@ func TestShellTubeKeepsDenotedLevel(t *testing.T) {
 	inch := units.Inches(0.2)
 	doc := decad.New()
 	plate := upPlate(t, doc, inch)
-	tube, err := decad.Shell(t.Context(), plate,
+	tube, err := decad.Shell(plate,
 		decad.Faces(decad.FaceCreatedBy(decad.CapEnd(plate))).Or(decad.FaceCreatedBy(decad.CapStart(plate))),
-		units.Millimeters(2))
+		units.Millimeters(2)).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, prismClass, decadtest.PayloadClass(tube))
 	requireRationalVolumeCovered(t, tube, scaled(144, denotedDepth(inch), 0))

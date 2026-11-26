@@ -140,7 +140,7 @@ func TestScaledAtUnmarkedFacetedSolid(t *testing.T) {
 	t.Run("RetainedTangentChainFillet", func(t *testing.T) {
 		t.Parallel()
 		drilled := crossDrilled(t)
-		filleted, err := decad.Fillet(t.Context(), drilled, topFront(), units.Millimeters(1), decad.WithTangentChain())
+		filleted, err := decad.Fillet(drilled, topFront(), units.Millimeters(1)).TangentChain().Do(t.Context())
 		require.NoError(t, err)
 		scaled, err := decad.ScaledAt(t.Context(), filleted, r3.NewVec(1, 2, 3), units.Scalar(2))
 		require.NoError(t, err)

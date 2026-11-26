@@ -90,7 +90,7 @@ func TestBrepPartialRootFilletFlushSide(t *testing.T) {
 	sel = rootEdge(sel, 10, 0, r3.NewVec(0, 1, 0))
 	sel = rootEdge(sel, 10, 6, r3.NewVec(1, 0, 0))
 	sel = rootEdge(sel, 20, 0, r3.NewVec(0, 1, 0))
-	got, err := decad.Fillet(t.Context(), body, sel.Exactly(3), units.Millimeters(1))
+	got, err := decad.Fillet(body, sel.Exactly(3), units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	volume := requireSoundRootFillet(t, doc, got, 2)
 	requireMeasurementHoldsPiSquared(t, volume, big.NewRat(8322, 1), big.NewRat(-14, 3), big.NewRat(-1, 4))
@@ -112,7 +112,7 @@ func TestBrepPartialRootFilletFlushCorner(t *testing.T) {
 	var sel *decad.EdgeQuery
 	sel = rootEdge(sel, 30, 0, r3.NewVec(0, 1, 0))
 	sel = rootEdge(sel, 40, 6, r3.NewVec(1, 0, 0))
-	got, err := decad.Fillet(t.Context(), body, sel.Exactly(2), units.Millimeters(1))
+	got, err := decad.Fillet(body, sel.Exactly(2), units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	volume := requireSoundRootFillet(t, doc, got, 1)
 	requireMeasurementHoldsPiSquared(t, volume, big.NewRat(8316, 1), big.NewRat(-43, 12), big.NewRat(-1, 8))
@@ -134,7 +134,7 @@ func TestBrepPartialRootFilletMixedSidesRefuses(t *testing.T) {
 	sel = rootEdge(sel, 10, 6, r3.NewVec(1, 0, 0))
 	sel = rootEdge(sel, 20, 0, r3.NewVec(0, 1, 0))
 	sel = rootEdge(sel, 0, 0, r3.NewVec(0, 1, 0))
-	_, err = decad.Fillet(t.Context(), body, sel.Exactly(4), units.Millimeters(1))
+	_, err = decad.Fillet(body, sel.Exactly(4), units.Millimeters(1)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Len(t, doc.Bodies(), 1, "the receiver stays live")
 }

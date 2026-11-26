@@ -58,8 +58,8 @@ func reflexDPlate(t *testing.T, doc *decad.Document) *decad.Body {
 func reflexDPlateChamfered(t *testing.T, doc *decad.Document) *decad.Body {
 	t.Helper()
 	plate := reflexDPlate(t, doc)
-	ch, err := decad.Chamfer(t.Context(), plate,
-		decad.Edges(decad.CreatedBy(decad.CapStart(plate))), units.Millimeters(reflexD))
+	ch, err := decad.Chamfer(plate,
+		decad.Edges(decad.CreatedBy(decad.CapStart(plate))), units.Millimeters(reflexD)).Do(t.Context())
 	require.NoError(t, err)
 	return ch
 }
@@ -141,7 +141,7 @@ func TestCapBlendReflexLBodyBoolean(t *testing.T) {
 	t.Parallel()
 	mk := func() *decad.Body {
 		body := reflexLBody(t)
-		ch, err := decad.Chamfer(t.Context(), body, capLoopEdges(body), units.Millimeters(3))
+		ch, err := decad.Chamfer(body, capLoopEdges(body), units.Millimeters(3)).Do(t.Context())
 		require.NoError(t, err)
 		return ch
 	}

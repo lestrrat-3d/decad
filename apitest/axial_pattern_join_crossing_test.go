@@ -115,7 +115,7 @@ func TestPatternUnionFlanksCrossTheBaseThenFilletBoreChamfer(t *testing.T) {
 
 	// Where a flank leaves the base circle the surface turns inward: a concave axial edge.
 	selection := decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)), decad.Concave()).Exactly(2 * n)
-	filleted, err := decad.Fillet(t.Context(), joined, selection, units.Millimeters(0.05))
+	filleted, err := decad.Fillet(joined, selection, units.Millimeters(0.05)).Do(t.Context())
 	require.NoError(t, err)
 	v1, err := filleted.Volume()
 	require.NoError(t, err)
@@ -125,7 +125,7 @@ func TestPatternUnionFlanksCrossTheBaseThenFilletBoreChamfer(t *testing.T) {
 	bored, err := decad.Cut(filleted, bore).Do(t.Context())
 	require.NoError(t, err)
 	caps := decad.Edges(decad.OuterLoopOf(decad.CapStart(bored))).Or(decad.OuterLoopOf(decad.CapEnd(bored)))
-	chamfered, err := decad.Chamfer(t.Context(), bored, caps, units.Millimeters(0.02))
+	chamfered, err := decad.Chamfer(bored, caps, units.Millimeters(0.02)).Do(t.Context())
 	require.NoError(t, err)
 	require.True(t, chamfered.IsSolid())
 }

@@ -196,8 +196,8 @@ func TestLoftFilletTwistedGearRoots(t *testing.T) {
 		body, bottom, top := g.loft(t, tc.height, tc.twist, 0)
 		before, err := body.Volume()
 		require.NoError(t, err, tc.name)
-		rounded, err := decad.Fillet(t.Context(), body, rungQuery(bottom, top, tc.height).Exactly(len(bottom)),
-			units.Millimeters(tc.radius))
+		rounded, err := decad.Fillet(body, rungQuery(bottom, top, tc.height).Exactly(len(bottom)),
+			units.Millimeters(tc.radius)).Do(t.Context())
 		require.NoError(t, err, tc.name)
 		after, err := rounded.Volume()
 		require.NoError(t, err, tc.name)
@@ -227,8 +227,8 @@ func TestLoftFilletTwistedGearMirrorJoin(t *testing.T) {
 	g := newTwistedGear(16, 20*math.Pi/180, 0.05)
 	g.samples = 15
 	body, bottom, top := g.loft(t, height, twist, 0)
-	half, err := decad.Fillet(t.Context(), body, rungQuery(bottom, top, height).Exactly(len(bottom)),
-		units.Millimeters(radius))
+	half, err := decad.Fillet(body, rungQuery(bottom, top, height).Exactly(len(bottom)),
+		units.Millimeters(radius)).Do(t.Context())
 	require.NoError(t, err)
 	end, err := r3.NewFrame(r3.Vec{Z: height}, r3.Vec{X: 1}, r3.Vec{Y: 1})
 	require.NoError(t, err)
@@ -306,7 +306,7 @@ func TestLoftFilletSectionsWithDifferentRecords(t *testing.T) {
 	} {
 		body, c0, c1 := build(tc.size1, tc.twist, 0)
 		query := rungQuery([]gearPoint{c0}, []gearPoint{c1}, height).Exactly(1)
-		rounded, err := decad.Fillet(t.Context(), body, query, units.Millimeters(tc.radius))
+		rounded, err := decad.Fillet(body, query, units.Millimeters(tc.radius)).Do(t.Context())
 		require.NoError(t, err, tc.name)
 		got, err := rounded.Volume()
 		require.NoError(t, err, tc.name)
@@ -320,6 +320,6 @@ func TestLoftFilletSectionsWithDifferentRecords(t *testing.T) {
 
 	body, c0, c1 := build(6, 0, 0)
 	query := rungQuery([]gearPoint{c0}, []gearPoint{c1}, height).Exactly(1)
-	_, err := decad.Fillet(t.Context(), body, query, units.Millimeters(6.5))
+	_, err := decad.Fillet(body, query, units.Millimeters(6.5)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 }

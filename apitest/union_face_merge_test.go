@@ -218,7 +218,7 @@ func TestUnionFaceMergeThenChamfer(t *testing.T) {
 	t.Parallel()
 	joined := mergeFlushBoxes(t, 0.5, 0)
 	edge := decad.Edges(decad.ParallelTo(r3.Vec{X: 1}), decad.EndpointAt(r3.Vec{X: 0.5, Z: 20}))
-	chamfered, err := decad.Chamfer(t.Context(), joined, edge, units.Millimeters(1))
+	chamfered, err := decad.Chamfer(joined, edge, units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	before, err := joined.Volume()
 	require.NoError(t, err)

@@ -110,7 +110,7 @@ func TestRetainedBlendGroupsRecordSource(t *testing.T) {
 		}
 	}
 	require.NotNil(t, sel, "bore mouth at the top")
-	filleted, err := Fillet(t.Context(), bored, sel, units.Millimeters(1))
+	filleted, err := Fillet(bored, sel, units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 
 	before, after := facetedGroups(t, bored), facetedGroups(t, filleted)

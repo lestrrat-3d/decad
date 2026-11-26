@@ -48,8 +48,8 @@ func TestLoftBoreTwistedSections(t *testing.T) {
 	twist := 14.5 * math.Pi / 180
 	g := newTwistedGear(5, 20*math.Pi/180, 0.05)
 	body, bottom, top := g.loft(t, height, twist, 0)
-	rounded, err := decad.Fillet(t.Context(), body, rungQuery(bottom, top, height).Exactly(len(bottom)),
-		units.Millimeters(0.25))
+	rounded, err := decad.Fillet(body, rungQuery(bottom, top, height).Exactly(len(bottom)),
+		units.Millimeters(0.25)).Do(t.Context())
 	require.NoError(t, err)
 	bored := requireBoredLoft(t, rounded, height, 0.5, "gear")
 	require.Equal(t, len(bottom), filletRoleCount(bored), "the rounded roots stay")

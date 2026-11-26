@@ -9,7 +9,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// WithNoOpenings makes Shell hollow a body without removing any face. The
+// ShellClosed hollows a body without removing any face. The
 // result is a sealed hollow part with a void inside, such as a lightweight
 // printed block.
 func Example_shell_closed() {
@@ -36,7 +36,7 @@ func Example_shell_closed() {
 	}
 
 	// A nil selector names no faces to open. The 5 mm walls enclose a cavity.
-	sealed, err := decad.Shell(context.Background(), block, nil, units.Millimeters(5), decad.WithNoOpenings())
+	sealed, err := decad.ShellClosed(block, units.Millimeters(5)).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to shell: %s\n", err)
 		return

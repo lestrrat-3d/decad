@@ -1186,7 +1186,7 @@ func TestVoidRevolveModifyOps(t *testing.T) {
 	// its corner: two corners at ρ = 5 and two at ρ = 15, so the four removed
 	// centroids' radii sum to 40 and the volume drops by 2π·40·(1 − π/4).
 	_, body := voidRevolve(t)
-	filleted, err := decad.Fillet(t.Context(), body, decad.Edges(decad.Circular()).Exactly(4), units.Millimeters(1))
+	filleted, err := decad.Fillet(body, decad.Edges(decad.Circular()).Exactly(4), units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	requireManifold(t, filleted)
 	require.Len(t, filleted.Shells(), 2)
@@ -1199,7 +1199,7 @@ func TestVoidRevolveModifyOps(t *testing.T) {
 	doc, body := voidRevolve(t)
 	before, err := body.Volume()
 	require.NoError(t, err)
-	_, err = decad.Shell(t.Context(), body, decad.Faces(), units.Millimeters(1))
+	_, err = decad.Shell(body, decad.Faces(), units.Millimeters(1)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.ErrorContains(t, err, `SX8`)
 	after, err := body.Volume()
