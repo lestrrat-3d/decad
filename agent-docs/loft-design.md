@@ -3230,11 +3230,11 @@ denotation and bounds are those above, with `H` the join's held shell and `S` it
 lower Loft's layout (`loftcylinder.mirrorJoinRings`): each loop's start stations, then its end stations, outer loop
 first, then each loop's reflected start stations in the same order. A bore's loop has the same three rings; its cells
 are kept whole, its two rims stay sharp, and each new cap tiles the annulus between its inset loop and its rim.
-`apitest.TestLoftMirrorJoinCapChamfer` chamfers rounded twisted gear joins of half height 1.5 and 0.5: the removed held
+`apitest.TestLoftMirrorJoinCapChamfer` chamfers a rounded twisted gear join of half height 0.5: the removed held
 volume is `d/2` times the cap area lost within 3%, every mesh vertex lies on a cap, band or middle level, and the
 tessellation is verified. At half height 0.5 the side ring turns past the inset loop in projection.
-`TestLoftMirrorJoinCapChamferKeepsTheBore` chamfers the bored join: the same volume relation holds, every mesh vertex
-near the axis lies on the bore, and the shell keeps its one hole.
+`TestLoftMirrorJoinCapChamferKeepsTheBore` chamfers the bored join of half height 1.5: the same
+volume relation holds, every mesh vertex near the axis lies on the bore, and the shell keeps its one hole.
 
 ## 20. Point-section loft
 
