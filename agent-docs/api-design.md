@@ -847,8 +847,8 @@ value it reads, so a retired body still answers it (§6). The query set is:
   `LocatePoint`, `DistanceToPoint`, `ExtremeFacesByCentroid`;
 - `Tessellate`, which returns a `Mesh` and registers nothing;
 - the document reads `Bodies`, `Verify`, `VerifyMotion`, `VerifyLinkage`,
-  `VerifyJointBox`, `ContactPair`, `ProvePairSeparated`, `SweepPair` and
-  `SweptBox`, each of which returns a result and leaves the document unchanged;
+  `VerifyJointBox`, `ContactPair`, `ProvePairSeparated`, `SweepPair`, `SweptBox`
+  and `IntersectionVolume`, each of which returns a result and leaves the document unchanged;
 - the accessors and report methods on result types (`Report`, `MotionReport`,
   `SweepReport`, `Path`, `Mesh` and the like).
 
@@ -1156,6 +1156,16 @@ func UnionRefined(ctx context.Context, bodies []*Body, maxBound units.Value) (*B
 func Cut(ctx context.Context, target, tool *Body, opts ...BooleanOption) (*Body, error)
 func Intersect(ctx context.Context, a, b *Body, opts ...BooleanOption) (*Body, error)
 ```
+
+`Document.IntersectionVolume(ctx, a, b)` is the read-only form of `Intersect`: it runs the evaluation `Intersect`
+runs on the same operands in the same order (both take `buildBoolean` in `boolean.go`) and returns the volume of the
+body `Intersect` would build, as a `Measurement` equal to it bit for bit. It commits nothing, so `Bodies`, the
+operation history, producer numbering and containers are unchanged and both operands stay live; it may advance the
+document's private level and curve counters, which are atomic so that queries and `Verify` may run together on one
+document. Its errors are `Intersect`'s without the operation tag, and an empty result is the `*BooleanError` with
+`BooleanEmpty` that carries the gap shift, if one applied. It differs from `Intersect` in two gates: the operands may
+sit in different containers, since nothing lands in either, and it is a method on the document, as §6.3 makes a query.
+A retired operand is `ErrRetiredBody`, because `Intersect` has no answer for one. It takes no options in v1.
 
 `BooleanOption` is a sealed option tier for `Cut` and `Intersect`. A nil or zero
 option is `ErrDegenerate`. `WithMatchingFaces()` declares that faces of the two

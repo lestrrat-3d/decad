@@ -113,8 +113,8 @@ func TestBuildBox(t *testing.T) {
 	require.Equal(t, r3.NewVec(4, 4, 4), body.Bounds.Max)
 
 	// Two cap levels and one curve identity per rim vertex and rim edge.
-	require.Equal(t, 2, int(doc.NextLevel))
-	require.Equal(t, 16, int(doc.NextCurve))
+	require.Equal(t, 2, int(doc.NextLevel.Load()))
+	require.Equal(t, 16, int(doc.NextCurve.Load()))
 
 	rec, ok := body.Payload.(prismrecord.Payload)
 	require.True(t, ok)

@@ -24,7 +24,7 @@ func TestDocumentNodeMintsAndReadsLiveness(t *testing.T) {
 	l2 := d.MintLevel(t.Context(), origin, normal)
 	require.Equal(t, denotation.LevelID(1), l1.ID)
 	require.Equal(t, denotation.LevelID(2), l2.ID)
-	require.Equal(t, denotation.LevelID(2), d.NextLevel)
+	require.Equal(t, denotation.LevelID(2), denotation.LevelID(d.NextLevel.Load()))
 	require.Equal(t, origin, l1.Origin)
 	require.Equal(t, normal, l1.Normal)
 	require.False(t, denotation.SameLevel(l1, l2), "two mints never denote one level")
@@ -33,7 +33,7 @@ func TestDocumentNodeMintsAndReadsLiveness(t *testing.T) {
 	c2 := d.MintCurve(t.Context())
 	require.Equal(t, denotation.CurveID(1), c1.ID)
 	require.Equal(t, denotation.CurveID(2), c2.ID)
-	require.Equal(t, denotation.CurveID(2), d.NextCurve)
+	require.Equal(t, denotation.CurveID(2), denotation.CurveID(d.NextCurve.Load()))
 	require.False(t, denotation.SameCurve(c1, c2), "two mints never denote one curve")
 
 	a, b := new(topo.Body), new(topo.Body)

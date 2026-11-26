@@ -99,12 +99,13 @@ func motionHooks() motionengine.Hooks {
 		Operand: pairMeshes{},
 		Place:   placePayloadNode,
 		NewDocument: func(seeds topo.Seeds, live []*topo.Body) *topo.Document {
-			return &bornDocument(&Document{n: topo.Document{
-				NextLevel:    seeds.Level,
-				NextCurve:    seeds.Curve,
+			born := bornDocument(&Document{n: topo.Document{
 				NextProducer: seeds.Producer,
 				LiveSet:      live,
-			}}).n
+			}})
+			born.n.NextLevel.Store(int64(seeds.Level))
+			born.n.NextCurve.Store(int64(seeds.Curve))
+			return &born.n
 		},
 	}
 }

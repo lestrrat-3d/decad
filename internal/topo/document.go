@@ -4,6 +4,7 @@ import (
 	"context"
 	"slices"
 	"sync"
+	"sync/atomic"
 
 	"github.com/lestrrat-3d/decad/internal/denotation"
 	"github.com/lestrrat-3d/decad/internal/provenance"
@@ -25,12 +26,13 @@ type Document struct {
 	// written only by root operation commit helpers and retire, under
 	// LiveMu.
 	LiveSet []*Body
-	// NextLevel is the LEVEL half of the shared-denotation certificate. It is
-	// written only by MintLevel.
-	NextLevel denotation.LevelID
-	// NextCurve is the CURVE half of the shared-denotation certificate. It is
-	// written only by MintCurve.
-	NextCurve denotation.CurveID
+	// NextLevel is the LEVEL half of the shared-denotation certificate: the
+	// last LevelID minted. It is written only by MintLevel, atomically, so two
+	// read-only builds on one document may mint at once.
+	NextLevel atomic.Int64
+	// NextCurve is the CURVE half of the shared-denotation certificate: the
+	// last CurveID minted. It is written only by MintCurve, atomically.
+	NextCurve atomic.Int64
 	// NextProducer is the identity the next successful operation occupies. It
 	// is written only by root operation commit helpers.
 	NextProducer provenance.Producer
@@ -57,23 +59,25 @@ type Seeds struct {
 // SeedsAt reads the counters a transient document called with ctx starts
 // from: the identities the next operation would occupy.
 func (d *Document) SeedsAt(ctx context.Context) Seeds {
-	return Seeds{Level: d.NextLevel, Curve: d.NextCurve, Producer: d.ProducerAt(ctx)}
+	return Seeds{
+		Level:    denotation.LevelID(d.NextLevel.Load()),
+		Curve:    denotation.CurveID(d.NextCurve.Load()),
+		Producer: d.ProducerAt(ctx),
+	}
 }
 
-// MintLevel advances the level counter and returns a token for the new level
+// MintLevel advances the level counter (atomically) and returns a token for the new level
 // at origin with normal. Identities only increase, so none is reused, even by
 // a build that later fails. ctx names the caller, like ProducerAt's.
 func (d *Document) MintLevel(_ context.Context, origin, normal r3.Vec) denotation.LevelToken {
-	d.NextLevel++
-	return denotation.NewLevel(d.NextLevel, origin, normal)
+	return denotation.NewLevel(denotation.LevelID(d.NextLevel.Add(1)), origin, normal)
 }
 
-// MintCurve advances the curve counter and returns a token for the new curve.
+// MintCurve advances the curve counter (atomically) and returns a token for the new curve.
 // Identities only increase, so none is reused, even by a build that later
 // fails. ctx names the caller, like ProducerAt's.
 func (d *Document) MintCurve(_ context.Context) denotation.CurveToken {
-	d.NextCurve++
-	return denotation.NewCurve(d.NextCurve)
+	return denotation.NewCurve(denotation.CurveID(d.NextCurve.Add(1)))
 }
 
 // IsLive reports whether b is in the live set, read under LiveMu.
