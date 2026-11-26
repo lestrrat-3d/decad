@@ -109,24 +109,17 @@ func TestHoleDraftRefusals(t *testing.T) {
 	require.Equal(t, []*decad.Body{rod}, doc.Bodies())
 }
 
-// pilotBoss is the 8 mm wide, 8 mm tall boss on the top of the plate of
-// bossPlate with the given pilot bore.
-func pilotBoss(plate *decad.Body, bore decad.BossBore) *decad.BossCommand {
-	return decad.Boss(plate, capFace(true, plate), r3.Vec{X: 0, Y: 0, Z: 5},
-		units.Millimeters(8), units.Millimeters(8)).Bore(bore)
-}
-
 func TestBossPilotDraft(t *testing.T) {
 	t.Parallel()
 	_, plate := bossPlate(t)
-	out, err := pilotBoss(plate, decad.NewBossBore(units.Millimeters(3), units.Millimeters(6)).
+	out, err := bossTapCommand(plate, decad.NewBossBore(units.Millimeters(3), units.Millimeters(6)).
 		Draft(units.Degrees(3))).Do(t.Context())
 	require.NoError(t, err)
 	tan := math.Tan(3 * math.Pi / 180)
 	want := bossPlateVolume + math.Pi*16*8 - cylinderFrustum(1.5, 1.5-6*tan, 6)
 	decadtest.MeasuresVolume(t, out, units.CubicMillimeters(want), decadtest.WithinRel(units.Scalar(1e-3)))
 	_, plate = bossPlate(t)
-	_, err = pilotBoss(plate, decad.NewBossBore(units.Millimeters(3), units.Millimeters(6)).
+	_, err = bossTapCommand(plate, decad.NewBossBore(units.Millimeters(3), units.Millimeters(6)).
 		Draft(units.Degrees(3)).Thread(decad.NewHoleThread(units.Millimeters(0.5)))).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrDegenerate, "a tapped pilot is straight")
 }

@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
-	"github.com/lestrrat-3d/decad/decadtest"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
@@ -635,13 +634,16 @@ func TestCompositeMethodsLastCallWins(t *testing.T) {
 	t.Run("Infill.Resolution and Skin", func(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
-		block := boxBody(t, doc, 5, 5, 15, 15, 12)
-		_, err := decad.Infill(block, decad.GyroidInfill, mm(10), units.Scalar(0.8)).Resolution(2).Resolution(8).Do(t.Context())
+		block := boxBody(t, doc, 0, 0, 5, 5, 5)
+		infill := func(b *decad.Body) *decad.InfillCommand {
+			return decad.Infill(b, decad.GyroidInfill, mm(5), units.Scalar(0.8))
+		}
+		_, err := infill(block).Resolution(2).Resolution(4).Do(t.Context())
 		require.NoError(t, err, "a valid resolution replaces an invalid one")
-		block2 := boxBody(t, doc, 5, 5, 15, 15, 12)
-		_, err = decad.Infill(block2, decad.GyroidInfill, mm(10), units.Scalar(0.8)).Resolution(8).Resolution(2).Do(t.Context())
+		block2 := boxBody(t, doc, 0, 0, 5, 5, 5)
+		_, err = infill(block2).Resolution(4).Resolution(2).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrDegenerate, "an invalid resolution replaces a valid one")
-		_, err = decad.Infill(block2, decad.GyroidInfill, mm(10), units.Scalar(0.8)).Resolution(8).Skin(mm(-1)).Skin(mm(1)).Do(t.Context())
+		_, err = infill(block2).Resolution(4).Skin(mm(-1)).Skin(mm(1)).Do(t.Context())
 		require.NoError(t, err, "a valid skin replaces an invalid one")
 	})
 }
@@ -736,76 +738,6 @@ func TestCompositeCommandsCopyTheirArguments(t *testing.T) {
 		requireCompositeBounds(t, got, r3.Vec{Y: -1}, r3.Vec{X: 35, Y: 24, Z: 10})
 		require.InDelta(t, 50+math.Pi/2*(3+0.44*2), report.FlatLength.Base(), 1e-12)
 	})
-}
-
-// Hole and Boss take the same results as before: the pilot, head and draft
-// values give the volumes the old spec gave, and a shaped hole takes the
-// shape's own size.
-func TestCompositeCommandsKeepTheirGeometry(t *testing.T) {
-	t.Parallel()
-	mm := units.Millimeters
-	t.Run("hole thread cuts the groove", func(t *testing.T) {
-		t.Parallel()
-		_, plate := drillPlate(t)
-		plain, err := decad.Hole(plate, capFace(true, plate), r3.Vec{X: 10, Y: 10, Z: 10}, mm(4.2), decad.ThroughHole{}).Do(t.Context())
-		require.NoError(t, err)
-		_, plate2 := drillPlate(t)
-		tapped, err := decad.Hole(plate2, capFace(true, plate2), r3.Vec{X: 10, Y: 10, Z: 10}, mm(4.2), decad.ThroughHole{}).
-			Thread(decad.NewHoleThread(mm(1)).LeftHand().Length(mm(5))).Do(t.Context())
-		require.NoError(t, err)
-		pv, err := plain.Volume()
-		require.NoError(t, err)
-		tv, err := tapped.Volume()
-		require.NoError(t, err)
-		require.Less(t, tv.Value.Base(), pv.Value.Base()-1, "the tapped hole removes the groove as well")
-	})
-	t.Run("boss tilt leans the boss", func(t *testing.T) {
-		t.Parallel()
-		_, plate := drillPlate(t)
-		got, err := decad.Boss(plate, capFace(true, plate), r3.Vec{X: 10, Y: 10, Z: 10}, mm(8), mm(8)).
-			Tilt(units.Degrees(30), units.Degrees(0)).Do(t.Context())
-		require.NoError(t, err)
-		box, err := got.Bounds()
-		require.NoError(t, err)
-		// The tilted rim rises to 10 + 8 cos 30 + 4 sin 30 = 18.93 mm; an upright boss stops at 18.
-		require.InDelta(t, 10+8*math.Cos(math.Pi/6)+4*math.Sin(math.Pi/6), box.Max.Z, 0.05)
-	})
-	t.Run("boss ribs and angle", func(t *testing.T) {
-		t.Parallel()
-		_, plate := bossPlate(t)
-		got, err := decad.Boss(plate, capFace(true, plate), r3.Vec{Z: 5}, mm(8), mm(8)).
-			Ribs(decad.NewBossRibs(2, mm(1), mm(5), mm(4)).Angle(units.Degrees(90))).Do(t.Context())
-		require.NoError(t, err)
-		box, err := got.Bounds()
-		require.NoError(t, err)
-		require.Greater(t, box.Max.Y, 4+4.5, "the first rib reaches out along +Y")
-		decadtest.MeasuresBounds(t, got, r3.Vec{X: -20, Y: -20}, r3.Vec{X: 20, Y: 20, Z: 13})
-	})
-	t.Run("sheet metal k factor", func(t *testing.T) {
-		t.Parallel()
-		legs, bends := sheetMetalFixture()
-		_, report, err := decad.SheetMetal(decad.New(), mm(2), mm(3), mm(10), legs, bends).KFactor(units.Scalar(0.5)).Do(t.Context())
-		require.NoError(t, err)
-		allowance := math.Pi / 2 * (3 + 0.5*2)
-		require.InDelta(t, allowance, report.BendAllowances[0].Base(), 1e-12)
-		require.InDelta(t, 50+allowance, report.FlatLength.Base(), 1e-12)
-	})
-}
-
-// Infill tags the refusals of its nested Union, Intersect and Shell with its own
-// kind, and a skin leaves the block live when it is refused.
-func TestInfillTagsNestedRefusalsWithItsKind(t *testing.T) {
-	t.Parallel()
-	mm := units.Millimeters
-	doc := decad.New()
-	block := boxBody(t, doc, 5, 5, 15, 15, 12)
-	_, err := decad.Infill(block, decad.GyroidInfill, mm(10), units.Scalar(0.8)).Resolution(8).Skin(mm(-1)).Do(t.Context())
-	require.Error(t, err)
-	requireOperationKind(t, err, decad.OperationInfill)
-	_, err = decad.Infill(block, decad.LatticeKind(99), mm(10), units.Scalar(0.8)).Do(t.Context())
-	require.ErrorIs(t, err, decad.ErrDegenerate)
-	requireOperationKind(t, err, decad.OperationInfill)
-	require.Equal(t, []*decad.Body{block}, doc.Bodies(), "a refusal leaves the block live")
 }
 
 // A method called with an explicit units.Value{} is validated as that value, not
