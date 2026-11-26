@@ -301,7 +301,8 @@ const (
 // registered in the document, and dropping it leaves no trace there.
 type booleanBuild struct {
 	// ctx is the build's context, as buildBoolean narrowed it for the commit.
-	ctx    context.Context
+	// It lives for one synchronous performBoolean call.
+	ctx    context.Context //nolint:containedctx // The commit of this build runs in the same call.
 	route  booleanRoute
 	body   *Body
 	span   producerID
