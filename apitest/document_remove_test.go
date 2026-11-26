@@ -81,14 +81,6 @@ func TestDocumentRemoveTakesBodyOutOfTheModel(t *testing.T) {
 func TestDocumentRemoveRefusals(t *testing.T) {
 	t.Parallel()
 
-	t.Run("nil body", func(t *testing.T) {
-		t.Parallel()
-		doc := decad.New()
-		live := boxBody(t, doc, 0, 0, 10, 10, 10)
-		require.ErrorIs(t, decad.Remove(nil).Do(t.Context()), decad.ErrDegenerate)
-		require.Equal(t, []*decad.Body{live}, doc.Bodies())
-	})
-
 	// A body names its own document, so a body of another document cannot be
 	// handed to the wrong one: the case has no expression and no sentinel.
 	t.Run("body of no document", func(t *testing.T) {

@@ -286,15 +286,7 @@ func TestPlacementCommandsRunOnceAndConsume(t *testing.T) {
 			require.NoError(t, err)
 			tc.check(t, got, doc)
 
-			bodies := doc.Bodies()
-			again, err := do(t.Context())
-			require.ErrorIs(t, err, decad.ErrConsumed)
-			require.Nil(t, again)
-			first := requireOperationKind(t, err, tc.kind)[0]
-			require.Equal(t, decad.OpDiagInputRejected, first.Code)
-			require.Equal(t, decad.OperationStageInput, first.Stage)
-			require.Empty(t, first.Subject.Name)
-			require.Equal(t, bodies, doc.Bodies(), "a consumed command changes nothing")
+			requireConsumed(t, do, doc, tc.kind)
 		})
 	}
 }

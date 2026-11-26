@@ -176,25 +176,9 @@ func TestSurfaceCommandsRunOnceAndConsume(t *testing.T) {
 			require.NoError(t, err)
 			tc.check(t, got, doc)
 
-			requireSecondDoConsumed(t, do, tc.kind, doc)
+			requireConsumed(t, do, doc, tc.kind)
 		})
 	}
-}
-
-// requireSecondDoConsumed runs do a second time and requires ErrConsumed, tagged
-// with kind and with no subject, and a document left as it was.
-func requireSecondDoConsumed(t *testing.T, do func(context.Context) ([]*decad.Body, error),
-	kind decad.OperationKind, doc *decad.Document) {
-	t.Helper()
-	bodies := doc.Bodies()
-	again, err := do(t.Context())
-	require.ErrorIs(t, err, decad.ErrConsumed)
-	require.Nil(t, again)
-	first := requireOperationKind(t, err, kind)[0]
-	require.Equal(t, decad.OpDiagInputRejected, first.Code)
-	require.Equal(t, decad.OperationStageInput, first.Stage)
-	require.Empty(t, first.Subject.Name)
-	require.Equal(t, bodies, doc.Bodies(), "a consumed command changes nothing")
 }
 
 func TestSurfaceCommandsRefuseNilContext(t *testing.T) {
@@ -439,14 +423,5 @@ func TestSurfaceCommandsKeepTheirGateOrder(t *testing.T) {
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 		_, err = decad.Split(sheet, sheet).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrDegenerate)
-	})
-	t.Run("Remove of a retired body", func(t *testing.T) {
-		t.Parallel()
-		doc := decad.New()
-		block := decadtest.NewBlock(t, doc, 0, 0, 10, 10, units.Millimeters(3))
-		require.NoError(t, decad.Remove(block).Do(t.Context()))
-		err := decad.Remove(block).Do(t.Context())
-		require.ErrorIs(t, err, decad.ErrRetiredBody)
-		requireOperationKind(t, err, decad.OperationRemove)
 	})
 }

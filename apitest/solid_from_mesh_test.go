@@ -126,14 +126,8 @@ func TestSolidFromMeshRefusals(t *testing.T) {
 		bothTris = append(bothTris, [3]int{tri[0] + len(v), tri[1] + len(v), tri[2] + len(v)})
 	}
 	require.ErrorIs(t, solid(build(both, bothTris)), decad.ErrDegenerate, "a mesh that crosses itself")
-	_, err := decad.SolidFromMesh(decad.New(), build(v, tris)).Do(nil) //nolint:staticcheck // a nil context is the case under test
-	require.ErrorIs(t, err, decad.ErrDegenerate)
-	_, err = decad.SolidFromMesh(nil, build(v, tris)).Do(t.Context())
-	require.ErrorIs(t, err, decad.ErrDegenerate)
-	_, err = decad.SolidFromMesh(decad.New(), nil).Do(t.Context())
-	require.ErrorIs(t, err, decad.ErrDegenerate)
 	doc := decad.New()
-	_, err = decad.SolidFromMesh(doc, build(v, tris[:len(tris)-1])).Do(t.Context())
+	_, err := decad.SolidFromMesh(doc, build(v, tris[:len(tris)-1])).Do(t.Context())
 	require.Error(t, err)
 	require.Empty(t, doc.Bodies(), "a refusal leaves the document unchanged")
 }

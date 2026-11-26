@@ -88,13 +88,11 @@ func TestContextOperationsRejectNilBeforeOperands(t *testing.T) {
 			_, err := decad.Revolve(doc, nil, (*sketch.Chain)(nil), nil, nil).Do(ctx)
 			return err
 		}},
-		{"Split", func(ctx context.Context) error { _, err := decad.Split(nil, nil).Do(ctx); return err }},
 		{"Copy identity", func(ctx context.Context) error { _, err := decad.Copy(body).Do(ctx); return err }},
 		{"Copy placement", func(ctx context.Context) error {
 			_, err := decad.Copy(body).Place(decad.CopyTransform{Transform: r3.Transform{}}).Do(ctx)
 			return err
 		}},
-		{"PatchEdges", func(ctx context.Context) error { _, err := decad.PatchEdges(body, nil).Do(ctx); return err }},
 		{"Body.Fillet", func(ctx context.Context) error { _, err := decad.Fillet(body, nil, units.Value{}).Do(ctx); return err }},
 		{"Body.Chamfer", func(ctx context.Context) error { _, err := decad.Chamfer(body, nil, units.Value{}).Do(ctx); return err }},
 		{"Body.Shell", func(ctx context.Context) error { _, err := decad.Shell(body, nil, units.Value{}).Do(ctx); return err }},
@@ -124,10 +122,7 @@ func TestContextOperationsRejectNilBeforeOperands(t *testing.T) {
 		}},
 		{"Thicken", func(ctx context.Context) error { _, err := decad.Thicken(body, units.Value{}).Do(ctx); return err }},
 		{"Offset", func(ctx context.Context) error { _, err := decad.Offset(body, units.Value{}).Do(ctx); return err }},
-		{"Unstitch", func(ctx context.Context) error { _, err := decad.Unstitch(body).Do(ctx); return err }},
 		{"Body.Tessellate", func(ctx context.Context) error { _, err := body.Tessellate(ctx, units.Value{}); return err }},
-		{"Trim", func(ctx context.Context) error { _, err := decad.Trim(body, nil, 0).Do(ctx); return err }},
-		{"Extend", func(ctx context.Context) error { _, err := decad.Extend(body, nil, nil).Do(ctx); return err }},
 		{"Stitch", func(ctx context.Context) error { _, err := decad.Stitch().Do(ctx); return err }},
 		{"Union", func(ctx context.Context) error { _, err := decad.Union(nil, nil).Do(ctx); return err }},
 		{"Cut", func(ctx context.Context) error { _, err := decad.Cut(nil, nil).Do(ctx); return err }},

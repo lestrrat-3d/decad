@@ -253,8 +253,8 @@ func TestFeatureCommandsRunOnceAndConsume(t *testing.T) {
 }
 
 // requireConsumed runs do again and requires the tagged ErrConsumed refusal
-// that changes nothing in doc.
-func requireConsumed(t *testing.T, do func(context.Context) (*decad.Body, error), doc *decad.Document, kind decad.OperationKind) {
+// that changes nothing in doc and returns no result.
+func requireConsumed[R any](t *testing.T, do func(context.Context) (R, error), doc *decad.Document, kind decad.OperationKind) {
 	t.Helper()
 	bodies := doc.Bodies()
 	again, err := do(t.Context())
