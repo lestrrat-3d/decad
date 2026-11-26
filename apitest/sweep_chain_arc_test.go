@@ -100,7 +100,7 @@ func TestSweepChainSingleArcNoncardinalAndReflectedMesh(t *testing.T) {
 	require.NoError(t, err)
 	flip, err := r3.Reflection(plane)
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), base, flip)
+	placed, err := decad.Transform(base, flip).Do(t.Context())
 	require.NoError(t, err)
 	reflected, err := placed.Tessellate(t.Context(), units.Millimeters(0.1),
 		decad.WithVerification(decad.VerifyAll))

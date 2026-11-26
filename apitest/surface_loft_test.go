@@ -275,17 +275,17 @@ func TestSurfaceLoftStaysASheetThroughPlacement(t *testing.T) {
 
 	motion, err := r3.Translation(r3.NewVec(50, 0, 0))
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), sheet, motion)
+	placed, err := decad.Transform(sheet, motion).Do(t.Context())
 	require.NoError(t, err)
 	requireSheetWithFreeEdges(t, placed)
 
-	dup, err := decad.Copy(t.Context(), placed)
+	dup, err := decad.Copy(placed).Do(t.Context())
 	require.NoError(t, err)
 	requireSheetWithFreeEdges(t, dup)
 
 	copyMotion, err := r3.Translation(r3.NewVec(0, 50, 0))
 	require.NoError(t, err)
-	copied, err := decad.Copy(t.Context(), dup, decad.WithCopyPlacement(copyMotion))
+	copied, err := decad.Copy(dup).Place(decad.CopyTransform{Transform: copyMotion}).Do(t.Context())
 	require.NoError(t, err)
 	requireSheetWithFreeEdges(t, copied)
 }
@@ -420,7 +420,7 @@ func TestSurfaceLoftTessellationRestatesWalls(t *testing.T) {
 	}
 	rotation, err := r3.Rotation(r3.NewVec(1, 2, 3), units.Degrees(37))
 	require.NoError(t, err)
-	placed, err := decad.Copy(t.Context(), sheet, decad.WithCopyPlacement(rotation))
+	placed, err := decad.Copy(sheet).Place(decad.CopyTransform{Transform: rotation}).Do(t.Context())
 	require.NoError(t, err)
 	placedArea, err := placed.Area()
 	require.NoError(t, err)

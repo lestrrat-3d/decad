@@ -183,7 +183,7 @@ func TestHoleOnRotatedPlate(t *testing.T) {
 	_, plate := drillPlate(t)
 	turn, err := r3.RotationAround(r3.Vec{}, r3.NewVec(0, 1, 0), units.Degrees(90))
 	require.NoError(t, err)
-	turned, err := decad.Transform(t.Context(), plate, turn)
+	turned, err := decad.Transform(plate, turn).Do(t.Context())
 	require.NoError(t, err)
 	// The top cap (z = 10) turns to x = 10; its centre (10, 10, 10) maps to
 	// (10, 10, -10).

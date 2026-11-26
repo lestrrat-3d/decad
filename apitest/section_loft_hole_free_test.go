@@ -79,7 +79,7 @@ func TestSectionDirectHoleFreeLoftRefusesUnprovedCases(t *testing.T) {
 	})
 	move, err := r3.Translation(r3.NewVec(10, 0, 0))
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), source, move)
+	placed, err := decad.Transform(source, move).Do(t.Context())
 	require.NoError(t, err)
 	requireDirectLoftSectionUnsupported(t, placed, r3.NewVec(0, 0, 1))
 }

@@ -112,12 +112,12 @@ func TestPathPatternArcAround(t *testing.T) {
 		Axis: r3.NewVec(0, 0, 1), End: r3.NewVec(-10, 0, 0),
 	})
 	require.NoError(t, err)
-	copies, err := decad.PathPattern(t.Context(), block, path, decad.WithPathCount(3))
+	copies, err := decad.PathPattern(block, path, decad.PathCount{Count: 3}).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, copies, 2)
 	requireBoundsNear(t, copies[0], r3.NewVec(-10, 10, 0), r3.NewVec(-6, 14, 2))
 	requireBoundsNear(t, copies[1], r3.NewVec(-20, 0, 0), r3.NewVec(-16, 4, 2))
-	spaced, err := decad.PathPattern(t.Context(), block, path, decad.WithPathSpacing(units.Millimeters(5*math.Pi)))
+	spaced, err := decad.PathPattern(block, path, decad.PathSpacing{Spacing: units.Millimeters(5 * math.Pi)}).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, spaced, 2)
 	requireBoundsNear(t, spaced[0], r3.NewVec(-10, 10, 0), r3.NewVec(-6, 14, 2))
@@ -125,14 +125,14 @@ func TestPathPatternArcAround(t *testing.T) {
 		Axis: r3.NewVec(0, 0, -7), End: r3.NewVec(-10, 0, 0),
 	})
 	require.NoError(t, err)
-	reversed, err := decad.PathPattern(t.Context(), block, reverse, decad.WithPathCount(3))
+	reversed, err := decad.PathPattern(block, reverse, decad.PathCount{Count: 3}).Do(t.Context())
 	require.NoError(t, err)
 	requireBoundsNear(t, reversed[0], r3.NewVec(-10, -10, 0), r3.NewVec(-6, -6, 2))
 	quarter, err := decad.NewPath(r3.NewVec(10, 0, 0), decad.ArcAround{
 		Axis: r3.NewVec(0, 0, 1), End: r3.NewVec(0, 10, 0),
 	})
 	require.NoError(t, err)
-	follow, err := decad.PathPattern(t.Context(), block, quarter, decad.WithPathCount(2), decad.WithPathFollow())
+	follow, err := decad.PathPattern(block, quarter, decad.PathCount{Count: 2}).Follow().Do(t.Context())
 	require.NoError(t, err)
 	lo, hi := turnedBlockBounds(math.Pi/2, r3.Vec{})
 	requireBoundsNear(t, follow[0], lo, hi)
@@ -144,7 +144,7 @@ func TestPathPatternArcAroundUnrepresentableSampler(t *testing.T) {
 		Axis: r3.NewVec(0, 0, 1), End: r3.NewVec(-math.SmallestNonzeroFloat64, 0, 0),
 	})
 	require.NoError(t, err)
-	_, err = decad.PathPattern(t.Context(), block, path, decad.WithPathCount(3))
+	_, err = decad.PathPattern(block, path, decad.PathCount{Count: 3}).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 	require.Equal(t, []*decad.Body{block}, doc.Bodies())
 }

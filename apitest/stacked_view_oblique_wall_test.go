@@ -82,7 +82,7 @@ func TestStackedViewObliqueWallTag(t *testing.T) {
 	}
 
 	// The mesh Cut below retires part, so the Chamfer subtest reads its own copy.
-	chamferPart, err := decad.Copy(t.Context(), part)
+	chamferPart, err := decad.Copy(part).Do(t.Context())
 	require.NoError(t, err)
 
 	t.Run("the uncharged twin states no tilt", func(t *testing.T) {

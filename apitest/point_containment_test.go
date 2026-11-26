@@ -94,7 +94,7 @@ func TestPointLocationOnFacetedAndPlacedBodies(t *testing.T) {
 
 	rotation, err := r3.Rotation(r3.NewVec(1, 2, 3), units.Degrees(37))
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), part, rotation)
+	placed, err := decad.Transform(part, rotation).Do(t.Context())
 	require.NoError(t, err)
 	for _, tc := range []struct {
 		at   r3.Vec

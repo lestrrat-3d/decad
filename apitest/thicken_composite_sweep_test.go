@@ -125,7 +125,7 @@ func TestThickenCompositeSweepSheetKeepsR24(t *testing.T) {
 		require.NoError(t, err)
 		move, err := r3.Translation(r3.NewVec(3, 2, 1))
 		require.NoError(t, err)
-		placed, err := decad.Transform(t.Context(), sheet, move)
+		placed, err := decad.Transform(sheet, move).Do(t.Context())
 		require.NoError(t, err)
 		_, err = decad.Thicken(placed, units.Millimeters(0.2)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)

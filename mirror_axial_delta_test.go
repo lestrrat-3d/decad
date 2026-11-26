@@ -45,13 +45,13 @@ func TestMirrorFaceStatedAxialDelta(t *testing.T) {
 	t.Run("a stated displacement is unsupported", func(t *testing.T) {
 		t.Parallel()
 		body, plane := setup(t, 1e-6)
-		_, err := MirroredCopy(t.Context(), body, plane)
+		_, err := MirroredCopy(body, plane).Do(t.Context())
 		require.ErrorIs(t, err, ErrUnsupported)
 	})
 	t.Run("a unit-conversion sized delta still mirrors", func(t *testing.T) {
 		t.Parallel()
 		body, plane := setup(t, 2.9e-16)
-		img, err := MirroredCopy(t.Context(), body, plane)
+		img, err := MirroredCopy(body, plane).Do(t.Context())
 		require.NoError(t, err)
 		box, err := img.Bounds()
 		require.NoError(t, err)

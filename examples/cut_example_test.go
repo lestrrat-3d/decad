@@ -64,7 +64,7 @@ func Example_cut() {
 		fmt.Printf("failed to build translation: %s\n", err)
 		return
 	}
-	tool, err := decad.Transform(context.Background(), pin, down)
+	tool, err := decad.Transform(pin, down).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to move tool: %s\n", err)
 		return

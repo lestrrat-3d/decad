@@ -105,7 +105,7 @@ func TestVerifyReportForBody(t *testing.T) {
 	// membership nor liveness.
 	shift, err := r3.Translation(r3.NewVec(500, 0, 0))
 	require.NoError(t, err)
-	_, err = decad.Transform(t.Context(), body, shift)
+	_, err = decad.Transform(body, shift).Do(t.Context())
 	require.NoError(t, err)
 	stillResolves, err := report.ForBody(body)
 	require.NoError(t, err)
@@ -252,7 +252,7 @@ func TestVerifyDisjointPairIsSound(t *testing.T) {
 	doc, body := extrudePlate(t)
 	shift, err := r3.Translation(r3.NewVec(500, 0, 0))
 	require.NoError(t, err)
-	_, err = decad.Transform(t.Context(), body, shift)
+	_, err = decad.Transform(body, shift).Do(t.Context())
 	require.NoError(t, err)
 
 	s, p := plateSketch(t)
@@ -275,7 +275,7 @@ func TestVerifyTouchingBoxesAreDisjoint(t *testing.T) {
 	doc, body := extrudePlate(t)
 	shift, err := r3.Translation(r3.NewVec(100, 0, 0))
 	require.NoError(t, err)
-	_, err = decad.Transform(t.Context(), body, shift)
+	_, err = decad.Transform(body, shift).Do(t.Context())
 	require.NoError(t, err)
 
 	s, p := plateSketch(t)
@@ -367,7 +367,7 @@ func TestVerifyClearancesMeasureBoxProvenPair(t *testing.T) {
 	doc, body := extrudePlate(t)
 	shift, err := r3.Translation(r3.NewVec(500, 0, 0))
 	require.NoError(t, err)
-	_, err = decad.Transform(t.Context(), body, shift)
+	_, err = decad.Transform(body, shift).Do(t.Context())
 	require.NoError(t, err)
 	s, p := plateSketch(t)
 	_, err = decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
@@ -548,7 +548,7 @@ func TestVerifyCoversLiveBodiesOnly(t *testing.T) {
 	doc, body := extrudePlate(t)
 	shift, err := r3.Translation(r3.NewVec(500, 0, 0))
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), body, shift)
+	placed, err := decad.Transform(body, shift).Do(t.Context())
 	require.NoError(t, err)
 
 	// The original was retired by the placement: it stays readable but it
@@ -899,7 +899,7 @@ func coplanarContactPairDocument(t *testing.T) *decad.Document {
 
 	shift, err := r3.Translation(r3.NewVec(0, 5, 5))
 	require.NoError(t, err)
-	_, err = decad.Transform(t.Context(), roundTrip(t, box2), shift)
+	_, err = decad.Transform(roundTrip(t, box2), shift).Do(t.Context())
 	require.NoError(t, err)
 	return doc
 }
@@ -925,7 +925,7 @@ func TestVerifyReadsTheCoplanarPairAsInterferingWithAGapTolerance(t *testing.T) 
 	require.NoError(t, err)
 	shift, err := r3.Translation(r3.NewVec(0, 5, 5))
 	require.NoError(t, err)
-	_, err = decad.Transform(t.Context(), box2, shift)
+	_, err = decad.Transform(box2, shift).Do(t.Context())
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context())
@@ -1105,7 +1105,7 @@ func TestVerifyDiagnosticsUndecidedClearance(t *testing.T) {
 	require.NoError(t, err)
 	far, err := r3.Translation(r3.NewVec(500, 0, 0))
 	require.NoError(t, err)
-	_, err = decad.Transform(t.Context(), cup1, far)
+	_, err = decad.Transform(cup1, far).Do(t.Context())
 	require.NoError(t, err)
 	s2, p2 := plateSketch(t)
 	box2, err := decad.Extrude(doc, s2, p2, decad.Distance{D: units.Millimeters(shellBoxHeight), Dir: decad.Along}).Do(t.Context())
@@ -1270,7 +1270,7 @@ func TestVerifyToleranceGateTracksScaleAndPlacement(t *testing.T) {
 			require.NoError(t, err)
 			placement, err := rotation.Then(translation)
 			require.NoError(t, err)
-			placed, err := decad.Transform(t.Context(), body, placement)
+			placed, err := decad.Transform(body, placement).Do(t.Context())
 			require.NoError(t, err)
 
 			report, err := doc.Verify(t.Context())

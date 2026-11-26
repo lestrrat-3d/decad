@@ -26,22 +26,22 @@ func TestTranslatedBlindCutKeepsThinFloor(t *testing.T) {
 	require.NoError(t, err)
 	xb, err := r3.FromFrame(frameB)
 	require.NoError(t, err)
-	target, err = decad.Transform(t.Context(), target, xa)
+	target, err = decad.Transform(target, xa).Do(t.Context())
 	require.NoError(t, err)
-	tool, err = decad.Transform(t.Context(), tool, xb)
+	tool, err = decad.Transform(tool, xb).Do(t.Context())
 	require.NoError(t, err)
 	for _, operation := range []func() (*decad.Body, error){
 		func() (*decad.Body, error) {
-			a, err := decad.Copy(t.Context(), target)
+			a, err := decad.Copy(target).Do(t.Context())
 			require.NoError(t, err)
-			b, err := decad.Copy(t.Context(), tool)
+			b, err := decad.Copy(tool).Do(t.Context())
 			require.NoError(t, err)
 			return decad.Intersect(a, b).Do(t.Context())
 		},
 		func() (*decad.Body, error) {
-			a, err := decad.Copy(t.Context(), target)
+			a, err := decad.Copy(target).Do(t.Context())
 			require.NoError(t, err)
-			b, err := decad.Copy(t.Context(), tool)
+			b, err := decad.Copy(tool).Do(t.Context())
 			require.NoError(t, err)
 			return decad.Union(a, b).Do(t.Context())
 		},

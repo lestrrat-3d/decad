@@ -113,7 +113,7 @@ func (sc revolvePlaneScene) build(ctx, control context.Context, t *testing.T) (*
 	var controlErr error
 	for i := range sc.holes {
 		if sc.copyEach {
-			body, err = Copy(ctx, body)
+			body, err = Copy(body).Do(ctx)
 			require.NoError(t, err)
 		}
 		x, y := sc.holeCentre(i)

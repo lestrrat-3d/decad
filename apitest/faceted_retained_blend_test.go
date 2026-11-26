@@ -54,7 +54,7 @@ func zCylinderAt(t *testing.T, sc *retentionScene, cx, cy, r, z0, z1 float64) *d
 	require.NoError(t, err)
 	move, err := r3.Translation(r3.Vec{Z: z0 + 0.001})
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), pin, move)
+	placed, err := decad.Transform(pin, move).Do(t.Context())
 	require.NoError(t, err)
 	return placed
 }
@@ -311,7 +311,7 @@ func TestFacetedRetainedBlend(t *testing.T) {
 		require.NoError(t, err)
 		move, err := r3.Translation(r3.Vec{Y: 0.001})
 		require.NoError(t, err)
-		hole, err := decad.Transform(t.Context(), pin, move)
+		hole, err := decad.Transform(pin, move).Do(t.Context())
 		require.NoError(t, err)
 		// The shaft runs down from its top cap and is lifted by 20.001, so the
 		// cap's level is the exact float 0 + 20.001. Lifted from its foot
@@ -389,7 +389,7 @@ func TestFacetedRetainedBlend(t *testing.T) {
 		require.NoError(t, err)
 		move, err := r3.Translation(r3.Vec{X: 5, Y: -2, Z: 7})
 		require.NoError(t, err)
-		moved, err := decad.Transform(t.Context(), cut, move)
+		moved, err := decad.Transform(cut, move).Do(t.Context())
 		require.NoError(t, err)
 		tori := 0
 		for _, f := range moved.Faces() {
@@ -696,7 +696,7 @@ func TestFacetedRetainedBlendStraight(t *testing.T) {
 		require.NoError(t, err)
 		shift, err := r3.Translation(r3.Vec{Y: 10})
 		require.NoError(t, err)
-		prism, err = decad.Transform(t.Context(), prism, shift)
+		prism, err = decad.Transform(prism, shift).Do(t.Context())
 		require.NoError(t, err)
 		bored, err := decad.Cut(prism, zCylinder(t, sc, -30)).Do(t.Context())
 		require.NoError(t, err)
@@ -747,7 +747,7 @@ func TestFacetedRetainedBlendStraight(t *testing.T) {
 			require.NoError(t, err)
 			lift, err := r3.Translation(r3.Vec{Z: 15})
 			require.NoError(t, err)
-			wall, err = decad.Transform(t.Context(), wall, lift)
+			wall, err = decad.Transform(wall, lift).Do(t.Context())
 			require.NoError(t, err)
 			joined, err := decad.Union(plate, wall).Do(t.Context())
 			require.NoError(t, err)
@@ -842,7 +842,7 @@ func TestFacetedRetainedBlendStraight(t *testing.T) {
 		require.NoError(t, err)
 		move, err := r3.Translation(r3.Vec{X: 5, Y: -2, Z: 7})
 		require.NoError(t, err)
-		moved, err := decad.Transform(t.Context(), cut, move)
+		moved, err := decad.Transform(cut, move).Do(t.Context())
 		require.NoError(t, err)
 		cylinders := 0
 		for _, f := range moved.Faces() {
@@ -875,7 +875,7 @@ func groovedPlate(t *testing.T) *decad.Body {
 	require.NoError(t, err)
 	shift, err := r3.Translation(r3.Vec{X: 20})
 	require.NoError(t, err)
-	tool, err = decad.Transform(t.Context(), tool, shift)
+	tool, err = decad.Transform(tool, shift).Do(t.Context())
 	require.NoError(t, err)
 	grooved, err := decad.Cut(plate, tool).Do(t.Context())
 	require.NoError(t, err)
@@ -909,7 +909,7 @@ func rodOnPlate(t *testing.T, sc *retentionScene) *decad.Body {
 	require.NoError(t, err)
 	shift, err := r3.Translation(r3.Vec{X: 10})
 	require.NoError(t, err)
-	rod, err = decad.Transform(t.Context(), rod, shift)
+	rod, err = decad.Transform(rod, shift).Do(t.Context())
 	require.NoError(t, err)
 	joined, err := decad.Union(plate, rod).Do(t.Context())
 	require.NoError(t, err)
@@ -1206,7 +1206,7 @@ func TestFacetedRetainedBlendArc(t *testing.T) {
 		require.NoError(t, err)
 		lift, err := r3.Translation(r3.Vec{Z: 0.001})
 		require.NoError(t, err)
-		slab, err = decad.Transform(t.Context(), slab, lift)
+		slab, err = decad.Transform(slab, lift).Do(t.Context())
 		require.NoError(t, err)
 		flat, err := decad.Cut(rod, slab).Do(t.Context())
 		require.NoError(t, err)

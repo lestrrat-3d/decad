@@ -182,7 +182,7 @@ func TestStackedBrepViewFilletChargedWall(t *testing.T) {
 	// which is not safe for concurrent use, so the subtests run in turn.
 	copies := make([]*decad.Body, 3)
 	for i := range copies {
-		copies[i], err = decad.Copy(t.Context(), filleted)
+		copies[i], err = decad.Copy(filleted).Do(t.Context())
 		require.NoError(t, err)
 	}
 

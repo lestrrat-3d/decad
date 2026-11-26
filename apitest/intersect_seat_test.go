@@ -43,7 +43,7 @@ func seatPlate(t *testing.T, sc *tcScene) *decad.Body {
 
 func seatCopy(t *testing.T, b *decad.Body) *decad.Body {
 	t.Helper()
-	c, err := decad.Copy(t.Context(), b)
+	c, err := decad.Copy(b).Do(t.Context())
 	require.NoError(t, err)
 	return c
 }
@@ -127,9 +127,9 @@ func TestIntersectSeat(t *testing.T) {
 		sc := newSeatScene()
 		turn, err := r3.Rotation(r3.NewVec(1, 2, 3), units.Degrees(31))
 		require.NoError(t, err)
-		plate, err := decad.Transform(t.Context(), seatPlate(t, sc), turn)
+		plate, err := decad.Transform(seatPlate(t, sc), turn).Do(t.Context())
 		require.NoError(t, err)
-		block, err := decad.Transform(t.Context(), tcCut(t, seatBox(t, sc, -4, -4, 6, 4, 4, 9), seatDisc(t, sc, 2.5, 5, 10)), turn)
+		block, err := decad.Transform(tcCut(t, seatBox(t, sc, -4, -4, 6, 4, 4, 9), seatDisc(t, sc, 2.5, 5, 10)), turn).Do(t.Context())
 		require.NoError(t, err)
 		_, err = decad.Intersect(seatCopy(t, plate), seatCopy(t, block)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
@@ -145,7 +145,7 @@ func TestIntersectPlacedSeat(t *testing.T) {
 		t.Helper()
 		turn, err := r3.Rotation(axis, units.Degrees(deg))
 		require.NoError(t, err)
-		out, err := decad.Transform(t.Context(), b, turn)
+		out, err := decad.Transform(b, turn).Do(t.Context())
 		require.NoError(t, err)
 		return out
 	}
@@ -181,7 +181,7 @@ func TestIntersectPlacedSeat(t *testing.T) {
 		sc := newSeatScene()
 		lift, err := r3.Translation(r3.NewVec(0, 0, 1e-30))
 		require.NoError(t, err)
-		plate, err := decad.Transform(t.Context(), seatPlate(t, sc), lift)
+		plate, err := decad.Transform(seatPlate(t, sc), lift).Do(t.Context())
 		require.NoError(t, err)
 		block := tcCut(t, seatBox(t, sc, -4, -4, 6, 4, 4, 9), seatDisc(t, sc, 2.5, 5, 10))
 		for _, ops := range [][2]*decad.Body{{block, plate}, {plate, block}} {
@@ -210,7 +210,7 @@ func TestIntersectSeatWithinGapTolerance(t *testing.T) {
 		t.Helper()
 		turn, err := r3.Rotation(r3.NewVec(1, 0, 0), units.Degrees(31))
 		require.NoError(t, err)
-		out, err := decad.Transform(t.Context(), b, turn)
+		out, err := decad.Transform(b, turn).Do(t.Context())
 		require.NoError(t, err)
 		return out
 	}

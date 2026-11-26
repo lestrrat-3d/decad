@@ -72,7 +72,7 @@ func TestScaledAtUnmarkedFacetedSolid(t *testing.T) {
 		}
 		require.Equal(t, 4, nurbs)
 		anchor := r3.NewVec(1, -2, 3)
-		scaled, err := decad.ScaledAt(t.Context(), body, anchor, units.Scalar(10))
+		scaled, err := decad.ScaledAt(body, anchor, units.Scalar(10)).Do(t.Context())
 		require.NoError(t, err)
 		require.Equal(t, []*decad.Body{scaled}, doc.Bodies())
 
@@ -111,11 +111,11 @@ func TestScaledAtUnmarkedFacetedSolid(t *testing.T) {
 		require.NoError(t, err)
 		move, err := r3.Translation(r3.NewVec(4, 0, -2))
 		require.NoError(t, err)
-		placed, err := decad.Transform(t.Context(), body, move)
+		placed, err := decad.Transform(body, move).Do(t.Context())
 		require.NoError(t, err)
-		first, err := decad.ScaledAt(t.Context(), placed, r3.NewVec(0, 1, 0), units.Scalar(3))
+		first, err := decad.ScaledAt(placed, r3.NewVec(0, 1, 0), units.Scalar(3)).Do(t.Context())
 		require.NoError(t, err)
-		scaled, err := decad.ScaledAt(t.Context(), first, r3.NewVec(-2, 0, 5), units.Scalar(0.5))
+		scaled, err := decad.ScaledAt(first, r3.NewVec(-2, 0, 5), units.Scalar(0.5)).Do(t.Context())
 		require.NoError(t, err)
 		require.Equal(t, []*decad.Body{scaled}, doc.Bodies())
 
@@ -142,7 +142,7 @@ func TestScaledAtUnmarkedFacetedSolid(t *testing.T) {
 		drilled := crossDrilled(t)
 		filleted, err := decad.Fillet(drilled, topFront(), units.Millimeters(1)).TangentChain().Do(t.Context())
 		require.NoError(t, err)
-		scaled, err := decad.ScaledAt(t.Context(), filleted, r3.NewVec(1, 2, 3), units.Scalar(2))
+		scaled, err := decad.ScaledAt(filleted, r3.NewVec(1, 2, 3), units.Scalar(2)).Do(t.Context())
 		require.NoError(t, err)
 		require.Len(t, scaled.Document().Bodies(), 1)
 
@@ -185,7 +185,7 @@ func TestScaledAtUnmarkedFacetedSolid(t *testing.T) {
 		doc := decad.New()
 		body, err := decad.LoftFromPoint(doc, r3.Vec{}, s, profile).Do(t.Context())
 		require.NoError(t, err)
-		scaled, err := decad.ScaledAt(t.Context(), body, r3.Vec{}, units.Scalar(3))
+		scaled, err := decad.ScaledAt(body, r3.Vec{}, units.Scalar(3)).Do(t.Context())
 		require.NoError(t, err)
 		require.Equal(t, []*decad.Body{scaled}, doc.Bodies())
 

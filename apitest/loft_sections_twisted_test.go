@@ -290,7 +290,7 @@ func TestLoftSectionsTwistedRibbonKeepsVolumeAndMeshProof(t *testing.T) {
 	// A rigid motion keeps the body usable and its readings.
 	motion, err := r3.RotationAround(r3.NewVec(1, 2, 3), r3.NewVec(1, 1, 0), units.Radians(0.7))
 	require.NoError(t, err)
-	moved, err := decad.Copy(t.Context(), body, decad.WithCopyPlacement(motion))
+	moved, err := decad.Copy(body).Place(decad.CopyTransform{Transform: motion}).Do(t.Context())
 	require.NoError(t, err)
 	movedVolume, err := moved.Volume()
 	require.NoError(t, err)
@@ -322,7 +322,7 @@ func TestLoftSectionsTwistedThreeSectionsFallBackToTwistedRoute(t *testing.T) {
 
 	move, err := r3.Translation(r3.NewVec(20, 0, 0))
 	require.NoError(t, err)
-	placed, err := decad.Copy(t.Context(), body, decad.WithCopyPlacement(move))
+	placed, err := decad.Copy(body).Place(decad.CopyTransform{Transform: move}).Do(t.Context())
 	require.NoError(t, err)
 	placedMesh, err := placed.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
 	require.NoError(t, err)

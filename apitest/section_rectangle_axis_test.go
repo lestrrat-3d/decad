@@ -66,7 +66,7 @@ func TestSectionCardinalRectanglePlacementAndAxisSense(t *testing.T) {
 		EX: r3.Vec{Y: 1}, EY: r3.Vec{X: -1}, EZ: r3.Vec{Z: 1},
 	}, r3.NewVec(20, 30, 7))
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), source, placement)
+	placed, err := decad.Transform(source, placement).Do(t.Context())
 	require.NoError(t, err)
 	for _, tc := range []struct {
 		name   string

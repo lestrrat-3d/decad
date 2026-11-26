@@ -157,7 +157,7 @@ func TestShellSideOpeningUChannel(t *testing.T) {
 		// Table DO's DO12: a placement re-lifts every face.
 		rotation, err := r3.Rotation(r3.NewVec(1, 2, 3), units.Degrees(37))
 		require.NoError(t, err)
-		placed, err := decad.Transform(t.Context(), body, rotation)
+		placed, err := decad.Transform(body, rotation).Do(t.Context())
 		require.NoError(t, err)
 		require.Len(t, placed.Faces(), 11)
 		requireVolumeNear(t, placed, 4352)
@@ -321,7 +321,7 @@ func TestShellSideOpeningRefusals(t *testing.T) {
 			require.ErrorIs(t, err, tc.want)
 			require.ErrorContains(t, err, tc.text)
 			require.Equal(t, before.bodies, doc.Bodies())
-			_, err = decad.Copy(t.Context(), box)
+			_, err = decad.Copy(box).Do(t.Context())
 			require.NoError(t, err, "the receiver stays live")
 		})
 	}
@@ -359,7 +359,7 @@ func TestShellSideOpeningObliqueRefusals(t *testing.T) {
 			require.ErrorIs(t, err, decad.ErrUnsupported)
 			require.ErrorContains(t, err, tc.text)
 			require.Equal(t, before.bodies, doc.Bodies())
-			_, err = decad.Copy(t.Context(), body)
+			_, err = decad.Copy(body).Do(t.Context())
 			require.NoError(t, err, "the receiver stays live")
 		})
 	}

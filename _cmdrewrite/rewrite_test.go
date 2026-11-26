@@ -252,3 +252,96 @@ func TestFeatures(t *testing.T) {
 		}
 	})
 }
+
+func TestPlacement(t *testing.T) {
+	const head = "package p\n\nimport \"github.com/lestrrat-3d/decad\"\n\nfunc f() {\n"
+	tests := []struct{ name, in, want string }{
+		{"transform", "_, _ = decad.Transform(ctx, b, t)", "_, _ = decad.Transform(b, t).Do(ctx)"},
+		{"copy", "_, _ = decad.Copy(ctx, b)", "_, _ = decad.Copy(b).Do(ctx)"},
+		{"copy placement", "_, _ = decad.Copy(ctx, b, decad.WithCopyPlacement(t))",
+			"_, _ = decad.Copy(b).Place(decad.CopyTransform{Transform: t}).Do(ctx)"},
+		{"copy rotation", "_, _ = decad.Copy(ctx, b, decad.WithCopyRotation(c, ax, a))",
+			"_, _ = decad.Copy(b).Place(decad.CopyRotation{Center: c, Axis: ax, Angle: a}).Do(ctx)"},
+		{"copy lift translation", "_, _ = decad.Copy(ctx, b, decad.WithCopyLiftTranslation(l, from, to))",
+			"_, _ = decad.Copy(b).Place(decad.CopyLiftTranslation{Lift: l, From: from, To: to}).Do(ctx)"},
+		{"copy repeated placement keeps the last", "_, _ = decad.Copy(ctx, b, decad.WithCopyPlacement(t), decad.WithCopyRotation(c, ax, a))",
+			"_, _ = decad.Copy(b).Place(decad.CopyTransform{Transform: t}).Place(decad.CopyRotation{Center: c, Axis: ax, Angle: a}).Do(ctx)"},
+		{"mirrored", "_, _ = decad.Mirrored(ctx, b, plane)", "_, _ = decad.Mirrored(b, plane).Do(ctx)"},
+		{"mirrored join", "_, _ = decad.Mirrored(ctx, b, plane, decad.WithJoin())", "_, _ = decad.MirroredJoin(b, plane).Do(ctx)"},
+		{"mirrored copy", "_, _ = decad.MirroredCopy(ctx, b, plane)", "_, _ = decad.MirroredCopy(b, plane).Do(ctx)"},
+		{"scaled at", "_, _ = decad.ScaledAt(ctx, b, anchor, f)", "_, _ = decad.ScaledAt(b, anchor, f).Do(ctx)"},
+		{"quarter turn", "_, _ = decad.QuarterTurn(ctx, b, ax, about, 1)", "_, _ = decad.QuarterTurn(b, ax, about, 1).Do(ctx)"},
+		{"stretch", "_, _ = decad.Stretch(ctx, b, anchor, x, y, z)", "_, _ = decad.Stretch(b, anchor, x, y, z).Do(ctx)"},
+		{"pattern copies", "_, _ = decad.PatternCopies(ctx, b, spec)", "_, _ = decad.PatternCopies(b, spec).Do(ctx)"},
+		{"patterned", "_, _ = decad.Patterned(ctx, b, spec)", "_, _ = decad.Patterned(b, spec).Do(ctx)"},
+		{"path pattern count", "_, _ = decad.PathPattern(ctx, b, path, decad.WithPathCount(4))",
+			"_, _ = decad.PathPattern(b, path, decad.PathCount{Count: 4}).Do(ctx)"},
+		{"path pattern spacing follow", "_, _ = decad.PathPattern(ctx, b, path, decad.WithPathFollow(), decad.WithPathSpacing(s))",
+			"_, _ = decad.PathPattern(b, path, decad.PathSpacing{Spacing: s}).Follow().Do(ctx)"},
+		{"path pattern pivot", "_, _ = decad.PathPattern(ctx, b, path, decad.WithPathCount(3), decad.WithPathPivot(p), decad.WithPathFollow())",
+			"_, _ = decad.PathPattern(b, path, decad.PathCount{Count: 3}).FollowAbout(p).Do(ctx)"},
+		{"arrange", "_, _ = decad.Arrange(ctx, bodies, bed)", "_, _ = decad.Arrange(bodies, bed).Do(ctx)"},
+		{"arrange options", "_, _ = decad.Arrange(ctx, bodies, bed, decad.WithArrangeTurns(), decad.WithArrangeAngle(a))",
+			"_, _ = decad.Arrange(bodies, bed).Turns().Angle(a).Do(ctx)"},
+		{"nested", "_, _ = decad.Transform(ctx, mustBody(decad.Copy(ctx, b)), t)",
+			"_, _ = decad.Transform(mustBody(decad.Copy(b).Do(ctx)), t).Do(ctx)"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			out, reports, err := rewriteFile("x.go", []byte(head+"\t"+tc.in+"\n}\n"), families["placement"], false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(reports) != 0 {
+				t.Fatalf("reports: %v", reports)
+			}
+			if want := head + "\t" + tc.want + "\n}\n"; string(out) != want {
+				t.Fatalf("got\n%s\nwant\n%s", out, want)
+			}
+		})
+	}
+	for name, call := range map[string]string{
+		"copy spread options":           "decad.Copy(ctx, b, opts...)",
+		"copy option variable":          "decad.Copy(ctx, b, opt)",
+		"copy placement wrong arity":    "decad.Copy(ctx, b, decad.WithCopyRotation(c, a))",
+		"mirrored option variable":      "decad.Mirrored(ctx, b, plane, opt)",
+		"path pattern no stations":      "decad.PathPattern(ctx, b, path, decad.WithPathFollow())",
+		"path pattern both stations":    "decad.PathPattern(ctx, b, path, decad.WithPathCount(3), decad.WithPathSpacing(s))",
+		"path pattern repeated count":   "decad.PathPattern(ctx, b, path, decad.WithPathCount(3), decad.WithPathCount(4))",
+		"path pattern pivot no follow":  "decad.PathPattern(ctx, b, path, decad.WithPathCount(3), decad.WithPathPivot(p))",
+		"path pattern spread options":   "decad.PathPattern(ctx, b, path, opts...)",
+		"arrange spread options":        "decad.Arrange(ctx, bodies, bed, opts...)",
+		"arrange spread angle":          "decad.Arrange(ctx, bodies, bed, decad.WithArrangeAngle(xs...))",
+		"transform with a stray option": "decad.Transform(ctx, b, t, opt)",
+	} {
+		t.Run("reported "+name, func(t *testing.T) {
+			in := head + "\t_, _ = " + call + "\n}\n"
+			out, reports, err := rewriteFile("x.go", []byte(in), families["placement"], false)
+			if err != nil || len(reports) != 1 || string(out) != in {
+				t.Fatalf("out %q reports %v err %v", out, reports, err)
+			}
+		})
+	}
+	t.Run("root bare call", func(t *testing.T) {
+		in := "package decad\n\nfunc f() {\n\t_, _ = Copy(ctx, b, WithCopyPlacement(t))\n}\n"
+		out, _, err := rewriteFile("x_test.go", []byte(in), families["placement"], true)
+		want := "package decad\n\nfunc f() {\n\t_, _ = Copy(b).Place(CopyTransform{Transform: t}).Do(ctx)\n}\n"
+		if err != nil || string(out) != want {
+			t.Fatalf("out %q err %v", out, err)
+		}
+	})
+	t.Run("root production file reported", func(t *testing.T) {
+		in := "package decad\n\nfunc f() {\n\t_, _ = Copy(ctx, b)\n}\n"
+		out, reports, err := rewriteFile("x.go", []byte(in), families["placement"], true)
+		if err != nil || len(reports) != 1 || string(out) != in {
+			t.Fatalf("out %q reports %v err %v", out, reports, err)
+		}
+	})
+	t.Run("new names are not old-API input", func(t *testing.T) {
+		in := head + "\t_, _ = decad.Copy(ctx, b, decad.CopyTransform{Transform: t})\n}\n"
+		out, reports, err := rewriteFile("x.go", []byte(in), families["placement"], false)
+		if err != nil || len(reports) != 1 || string(out) != in {
+			t.Fatalf("out %q reports %v err %v", out, reports, err)
+		}
+	})
+}

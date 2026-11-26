@@ -34,7 +34,7 @@ func TestUnionManyJoinsTwistedLoftTeethToADisc(t *testing.T) {
 		discVol, err := disc.Volume()
 		require.NoError(t, err)
 
-		copies, err := decad.PatternCopies(t.Context(), tooth, decad.CircularPattern{Axis: r3.Vec{Z: 1}, Count: tc.teeth})
+		copies, err := decad.PatternCopies(tooth, decad.CircularPattern{Axis: r3.Vec{Z: 1}, Count: tc.teeth}).Do(t.Context())
 		require.NoError(t, err)
 		joined, err := decad.Union(append([]*decad.Body{disc}, append([]*decad.Body{tooth}, copies...)...)...).Do(t.Context())
 		require.NoError(t, err, "teeth %d", tc.teeth)
@@ -80,7 +80,7 @@ func TestUnionManyJoinsTwistedLoftTeethWithRootsInsideTheDisc(t *testing.T) {
 		radius := tc.root + tc.offset
 		disc := circleBodyAtZ(t, doc, 0, radius, 0, height)
 
-		copies, err := decad.PatternCopies(t.Context(), tooth, decad.CircularPattern{Axis: r3.Vec{Z: 1}, Count: tc.teeth})
+		copies, err := decad.PatternCopies(tooth, decad.CircularPattern{Axis: r3.Vec{Z: 1}, Count: tc.teeth}).Do(t.Context())
 		require.NoError(t, err)
 		joined, err := decad.Union(append([]*decad.Body{disc}, append([]*decad.Body{tooth}, copies...)...)...).Do(t.Context())
 		require.NoError(t, err, "teeth %d", tc.teeth)

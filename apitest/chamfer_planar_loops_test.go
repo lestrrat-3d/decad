@@ -148,7 +148,7 @@ func TestChamferTangentOutlineAfterPinUnion(t *testing.T) {
 	doc, world := decad.New(), sketch.NewWorld()
 	plate := roundedTrianglePlate(t, doc, world, plateOrbit, plateRadius)
 	pin := pinBody(t, doc, world, plateOrbit, -9, 7.5, 9+1.5)
-	pins, err := decad.PatternCopies(t.Context(), pin, decad.CircularPattern{Center: r3.NewVec(0, 0, 0), Axis: r3.NewVec(0, 0, 1), Count: 3})
+	pins, err := decad.PatternCopies(pin, decad.CircularPattern{Center: r3.NewVec(0, 0, 0), Axis: r3.NewVec(0, 0, 1), Count: 3}).Do(t.Context())
 	require.NoError(t, err)
 	carrier, err := decad.Union(append([]*decad.Body{plate}, append([]*decad.Body{pin}, pins...)...)...).Do(t.Context())
 	require.NoError(t, err)

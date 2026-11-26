@@ -206,3 +206,17 @@ func TestFeatureConstructorsAreCommandConstructors(t *testing.T) {
 		require.Contains(t, constructors, name)
 	}
 }
+
+// TestPlacementConstructorsAreCommandConstructors fails when a placement or
+// pattern constructor stops returning a *<X>Command, which would drop it from
+// both lint checks above (agent-docs/command-api-design.md §12).
+func TestPlacementConstructorsAreCommandConstructors(t *testing.T) {
+	t.Parallel()
+	constructors := commandConstructorNames(t)
+	for _, name := range []string{
+		"Transform", "Copy", "Mirrored", "MirroredJoin", "MirroredCopy", "ScaledAt", "QuarterTurn", "Stretch",
+		"PatternCopies", "Patterned", "PathPattern", "Arrange",
+	} {
+		require.Contains(t, constructors, name)
+	}
+}

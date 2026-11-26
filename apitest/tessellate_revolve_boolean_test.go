@@ -185,7 +185,7 @@ func TestRevolveBooleanRefusesAShallowCrossing(t *testing.T) {
 		box := revolveBoxBody(t, doc, 1, 1, 7, 6, 4)
 		spun, err := r3.RotationAround(r3.Vec{X: 4, Y: 3.5}, r3.Vec{X: 1}, units.Radians(alpha))
 		require.NoError(t, err)
-		moved, err := decad.Transform(t.Context(), box, spun)
+		moved, err := decad.Transform(box, spun).Do(t.Context())
 		require.NoError(t, err)
 		_, err = decad.Union(cyl, moved).Do(t.Context())
 		return err

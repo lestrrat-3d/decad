@@ -15,7 +15,7 @@ import (
 func TestStretchScalesEachAxisOfAMeshSolid(t *testing.T) {
 	t.Parallel()
 	doc, block := blockSolid(t, r3.NewVec(0, 0, 0), r3.NewVec(10, 8, 6))
-	out, err := decad.Stretch(t.Context(), block, r3.NewVec(0, 0, 0), units.Scalar(2), units.Scalar(0.5), units.Scalar(3))
+	out, err := decad.Stretch(block, r3.NewVec(0, 0, 0), units.Scalar(2), units.Scalar(0.5), units.Scalar(3)).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, []*decad.Body{out}, doc.Bodies())
 	operations := doc.OperationHistory().Operations()
@@ -32,7 +32,7 @@ func TestStretchScalesEachAxisOfAMeshSolid(t *testing.T) {
 func TestStretchAboutAnAnchorAndOfAnLShape(t *testing.T) {
 	t.Parallel()
 	l := lPrismSolid(t)
-	out, err := decad.Stretch(t.Context(), l, r3.NewVec(2, 0, 0), units.Scalar(1.5), units.Scalar(1), units.Scalar(2))
+	out, err := decad.Stretch(l, r3.NewVec(2, 0, 0), units.Scalar(1.5), units.Scalar(1), units.Scalar(2)).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := out.Volume()
 	require.NoError(t, err)
@@ -49,7 +49,7 @@ func TestStretchAboutAnAnchorAndOfAnLShape(t *testing.T) {
 func TestStretchMirrorsOnANegativeFactor(t *testing.T) {
 	t.Parallel()
 	_, block := blockSolid(t, r3.NewVec(0, 0, 0), r3.NewVec(10, 8, 6))
-	out, err := decad.Stretch(t.Context(), block, r3.NewVec(0, 0, 0), units.Scalar(-1), units.Scalar(1), units.Scalar(1))
+	out, err := decad.Stretch(block, r3.NewVec(0, 0, 0), units.Scalar(-1), units.Scalar(1), units.Scalar(1)).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := out.Volume()
 	require.NoError(t, err)
@@ -65,15 +65,15 @@ func TestStretchRefusals(t *testing.T) {
 	one := units.Scalar(1)
 	o := r3.NewVec(0, 0, 0)
 	stretch := func(b *decad.Body, x, y, z units.Value) error {
-		_, err := decad.Stretch(t.Context(), b, o, x, y, z)
+		_, err := decad.Stretch(b, o, x, y, z).Do(t.Context())
 		return err
 	}
 	require.ErrorIs(t, stretch(block, units.Scalar(0), one, one), decad.ErrDegenerate)
 	require.ErrorIs(t, stretch(block, units.Millimeters(2), one, one), decad.ErrUnitKind)
 	require.ErrorIs(t, stretch(block, units.Scalar(math.Inf(1)), one, one), decad.ErrNotFinite)
-	_, err := decad.Stretch(t.Context(), block, r3.NewVec(math.NaN(), 0, 0), one, one, one)
+	_, err := decad.Stretch(block, r3.NewVec(math.NaN(), 0, 0), one, one, one).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrNotFinite)
-	_, err = decad.Stretch(nil, block, o, one, one, one) //nolint:staticcheck // a nil context is the case under test
+	_, err = decad.Stretch(block, o, one, one, one).Do(nil) //nolint:staticcheck // a nil context is the case under test
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 	prism := boxBody(t, doc, 30, 0, 40, 8, 6)
 	require.ErrorIs(t, stretch(prism, units.Scalar(2), one, one), decad.ErrUnsupported)

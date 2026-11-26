@@ -14,10 +14,16 @@ type ArrangeBed struct {
     Height       units.Value
 }
 
-func Arrange(ctx context.Context, bodies []*Body, bed ArrangeBed, opts ...ArrangeOption) ([]*Body, error)
-func WithArrangeTurns() ArrangeOption
-func WithArrangeAngle(step units.Value) ArrangeOption
+func Arrange(bodies []*Body, bed ArrangeBed) *ArrangeCommand
+func (c *ArrangeCommand) Turns() *ArrangeCommand
+func (c *ArrangeCommand) Angle(step units.Value) *ArrangeCommand
+func (c *ArrangeCommand) Do(ctx context.Context) ([]*Body, error)
 ```
+
+`Arrange` is an operation command (`agent-docs/command-api-design.md`). The constructor copies `bodies` and records an
+empty slice or a nil first body, named `bodies`, which `Do` returns after the nil-ctx check. `Angle` stores its
+step and the fault validating it, and `Do` refuses that fault after the empty and nil-first-body refusals and before G3's liveness checks. Every error carries
+`OperationTransform`.
 
 | Decision | Rule |
 |---|---|
@@ -25,8 +31,8 @@ func WithArrangeAngle(step units.Value) ArrangeOption
 | G2 | `Width` and `Depth` are positive lengths and `Gap` is a non-negative length. A zero size is `ErrDegenerate`, a negative value is `ErrNegativeMagnitude`, and a wrong unit kind is `ErrUnitKind`. |
 | G3 | `bodies` is non-empty, holds no nil, no repeat and no retired body, and every body belongs to one document. A violation is `ErrDegenerate`, `ErrRetiredBody` or `ErrForeignBody`. |
 | G4 | Each body's footprint is its `Bounds` box grown by the box's own `Bound` on every side, so two bodies whose proven boxes are `Gap` apart are never closer. The footprint is the extent along X and Y. |
-| G5 | Each body moves by one translation. Its minimum Z lands on `Origin.Z`, and its footprint lands at the position `arrangeplan.Pack` gives. No body turns unless `WithArrangeTurns` is given (§5). |
-| G6 | The result holds the moved bodies in the order given, and the inputs are retired through `Transform`, so each move is an `OperationTransform` history entry. |
+| G5 | Each body moves by one translation. Its minimum Z lands on `Origin.Z`, and its footprint lands at the position `arrangeplan.Pack` gives. No body turns unless `Turns` is given (§5). |
+| G6 | The result holds the moved bodies in the order given, and the inputs are retired through the `Transform` implementation, so each move is an `OperationTransform` history entry. |
 | G7 | Bodies that do not all fit are `ErrDegenerate` and no body moves. The plan is complete before the first move. |
 
 ## 2. Packing
@@ -53,7 +59,7 @@ Every refusal G2, G3 and G7 name is raised before the first move.
 
 ## 5. Quarter turns
 
-`WithArrangeTurns` lets `Arrange` turn bodies a quarter turn about +Z. `arrangeplan.PackTurning` chooses which.
+`Turns` lets `Arrange` turn bodies a quarter turn about +Z. `arrangeplan.PackTurning` chooses which.
 
 | Decision | Rule |
 |---|---|
@@ -61,11 +67,11 @@ Every refusal G2, G3 and G7 name is raised before the first move.
 | T2 | A body that turns is rotated a quarter turn counter-clockwise about +Z through its bounding box's minimum corner. Its bounds are then read again and one translation places it, as G5 says. |
 | T3 | A turned body costs two `OperationTransform` entries, the turn and the move. An unturned body costs one. |
 | T4 | A turn changes no volume. The footprint is read from the turned body's own bounds, grown by the bound of that box. |
-| T5 | A nil option is `ErrDegenerate`. Bodies that fit neither way are `ErrDegenerate` and none moves. |
+| T5 | Bodies that fit neither way are `ErrDegenerate` and none moves. A second `Turns` call changes nothing. |
 
 ## 6. Free angles
 
-`WithArrangeAngle` turns each body about +Z to the angle that makes its bounding-box footprint smallest. It reads
+`Angle` turns each body about +Z to the angle that makes its bounding-box footprint smallest. It reads
 each trial's footprint from a copy of the body, so it needs no geometry of its own.
 
 | Decision | Rule |
@@ -73,9 +79,9 @@ each trial's footprint from a copy of the body, so it needs no geometry of its o
 | A1 | The angles tried are the multiples of `step` from zero below a quarter turn. A further quarter turn swaps a footprint's width and depth and keeps its area, so nothing past it is tried. |
 | A2 | The footprint of an angle is the bounding box of a `Copy` turned by it about the body's bounding-box centre, grown on every side by that box's own bound as in G4. The copy is retired once read. Angle zero reads the body itself. |
 | A3 | The least footprint area wins, and the least angle among equals, so a body square to the axes does not turn. A step that misses the best angle gets the best multiple, which can leave a set refused that a finer step fits. |
-| A4 | A chosen angle is a `Transform` about the bounding-box centre before the move, so a turned body costs two `OperationTransform` entries as in T3. The probe copies add `Copy` entries to the history. |
-| A5 | The option combines with `WithArrangeTurns`: the quarter-turn packer then works on the turned footprints. |
-| A6 | `step` is an angle (`ErrUnitKind`), finite (`ErrNotFinite`), not negative (`ErrNegativeMagnitude`), and nonzero with at most 360 multiples below a quarter turn (`ErrDegenerate`). The last option wins. A body that cannot be copied turned carries `Copy`'s refusal. |
+| A4 | A chosen angle is a `Transform` about the bounding-box centre before the move, so a turned body costs two `OperationTransform` entries as in T3. Each probe copy records one `OperationCopy` entry, and retiring it records no `Remove` entry and no consumer, so a successful call leaves one `Copy` entry per probe in the history. A failed or canceled call withdraws them with the rest (§3). |
+| A5 | `Angle` combines with `Turns`: the quarter-turn packer then works on the turned footprints. |
+| A6 | `step` is an angle (`ErrUnitKind`), finite (`ErrNotFinite`), not negative (`ErrNegativeMagnitude`), and nonzero with at most 360 multiples below a quarter turn (`ErrDegenerate`). A second `Angle` call replaces the first, fault included. A body that cannot be copied turned carries `Copy`'s refusal. |
 | A7 | Refusals A6 names are raised before any trial, and a set that does not fit is `ErrDegenerate` with no body moved, as G7 says. |
 
 ## 7. Layers
@@ -88,5 +94,5 @@ each trial's footprint from a copy of the body, so it needs no geometry of its o
 | L2 | `arrangeplan.PackLayers` takes the bodies in order. Each joins the current layer if that layer still packs with it, by `Pack` or by `PackTurning` when turns are allowed, and otherwise waits for a later layer; a body that fits no empty layer is refused. So a narrow body can join an early layer that a wide one before it could not. |
 | L3 | A layer's base rests `Gap` above the top of the tallest body of the layer below. A body's height is its box's extent along Z grown by the bound of the box, so the bound never lets two layers touch. The first layer's base is the bed's surface. |
 | L4 | The layers together, the gaps between them included, must stand no higher than `Height`, or the arrangement is `ErrDegenerate` and no body moves. |
-| L5 | Each body moves by one translation as G5 says, its minimum Z landing on its layer's base. A quarter turn or an angle of `WithArrangeAngle` changes no body's extent along Z. |
+| L5 | Each body moves by one translation as G5 says, its minimum Z landing on its layer's base. A quarter turn or an angle of `Angle` changes no body's extent along Z. |
 | L6 | The tests state each layer's base from the bodies' own heights and compare the moved boxes with it, and check the limit on both sides. |

@@ -104,7 +104,7 @@ func TestSTEPWritesACavityThatTouchesTheOuterShell(t *testing.T) {
 	s, p := polygonSketch(t, [][2]float64{{0, 10}, {5, 5}, {10, 10}, {5, 15}})
 	prism, err := decad.Extrude(edgeDoc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
-	prism, err = decad.Transform(t.Context(), prism, mustTranslation(t, 0, 0, 5))
+	prism, err = decad.Transform(prism, mustTranslation(t, 0, 0, 5)).Do(t.Context())
 	require.NoError(t, err)
 	edgeTouch, err := decad.Cut(box, prism).Do(t.Context())
 	require.NoError(t, err)
@@ -124,7 +124,7 @@ func TestSTEPWritesACavityThatTouchesTheOuterShell(t *testing.T) {
 	axis := decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}}
 	cone, err := decad.Revolve(vertexDoc, cs, cs.Profiles()[0], axis, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
-	cone, err = decad.Transform(t.Context(), cone, mustTranslation(t, 0, 0, 10))
+	cone, err = decad.Transform(cone, mustTranslation(t, 0, 0, 10)).Do(t.Context())
 	require.NoError(t, err)
 	vertexTouch, err := decad.Cut(vbox, cone).Do(t.Context())
 	require.NoError(t, err)

@@ -34,7 +34,7 @@ func xScrew(t *testing.T, doc *decad.Document, x0, cy, cz float64) *decad.Body {
 	require.NoError(t, err)
 	move, err := r3.Translation(r3.Vec{X: x0 - box.Min.X, Y: cy, Z: cz})
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), body, move)
+	placed, err := decad.Transform(body, move).Do(t.Context())
 	require.NoError(t, err)
 	return placed
 }

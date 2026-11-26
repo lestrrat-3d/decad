@@ -21,7 +21,7 @@ func chainedCut(t *testing.T, opts ...decad.DocumentOption) (*decad.Body, error)
 	require.NoError(t, err)
 	// A Copy ends the operation history's Boolean chain, so the refusal under test is
 	// the sequential gate, not a chain the regroup rebuilds.
-	held, err := decad.Copy(t.Context(), first)
+	held, err := decad.Copy(first).Do(t.Context())
 	require.NoError(t, err)
 	return decad.Cut(held, slabYTool(t, sc, 22, 3)).Do(t.Context())
 }

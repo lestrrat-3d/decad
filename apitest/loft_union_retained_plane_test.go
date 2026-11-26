@@ -97,7 +97,7 @@ func TestChordedLoftUnionKeepsRimBoundOnLaterCut(t *testing.T) {
 		if placedBy != 0 {
 			move, err := r3.Translation(r3.Vec{Z: placedBy})
 			require.NoError(t, err)
-			target, err = decad.Copy(t.Context(), target, decad.WithCopyPlacement(move))
+			target, err = decad.Copy(target).Place(decad.CopyTransform{Transform: move}).Do(t.Context())
 			require.NoError(t, err)
 		}
 		return target, boxBodyAtZ(t, doc, cutX, -20, 20, 20, 2+placedBy, 14)

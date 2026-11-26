@@ -54,7 +54,7 @@ func (sc *slabScene) yTool(ctx context.Context, t *testing.T, cx, r float64) *Bo
 	require.NoError(t, err)
 	move, err := r3.Translation(r3.Vec{Y: 30})
 	require.NoError(t, err)
-	placed, err := Transform(ctx, cyl, move)
+	placed, err := Transform(cyl, move).Do(ctx)
 	require.NoError(t, err)
 	return placed
 }
@@ -67,7 +67,7 @@ func slabRun(t *testing.T, ctx context.Context, cx, r float64) (*Body, error) {
 	require.NoError(t, err)
 	// A Copy ends the operation history's Boolean chain, so the control's refusal is
 	// the sequential gate, not a chain the regroup rebuilds.
-	first, err := Copy(ctx, built)
+	first, err := Copy(built).Do(ctx)
 	require.NoError(t, err)
 	return Cut(first, sc.yTool(ctx, t, cx, r)).Do(ctx)
 }

@@ -19,7 +19,7 @@ func TestFacetedUnionNestedBossShellVerified(t *testing.T) {
 			boss := boxBodyAtZ(t, doc, -4, -3, 4, 3, 3, 5)
 			turn, err := r3.RotationAround(r3.Vec{X: 1, Y: 0.5}, r3.Vec{Z: 1}, units.Degrees(20))
 			require.NoError(t, err)
-			boss, err = decad.Transform(t.Context(), boss, turn)
+			boss, err = decad.Transform(boss, turn).Do(t.Context())
 			require.NoError(t, err)
 			first, second := plate, boss
 			if reverse {
@@ -46,7 +46,7 @@ func TestFacetedUnionNestedBossShellVerified(t *testing.T) {
 			if !reverse {
 				move, err := r3.Translation(r3.Vec{X: 7, Y: -3, Z: 2})
 				require.NoError(t, err)
-				placed, err := decad.Transform(t.Context(), shell, move)
+				placed, err := decad.Transform(shell, move).Do(t.Context())
 				require.NoError(t, err)
 				placedMesh, err := placed.Tessellate(t.Context(), units.Millimeters(0.1),
 					decad.WithVerification(decad.VerifyAll))
@@ -76,7 +76,7 @@ func TestFacetedUnionNestedBossShellKeepsThicknessAtRoot(t *testing.T) {
 	boss := boxBodyAtZ(t, doc, -4, -3, 4, 3, 3, 5)
 	turn, err := r3.RotationAround(r3.Vec{X: 1, Y: 0.5}, r3.Vec{Z: 1}, units.Degrees(20))
 	require.NoError(t, err)
-	boss, err = decad.Transform(t.Context(), boss, turn)
+	boss, err = decad.Transform(boss, turn).Do(t.Context())
 	require.NoError(t, err)
 	joined, err := decad.Union(plate, boss).Do(t.Context())
 	require.NoError(t, err)
@@ -112,7 +112,7 @@ func TestFacetedUnionNestedBossShellRefusesInsufficientClearance(t *testing.T) {
 	boss := boxBodyAtZ(t, doc, -9, -3, -1, 3, 3, 5)
 	turn, err := r3.RotationAround(r3.Vec{X: -5}, r3.Vec{Z: 1}, units.Degrees(20))
 	require.NoError(t, err)
-	boss, err = decad.Transform(t.Context(), boss, turn)
+	boss, err = decad.Transform(boss, turn).Do(t.Context())
 	require.NoError(t, err)
 	joined, err := decad.Union(plate, boss).Do(t.Context())
 	require.NoError(t, err)
@@ -129,13 +129,13 @@ func TestFacetedUnionNestedBossShellRefusesPlacedSourceRelation(t *testing.T) {
 	boss := boxBodyAtZ(t, doc, -4, -3, 4, 3, 3, 5)
 	turn, err := r3.RotationAround(r3.Vec{X: 1, Y: 0.5}, r3.Vec{Z: 1}, units.Degrees(20))
 	require.NoError(t, err)
-	boss, err = decad.Transform(t.Context(), boss, turn)
+	boss, err = decad.Transform(boss, turn).Do(t.Context())
 	require.NoError(t, err)
 	joined, err := decad.Union(plate, boss).Do(t.Context())
 	require.NoError(t, err)
 	move, err := r3.Translation(r3.Vec{Z: 2})
 	require.NoError(t, err)
-	joined, err = decad.Transform(t.Context(), joined, move)
+	joined, err = decad.Transform(joined, move).Do(t.Context())
 	require.NoError(t, err)
 	_, err = decad.Shell(joined,
 		decad.Faces(decad.FaceCreatedBy(decad.CapEnd(boss))).Exactly(1), units.Millimeters(1)).Do(t.Context())

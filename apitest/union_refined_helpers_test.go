@@ -34,7 +34,7 @@ func unionRefinedSet(t testing.TB, fitted bool) (*decad.Document, *decad.Body, [
 	for i := 1; i < count; i++ {
 		turn, err := r3.Rotation(r3.Vec{X: 1}, units.Radians(2*math.Pi*float64(i)/float64(count)))
 		require.NoError(t, err)
-		copied, err := decad.Copy(t.Context(), lug, decad.WithCopyPlacement(turn))
+		copied, err := decad.Copy(lug).Place(decad.CopyTransform{Transform: turn}).Do(t.Context())
 		require.NoError(t, err)
 		lugs = append(lugs, copied)
 	}

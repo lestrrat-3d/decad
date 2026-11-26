@@ -52,7 +52,7 @@ func bodySurveyDocument(tb testing.TB, shape string, count int) (*decad.Document
 	for i := 1; i < count; i++ {
 		placement, err := r3.Translation(r3.NewVec(100*float64(i), 0, 0))
 		require.NoError(tb, err)
-		placed, err := decad.Copy(tb.Context(), body, decad.WithCopyPlacement(placement))
+		placed, err := decad.Copy(body).Place(decad.CopyTransform{Transform: placement}).Do(tb.Context())
 		require.NoError(tb, err)
 		bodies = append(bodies, placed)
 	}

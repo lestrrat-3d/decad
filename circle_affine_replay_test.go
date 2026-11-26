@@ -68,11 +68,11 @@ func TestCircleExactAffineAllowance(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			once, err := Transform(t.Context(), base, first)
+			once, err := Transform(base, first).Do(t.Context())
 			if err != nil {
 				t.Fatal(err)
 			}
-			placed, err := Transform(t.Context(), once, second)
+			placed, err := Transform(once, second).Do(t.Context())
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -240,11 +240,11 @@ func TestCircleAffineLargeRadius(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		body, err = Transform(t.Context(), body, a)
+		body, err = Transform(body, a).Do(t.Context())
 		if err != nil {
 			t.Fatal(err)
 		}
-		body, err = Transform(t.Context(), body, b)
+		body, err = Transform(body, b).Do(t.Context())
 		if err != nil {
 			t.Fatal(err)
 		}

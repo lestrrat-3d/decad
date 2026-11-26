@@ -31,7 +31,7 @@ func slabYTool(t *testing.T, sc *retentionScene, cx, r float64) *decad.Body {
 	require.NoError(t, err)
 	move, err := r3.Translation(r3.Vec{Y: 30})
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), cyl, move)
+	placed, err := decad.Transform(cyl, move).Do(t.Context())
 	require.NoError(t, err)
 	return placed
 }
@@ -94,7 +94,7 @@ func TestFacetedPlaneSlab(t *testing.T) {
 		require.NoError(t, err)
 		// A Copy ends the operation history's Boolean chain, so the refusal under test is
 		// the sequential gate, not a chain the regroup rebuilds.
-		first, err := decad.Copy(t.Context(), built)
+		first, err := decad.Copy(built).Do(t.Context())
 		require.NoError(t, err)
 		held, err := mustTessellate(t, first, units.Millimeters(1)).Bound().In(units.Millimeter)
 		require.NoError(t, err)

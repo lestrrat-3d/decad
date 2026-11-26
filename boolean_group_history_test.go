@@ -69,7 +69,7 @@ func TestGroupUnionInputsUsesPublicHistory(t *testing.T) {
 		basis := r3.Basis{EX: r3.Vec{Y: -1}, EY: r3.Vec{X: 1}, EZ: r3.Vec{Z: 1}}
 		transform, transformErr := r3.FromBasis(basis, r3.Vec{X: 3, Y: y, Z: 6})
 		require.NoError(t, transformErr)
-		placed, transformErr := Transform(t.Context(), makeCircle(0), transform)
+		placed, transformErr := Transform(makeCircle(0), transform).Do(t.Context())
 		require.NoError(t, transformErr)
 		return placed
 	}
@@ -1147,7 +1147,7 @@ func BenchmarkGroupUnionSourceSnapshotFourCircles(b *testing.B) {
 func TestGroupDirectPrismSourceHistory(t *testing.T) {
 	doc := New()
 	source := internalBoxBody(t, doc, 0, 0, 4, 5, 6)
-	placed, err := Transform(t.Context(), source, r3.Identity())
+	placed, err := Transform(source, r3.Identity()).Do(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}

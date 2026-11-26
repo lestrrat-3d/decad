@@ -62,9 +62,9 @@ func TestCutFlatOnPerpendicularShaft(t *testing.T) {
 			if tc.lift != 0 {
 				xf, err := r3.RotationAround(r3.Vec{X: -96, Y: -60, Z: 600}, r3.Vec{Y: 1}, units.Radians(tc.lift))
 				require.NoError(t, err)
-				shaft, err = decad.Transform(t.Context(), shaft, xf)
+				shaft, err = decad.Transform(shaft, xf).Do(t.Context())
 				require.NoError(t, err)
-				tool, err = decad.Transform(t.Context(), tool, xf)
+				tool, err = decad.Transform(tool, xf).Do(t.Context())
 				require.NoError(t, err)
 			}
 			out, err := decad.Cut(shaft, tool).Do(t.Context())

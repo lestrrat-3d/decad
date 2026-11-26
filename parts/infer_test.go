@@ -125,7 +125,7 @@ func TestInferRotatedCopy(t *testing.T) {
 	turn, err := r3.RotationAround(r3.Vec{X: 10, Y: 10, Z: 5}, r3.Vec{Y: 1}, units.Degrees(30))
 	require.NoError(t, err)
 	turned := func(b *decad.Body) *decad.Body {
-		out, err := decad.Transform(t.Context(), b, turn)
+		out, err := decad.Transform(b, turn).Do(t.Context())
 		require.NoError(t, err)
 		return out
 	}

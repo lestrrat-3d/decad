@@ -10,21 +10,20 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/mirrorjoin"
+	"github.com/lestrrat-3d/decad/internal/opcommand"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
 
 // This file adapts internal/mirrorjoin's record rewrite and joined-section
 // audit to prism and stacked payloads.
 
-type mirrorJoinOption struct{}
-
-func (mirrorJoinOption) mirrorOption() {}
-
-// WithJoin makes [Mirrored] return the union of the receiver and its
-// mirror image as one body: the symmetric-part operation
-// (agent-docs/mirror-pattern-design.md §5). The plane must be a [MirrorFace] of the
-// receiver itself naming one or more planar walls on one line of its section;
-// the selector then asserts at least one face rather than exactly one.
+// MirroredJoin returns the command that mirrors b across plane and joins the
+// image to it. Do returns the union of the receiver and its mirror image as
+// one body: the symmetric-part operation
+// (agent-docs/mirror-pattern-design.md §5). The plane must be a [MirrorFace] of
+// the receiver itself naming one or more planar walls on one line of its
+// section; the selector then asserts at least one face rather than exactly one.
+// A [MirrorFrame] names no recorded wall and is ErrUnsupported.
 //
 // The join rewrites the receiver's own recorded section and never runs a
 // boolean. It admits a straight prism or a stacked prism (a blind-cut plate)
@@ -33,12 +32,37 @@ func (mirrorJoinOption) mirrorOption() {}
 // section carries no displacement. Every other receiver is refused with the
 // sentinel §5.1 states — ErrUnsupported for a shape the join does not build,
 // ErrDegenerate for a selection that names no single mirror line — and is
-// never handed to Union instead. A repeated WithJoin() is idempotent.
-func WithJoin() MirrorOption {
-	return mirrorJoinOption{}
+// never handed to Union instead. The gates are those of [Mirrored], and a nil
+// b is ErrDegenerate. MirroredJoin copies plane when it is called. Its
+// history entries carry [OperationMirrored].
+func MirroredJoin(b *Body, plane MirrorPlane) *MirroredJoinCommand {
+	c := &MirroredJoinCommand{b: b, plane: copyMirrorPlane(plane)}
+	if b == nil {
+		c.state.Record("body", errNilBody)
+	}
+	return c
 }
 
-// mirroredJoin is Mirrored under WithJoin. It runs Transform's receiver gates,
+// MirroredJoinCommand mirrors a body and joins the image to it. Build it with
+// [MirroredJoin].
+type MirroredJoinCommand struct {
+	state opcommand.State // consumed flag and first recorded fault
+	b     *Body           // stored as given
+	plane MirrorPlane     // copied at MirroredJoin
+}
+
+// Do builds the joined body and retires the receiver, or returns the error of
+// the first gate that refuses. A nil ctx is ErrDegenerate, and a second call
+// returns ErrConsumed.
+func (c *MirroredJoinCommand) Do(ctx context.Context) (*Body, error) {
+	return runCommand(ctx, &c.state, OperationMirrored, c.run)
+}
+
+func (c *MirroredJoinCommand) run(ctx context.Context) (*Body, error) {
+	return c.b.mirroredJoin(ctx, c.plane)
+}
+
+// mirroredJoin is MirroredJoin's implementation. It runs Transform's receiver gates,
 // then §5.1's admission J1-J7 in order, assembles the joined record (§5.2),
 // audits it (§5.3) and commits the result in place of the receiver.
 func (b *Body) mirroredJoin(ctx context.Context, plane MirrorPlane) (*Body, error) {

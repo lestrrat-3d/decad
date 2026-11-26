@@ -99,7 +99,7 @@ func TestSectionCardinalConeRoundedProxyCarriesDisplacement(t *testing.T) {
 	_, cone := sectionConeSource(t, 3)
 	move, err := r3.Translation(r3.NewVec(1<<20, 0, 0))
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), cone, move)
+	placed, err := decad.Transform(cone, move).Do(t.Context())
 	require.NoError(t, err)
 	section, profiles, err := placed.Section(t.Context(), sectionConePlane(t, 1))
 	require.NoError(t, err)
@@ -151,7 +151,7 @@ func TestSectionCardinalConeRefusesInexactProjectedCenter(t *testing.T) {
 			_, cone := sectionConeSource(t, 10)
 			move, err := r3.Translation(tc.center)
 			require.NoError(t, err)
-			placed, err := decad.Transform(t.Context(), cone, move)
+			placed, err := decad.Transform(cone, move).Do(t.Context())
 			require.NoError(t, err)
 			// The same source and exact radius succeed with a nearby plane origin.
 			_, nearby, err := placed.Section(t.Context(), sectionConePlane(t, 5))
@@ -173,7 +173,7 @@ func TestSectionCardinalConePlacementAndAxisSense(t *testing.T) {
 		EX: r3.Vec{Y: 1}, EY: r3.Vec{Z: 1}, EZ: r3.Vec{X: 1},
 	}, r3.NewVec(20, 30, 40))
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), cone, motion)
+	placed, err := decad.Transform(cone, motion).Do(t.Context())
 	require.NoError(t, err)
 	frame, err := r3.NewFrame(r3.NewVec(25, 27, 38), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1))
 	require.NoError(t, err)

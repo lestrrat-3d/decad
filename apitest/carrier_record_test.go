@@ -175,8 +175,8 @@ func wheelUnion(t *testing.T, windows, teeth int) *decad.Body {
 	var copies []*decad.Body
 	if teeth > 1 {
 		var err error
-		copies, err = decad.PatternCopies(t.Context(), tooth,
-			decad.CircularPattern{Center: r3.Vec{}, Axis: r3.NewVec(0, 0, 1), Count: teeth})
+		copies, err = decad.PatternCopies(tooth,
+			decad.CircularPattern{Center: r3.Vec{}, Axis: r3.NewVec(0, 0, 1), Count: teeth}).Do(t.Context())
 		require.NoError(t, err)
 	}
 	wheel, err := decad.Union(append([]*decad.Body{disc}, append([]*decad.Body{tooth}, copies...)...)...).Do(t.Context())
@@ -352,8 +352,8 @@ func TestCarrierRecordHoledPlateWithTranslatedBlocks(t *testing.T) {
 	parallelogram(bs, 3.3, 18, 2, 6)
 	block, err := decad.Extrude(doc, bs, bs.Profiles()[0], decad.Distance{D: units.Millimeters(height), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
-	copies, err := decad.PatternCopies(t.Context(), block,
-		decad.LinearPattern{Dir: r3.NewVec(1, 0, 0), Step: units.Millimeters(6.1), Count: blocks})
+	copies, err := decad.PatternCopies(block,
+		decad.LinearPattern{Dir: r3.NewVec(1, 0, 0), Step: units.Millimeters(6.1), Count: blocks}).Do(t.Context())
 	require.NoError(t, err)
 	joined, err := decad.Union(append([]*decad.Body{plate}, append([]*decad.Body{block}, copies...)...)...).Do(t.Context())
 	require.NoError(t, err)

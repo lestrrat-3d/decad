@@ -198,7 +198,7 @@ func TestFacetedRetainedBlendParallelCylinders(t *testing.T) {
 		require.NoError(t, err)
 		shift, err := r3.Translation(r3.Vec{X: 20.001})
 		require.NoError(t, err)
-		cross, err = decad.Transform(t.Context(), cross, shift)
+		cross, err = decad.Transform(cross, shift).Do(t.Context())
 		require.NoError(t, err)
 		b, err = decad.Cut(b, cross).Do(t.Context())
 		require.NoError(t, err)

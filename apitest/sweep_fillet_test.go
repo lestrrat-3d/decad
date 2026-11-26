@@ -57,7 +57,7 @@ func TestSweepLineFilletVerticalEdgesVerified(t *testing.T) {
 
 	move, err := r3.Translation(r3.NewVec(3, -2, 5))
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), rounded, move)
+	placed, err := decad.Transform(rounded, move).Do(t.Context())
 	require.NoError(t, err)
 	placedVolume, err := placed.Volume()
 	require.NoError(t, err)
@@ -112,7 +112,7 @@ func TestSweepLineFilletPlacedBottomCapEdgeVerified(t *testing.T) {
 	_, body := straightSweepSquare(t)
 	motion, err := r3.Translation(r3.NewVec(3, -2, 5))
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), body, motion)
+	placed, err := decad.Transform(body, motion).Do(t.Context())
 	require.NoError(t, err)
 	sel := decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0)),
 		decad.EndpointAt(r3.NewVec(3, -2, 5))).Exactly(1)
@@ -135,7 +135,7 @@ func TestSweepLineFilletPlacedReceiver(t *testing.T) {
 	_, body := straightSweepSquare(t)
 	move, err := r3.Translation(r3.NewVec(3, -2, 5))
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), body, move)
+	placed, err := decad.Transform(body, move).Do(t.Context())
 	require.NoError(t, err)
 	rounded, err := decad.Fillet(placed, convexVerticalSweepEdges(), units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)

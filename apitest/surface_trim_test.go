@@ -310,7 +310,7 @@ func TestSurfaceTrimS4IsExactFloatEquality(t *testing.T) {
 		// (0,0,1) Go == demands.
 		xform, err := r3.RotationAround(r3.NewVec(0, 0, 0), r3.NewVec(0.001, 0, 1), units.Degrees(21.176470588235293))
 		require.NoError(t, err)
-		placedTool, err := decad.Transform(t.Context(), tool, xform)
+		placedTool, err := decad.Transform(tool, xform).Do(t.Context())
 		require.NoError(t, err)
 
 		_, err = decad.Trim(t.Context(), sheet, placedTool, decad.KeepOutside)
@@ -325,7 +325,7 @@ func TestSurfaceTrimS4IsExactFloatEquality(t *testing.T) {
 		tool := trimSpanningTool(t, doc, 40, -10, 60, 70)
 		xform, err := r3.Translation(r3.NewVec(5, 0, 0))
 		require.NoError(t, err)
-		placedTool, err := decad.Transform(t.Context(), tool, xform)
+		placedTool, err := decad.Transform(tool, xform).Do(t.Context())
 		require.NoError(t, err)
 
 		_, err = decad.Trim(t.Context(), sheet, placedTool, decad.KeepOutside)
@@ -353,7 +353,7 @@ func TestSurfaceTrimS4IsExactFloatEquality(t *testing.T) {
 		require.NoError(t, err)
 		basis, err := r3.FromBasis(r3.Basis{EX: r3.NewVec(1, 0, 0), EY: r3.NewVec(0, 1, 0), EZ: r3.NewVec(0, 0, 1)}, r3.NewVec(0, 0, 0))
 		require.NoError(t, err)
-		placedTool, err := decad.Transform(t.Context(), tool, basis)
+		placedTool, err := decad.Transform(tool, basis).Do(t.Context())
 		require.NoError(t, err)
 
 		_, err = decad.Trim(t.Context(), sheet, placedTool, decad.KeepOutside)

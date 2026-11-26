@@ -130,7 +130,7 @@ func TestExtrudeToTranslatedRevolveStartCapChargesStopLevel(t *testing.T) {
 	const shift = 1e9
 	move, err := r3.Translation(r3.NewVec(0, 0, shift))
 	require.NoError(t, err)
-	host, err = decad.Transform(t.Context(), host, move)
+	host, err = decad.Transform(host, move).Do(t.Context())
 	require.NoError(t, err)
 	query := capStartFace(host)
 	stopSketch := stopSketchBehindRevolveFace(t, host, query, 10)
@@ -254,7 +254,7 @@ func TestExtrudeToPlacedRevolveFaceWithTiltedRecordRefuses(t *testing.T) {
 	// check, while its recorded plane is tilted against that same direction.
 	turn, err := r3.Rotation(r3.NewVec(1, 2, 3), units.Degrees(41))
 	require.NoError(t, err)
-	rotated, err := decad.Transform(t.Context(), original, turn)
+	rotated, err := decad.Transform(original, turn).Do(t.Context())
 	require.NoError(t, err)
 	var farFrame r3.Frame
 	for _, face := range rotated.Faces() {

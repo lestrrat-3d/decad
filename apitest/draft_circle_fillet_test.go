@@ -68,13 +68,13 @@ func TestDraftCircleEndRimFilletPlacement(t *testing.T) {
 	base := draftedDisk(t, r3.NewVec(3, -2, 4), 5)
 	shift, err := r3.Translation(r3.NewVec(6, 7, -3))
 	require.NoError(t, err)
-	placed, err := decad.Copy(t.Context(), base, decad.WithCopyPlacement(shift))
+	placed, err := decad.Copy(base).Place(decad.CopyTransform{Transform: shift}).Do(t.Context())
 	require.NoError(t, err)
 	rounded, err := decad.Fillet(placed, draftedDiskEndRim(placed), units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	checkDraftCircleModifyRoles(t, rounded,
 		map[decad.SurfaceKind]int{decad.KindCone: 1, decad.KindTorus: 1}, "fillet(")
-	placedCopy, err := decad.Copy(t.Context(), rounded, decad.WithCopyPlacement(shift))
+	placedCopy, err := decad.Copy(rounded).Place(decad.CopyTransform{Transform: shift}).Do(t.Context())
 	require.NoError(t, err)
 	checkDraftCircleModifyRoles(t, placedCopy,
 		map[decad.SurfaceKind]int{decad.KindCone: 1, decad.KindTorus: 1}, "fillet(")

@@ -243,7 +243,7 @@ func TestLoftThroughBoreCutPublishesCircularTopology(t *testing.T) {
 		t.Run(placed.name, func(t *testing.T) {
 			motion, err := placed.transform()
 			require.NoError(t, err)
-			placedBody, err := decad.Copy(t.Context(), cut, decad.WithCopyPlacement(motion))
+			placedBody, err := decad.Copy(cut).Place(decad.CopyTransform{Transform: motion}).Do(t.Context())
 			require.NoError(t, err)
 			requireManifold(t, placedBody)
 			caps, err := decad.Faces(decad.FaceCreatedBy(decad.CapStart(placedBody))).Exactly(1).SelectFaces(placedBody)

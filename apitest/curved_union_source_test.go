@@ -135,7 +135,7 @@ func TestCurvedLoftFacesUnionStopsAtTheChainDepthGate(t *testing.T) {
 
 	move, err := r3.Translation(r3.NewVec(0, 0.05, 0))
 	require.NoError(t, err)
-	shifted, err := decad.Copy(t.Context(), blank, decad.WithCopyPlacement(move))
+	shifted, err := decad.Copy(blank).Place(decad.CopyTransform{Transform: move}).Do(t.Context())
 	require.NoError(t, err)
 	_, err = decad.Union(shifted, trimmed).Do(t.Context())
 	if err != nil {

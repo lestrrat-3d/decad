@@ -87,7 +87,7 @@ func TestSweepCompositeTubeUnionAuditsCandidates(t *testing.T) {
 			require.NoError(t, err)
 			move, err := r3.Translation(centre.Add(r3.NewVec(0, 0, lo)))
 			require.NoError(t, err)
-			box, err = decad.Transform(t.Context(), box, move)
+			box, err = decad.Transform(box, move).Do(t.Context())
 			require.NoError(t, err)
 
 			joined, err := decad.Union(tube, box).Do(t.Context())

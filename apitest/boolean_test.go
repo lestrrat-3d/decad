@@ -79,7 +79,7 @@ func translated(t testing.TB, b *decad.Body, x, y, z float64) *decad.Body {
 	t.Helper()
 	tr, err := r3.Translation(r3.Vec{X: x, Y: y, Z: z})
 	require.NoError(t, err)
-	moved, err := decad.Transform(t.Context(), b, tr)
+	moved, err := decad.Transform(b, tr).Do(t.Context())
 	require.NoError(t, err)
 	return moved
 }
@@ -754,7 +754,7 @@ func coneSegment(t *testing.T, doc *decad.Document, a, b r3.Vec, ra, rb float64)
 	require.True(t, ok)
 	frame, err := r3.FromBasis(r3.Basis{EX: d, EY: q.Cross(d), EZ: q}, a)
 	require.NoError(t, err)
-	body, err = decad.Transform(t.Context(), body, frame)
+	body, err = decad.Transform(body, frame).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -1311,7 +1311,7 @@ func TestFacetedPlacedFarFromOriginBoundHolds(t *testing.T) {
 	require.NoError(t, err)
 	xform, err := rot.Then(back)
 	require.NoError(t, err)
-	moved, err := decad.Transform(t.Context(), got, xform)
+	moved, err := decad.Transform(got, xform).Do(t.Context())
 	require.NoError(t, err)
 
 	volAfter, err := moved.Volume()

@@ -58,8 +58,8 @@ func Example_pattern_as_one_body() {
 	}
 
 	// Repeat the pin six times, 10 mm apart along X, as one tool body.
-	pins, err := decad.Patterned(context.Background(), drill,
-		decad.LinearPattern{Dir: r3.NewVec(1, 0, 0), Step: units.Millimeters(10), Count: 6})
+	pins, err := decad.Patterned(drill,
+		decad.LinearPattern{Dir: r3.NewVec(1, 0, 0), Step: units.Millimeters(10), Count: 6}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to pattern: %s\n", err)
 		return

@@ -349,7 +349,7 @@ func TestTaperTwoSidedCurvedMesh(t *testing.T) {
 			requireWatertight(t, mesh)
 			require.True(t, mesh.VolumeVerified())
 
-			placed, err := decad.Transform(t.Context(), body, generalMotion(t, 37, 3.25))
+			placed, err := decad.Transform(body, generalMotion(t, 37, 3.25)).Do(t.Context())
 			require.NoError(t, err)
 			requireManifold(t, placed)
 			placedMesh, err := placed.Tessellate(t.Context(), units.Millimeters(0.05))
@@ -792,7 +792,7 @@ func TestTaperFarOrigin(t *testing.T) {
 		doc := decad.New()
 		s, p := taperSketch(t, farOrigin, 0, drawSquare(0, a))
 		b := taperExtrude(t, doc, s, p, h, deg, decad.Along)
-		placed, err := decad.Transform(t.Context(), b, motion)
+		placed, err := decad.Transform(b, motion).Do(t.Context())
 		require.NoError(t, err)
 		d := bfMul(bf(h), taperTan(deg))
 		for _, body := range []struct {
@@ -828,7 +828,7 @@ func TestTaperFarOrigin(t *testing.T) {
 		doc := decad.New()
 		s, p := taperSketch(t, farOrigin, 0, drawSlot(0, 0))
 		b := taperExtrude(t, doc, s, p, 8, 3, decad.Along)
-		placed, err := decad.Transform(t.Context(), b, motion)
+		placed, err := decad.Transform(b, motion).Do(t.Context())
 		require.NoError(t, err)
 		d := bfMul(bf(8), taperTan(3))
 		for _, su := range []float64{-1, 1} {
@@ -891,7 +891,7 @@ func TestTaperPlacedEquivalence(t *testing.T) {
 	require.NoError(t, err)
 
 	motion := generalMotion(t, 23, -7.5)
-	placed, err := decad.Transform(t.Context(), b, motion)
+	placed, err := decad.Transform(b, motion).Do(t.Context())
 	require.NoError(t, err)
 	requireManifold(t, placed)
 	vol, err := placed.Volume()
@@ -1077,7 +1077,7 @@ func TestTaperDownstreamRefusals(t *testing.T) {
 	require.NoError(t, err)
 	mirror, err := r3.NewFrame(r3.NewVec(30, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1))
 	require.NoError(t, err)
-	mirrored, err := decad.MirroredCopy(t.Context(), b, decad.MirrorFrame{Frame: mirror})
+	mirrored, err := decad.MirroredCopy(b, decad.MirrorFrame{Frame: mirror}).Do(t.Context())
 	require.NoError(t, err)
 	requireManifold(t, mirrored)
 	mv, err := mirrored.Volume()

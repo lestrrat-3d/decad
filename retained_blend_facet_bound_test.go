@@ -155,7 +155,7 @@ func moved(t testing.TB, b *Body, d r3.Vec) *Body {
 	t.Helper()
 	tr, err := r3.Translation(d)
 	require.NoError(t, err)
-	out, err := Transform(t.Context(), b, tr)
+	out, err := Transform(b, tr).Do(t.Context())
 	require.NoError(t, err)
 	return out
 }

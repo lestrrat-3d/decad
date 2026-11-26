@@ -132,9 +132,9 @@ func TestBrepChamferAllStraightOuterEdgesPlacement(t *testing.T) {
 					originalRoles[face.Origins()[0].Role] = true
 				}
 				if copyBody {
-					got, err = decad.Copy(t.Context(), got, decad.WithCopyPlacement(tc.pose))
+					got, err = decad.Copy(got).Place(decad.CopyTransform{Transform: tc.pose}).Do(t.Context())
 				} else {
-					got, err = decad.Transform(t.Context(), got, tc.pose)
+					got, err = decad.Transform(got, tc.pose).Do(t.Context())
 				}
 				require.NoError(t, err)
 				requireEveryEdgeOnTwoFaces(t, got)
@@ -185,9 +185,9 @@ func TestBrepChamferAllStraightOuterEdgesPlacementComposition(t *testing.T) {
 	require.NoError(t, err)
 	move, err := r3.Translation(r3.NewVec(5, 0, 0))
 	require.NoError(t, err)
-	first, err := decad.Copy(t.Context(), got, decad.WithCopyPlacement(move))
+	first, err := decad.Copy(got).Place(decad.CopyTransform{Transform: move}).Do(t.Context())
 	require.NoError(t, err)
-	second, err := decad.Copy(t.Context(), first, decad.WithCopyPlacement(move))
+	second, err := decad.Copy(first).Place(decad.CopyTransform{Transform: move}).Do(t.Context())
 	require.NoError(t, err)
 	centroid, err := second.Centroid()
 	require.NoError(t, err)
@@ -217,9 +217,9 @@ func TestBrepChamferAllStraightOuterEdgesPlacementRefusal(t *testing.T) {
 				Or(decad.ParallelTo(r3.NewVec(0, 0, 1))).Exactly(12)
 			got, err := decad.Chamfer(bar, selected, units.Millimeters(1)).Do(t.Context())
 			require.NoError(t, err)
-			_, err = decad.Copy(t.Context(), got, decad.WithCopyPlacement(tc.pose))
+			_, err = decad.Copy(got).Place(decad.CopyTransform{Transform: tc.pose}).Do(t.Context())
 			require.ErrorIs(t, err, decad.ErrUnsupported)
-			_, err = decad.Transform(t.Context(), got, tc.pose)
+			_, err = decad.Transform(got, tc.pose).Do(t.Context())
 			require.ErrorIs(t, err, decad.ErrUnsupported)
 			_, err = got.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
 			require.NoError(t, err)

@@ -43,7 +43,7 @@ func TestFacetedRetainedBlendAreaCharge(t *testing.T) {
 	require.NoError(t, err)
 	move, err := r3.Translation(r3.Vec{X: 65, Y: 45, Z: 10})
 	require.NoError(t, err)
-	post, err = decad.Transform(t.Context(), post, move)
+	post, err = decad.Transform(post, move).Do(t.Context())
 	require.NoError(t, err)
 	body, err = decad.Union(body, post).Do(t.Context())
 	require.NoError(t, err)

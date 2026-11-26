@@ -104,7 +104,7 @@ func TestUnionShoulderedHubAndTwoRadialLugs(t *testing.T) {
 	require.NoError(t, err)
 	turn, err := r3.Rotation(r3.Vec{X: 1}, units.Degrees(180))
 	require.NoError(t, err)
-	second, err := decad.Copy(t.Context(), trimmed, decad.WithCopyPlacement(turn))
+	second, err := decad.Copy(trimmed).Place(decad.CopyTransform{Transform: turn}).Do(t.Context())
 	require.NoError(t, err)
 	joined, err := decad.Union(hub, trimmed).Do(t.Context())
 	require.NoError(t, err)
@@ -155,7 +155,7 @@ func TestUnionSixSpanHubSerialRadialLugs(t *testing.T) {
 	for _, degrees := range []float64{120, 240} {
 		turn, turnErr := r3.Rotation(r3.Vec{X: 1}, units.Degrees(degrees))
 		require.NoError(t, turnErr)
-		placedCopy, copyErr := decad.Copy(t.Context(), trimmed, decad.WithCopyPlacement(turn))
+		placedCopy, copyErr := decad.Copy(trimmed).Place(decad.CopyTransform{Transform: turn}).Do(t.Context())
 		require.NoError(t, copyErr)
 		placed = append(placed, placedCopy)
 	}
@@ -181,7 +181,7 @@ func TestUnionShoulderedHubAndTwoRadialLugsVariadic(t *testing.T) {
 	_, hub, trimmed := shoulderedHubAndRadialLug(t)
 	turn, err := r3.Rotation(r3.Vec{X: 1}, units.Degrees(180))
 	require.NoError(t, err)
-	second, err := decad.Copy(t.Context(), trimmed, decad.WithCopyPlacement(turn))
+	second, err := decad.Copy(trimmed).Place(decad.CopyTransform{Transform: turn}).Do(t.Context())
 	require.NoError(t, err)
 	joined, err := decad.Union(hub, trimmed, second).Do(t.Context())
 	require.NoError(t, err)
@@ -201,7 +201,7 @@ func TestUnionShoulderedHubAndThreeRadialLugsVariadic(t *testing.T) {
 	for i, degrees := range []float64{120, 240} {
 		turn, err := r3.Rotation(r3.Vec{X: 1}, units.Degrees(degrees))
 		require.NoError(t, err)
-		placed[i], err = decad.Copy(t.Context(), trimmed, decad.WithCopyPlacement(turn))
+		placed[i], err = decad.Copy(trimmed).Place(decad.CopyTransform{Transform: turn}).Do(t.Context())
 		require.NoError(t, err)
 	}
 	joined, err := decad.Union(hub, trimmed, placed[0], placed[1]).Do(t.Context())
@@ -231,7 +231,7 @@ func TestUnionShoulderedHubWithNearAxisCopy(t *testing.T) {
 			require.NoError(t, err)
 			turn, err := r3.Rotation(r3.NewVec(1, 0, 0), units.Radians(2*math.Pi*5/16))
 			require.NoError(t, err)
-			copyOfLug, err := decad.Copy(t.Context(), trimmed, decad.WithCopyPlacement(turn))
+			copyOfLug, err := decad.Copy(trimmed).Place(decad.CopyTransform{Transform: turn}).Do(t.Context())
 			require.NoError(t, err)
 			var joined *decad.Body
 			if serial {
@@ -261,11 +261,11 @@ func TestUnionNearAxisCopyOverlapLeavesInputsLive(t *testing.T) {
 	doc, hub, trimmed := shoulderedHubAndRadialLug(t)
 	farTurn, err := r3.Rotation(r3.NewVec(1, 0, 0), units.Radians(2*math.Pi*5/16))
 	require.NoError(t, err)
-	farCopy, err := decad.Copy(t.Context(), trimmed, decad.WithCopyPlacement(farTurn))
+	farCopy, err := decad.Copy(trimmed).Place(decad.CopyTransform{Transform: farTurn}).Do(t.Context())
 	require.NoError(t, err)
 	nearTurn, err := r3.Rotation(r3.NewVec(1, 0, 0), units.Degrees(5))
 	require.NoError(t, err)
-	nearCopy, err := decad.Copy(t.Context(), trimmed, decad.WithCopyPlacement(nearTurn))
+	nearCopy, err := decad.Copy(trimmed).Place(decad.CopyTransform{Transform: nearTurn}).Do(t.Context())
 	require.NoError(t, err)
 	before := doc.Bodies()
 	_, err = decad.Union(hub, trimmed, farCopy, nearCopy).Do(t.Context())
@@ -277,7 +277,7 @@ func TestUnionShoulderedHubOverlappingLugsLeaveInputsLive(t *testing.T) {
 	doc, hub, trimmed := shoulderedHubAndRadialLug(t)
 	turn, err := r3.Rotation(r3.Vec{X: 1}, units.Degrees(5))
 	require.NoError(t, err)
-	second, err := decad.Copy(t.Context(), trimmed, decad.WithCopyPlacement(turn))
+	second, err := decad.Copy(trimmed).Place(decad.CopyTransform{Transform: turn}).Do(t.Context())
 	require.NoError(t, err)
 	before := doc.Bodies()
 	_, err = decad.Union(hub, trimmed, second).Do(t.Context())

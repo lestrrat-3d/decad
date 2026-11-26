@@ -32,7 +32,7 @@ func unionBossShellFixture(t *testing.T, plateZ0, plateHeight, bossZ0, bossHeigh
 	boss := internalBoxBodyAtZ(t, doc, -4, -3, 4, 3, bossZ0, bossHeight)
 	turn, err := r3.RotationAround(r3.Vec{X: 1, Y: 0.5}, r3.Vec{Z: 1}, units.Degrees(20))
 	require.NoError(t, err)
-	boss, err = Transform(t.Context(), boss, turn)
+	boss, err = Transform(boss, turn).Do(t.Context())
 	require.NoError(t, err)
 	joined, err := Union(plate, boss).Do(t.Context())
 	require.NoError(t, err)

@@ -182,7 +182,7 @@ func TestSweepTwistChargesPlacementMap(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
 			body := twistMapSweep(t, c)
-			placed, err := decad.Transform(t.Context(), body, pose)
+			placed, err := decad.Transform(body, pose).Do(t.Context())
 			require.NoError(t, err)
 			v0, err := body.Volume()
 			require.NoError(t, err)
@@ -224,7 +224,7 @@ func TestSweepTwistExactPlacementKeepsReadings(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
 			body := twistMapSweep(t, c)
-			placed, err := decad.Transform(t.Context(), body, move)
+			placed, err := decad.Transform(body, move).Do(t.Context())
 			require.NoError(t, err)
 			v0, err := body.Volume()
 			require.NoError(t, err)

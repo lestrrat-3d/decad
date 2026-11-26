@@ -390,7 +390,7 @@ func TestQuarterTurnAgreesWithTheTurnedCubes(t *testing.T) {
 		}
 		about := r3.NewVec(float64(rng.IntN(voxelSide)), float64(rng.IntN(voxelSide)), 0)
 		turns := 1 + rng.IntN(3)
-		out, err := decad.QuarterTurn(t.Context(), b, r3.NewVec(0, 0, 1), about, turns)
+		out, err := decad.QuarterTurn(b, r3.NewVec(0, 0, 1), about, turns).Do(t.Context())
 		if err != nil {
 			continue
 		}
@@ -439,7 +439,7 @@ func TestStretchAgreesWithTheStretchedCubes(t *testing.T) {
 			f[a] = factors[rng.IntN(len(factors))]
 		}
 		anchor := r3.NewVec(float64(rng.IntN(voxelSide)), float64(rng.IntN(voxelSide)), float64(rng.IntN(voxelSide)))
-		out, err := decad.Stretch(t.Context(), b, anchor, units.Scalar(f[0]), units.Scalar(f[1]), units.Scalar(f[2]))
+		out, err := decad.Stretch(b, anchor, units.Scalar(f[0]), units.Scalar(f[1]), units.Scalar(f[2])).Do(t.Context())
 		if err != nil {
 			continue
 		}
@@ -480,7 +480,7 @@ func TestCircularPatternAgreesWithTheUnionOfTurnedCubes(t *testing.T) {
 		}
 		count := []int{2, 4}[rng.IntN(2)]
 		centre := r3.NewVec(float64(rng.IntN(voxelSide+1)), float64(rng.IntN(voxelSide+1)), 0)
-		out, err := decad.Patterned(t.Context(), b, decad.CircularPattern{Center: centre, Axis: r3.NewVec(0, 0, 1), Count: count})
+		out, err := decad.Patterned(b, decad.CircularPattern{Center: centre, Axis: r3.NewVec(0, 0, 1), Count: count}).Do(t.Context())
 		if err != nil {
 			// A union whose kept cubes meet only along an edge, or too many cubes: refused, never a wrong volume.
 			continue
@@ -533,7 +533,7 @@ func TestMeshSolidWithAPrismAgreesWithTheCubeByCubeBoolean(t *testing.T) {
 			block := decadtest.NewBlock(t, doc, float64(lo[0]), float64(lo[1]), float64(hi[0]), float64(hi[1]), units.Millimeters(float64(hi[2]-lo[2])))
 			lift, err := r3.Translation(r3.NewVec(0, 0, float64(lo[2])))
 			require.NoError(t, err)
-			prism, err := decad.Transform(t.Context(), block, lift)
+			prism, err := decad.Transform(block, lift).Do(t.Context())
 			require.NoError(t, err)
 			want := 0
 			for x := range voxelSide {
@@ -597,7 +597,7 @@ func TestMirroredCopyAndUnionAgreeWithTheMirroredCubes(t *testing.T) {
 		k := rng.IntN(voxelSide + 1)
 		frame, err := r3.NewFrame(r3.NewVec(float64(k), 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1))
 		require.NoError(t, err)
-		image, err := decad.MirroredCopy(t.Context(), b, decad.MirrorFrame{Frame: frame})
+		image, err := decad.MirroredCopy(b, decad.MirrorFrame{Frame: frame}).Do(t.Context())
 		require.NoError(t, err)
 		got, bound := volumeOf(t, image)
 		require.InDelta(t, float64(c.count()), got, bound+1e-9, "a mirror keeps the volume")

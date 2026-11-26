@@ -460,7 +460,7 @@ func TestShellCupPlacedComposes(t *testing.T) {
 	// is invariant under a rigid move.
 	motion, err := r3.Translation(r3.NewVec(10, 20, 30))
 	require.NoError(t, err)
-	moved, err := decad.Transform(t.Context(), cup, motion)
+	moved, err := decad.Transform(cup, motion).Do(t.Context())
 	require.NoError(t, err)
 	require.True(t, moved.IsSolid())
 	requireManifold(t, moved)
@@ -913,7 +913,7 @@ func TestShellInwardSectionWorkBudget(t *testing.T) {
 	require.Contains(t, err.Error(), "work budget")
 	require.Contains(t, err.Error(), "candidate-family visits")
 	require.Equal(t, before.bodies, doc.Bodies(), `a refused shell must preserve live body membership and order`)
-	_, err = decad.Copy(t.Context(), box)
+	_, err = decad.Copy(box).Do(t.Context())
 	require.NoError(t, err, `the receiver must remain live after a work-budget refusal`)
 }
 
@@ -951,7 +951,7 @@ func TestShellCupDownstream(t *testing.T) {
 		// two live, box-disjoint cups in one document.
 		far, err := r3.Translation(r3.NewVec(500, 0, 0))
 		require.NoError(t, err)
-		_, err = decad.Transform(t.Context(), cup1, far)
+		_, err = decad.Transform(cup1, far).Do(t.Context())
 		require.NoError(t, err)
 		s2, p2 := plateSketch(t)
 		box2, err := decad.Extrude(doc, s2, p2, decad.Distance{D: units.Millimeters(shellBoxHeight), Dir: decad.Along}).Do(t.Context())
@@ -1285,7 +1285,7 @@ func TestShellCupTessellateReflected(t *testing.T) {
 	require.NoError(t, err)
 	refl, err := r3.Reflection(mirror)
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), cup, refl)
+	placed, err := decad.Transform(cup, refl).Do(t.Context())
 	require.NoError(t, err)
 
 	mesh, err := placed.Tessellate(t.Context(), units.Millimeters(0.1))

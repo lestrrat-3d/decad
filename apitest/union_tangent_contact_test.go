@@ -212,7 +212,7 @@ func TestPatternedTangentCopies(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			doc := decad.New()
-			got, err := decad.Patterned(t.Context(), circleBodyAtZ(t, doc, tc.x, 2, 0, 10), tc.spec)
+			got, err := decad.Patterned(circleBodyAtZ(t, doc, tc.x, 2, 0, 10), tc.spec).Do(t.Context())
 			require.NoError(t, err)
 			requireMeshedUnion(t, got, 80*math.Pi)
 		})

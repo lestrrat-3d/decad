@@ -19,7 +19,7 @@ func TestPlacedAxisPrismBooleans(t *testing.T) {
 		t.Helper()
 		motion, err := r3.Translation(r3.NewVec(x, y, z))
 		require.NoError(t, err)
-		placedBody, err := decad.Copy(t.Context(), source, decad.WithCopyPlacement(motion))
+		placedBody, err := decad.Copy(source).Place(decad.CopyTransform{Transform: motion}).Do(t.Context())
 		require.NoError(t, err)
 		return placedBody
 	}
@@ -107,7 +107,7 @@ func TestPlacedAxisPrismBooleans(t *testing.T) {
 			EZ: r3.NewVec(1, 0, 0),
 		}, r3.NewVec(10, 0, 10))
 		require.NoError(t, err)
-		b, err := decad.Copy(t.Context(), a, decad.WithCopyPlacement(motion))
+		b, err := decad.Copy(a).Place(decad.CopyTransform{Transform: motion}).Do(t.Context())
 		require.NoError(t, err)
 		got, err := decad.Union(a, b).Do(t.Context())
 		require.NoError(t, err, "exact boxes meeting face to face are classified exactly")

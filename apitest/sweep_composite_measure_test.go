@@ -50,7 +50,7 @@ func TestSweepCompositeArcLineArcMeasurementsReplay(t *testing.T) {
 
 	move, err := r3.Translation(r3.NewVec(20, -10, 3))
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), body, move)
+	placed, err := decad.Transform(body, move).Do(t.Context())
 	require.NoError(t, err)
 	decadtest.MeasuresVolume(t, placed, units.CubicMillimeters(12+20*math.Pi))
 	decadtest.MeasuresArea(t, placed, units.SquareMillimeters(32+40*math.Pi))
@@ -74,11 +74,11 @@ func TestSweepCompositeCopyPlacementKeepsSourceReplay(t *testing.T) {
 
 	move, err := r3.Translation(r3.NewVec(20, -10, 3))
 	require.NoError(t, err)
-	placedCopy, err := decad.Copy(t.Context(), source, decad.WithCopyPlacement(move))
+	placedCopy, err := decad.Copy(source).Place(decad.CopyTransform{Transform: move}).Do(t.Context())
 	require.NoError(t, err)
 	decadtest.MeasuresCentroid(t, placedCopy, move.Apply(sourceCentroid.Value))
 
-	replayedSource, err := decad.Copy(t.Context(), source)
+	replayedSource, err := decad.Copy(source).Do(t.Context())
 	require.NoError(t, err)
 	decadtest.MeasuresCentroid(t, replayedSource, sourceCentroid.Value)
 	decadtest.MeasuresBounds(t, replayedSource, r3.NewVec(-1, -1, 0), r3.NewVec(21, 5, 6))

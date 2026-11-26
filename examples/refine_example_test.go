@@ -44,7 +44,7 @@ func Example_refine() {
 		if err != nil {
 			return nil, err
 		}
-		return decad.Transform(ctx, wire, place)
+		return decad.Transform(wire, place).Do(ctx)
 	}
 
 	// Two spans meet end to end at a right-angle bend.

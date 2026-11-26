@@ -57,7 +57,7 @@ func (sc *retentionScene) tool(t *testing.T, cx float64) *decad.Body {
 	require.NoError(t, err)
 	move, err := r3.Translation(r3.Vec{Y: 30})
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), cyl, move)
+	placed, err := decad.Transform(cyl, move).Do(t.Context())
 	require.NoError(t, err)
 	return placed
 }
@@ -223,7 +223,7 @@ func TestFacetedSourceRetention(t *testing.T) {
 		require.NoError(t, err)
 		move, err := r3.Translation(r3.Vec{Y: 30})
 		require.NoError(t, err)
-		placed, err := decad.Transform(t.Context(), pin, move)
+		placed, err := decad.Transform(pin, move).Do(t.Context())
 		require.NoError(t, err)
 		joined, err := decad.Union(plate, placed).Do(t.Context())
 		require.NoError(t, err)
@@ -251,7 +251,7 @@ func TestFacetedSourceRetention(t *testing.T) {
 		sc := newRetentionScene()
 		drilled, err := decad.Cut(sc.roundedBox(t), sc.tool(t, 20)).Do(t.Context())
 		require.NoError(t, err)
-		scaled, err := decad.ScaledAt(t.Context(), drilled, r3.Vec{}, units.Scalar(2))
+		scaled, err := decad.ScaledAt(drilled, r3.Vec{}, units.Scalar(2)).Do(t.Context())
 		require.NoError(t, err)
 		kinds := retentionKinds(scaled)
 		require.Zero(t, kinds["other"], "kinds %v", kinds)
@@ -293,7 +293,7 @@ func TestFacetedSourceRetention(t *testing.T) {
 		drilled, err := decad.Cut(sc.roundedBox(t), sc.tool(t, 20)).Do(t.Context())
 		require.NoError(t, err)
 		wall := decad.Faces(decad.Planar(), decad.Facing(r3.NewVec(1, 0, 0)))
-		mirrored, err := decad.MirroredCopy(t.Context(), drilled, decad.MirrorFace{Body: drilled, Face: wall})
+		mirrored, err := decad.MirroredCopy(drilled, decad.MirrorFace{Body: drilled, Face: wall}).Do(t.Context())
 		require.NoError(t, err)
 		box, err := mirrored.Bounds()
 		require.NoError(t, err)
@@ -332,7 +332,7 @@ func TestFacetedSourceRetention(t *testing.T) {
 		require.NoError(t, err)
 		move, err := r3.Translation(r3.Vec{Z: 0.001})
 		require.NoError(t, err)
-		tool, err := decad.Transform(t.Context(), pin, move)
+		tool, err := decad.Transform(pin, move).Do(t.Context())
 		require.NoError(t, err)
 		cut, err := decad.Cut(shaft, tool).Do(t.Context())
 		require.NoError(t, err)
@@ -419,7 +419,7 @@ func TestFacetedSourceRetention(t *testing.T) {
 		require.NoError(t, err)
 		turn, err := r3.RotationAround(r3.NewVec(20, 10, 10), r3.NewVec(0, 1, 0), units.Radians(30*math.Pi/180))
 		require.NoError(t, err)
-		tool, err := decad.Transform(t.Context(), pin, turn)
+		tool, err := decad.Transform(pin, turn).Do(t.Context())
 		require.NoError(t, err)
 		bored, err := decad.Cut(plate, tool).Do(t.Context())
 		require.NoError(t, err)
@@ -475,7 +475,7 @@ func TestFacetedSourceRetention(t *testing.T) {
 				require.NoError(t, err)
 				// rims returns the curves of the bore wall's edges after the move.
 				rims := func(dx float64) (circles []decad.Circle3, chains int) {
-					twin, err := decad.Copy(t.Context(), drilled)
+					twin, err := decad.Copy(drilled).Do(t.Context())
 					require.NoError(t, err)
 					moved := translated(t, twin, dx, 0, 0)
 					bores := 0

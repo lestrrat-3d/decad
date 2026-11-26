@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/opcommand"
 	"github.com/lestrrat-3d/decad/internal/opdiagnostic"
 	"github.com/lestrrat-3d/decad/internal/patternassembly"
 	"github.com/lestrrat-3d/decad/internal/patternrecord"
@@ -73,8 +74,29 @@ func resolvePatternSpec(spec PatternSpec) (patternrecord.Spec, error) {
 	}
 }
 
-// PatternCopies returns Count−1 new live bodies, instances 1..Count−1 of
-// spec in order, and leaves b live (agent-docs/mirror-pattern-design.md §4.3).
+// copyPatternSpec copies spec at the call that stores it
+// (agent-docs/command-api-design.md rule A3): a pointer to a variant is
+// replaced by a pointer to a copy of its value, so a later write through the
+// caller's pointer does not reach the command.
+func copyPatternSpec(spec PatternSpec) PatternSpec {
+	switch s := spec.(type) {
+	case *LinearPattern:
+		if s != nil {
+			cp := *s
+			return &cp
+		}
+	case *CircularPattern:
+		if s != nil {
+			cp := *s
+			return &cp
+		}
+	}
+	return spec
+}
+
+// PatternCopies returns the command that repeats b by spec. Do returns Count−1
+// new live bodies, instances 1..Count−1 of spec in order, and leaves b live
+// (agent-docs/mirror-pattern-design.md §4.3).
 //
 // The gates are Copy's — a nil context or a nil b is ErrDegenerate, a body
 // this evaluator did not build is ErrUnsupported, a retired or foreign b is
@@ -94,7 +116,37 @@ func resolvePatternSpec(spec PatternSpec) (patternrecord.Spec, error) {
 // To join the instances to a base, pass the base, b and the result to one
 // [Union]: Union(append([]*Body{base, b}, copies...)...).Do(ctx). A refused
 // Union leaves every operand live, the copies included; [Remove] them.
-func PatternCopies(ctx context.Context, b *Body, spec PatternSpec) ([]*Body, error) {
+func PatternCopies(b *Body, spec PatternSpec) *PatternCopiesCommand {
+	c := &PatternCopiesCommand{b: b, spec: copyPatternSpec(spec)}
+	if b == nil {
+		c.state.Record("body", errNilBody)
+	}
+	return c
+}
+
+// PatternCopiesCommand repeats a body as separate live copies. Build it with
+// [PatternCopies].
+type PatternCopiesCommand struct {
+	state opcommand.State // consumed flag and first recorded fault
+	b     *Body           // stored as given
+	spec  PatternSpec     // copied at PatternCopies
+}
+
+// Do builds the copies and returns them, or returns the error of the first
+// gate that refuses, with nothing committed. A nil ctx is ErrDegenerate, and a
+// second call returns ErrConsumed.
+func (c *PatternCopiesCommand) Do(ctx context.Context) ([]*Body, error) {
+	return runCommand(ctx, &c.state, OperationPatternCopies, c.run)
+}
+
+func (c *PatternCopiesCommand) run(ctx context.Context) ([]*Body, error) {
+	return patternCopies(ctx, c.b, c.spec)
+}
+
+// patternCopies is PatternCopies' implementation. ctx is not nil, and the
+// errors it returns carry no operation tag
+// (agent-docs/command-api-design.md §11).
+func patternCopies(ctx context.Context, b *Body, spec PatternSpec) ([]*Body, error) {
 	d, rp, keeping, err := b.patternReceiver(ctx, spec)
 	if err != nil {
 		return nil, err
@@ -116,9 +168,6 @@ func PatternCopies(ctx context.Context, b *Body, spec PatternSpec) ([]*Body, err
 // patternReceiver runs the gates PatternCopies and Patterned share, then
 // decides §4.3's frame-keeping arm for the receiver.
 func (b *Body) patternReceiver(ctx context.Context, spec PatternSpec) (*Document, resolvedPattern, bool, error) {
-	if ctx == nil {
-		return nil, resolvedPattern{}, false, fmt.Errorf(`%w: a nil context cannot control a pattern`, ErrDegenerate)
-	}
 	if b == nil || b.n.Doc == nil {
 		return nil, resolvedPattern{}, false, fmt.Errorf(`%w: the body belongs to no document`, ErrDegenerate)
 	}
@@ -203,9 +252,10 @@ func (rp resolvedPattern) placedInstance(ctx context.Context, d *Document, ref p
 	return placePayload(ctx, payload, d, ref, composed)
 }
 
-// Patterned returns ONE body holding every instance of spec, b included,
-// and retires b (agent-docs/mirror-pattern-design.md §4.3, §6.1). Its gates are PatternCopies'. The instances combine by the first
-// rule that applies:
+// Patterned returns the command that joins every instance of spec into one
+// body. Do returns ONE body holding every instance of spec, b included, and
+// retires b (agent-docs/mirror-pattern-design.md §4.3, §6.1). Its gates are
+// PatternCopies'. The instances combine by the first rule that applies:
 //
 //  1. A straight prism or a prism group on the frame-keeping arm whose
 //     instances sketch proves pairwise disjoint becomes one prism group: a
@@ -222,7 +272,36 @@ func (rp resolvedPattern) placedInstance(ctx context.Context, d *Document, ref p
 // Every instance and every intermediate result is built before anything is
 // registered, so a refusal or a canceled context leaves the document
 // unchanged and b live.
-func Patterned(ctx context.Context, b *Body, spec PatternSpec) (*Body, error) {
+func Patterned(b *Body, spec PatternSpec) *PatternedCommand {
+	c := &PatternedCommand{b: b, spec: copyPatternSpec(spec)}
+	if b == nil {
+		c.state.Record("body", errNilBody)
+	}
+	return c
+}
+
+// PatternedCommand repeats a body and joins the instances into one body.
+// Build it with [Patterned].
+type PatternedCommand struct {
+	state opcommand.State // consumed flag and first recorded fault
+	b     *Body           // stored as given
+	spec  PatternSpec     // copied at Patterned
+}
+
+// Do builds the joined body and retires the receiver, or returns the error of
+// the first gate that refuses, with nothing committed. A nil ctx is
+// ErrDegenerate, and a second call returns ErrConsumed.
+func (c *PatternedCommand) Do(ctx context.Context) (*Body, error) {
+	return runCommand(ctx, &c.state, OperationPatterned, c.run)
+}
+
+func (c *PatternedCommand) run(ctx context.Context) (*Body, error) {
+	return patterned(ctx, c.b, c.spec)
+}
+
+// patterned is Patterned's implementation. ctx is not nil, and the errors it
+// returns carry no operation tag (agent-docs/command-api-design.md §11).
+func patterned(ctx context.Context, b *Body, spec PatternSpec) (*Body, error) {
 	d, rp, keeping, err := b.patternReceiver(ctx, spec)
 	if err != nil {
 		return nil, err

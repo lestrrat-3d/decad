@@ -354,7 +354,7 @@ func TestRevolvedShaftClassBBlend(t *testing.T) {
 		// fillets to item 1's volume.
 		move, err := r3.Translation(r3.Vec{X: 3})
 		require.NoError(t, err)
-		placed, err := decad.Transform(t.Context(), dFlat(t, extrudedShaft), move)
+		placed, err := decad.Transform(dFlat(t, extrudedShaft), move).Do(t.Context())
 		require.NoError(t, err)
 		got, err := decad.Fillet(placed, flatEdges(t, placed), units.Millimeters(1)).Do(t.Context())
 		require.NoError(t, err)

@@ -128,8 +128,7 @@ func sectorDigestTurn(t *testing.T, radians float64) r3.Transform {
 
 func sectorDigestCopy(t *testing.T, body *decad.Body, degrees float64) *decad.Body {
 	t.Helper()
-	placed, err := decad.Copy(t.Context(), body,
-		decad.WithCopyPlacement(sectorDigestTurn(t, degrees*math.Pi/180)))
+	placed, err := decad.Copy(body).Place(decad.CopyTransform{Transform: sectorDigestTurn(t, degrees*math.Pi/180)}).Do(t.Context())
 	require.NoError(t, err)
 	return placed
 }
@@ -213,8 +212,7 @@ func sectorDigestTapered(splitU float64, fitted bool) func(t *testing.T) []*deca
 func sectorDigestNearAxis(serial bool) func(t *testing.T) []*decad.Body {
 	return func(t *testing.T) []*decad.Body {
 		_, hub, trimmed := shoulderedHubAndRadialLug(t)
-		near, err := decad.Copy(t.Context(), trimmed,
-			decad.WithCopyPlacement(sectorDigestTurn(t, 2*math.Pi*5/16)))
+		near, err := decad.Copy(trimmed).Place(decad.CopyTransform{Transform: sectorDigestTurn(t, 2*math.Pi*5/16)}).Do(t.Context())
 		require.NoError(t, err)
 		if serial {
 			return []*decad.Body{sectorDigestUnion(t, sectorDigestUnion(t, hub, trimmed), near)}
@@ -291,8 +289,7 @@ func TestSectorRouteDigestManyLugs(t *testing.T) {
 			const count = 40
 			rest := []*decad.Body{lug}
 			for i := 1; i < count; i++ {
-				copied, err := decad.Copy(t.Context(), lug,
-					decad.WithCopyPlacement(sectorDigestTurn(t, 2*math.Pi*float64(i)/count)))
+				copied, err := decad.Copy(lug).Place(decad.CopyTransform{Transform: sectorDigestTurn(t, 2*math.Pi*float64(i)/count)}).Do(t.Context())
 				require.NoError(t, err)
 				rest = append(rest, copied)
 			}
@@ -352,7 +349,7 @@ func TestSectorRouteDigestPointCone(t *testing.T) {
 			require.NoError(t, err)
 			move, err := r3.Translation(r3.NewVec(1, 2, 3))
 			require.NoError(t, err)
-			placed, err := decad.Copy(t.Context(), cut, decad.WithCopyPlacement(move))
+			placed, err := decad.Copy(cut).Place(decad.CopyTransform{Transform: move}).Do(t.Context())
 			require.NoError(t, err)
 			return []*decad.Body{cut, placed}
 		}},

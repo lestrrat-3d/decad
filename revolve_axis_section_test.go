@@ -564,7 +564,7 @@ func TestSectorUnionAcceptsGeneralCertificate(t *testing.T) {
 		s5 := math.Sqrt(5)
 		turn, err := r3.Rotation(r3.Vec{X: 1 / s5, Y: 2 / s5}, units.Degrees(180))
 		require.NoError(t, err)
-		second, err := Copy(t.Context(), f.lug, WithCopyPlacement(turn))
+		second, err := Copy(f.lug).Place(CopyTransform{Transform: turn}).Do(t.Context())
 		require.NoError(t, err)
 		return f, second
 	}

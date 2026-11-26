@@ -69,7 +69,7 @@ func TestPrismGroupDisjointUnion(t *testing.T) {
 	require.Equal(t, 2, read.Report().Shells)
 	requireMeshVolume(t, read, 1000)
 
-	moved, err := decad.Transform(t.Context(), got, mustTranslation(t, 0, 0, 7))
+	moved, err := decad.Transform(got, mustTranslation(t, 0, 0, 7)).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, moved.Lumps(), 2)
 	movedVolume, err := moved.Volume()

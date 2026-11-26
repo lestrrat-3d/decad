@@ -375,7 +375,7 @@ func TestUnionHoledSharedSpanExactLines(t *testing.T) {
 	require.InDelta(t, 6, hi, 1e-12)
 
 	forScale := build()
-	scaled, err := decad.ScaledAt(t.Context(), forScale, r3.Vec{}, units.Scalar(2))
+	scaled, err := decad.ScaledAt(forScale, r3.Vec{}, units.Scalar(2)).Do(t.Context())
 	require.NoError(t, err)
 	sv, sb := volumeAndBound(t, scaled)
 	require.LessOrEqual(t, math.Abs(sv-8*want), sb)
@@ -459,7 +459,7 @@ func TestUnionHoledSharedSpanScaleRefusesCharged(t *testing.T) {
 	require.NoError(t, err)
 	requireAnalytic(t, out)
 
-	_, err = decad.ScaledAt(t.Context(), out, r3.Vec{}, units.Scalar(2))
+	_, err = decad.ScaledAt(out, r3.Vec{}, units.Scalar(2)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 
 	frame := mustFrame(t, r3.Vec{Z: 2.5}, r3.Vec{X: 1}, r3.Vec{Y: 1})

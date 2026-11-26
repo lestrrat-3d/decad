@@ -102,7 +102,7 @@ func TestLoftSectionsFourRoundedProfilesInterpolateNonAffineWidth(t *testing.T) 
 	}
 	move, err := r3.Translation(r3.NewVec(20, 0, 0))
 	require.NoError(t, err)
-	placed, err := decad.Copy(t.Context(), body, decad.WithCopyPlacement(move))
+	placed, err := decad.Copy(body).Place(decad.CopyTransform{Transform: move}).Do(t.Context())
 	require.NoError(t, err)
 	placedMesh, err := placed.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
 	require.NoError(t, err)

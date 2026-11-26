@@ -85,14 +85,14 @@ func placedPinInBore(t *testing.T, p bandPlacement, cut, split bool, pinD float6
 	if p.deg == 0 {
 		return doc, plate, pin
 	}
-	plate, err := decad.Transform(t.Context(), plate, placement(t, p, 1))
+	plate, err := decad.Transform(plate, placement(t, p, 1)).Do(t.Context())
 	require.NoError(t, err)
 	turns := []float64{1}
 	if split {
 		turns = []float64{0.5, 0.5}
 	}
 	for _, f := range turns {
-		pin, err = decad.Transform(t.Context(), pin, placement(t, p, f))
+		pin, err = decad.Transform(pin, placement(t, p, f)).Do(t.Context())
 		require.NoError(t, err)
 	}
 	return doc, plate, pin

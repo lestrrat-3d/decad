@@ -19,9 +19,9 @@ func TestOperationHistorySnapshotAndFaceCoverage(t *testing.T) {
 	require.Equal(t, OperationExtrude, created[0].Kind())
 	require.Equal(t, []*Body{source}, created[0].Outputs())
 
-	placed, err := Transform(t.Context(), source, r3.Identity())
+	placed, err := Transform(source, r3.Identity()).Do(t.Context())
 	require.NoError(t, err)
-	transformed, err := Transform(t.Context(), placed, r3.Identity())
+	transformed, err := Transform(placed, r3.Identity()).Do(t.Context())
 	require.NoError(t, err)
 	latest := doc.OperationHistory()
 	require.Len(t, snapshot.Operations(), 1)
@@ -58,7 +58,7 @@ func TestOperationHistorySnapshotAndFaceCoverage(t *testing.T) {
 	_, err = transform.FaceSuccessors(transformed.Faces()[0])
 	require.ErrorIs(t, err, ErrNoMatch)
 
-	copied, err := Copy(t.Context(), transformed)
+	copied, err := Copy(transformed).Do(t.Context())
 	require.NoError(t, err)
 	copyHistory := doc.OperationHistory()
 	copyProducer, err := copyHistory.Producer(copied)

@@ -189,7 +189,7 @@ func TestSectionMeshBooleanFromHistory(t *testing.T) {
 			s.Fix(rect.A)
 			move, err := r3.Translation(frame.N().Scale(-down))
 			require.NoError(t, err)
-			moved, err := decad.Transform(t.Context(), extrudeSolved(t, doc, s, length), move)
+			moved, err := decad.Transform(extrudeSolved(t, doc, s, length), move).Do(t.Context())
 			require.NoError(t, err)
 			return moved
 		}
@@ -230,7 +230,7 @@ func TestSectionMeshBooleanHistoryRefusals(t *testing.T) {
 		doc := decad.New()
 		notched, err := decad.Cut(historyCube(t, doc), boxBodyAtZ(t, doc, 5, 5, 15, 15, 5, 10)).Do(t.Context())
 		require.NoError(t, err)
-		duplicate, err := decad.Copy(t.Context(), notched)
+		duplicate, err := decad.Copy(notched).Do(t.Context())
 		require.NoError(t, err)
 		// The history gate refuses a copy, but a copy of an axis-square result keeps its exact vertices, so the grid
 		// reads the same notch (agent-docs/orthogonal-design.md).
@@ -511,7 +511,7 @@ func TestSectionMeshBooleanHistoryRefusesCutCurves(t *testing.T) {
 	s.CreateCircle(center, 4)
 	alongY, err := r3.Translation(r3.Vec{Y: 20})
 	require.NoError(t, err)
-	tool, err := decad.Transform(t.Context(), extrudeSolved(t, doc, s, 40), alongY)
+	tool, err := decad.Transform(extrudeSolved(t, doc, s, 40), alongY).Do(t.Context())
 	require.NoError(t, err)
 	joined, err := decad.Union(xCylinder(t, doc, -20, 40, 0, 0, 6), tool).Do(t.Context())
 	require.NoError(t, err)

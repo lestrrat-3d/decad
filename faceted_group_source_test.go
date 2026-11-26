@@ -49,7 +49,7 @@ func (sc *sourceScene) tool(t *testing.T, cx float64) *Body {
 	require.NoError(t, err)
 	move, err := r3.Translation(r3.Vec{Z: -29.999})
 	require.NoError(t, err)
-	placed, err := Transform(t.Context(), pin, move)
+	placed, err := Transform(pin, move).Do(t.Context())
 	require.NoError(t, err)
 	return placed
 }

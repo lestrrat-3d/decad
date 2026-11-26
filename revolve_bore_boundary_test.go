@@ -203,7 +203,7 @@ func requireRevolveBoreRepeatedPlacement(t *testing.T, outline string, toolArea 
 	wantVolume := math.Pi*32/3*(10*10+10*8+8*8) - toolArea*32
 	requireRevolveBoreVolume(t, result, wantVolume)
 
-	placed, err := Transform(t.Context(), result, r3.Identity())
+	placed, err := Transform(result, r3.Identity()).Do(t.Context())
 	require.NoError(t, err, "identity placement")
 	requireRevolveBoreVolume(t, placed, wantVolume)
 	angle := math.Remainder(7*math.Pi/3, 2*math.Pi)
@@ -212,15 +212,15 @@ func requireRevolveBoreRepeatedPlacement(t *testing.T, outline string, toolArea 
 	require.NoError(t, err)
 	turn, err := r3.FromFrame(frame)
 	require.NoError(t, err)
-	placed, err = Transform(t.Context(), placed, turn)
+	placed, err = Transform(placed, turn).Do(t.Context())
 	require.NoError(t, err, "nonzero placement")
 	requireRevolveBoreVolume(t, placed, wantVolume)
-	placed, err = Transform(t.Context(), placed, r3.Identity())
+	placed, err = Transform(placed, r3.Identity()).Do(t.Context())
 	require.NoError(t, err, "repeated identity placement")
 	requireRevolveBoreVolume(t, placed, wantVolume)
 	shift, err := r3.Translation(r3.Vec{X: 13, Y: -7, Z: 5})
 	require.NoError(t, err)
-	placed, err = Transform(t.Context(), placed, shift)
+	placed, err = Transform(placed, shift).Do(t.Context())
 	require.NoError(t, err, "repeated nonzero placement")
 	requireRevolveBoreVolume(t, placed, wantVolume)
 }

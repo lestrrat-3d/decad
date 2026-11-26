@@ -148,14 +148,14 @@ func TestPathPatternRefusedCopyLeavesTheDocumentUnchanged(t *testing.T) {
 	path, err := NewPath(r3.Vec{}, LineTo{End: r3.Vec{X: 10}}, LineTo{End: r3.Vec{X: 2}})
 	require.NoError(t, err)
 	before := captureDocumentState(t.Context(), t, doc)
-	copies, err := PathPattern(t.Context(), block, path, WithPathCount(6), WithPathFollow())
+	copies, err := PathPattern(block, path, PathCount{Count: 6}).Follow().Do(t.Context())
 	require.ErrorIs(t, err, ErrDegenerate)
 	require.Equal(t, OperationCopy, operationKindOf(t, err))
 	require.Nil(t, copies)
 	requireDocumentState(t.Context(), t, before, doc, block)
 	// The refused call used no producer number, so the next copy takes the
 	// number the first copy of the refused call would have taken.
-	again, err := Copy(t.Context(), block)
+	again, err := Copy(block).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, before.next, again.n.Origin.Producer)
 }
@@ -186,7 +186,7 @@ func TestPathPatternCanceledMidwayLeavesTheDocumentUnchanged(t *testing.T) {
 				}
 				before := captureDocumentState(t.Context(), t, doc)
 				return func(ctx context.Context) bool {
-					copies, err := PathPattern(ctx, block, path, WithPathCount(4))
+					copies, err := PathPattern(block, path, PathCount{Count: 4}).Do(ctx)
 					if err == nil {
 						require.Len(t, copies, 3)
 						return true
@@ -211,7 +211,7 @@ func TestPathPatternSuccessRecordsOneCopyEntryPerInstance(t *testing.T) {
 	doc := New()
 	block := internalBoxBody(t, doc, 0, 0, 4, 4, 2)
 	first := doc.producerAt(t.Context())
-	copies, err := PathPattern(t.Context(), block, straightPath(t), WithPathCount(4))
+	copies, err := PathPattern(block, straightPath(t), PathCount{Count: 4}).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, copies, 3)
 	require.Len(t, doc.Bodies(), 4)

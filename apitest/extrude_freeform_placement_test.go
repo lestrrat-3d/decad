@@ -32,7 +32,7 @@ func TestExtrudeFreeformReflectedCopyPreservesGeometry(t *testing.T) {
 	require.NoError(t, err)
 	reflection, err := r3.Reflection(frame)
 	require.NoError(t, err)
-	image, err := decad.Copy(t.Context(), base, decad.WithCopyPlacement(reflection))
+	image, err := decad.Copy(base).Place(decad.CopyTransform{Transform: reflection}).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, doc.Bodies(), 2)
 

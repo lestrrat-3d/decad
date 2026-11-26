@@ -74,7 +74,7 @@ func TestLoftCapChamferRoundedTwistedGear(t *testing.T) {
 	// held solid cut by the bands, whose bound also covers the ruled one.
 	held := heldVolume(t, source)
 	for _, d := range []float64{0.1, 0.3} {
-		rounded, err := decad.Copy(t.Context(), source)
+		rounded, err := decad.Copy(source).Do(t.Context())
 		require.NoError(t, err)
 		chamfered, err := decad.Chamfer(rounded, outerCapLoops(rounded), units.Millimeters(d)).Do(t.Context())
 		if d > 0.2 {

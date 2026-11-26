@@ -100,7 +100,7 @@ func TestExtrudedToothPatternJoinsADisc(t *testing.T) {
 		discVol, err := disc.Volume()
 		require.NoError(t, err)
 
-		copies, err := decad.PatternCopies(t.Context(), tooth, decad.CircularPattern{Axis: r3.Vec{Z: 1}, Count: tc.teeth})
+		copies, err := decad.PatternCopies(tooth, decad.CircularPattern{Axis: r3.Vec{Z: 1}, Count: tc.teeth}).Do(t.Context())
 		require.NoError(t, err)
 		joined, err := decad.Union(append([]*decad.Body{disc}, append([]*decad.Body{tooth}, copies...)...)...).Do(t.Context())
 		require.NoError(t, err, "teeth %d", tc.teeth)

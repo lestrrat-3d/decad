@@ -72,7 +72,7 @@ func TestRevolveChainBuiltEnds(t *testing.T) {
 			}
 			motion, err := r3.Translation(r3.Vec{X: 7})
 			require.NoError(t, err)
-			placed, err := Copy(t.Context(), body, WithCopyPlacement(motion))
+			placed, err := Copy(body).Place(CopyTransform{Transform: motion}).Do(t.Context())
 			require.NoError(t, err)
 			_, _, _, err = revolveplan.FreeEnd(t.Context(), proofbound.NewWorkBudget(t.Context()), &placed.n, &ends[0].n)
 			require.ErrorIs(t, err, ErrUnsupported)

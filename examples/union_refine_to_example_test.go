@@ -140,7 +140,7 @@ func Example_unionRefined() {
 			fmt.Printf("failed to build a rotation: %s\n", err)
 			return
 		}
-		copied, err := decad.Copy(ctx, trimmed, decad.WithCopyPlacement(turn))
+		copied, err := decad.Copy(trimmed).Place(decad.CopyTransform{Transform: turn}).Do(ctx)
 		if err != nil {
 			fmt.Printf("failed to copy a tooth: %s\n", err)
 			return

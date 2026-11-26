@@ -34,7 +34,7 @@ func translatedUp(t *testing.T, b *decad.Body, z float64) *decad.Body {
 	t.Helper()
 	up, err := r3.Translation(r3.Vec{Z: z})
 	require.NoError(t, err)
-	m, err := decad.Transform(t.Context(), b, up)
+	m, err := decad.Transform(b, up).Do(t.Context())
 	require.NoError(t, err)
 	return m
 }

@@ -64,7 +64,7 @@ func chainTube(t *testing.T, doc *decad.Document) *decad.Body {
 	tube := twistBoreTube(t, doc, chainTubeOuter, chainTubeInner, chainTubeHeight)
 	move, err := r3.Translation(r3.NewVec(0, 0, -chainTubeHeight/2))
 	require.NoError(t, err)
-	tube, err = decad.Transform(t.Context(), tube, move)
+	tube, err = decad.Transform(tube, move).Do(t.Context())
 	require.NoError(t, err)
 	return tube
 }
@@ -101,7 +101,7 @@ func chainBoreTool(t *testing.T, doc *decad.Document, c chainBoreSpec) *decad.Bo
 	require.NoError(t, err)
 	place, err := r3.FromFrame(f)
 	require.NoError(t, err)
-	tool, err = decad.Transform(t.Context(), tool, place)
+	tool, err = decad.Transform(tool, place).Do(t.Context())
 	require.NoError(t, err)
 	return tool
 }
@@ -140,7 +140,7 @@ func chainWindow(t *testing.T, doc *decad.Document, section [4][2]float64, turn 
 	}
 	rot, err := r3.Rotation(r3.NewVec(0, 0, 1), units.Degrees(turn))
 	require.NoError(t, err)
-	body, err = decad.Transform(t.Context(), body, rot)
+	body, err = decad.Transform(body, rot).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }

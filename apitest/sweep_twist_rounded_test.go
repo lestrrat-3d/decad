@@ -124,7 +124,7 @@ func TestSweepTwistRoundedProfileVerifyAll(t *testing.T) {
 	}
 	move, err := r3.Translation(r3.NewVec(7, -3, 11))
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), body, move)
+	placed, err := decad.Transform(body, move).Do(t.Context())
 	require.NoError(t, err)
 	placedMesh, err := placed.Tessellate(t.Context(), units.Millimeters(0.1),
 		decad.WithVerification(decad.VerifyAll))
@@ -218,7 +218,7 @@ func roundedTwistUnionOperands(t *testing.T, boxMinX, boxMaxX float64) (*decad.D
 	require.NoError(t, err)
 	shift, err := r3.Translation(r3.NewVec(0, 0, 2))
 	require.NoError(t, err)
-	box, err = decad.Transform(t.Context(), box, shift)
+	box, err = decad.Transform(box, shift).Do(t.Context())
 	require.NoError(t, err)
 
 	return doc, swept, box

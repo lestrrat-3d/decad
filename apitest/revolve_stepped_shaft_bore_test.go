@@ -109,9 +109,9 @@ func TestSteppedRevolveAxialThroughBores(t *testing.T) {
 				require.NoError(t, err)
 				toolTransform, err := r3.FromFrame(toolFrame)
 				require.NoError(t, err)
-				host, err = decad.Transform(t.Context(), host, hostTransform)
+				host, err = decad.Transform(host, hostTransform).Do(t.Context())
 				require.NoError(t, err)
-				tool, err = decad.Transform(t.Context(), tool, toolTransform)
+				tool, err = decad.Transform(tool, toolTransform).Do(t.Context())
 				require.NoError(t, err)
 			}
 			if tc.transformed {
@@ -120,9 +120,9 @@ func TestSteppedRevolveAxialThroughBores(t *testing.T) {
 					move, err = r3.RotationAround(r3.Vec{}, r3.Vec{X: 1}, units.Degrees(90))
 				}
 				require.NoError(t, err)
-				host, err = decad.Transform(t.Context(), host, move)
+				host, err = decad.Transform(host, move).Do(t.Context())
 				require.NoError(t, err)
-				tool, err = decad.Transform(t.Context(), tool, move)
+				tool, err = decad.Transform(tool, move).Do(t.Context())
 				require.NoError(t, err)
 			}
 			result, err := decad.Cut(host, tool).Do(t.Context())

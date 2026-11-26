@@ -391,3 +391,5 @@
 12	0.00	TestPathPatternRefusedCopyLeavesTheDocumentUnchanged
 12	0.30	TestPathPatternCanceledMidwayLeavesTheDocumentUnchanged
 12	0.00	TestPathPatternSuccessRecordsOneCopyEntryPerInstance
+12	0.10	TestCopyMirrorPlaneDeepCopiesItsSelector
+12	0.00	TestPlacementConstructorsAreCommandConstructors

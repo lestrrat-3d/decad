@@ -22,7 +22,7 @@ func TestLoftMirrorCylinderBoreChamfersExteriorCaps(t *testing.T) {
 	middleSketch, middleProfile := loftMirrorChamferSection(t, world, middlePlane, 0.03)
 	lower, err := decad.Loft(doc, bottomSketch, bottomProfile, middleSketch, middleProfile).Do(t.Context())
 	require.NoError(t, err)
-	upper, err := decad.MirroredCopy(t.Context(), lower, decad.MirrorFrame{Frame: middleFrame})
+	upper, err := decad.MirroredCopy(lower, decad.MirrorFrame{Frame: middleFrame}).Do(t.Context())
 	require.NoError(t, err)
 	pair, err := decad.Union(lower, upper).Do(t.Context())
 	require.NoError(t, err)
@@ -39,7 +39,7 @@ func TestLoftMirrorCylinderBoreChamfersExteriorCaps(t *testing.T) {
 		if i == 5 {
 			require.Equal(t, math.Nextafter(1, 0), turn.Basis().EZ.Z)
 		}
-		turned, err := decad.Copy(t.Context(), pair, decad.WithCopyPlacement(turn))
+		turned, err := decad.Copy(pair).Place(decad.CopyTransform{Transform: turn}).Do(t.Context())
 		require.NoError(t, err)
 		pattern = append(pattern, turned)
 	}

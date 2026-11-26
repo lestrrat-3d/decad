@@ -210,7 +210,7 @@ func emboss(ctx context.Context, b *Body, s *sketch.Sketch, profiles []*sketch.P
 	}
 	// The relief and its rim are tried on a copy first, so a fillet the evaluator
 	// refuses leaves b live and the document unchanged.
-	probe, err := Copy(ctx, b)
+	probe, err := copyAsIs(ctx, b)
 	if err != nil {
 		return nil, err
 	}

@@ -26,8 +26,8 @@ func TestPatternUnionRefusesCopiesItCannotCertify(t *testing.T) {
 			plate := polyPrismBody(t, doc, [][2]float64{{0, 0}, {30, 0}, {30, 6}, {0, 6}}, 5)
 			tongue := tongueLoft(t, doc, 5)
 			before := doc.Bodies()
-			copies, err := decad.PatternCopies(t.Context(), tongue,
-				decad.LinearPattern{Dir: r3.NewVec(1, 0, 0), Step: units.Millimeters(step), Count: 3})
+			copies, err := decad.PatternCopies(tongue,
+				decad.LinearPattern{Dir: r3.NewVec(1, 0, 0), Step: units.Millimeters(step), Count: 3}).Do(t.Context())
 			require.NoError(t, err)
 			_, err = decad.Union(append([]*decad.Body{plate}, append([]*decad.Body{tongue}, copies...)...)...).Do(t.Context())
 			require.ErrorIs(t, err, decad.ErrUnsupported)
@@ -52,8 +52,8 @@ func TestPatternUnionJoinsCopiesThatShareWholeSides(t *testing.T) {
 	require.NoError(t, err)
 	tv, err := tongue.Volume()
 	require.NoError(t, err)
-	copies, err := decad.PatternCopies(t.Context(), tongue,
-		decad.LinearPattern{Dir: r3.NewVec(1, 0, 0), Step: units.Millimeters(4), Count: 3})
+	copies, err := decad.PatternCopies(tongue,
+		decad.LinearPattern{Dir: r3.NewVec(1, 0, 0), Step: units.Millimeters(4), Count: 3}).Do(t.Context())
 	require.NoError(t, err)
 	joined, err := decad.Union(append([]*decad.Body{plate}, append([]*decad.Body{tongue}, copies...)...)...).Do(t.Context())
 	require.NoError(t, err)
@@ -74,8 +74,8 @@ func TestPatternUnionRefusesLobesThatOnlyTouchTheBase(t *testing.T) {
 	disc := circleBodyAtZ(t, doc, 0, r, 0, height)
 	lobe := gapLoft(t, doc, r, 0, 0.4*math.Pi/n, height)
 	before := doc.Bodies()
-	copies, err := decad.PatternCopies(t.Context(), lobe,
-		decad.CircularPattern{Axis: r3.NewVec(0, 0, 1), Count: n})
+	copies, err := decad.PatternCopies(lobe,
+		decad.CircularPattern{Axis: r3.NewVec(0, 0, 1), Count: n}).Do(t.Context())
 	require.NoError(t, err)
 	_, err = decad.Union(append([]*decad.Body{disc}, append([]*decad.Body{lobe}, copies...)...)...).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
@@ -101,8 +101,8 @@ func TestPatternUnionKeepsLobesThatMissTheBaseByAMicronApart(t *testing.T) {
 	require.NoError(t, err)
 	lobeVolume, err := lobe.Volume()
 	require.NoError(t, err)
-	copies, err := decad.PatternCopies(t.Context(), lobe,
-		decad.CircularPattern{Axis: r3.NewVec(0, 0, 1), Count: n})
+	copies, err := decad.PatternCopies(lobe,
+		decad.CircularPattern{Axis: r3.NewVec(0, 0, 1), Count: n}).Do(t.Context())
 	require.NoError(t, err)
 	out, err := decad.Union(append([]*decad.Body{disc}, append([]*decad.Body{lobe}, copies...)...)...).Do(t.Context())
 	require.NoError(t, err)

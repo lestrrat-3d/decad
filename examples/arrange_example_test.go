@@ -41,12 +41,12 @@ func Example_arrange() {
 
 	// A 60 x 40 mm bed at the origin with a 2 mm gap. The deepest part, the
 	// 30 x 15 one, starts the first row.
-	placed, err := decad.Arrange(context.Background(), parts, decad.ArrangeBed{
+	placed, err := decad.Arrange(parts, decad.ArrangeBed{
 		Origin: r3.Vec{},
 		Width:  units.Millimeters(60),
 		Depth:  units.Millimeters(40),
 		Gap:    units.Millimeters(2),
-	})
+	}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to arrange: %s\n", err)
 		return
@@ -65,7 +65,7 @@ func Example_arrange() {
 	// x 2..22, y 19..29
 }
 
-// WithArrangeTurns lets Arrange turn parts a quarter turn about +Z when that
+// Turns lets Arrange turn parts a quarter turn about +Z when that
 // makes them fit. Here three 4 x 20 mm bars cannot stand on a 30 x 20 mm bed
 // with a 1 mm gap, because each needs 22 mm of depth, but lying down they fit.
 func Example_arrange_turns() {
@@ -93,10 +93,10 @@ func Example_arrange_turns() {
 		bars = append(bars, bar)
 	}
 	bed := decad.ArrangeBed{Width: units.Millimeters(30), Depth: units.Millimeters(20), Gap: units.Millimeters(1)}
-	if _, err := decad.Arrange(context.Background(), bars, bed); err != nil {
+	if _, err := decad.Arrange(bars, bed).Do(context.Background()); err != nil {
 		fmt.Println("without turns: the bars do not fit")
 	}
-	placed, err := decad.Arrange(context.Background(), bars, bed, decad.WithArrangeTurns())
+	placed, err := decad.Arrange(bars, bed).Turns().Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to arrange: %s\n", err)
 		return
@@ -116,7 +116,7 @@ func Example_arrange_turns() {
 	// x 1..21, y 11..15
 }
 
-// WithArrangeAngle turns each part about +Z to the angle that makes its
+// Angle turns each part about +Z to the angle that makes its
 // footprint smallest, for parts that lie across the diagonal. Here a 4 x 30 mm
 // bar turned 45 degrees would need a bed 24 mm deep; tried at 5 degree steps it
 // lies along X and fits a bed 10 mm deep.
@@ -145,17 +145,17 @@ func Example_arrange_angle() {
 		fmt.Printf("failed to build turn: %s\n", err)
 		return
 	}
-	bar, err = decad.Transform(context.Background(), bar, turn)
+	bar, err = decad.Transform(bar, turn).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to turn: %s\n", err)
 		return
 	}
-	placed, err := decad.Arrange(context.Background(), []*decad.Body{bar}, decad.ArrangeBed{
+	placed, err := decad.Arrange([]*decad.Body{bar}, decad.ArrangeBed{
 		Origin: r3.Vec{},
 		Width:  units.Millimeters(40),
 		Depth:  units.Millimeters(10),
 		Gap:    units.Millimeters(1),
-	}, decad.WithArrangeAngle(units.Degrees(5)))
+	}).Angle(units.Degrees(5)).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to arrange: %s\n", err)
 		return
@@ -197,13 +197,13 @@ func Example_arrange_layers() {
 		}
 		parts = append(parts, part)
 	}
-	placed, err := decad.Arrange(context.Background(), parts, decad.ArrangeBed{
+	placed, err := decad.Arrange(parts, decad.ArrangeBed{
 		Origin: r3.Vec{},
 		Width:  units.Millimeters(20),
 		Depth:  units.Millimeters(10),
 		Gap:    units.Millimeters(1),
 		Height: units.Millimeters(30),
-	})
+	}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to arrange: %s\n", err)
 		return

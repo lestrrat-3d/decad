@@ -29,7 +29,7 @@ func TestShellWindingRefusesAnInsideOutCavity(t *testing.T) {
 	require.True(t, ok)
 	require.True(t, sp.ClosedShell)
 
-	marked, err := Transform(t.Context(), closed, mustTranslation(r3.NewVec(0, 0, 50)))
+	marked, err := Transform(closed, mustTranslation(r3.NewVec(0, 0, 50))).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, marked.Lumps(), 1)
 	_, err = marked.Tessellate(t.Context(), units.Millimeters(0.1), WithVerification(VerifyNone))
@@ -39,7 +39,7 @@ func TestShellWindingRefusesAnInsideOutCavity(t *testing.T) {
 	// record's own Placed build, and its lump reading is what the audit reads.
 	sp.ClosedShell = false
 	marked.n.Payload = sp
-	unmarked, err := Transform(t.Context(), marked, mustTranslation(r3.NewVec(0, 0, 50)))
+	unmarked, err := Transform(marked, mustTranslation(r3.NewVec(0, 0, 50))).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, unmarked.Lumps(), 2, `the cavity reads as a second lump`)
 	for _, level := range []Verification{VerifyNone, VerifyAll} {

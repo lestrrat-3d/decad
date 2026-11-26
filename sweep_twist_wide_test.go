@@ -84,7 +84,7 @@ func TestTwistWideThinRectangleTransform(t *testing.T) {
 	require.NoError(t, err)
 	both, err := rot.Then(move)
 	require.NoError(t, err)
-	placed, err := Transform(t.Context(), body, both)
+	placed, err := Transform(body, both).Do(t.Context())
 	require.NoError(t, err)
 	vol, err := placed.Volume()
 	require.NoError(t, err)

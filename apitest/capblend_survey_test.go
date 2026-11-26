@@ -527,7 +527,7 @@ func TestCapBlendMinRadiusUndecidedOnPlacedBand(t *testing.T) {
 	require.NoError(t, err)
 	motion, err := rot.Then(trans)
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), chamfered, motion)
+	placed, err := decad.Transform(chamfered, motion).Do(t.Context())
 	require.NoError(t, err)
 
 	report, err := placed.Document().Verify(t.Context(), decad.WithConcaveRadius())

@@ -86,7 +86,7 @@ func TestCircularFitPrimitiveEligibility(t *testing.T) {
 	require.Equal(t, payload.MeshBound, booloperand.ChordShare(t.Context(), &body.n).Floor)
 	shift, err := r3.Translation(r3.Vec{X: 5})
 	require.NoError(t, err)
-	placed, err := Copy(t.Context(), body, WithCopyPlacement(shift))
+	placed, err := Copy(body).Place(CopyTransform{Transform: shift}).Do(t.Context())
 	require.NoError(t, err)
 	placedPayload, ok := placed.n.Payload.(facetedPayload)
 	require.True(t, ok)

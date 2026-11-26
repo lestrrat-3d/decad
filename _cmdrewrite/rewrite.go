@@ -120,6 +120,7 @@ var families = map[string]map[string]rule{
 		"LoftSectionsWithCircularCorrespondence": ruleLoftSectionsCircular,
 		"LoftFaces":                              ruleLoftFaces,
 	},
+	"placement": placementRules,
 	"booleans": {
 		"Union":        ruleUnion,
 		"Cut":          ruleBinary("Cut"),

@@ -101,8 +101,8 @@ func Example_pattern_join() {
 	}
 
 	// Repeat the lobe about the Z axis, then join the base and every lobe.
-	copies, err := decad.PatternCopies(ctx, lobe,
-		decad.CircularPattern{Axis: r3.NewVec(0, 0, 1), Count: count})
+	copies, err := decad.PatternCopies(lobe,
+		decad.CircularPattern{Axis: r3.NewVec(0, 0, 1), Count: count}).Do(ctx)
 	if err != nil {
 		fmt.Printf("failed to pattern: %s\n", err)
 		return

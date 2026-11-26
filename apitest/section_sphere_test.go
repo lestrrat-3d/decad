@@ -158,7 +158,7 @@ func TestSectionObliqueOffsetSpherePlacement(t *testing.T) {
 		EX: r3.Vec{Y: 1}, EY: r3.Vec{X: -1}, EZ: r3.Vec{Z: 1},
 	}, r3.NewVec(7, 11, 13))
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), sphere, motion)
+	placed, err := decad.Transform(sphere, motion).Do(t.Context())
 	require.NoError(t, err)
 	frame, err := r3.NewFrame(r3.NewVec(7, 17.8, 15.4),
 		r3.NewVec(-1, 0, 0), r3.NewVec(0, 0.8, -0.6))
@@ -210,7 +210,7 @@ func TestSectionObliqueCenterSpherePlacementAndPlaneSense(t *testing.T) {
 		EX: r3.Vec{Y: 1}, EY: r3.Vec{X: -1}, EZ: r3.Vec{Z: 1},
 	}, r3.Vec{X: 7, Y: 11, Z: 13})
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), sphere, motion)
+	placed, err := decad.Transform(sphere, motion).Do(t.Context())
 	require.NoError(t, err)
 	frame, err := r3.NewFrame(r3.Vec{X: 7, Y: 16, Z: 13},
 		r3.Vec{X: -1}, r3.Vec{Y: -1, Z: -1})
@@ -305,7 +305,7 @@ func TestSectionCardinalSpherePlacementAndPlaneSense(t *testing.T) {
 		EX: r3.Vec{Y: 1}, EY: r3.Vec{X: -1}, EZ: r3.Vec{Z: 1},
 	}, r3.Vec{X: 7, Y: 11, Z: 13})
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), sphere, motion)
+	placed, err := decad.Transform(sphere, motion).Do(t.Context())
 	require.NoError(t, err)
 	frame, err := r3.NewFrame(r3.Vec{X: 7, Y: 11, Z: 16}, r3.Vec{X: -1}, r3.Vec{Y: -1})
 	require.NoError(t, err)
@@ -325,7 +325,7 @@ func TestSectionCardinalSphereNonSquarePlacementAndPlaneSense(t *testing.T) {
 		EX: r3.Vec{Y: 1}, EY: r3.Vec{X: -1}, EZ: r3.Vec{Z: 1},
 	}, r3.Vec{X: 7, Y: 11, Z: 13})
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), sphere, motion)
+	placed, err := decad.Transform(sphere, motion).Do(t.Context())
 	require.NoError(t, err)
 	frame, err := r3.NewFrame(r3.Vec{X: 7, Y: 11, Z: 15}, r3.Vec{X: -1}, r3.Vec{Y: -1})
 	require.NoError(t, err)

@@ -51,7 +51,7 @@ func TestCircleWitnessReadsRaceWithCommit(t *testing.T) {
 	doc := New()
 	shift, err := r3.Translation(r3.Vec{X: 3, Y: -2, Z: 1})
 	require.NoError(t, err)
-	placed, err := Transform(t.Context(), internalDiscBody(t, doc, 3, 2), shift)
+	placed, err := Transform(internalDiscBody(t, doc, 3, 2), shift).Do(t.Context())
 	require.NoError(t, err)
 	errs := make(chan error, 1)
 	done := make(chan struct{})
@@ -59,7 +59,7 @@ func TestCircleWitnessReadsRaceWithCommit(t *testing.T) {
 		defer close(done)
 		for range 300 {
 			body := internalDiscBody(t, doc, 2, 1)
-			if _, err := Transform(t.Context(), body, shift); err != nil {
+			if _, err := Transform(body, shift).Do(t.Context()); err != nil {
 				errs <- err
 				return
 			}

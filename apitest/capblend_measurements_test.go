@@ -725,7 +725,7 @@ func tangentFilletChamfer(t *testing.T, motion *r3.Transform) *decad.Body {
 	if motion == nil {
 		return chamfered
 	}
-	placed, err := decad.Transform(t.Context(), chamfered, *motion)
+	placed, err := decad.Transform(chamfered, *motion).Do(t.Context())
 	require.NoError(t, err)
 	return placed
 }

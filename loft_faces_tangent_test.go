@@ -203,7 +203,7 @@ func TestLoftFacesConeTangentEndRefuses(t *testing.T) {
 		move, err := r3.Translation(r3.NewVec(1, 0, 0))
 		require.NoError(t, err)
 		other := f.cone(t, f.doc)
-		placed, err := Transform(t.Context(), other, move)
+		placed, err := Transform(other, move).Do(t.Context())
 		require.NoError(t, err)
 		_, err = LoftFacesToCone(faces, placed, radial).Do(t.Context())
 		require.ErrorIs(t, err, ErrUnsupported)

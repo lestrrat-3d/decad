@@ -74,7 +74,7 @@ func TestBlindPocketPlacedAndVerified(t *testing.T) {
 	require.Contains(t, staged.Message, "stackedPrismPayload wall survey support is not implemented")
 	rotation, err := r3.Rotation(r3.NewVec(1, 2, 3), units.Degrees(37))
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), pocket, rotation)
+	placed, err := decad.Transform(pocket, rotation).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, placed.Faces(), len(pocket.Faces()))
 	// The placed pocket keeps the value 936; the rotation's held basis is

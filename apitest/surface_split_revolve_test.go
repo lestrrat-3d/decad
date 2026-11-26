@@ -68,7 +68,7 @@ func splitRevolveReflect(t *testing.T, body *decad.Body) *decad.Body {
 		EX: r3.NewVec(-1, 0, 0), EY: r3.NewVec(0, 1, 0), EZ: r3.NewVec(0, 0, 1),
 	}, r3.Vec{})
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), body, mirror)
+	placed, err := decad.Transform(body, mirror).Do(t.Context())
 	require.NoError(t, err)
 	return placed
 }

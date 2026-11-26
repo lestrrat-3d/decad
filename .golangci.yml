@@ -165,6 +165,18 @@ linters:
             - github.com/lestrrat-3d/decad.WebPath
             - github.com/lestrrat-3d/decad.CutExtrude
             - github.com/lestrrat-3d/decad.CutRevolve
+            - github.com/lestrrat-3d/decad.Transform
+            - github.com/lestrrat-3d/decad.Copy
+            - github.com/lestrrat-3d/decad.Mirrored
+            - github.com/lestrrat-3d/decad.MirroredJoin
+            - github.com/lestrrat-3d/decad.MirroredCopy
+            - github.com/lestrrat-3d/decad.ScaledAt
+            - github.com/lestrrat-3d/decad.QuarterTurn
+            - github.com/lestrrat-3d/decad.Stretch
+            - github.com/lestrrat-3d/decad.PatternCopies
+            - github.com/lestrrat-3d/decad.Patterned
+            - github.com/lestrrat-3d/decad.PathPattern
+            - github.com/lestrrat-3d/decad.Arrange
   exclusions:
     generated: lax
     presets:

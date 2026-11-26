@@ -44,8 +44,8 @@ func TestCircularPatternOfAMeshSolidReadsExactly(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			doc := decad.New()
 			b := blockIn(t, doc, r3.NewVec(float64(tc.x0), float64(tc.y0), 0), r3.NewVec(float64(tc.x1), float64(tc.y1), 10))
-			out, err := decad.Patterned(t.Context(), b, decad.CircularPattern{
-				Center: r3.NewVec(0, 0, 0), Axis: r3.NewVec(0, 0, 1), Count: tc.count})
+			out, err := decad.Patterned(b, decad.CircularPattern{
+				Center: r3.NewVec(0, 0, 0), Axis: r3.NewVec(0, 0, 1), Count: tc.count}).Do(t.Context())
 			require.NoError(t, err)
 			requireVolume(t, out, float64(10*turnedArea(tc.x0, tc.y0, tc.x1, tc.y1, tc.count)))
 		})

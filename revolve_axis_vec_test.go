@@ -117,7 +117,7 @@ func TestRevolveRecordsAxisVec(t *testing.T) {
 		require.NoError(t, err)
 		move, err := r3.Translation(r3.Vec{Z: 3})
 		require.NoError(t, err)
-		placed, err := Copy(t.Context(), body, WithCopyPlacement(move))
+		placed, err := Copy(body).Place(CopyTransform{Transform: move}).Do(t.Context())
 		require.NoError(t, err)
 		require.Equal(t, r3.Vec{X: 1, Y: 2}, placed.n.Payload.(revolvePayload).AxisVec)
 	})

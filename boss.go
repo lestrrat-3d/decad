@@ -139,7 +139,7 @@ func Boss(ctx context.Context, b *Body, spec BossSpec) (result *Body, retErr err
 	}
 	// The boss and its fillet are tried on a copy first, so a fillet the evaluator
 	// refuses leaves b live and the document as it was.
-	probe, err := Copy(ctx, b)
+	probe, err := copyAsIs(ctx, b)
 	if err != nil {
 		return nil, err
 	}

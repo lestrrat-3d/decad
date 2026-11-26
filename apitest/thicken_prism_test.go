@@ -94,7 +94,7 @@ func TestThickenStraightSweepSheetBuildsReplayableSolid(t *testing.T) {
 	bodyReport, err := report.ForBody(solid)
 	require.NoError(t, err)
 	require.Equal(t, decad.Sound, bodyReport.Status)
-	replay, err := decad.Copy(t.Context(), solid)
+	replay, err := decad.Copy(solid).Do(t.Context())
 	require.NoError(t, err)
 	decadtest.MeasuresVolume(t, replay, units.CubicMillimeters(3160), decadtest.Exactly())
 	require.NotNil(t, faceByRole(t, replay, "side(0,1,0)"))

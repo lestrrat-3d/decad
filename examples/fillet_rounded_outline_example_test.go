@@ -66,7 +66,7 @@ func Example_fillet_rounded_outline() {
 		fmt.Printf("failed to build the move: %s\n", err)
 		return
 	}
-	tool, err := decad.Transform(ctx, cyl, move)
+	tool, err := decad.Transform(cyl, move).Do(ctx)
 	if err != nil {
 		fmt.Printf("failed to move the tool: %s\n", err)
 		return

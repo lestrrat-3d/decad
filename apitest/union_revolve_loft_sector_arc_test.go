@@ -133,7 +133,7 @@ func arcToothRing(t testing.TB, hub, tooth *decad.Body) *decad.Body {
 	for i := 1; i < 4; i++ {
 		turn, err := r3.Rotation(r3.Vec{X: 1}, units.Radians(math.Pi/2*float64(i)))
 		require.NoError(t, err)
-		copied, err := decad.Copy(t.Context(), tooth, decad.WithCopyPlacement(turn))
+		copied, err := decad.Copy(tooth).Place(decad.CopyTransform{Transform: turn}).Do(t.Context())
 		require.NoError(t, err)
 		teeth = append(teeth, copied)
 	}

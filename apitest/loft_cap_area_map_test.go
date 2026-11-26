@@ -111,7 +111,7 @@ func TestLoftCapAreaChargesPlacementStretch(t *testing.T) {
 	body, err := decad.Loft(decad.New(), s0, p0, s1, p1).Do(t.Context())
 	require.NoError(t, err)
 	pose := loftCapMapDriftedPose(t, 5000)
-	placed, err := decad.Transform(t.Context(), body, pose)
+	placed, err := decad.Transform(body, pose).Do(t.Context())
 	require.NoError(t, err)
 
 	b := loftCapMapBasis(pose)

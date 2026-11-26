@@ -63,15 +63,15 @@ func requireSameRefusal(t *testing.T, realErr, ctrlErr error) {
 // fallbackP3 cuts the P3 scene's first bore, places both it and the second
 // y-tool (x = 30, r = 4) by opt (none when nil), and cuts the placed pair. It
 // returns the placed target beside the second cut's result.
-func fallbackP3(t *testing.T, ctx context.Context, opt CopyOption) (*Body, *Body, error) {
+func fallbackP3(t *testing.T, ctx context.Context, opt CopyPlacement) (*Body, *Body, error) {
 	t.Helper()
 	sc := &slabScene{w: sketch.NewWorld(), doc: New()}
 	target, err := Cut(sc.roundedBox(ctx, t), sc.yTool(ctx, t, 20, 4)).Do(ctx)
 	require.NoError(t, err)
 	tool := sc.yTool(ctx, t, 30, 4)
-	target, err = Copy(ctx, target, opt)
+	target, err = Copy(target).Place(opt).Do(ctx)
 	require.NoError(t, err)
-	tool, err = Copy(ctx, tool, opt)
+	tool, err = Copy(tool).Place(opt).Do(ctx)
 	require.NoError(t, err)
 	got, err := Cut(target, tool).Do(ctx)
 	return target, got, err
@@ -104,10 +104,10 @@ func TestFacetedSourcePatchFallback(t *testing.T) {
 
 	for _, tc := range []struct {
 		name string
-		opt  CopyOption
+		opt  CopyPlacement
 		axis r3.Vec
 	}{
-		{"a 20 degree exact rotation", WithCopyRotation(r3.Vec{X: 20, Y: 10, Z: 10}, r3.Vec{Z: 1}, units.Degrees(20)), tilted},
+		{"a 20 degree exact rotation", CopyRotation{Center: r3.Vec{X: 20, Y: 10, Z: 10}, Axis: r3.Vec{Z: 1}, Angle: units.Degrees(20)}, tilted},
 	} {
 		t.Run(tc.name+" refuses as the control does", func(t *testing.T) {
 			t.Parallel()
@@ -129,7 +129,7 @@ func TestFacetedSourcePatchFallback(t *testing.T) {
 	// slab off, so the cut refuses where the integer translation builds.
 	t.Run("a translation by Y = 0.1 that moves the back face refuses", func(t *testing.T) {
 		t.Parallel()
-		target, _, err := fallbackP3(t, t.Context(), WithCopyPlacement(mustTranslation(r3.Vec{Y: 0.1})))
+		target, _, err := fallbackP3(t, t.Context(), CopyTransform{Transform: mustTranslation(r3.Vec{Y: 0.1})})
 		planes := planesAlong(target, yAxis)
 		require.Len(t, planes, 2, "the later cut touches the front and back faces")
 		for _, f := range planes {
@@ -156,7 +156,7 @@ func TestFacetedSourcePatchFallback(t *testing.T) {
 	} {
 		t.Run(tc.name+" builds where the control refuses", func(t *testing.T) {
 			t.Parallel()
-			opt := WithCopyPlacement(mustTranslation(tc.move))
+			opt := CopyTransform{Transform: mustTranslation(tc.move)}
 			target, got, err := fallbackP3(t, t.Context(), opt)
 			require.NoError(t, err)
 			planes := planesAlong(target, yAxis)
@@ -181,7 +181,7 @@ func TestFacetedSourcePatchFallback(t *testing.T) {
 			require.NoError(t, err)
 			// A Copy ends the operation history's Boolean chain, so the later cut meets the
 			// sequential gate and not a chain the regroup rebuilds.
-			first, err := Copy(ctx, built)
+			first, err := Copy(built).Do(ctx)
 			require.NoError(t, err)
 			caps := planesThrough(first, r3.Vec{X: 4, Y: 6})
 			require.Len(t, caps, 1, "the pin pierces one cap")
@@ -206,7 +206,7 @@ func TestFacetedSourcePatchFallback(t *testing.T) {
 			require.NoError(t, err)
 			// A Copy ends the operation history's Boolean chain, so the cut under test
 			// is the sequential gate and not a chain the regroup rebuilds.
-			first, err := Copy(ctx, built)
+			first, err := Copy(built).Do(ctx)
 			require.NoError(t, err)
 			return Cut(first, sc.yTool(ctx, t, 22, 3)).Do(ctx)
 		}

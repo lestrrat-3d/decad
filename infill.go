@@ -103,14 +103,16 @@ func infillWithSkin(ctx context.Context, b *Body, spec InfillSpec) (result *Body
 			removeTools(temporaries)
 		}
 	}()
-	skinSource, err := Copy(ctx, b)
+	skinSource, err := copyAsIs(ctx, b)
 	if err != nil {
-		return nil, err
+		// Infill has no outer tag until it becomes a command, so its copy
+		// refusals keep the kind Copy gave them.
+		return nil, operationError(OperationCopy, err)
 	}
 	temporaries = append(temporaries, skinSource)
-	fillSource, err := Copy(ctx, b)
+	fillSource, err := copyAsIs(ctx, b)
 	if err != nil {
-		return nil, err
+		return nil, operationError(OperationCopy, err)
 	}
 	temporaries = append(temporaries, fillSource)
 	skin, err := shell(ctx, skinSource, nil, spec.Skin, modifyoption.ShellConfig{NoOpenings: true}, nil)

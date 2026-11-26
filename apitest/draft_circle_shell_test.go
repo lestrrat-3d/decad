@@ -83,12 +83,12 @@ func TestDraftCircleShellPlacement(t *testing.T) {
 	base := draftedDisk(t, r3.NewVec(3, -2, 4), 5)
 	shift, err := r3.Translation(r3.NewVec(6, 7, -3))
 	require.NoError(t, err)
-	placed, err := decad.Copy(t.Context(), base, decad.WithCopyPlacement(shift))
+	placed, err := decad.Copy(base).Place(decad.CopyTransform{Transform: shift}).Do(t.Context())
 	require.NoError(t, err)
 	cup, err := decad.Shell(placed,
 		decad.Faces(decad.FaceCreatedBy(decad.CapEnd(placed))).Exactly(1), units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
-	moved, err := decad.Copy(t.Context(), cup, decad.WithCopyPlacement(shift))
+	moved, err := decad.Copy(cup).Place(decad.CopyTransform{Transform: shift}).Do(t.Context())
 	require.NoError(t, err)
 	checkDraftCircleShellRoles(t, moved)
 	mesh, err := moved.Tessellate(t.Context(), units.Millimeters(0.1),

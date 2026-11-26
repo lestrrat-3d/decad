@@ -12,14 +12,14 @@ import (
 )
 
 // This file is agent-docs/path-pattern-design.md §6's public-surface tests for
-// PathPattern with WithPathSpacing, on the 4 x 4 x 2 block of path_pattern_test.go.
+// PathPattern with PathSpacing, on the 4 x 4 x 2 block of path_pattern_test.go.
 
 func TestPathPatternSpacingPlacesCopiesAtTheStatedDistance(t *testing.T) {
 	t.Parallel()
 	doc, block := patternBlock(t)
 	path, err := decad.NewPath(r3.Vec{}, decad.LineTo{End: r3.Vec{X: 30}})
 	require.NoError(t, err)
-	copies, err := decad.PathPattern(t.Context(), block, path, decad.WithPathSpacing(units.Millimeters(12)))
+	copies, err := decad.PathPattern(block, path, decad.PathSpacing{Spacing: units.Millimeters(12)}).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, copies, 2, "copies at 12 and 24 mm; 36 mm lies past the path's end")
 	require.Len(t, doc.Bodies(), 3)
@@ -35,7 +35,7 @@ func TestPathPatternSpacingPutsTheLastCopyAtTheEndWhenItDivides(t *testing.T) {
 	_, block := patternBlock(t)
 	path, err := decad.NewPath(r3.Vec{}, decad.LineTo{End: r3.Vec{X: 30}})
 	require.NoError(t, err)
-	copies, err := decad.PathPattern(t.Context(), block, path, decad.WithPathSpacing(units.Millimeters(10)))
+	copies, err := decad.PathPattern(block, path, decad.PathSpacing{Spacing: units.Millimeters(10)}).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, copies, 3)
 	requireBoundsNear(t, copies[2], r3.Vec{X: 30}, r3.Vec{X: 34, Y: 4, Z: 2})
@@ -49,7 +49,7 @@ func TestPathPatternSpacingMeasuresAlongAnArc(t *testing.T) {
 	mid := 10 / math.Sqrt2
 	path, err := decad.NewPath(r3.Vec{X: 10}, decad.ArcThrough{Through: r3.Vec{X: mid, Y: mid}, End: r3.Vec{Y: 10}})
 	require.NoError(t, err)
-	copies, err := decad.PathPattern(t.Context(), block, path, decad.WithPathSpacing(units.Millimeters(2.5*math.Pi)))
+	copies, err := decad.PathPattern(block, path, decad.PathSpacing{Spacing: units.Millimeters(2.5 * math.Pi)}).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, copies, 2)
 	requireBoundsNear(t, copies[0], r3.Vec{X: mid - 10, Y: mid}, r3.Vec{X: mid - 6, Y: mid + 4, Z: 2})
@@ -61,7 +61,7 @@ func TestPathPatternSpacingFollowsThePath(t *testing.T) {
 	_, block := patternBlock(t)
 	path, err := decad.NewPath(r3.Vec{}, decad.LineTo{End: r3.Vec{X: 20}}, decad.LineTo{End: r3.Vec{X: 20, Y: 20}})
 	require.NoError(t, err)
-	copies, err := decad.PathPattern(t.Context(), block, path, decad.WithPathSpacing(units.Millimeters(30)), decad.WithPathFollow())
+	copies, err := decad.PathPattern(block, path, decad.PathSpacing{Spacing: units.Millimeters(30)}).Follow().Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, copies, 1)
 	// 30 mm along is 10 mm up the second leg, which runs +Y: a quarter turn.
@@ -86,12 +86,10 @@ func TestPathPatternSpacingRefusals(t *testing.T) {
 		{"far too fine", units.Millimeters(1e-6), decad.ErrDegenerate},
 	}
 	for _, tc := range cases {
-		_, err := decad.PathPattern(t.Context(), block, path, decad.WithPathSpacing(tc.spacing))
+		_, err := decad.PathPattern(block, path, decad.PathSpacing{Spacing: tc.spacing}).Do(t.Context())
 		require.ErrorIs(t, err, tc.want, tc.name)
 	}
 	require.Equal(t, []*decad.Body{block}, doc.Bodies(), "a refused pattern leaves no copy")
-	_, err = decad.PathPattern(t.Context(), block, nil, decad.WithPathSpacing(units.Millimeters(5)))
-	require.ErrorIs(t, err, decad.ErrDegenerate)
-	_, err = decad.PathPattern(t.Context(), block, path, decad.WithPathSpacing(units.Millimeters(5)), nil)
+	_, err = decad.PathPattern(block, nil, decad.PathSpacing{Spacing: units.Millimeters(5)}).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 }

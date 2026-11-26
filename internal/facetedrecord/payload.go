@@ -99,7 +99,7 @@ type Payload struct {
 	// A Boolean result has no copy lineage; Copy and placement issue it.
 	CopyLineage *FacetedCopyLineage
 	// ExactCopyMoments stores contained-Cut moments only for a direct public
-	// Copy made with WithCopyRotation. Later placements and rewrites drop it.
+	// Copy made with CopyRotation. Later placements and rewrites drop it.
 	ExactCopyMoments *ExactCopyMomentRecord
 	// RevolveLoftJoin retains a geometry-certified section/sector source.
 	RevolveLoftJoin *RevolveLoftJoinRecord

@@ -104,9 +104,9 @@ func turnedPinSet(t *testing.T, j parts.Joint) *parts.Set {
 	doc := decad.New()
 	turn, err := r3.Rotation(r3.Vec{Z: 1}, unitsDegrees(30))
 	require.NoError(t, err)
-	plate, err := decad.Transform(t.Context(), boredPlateR(t, doc, 3.2), turn)
+	plate, err := decad.Transform(boredPlateR(t, doc, 3.2), turn).Do(t.Context())
 	require.NoError(t, err)
-	pin, err := decad.Transform(t.Context(), cylinder(t, doc, 10, 3, -2, 17), turn)
+	pin, err := decad.Transform(cylinder(t, doc, 10, 3, -2, 17), turn).Do(t.Context())
 	require.NoError(t, err)
 	s := parts.NewSet(doc)
 	mustAdd(t, s,

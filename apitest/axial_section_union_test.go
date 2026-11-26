@@ -246,7 +246,7 @@ func TestAxialSectionUnionLiftedLobeKeepsCapLevel(t *testing.T) {
 		if k != 0 {
 			continue
 		}
-		lobes[k], err = decad.Transform(t.Context(), lobes[k], lift)
+		lobes[k], err = decad.Transform(lobes[k], lift).Do(t.Context())
 		require.NoError(t, err)
 		for _, v := range lobes[k].Vertices() {
 			liftedTop = max(liftedTop, v.Position().Value.Z)
@@ -288,8 +288,8 @@ func TestAxialSectionUnionExactTurnsKeepExactCaps(t *testing.T) {
 	doc := decad.New()
 	disc := circleBodyAtZ(t, doc, 0, r, 0, height)
 	lobe := lobeLoft(t, doc, r, 0, 0.4*math.Pi/n, height)
-	copies, err := decad.PatternCopies(t.Context(), lobe,
-		decad.CircularPattern{Center: r3.Vec{}, Axis: r3.NewVec(0, 0, 1), Count: n})
+	copies, err := decad.PatternCopies(lobe,
+		decad.CircularPattern{Center: r3.Vec{}, Axis: r3.NewVec(0, 0, 1), Count: n}).Do(t.Context())
 	require.NoError(t, err)
 	joined, err := decad.Union(append([]*decad.Body{disc}, append([]*decad.Body{lobe}, copies...)...)...).Do(t.Context())
 	require.NoError(t, err)
@@ -328,8 +328,8 @@ func TestAxialSectionUnionCounterboreRimChamfers(t *testing.T) {
 	doc := decad.New()
 	disc := circleBodyAtZ(t, doc, 0, r, 0, height)
 	lobe := lobeLoft(t, doc, r, 0, 0.4*math.Pi/n, height)
-	copies, err := decad.PatternCopies(t.Context(), lobe,
-		decad.CircularPattern{Center: r3.Vec{}, Axis: r3.NewVec(0, 0, 1), Count: n})
+	copies, err := decad.PatternCopies(lobe,
+		decad.CircularPattern{Center: r3.Vec{}, Axis: r3.NewVec(0, 0, 1), Count: n}).Do(t.Context())
 	require.NoError(t, err)
 	joined, err := decad.Union(append([]*decad.Body{disc}, append([]*decad.Body{lobe}, copies...)...)...).Do(t.Context())
 	require.NoError(t, err)

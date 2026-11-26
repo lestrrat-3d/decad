@@ -75,7 +75,7 @@ func TestClosedShellOfNestedRectangularSlabs(t *testing.T) {
 
 	shift, err := r3.Translation(r3.NewVec(3, -2, 4))
 	require.NoError(t, err)
-	moved, err := decad.Transform(t.Context(), closed, shift)
+	moved, err := decad.Transform(closed, shift).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, moved.Shells(), 2)
 	require.True(t, moved.Shells()[1].IsVoid())
@@ -92,7 +92,7 @@ func TestClosedShellOfNestedRectangularSlabs(t *testing.T) {
 	require.NoError(t, err)
 	reflection, err := r3.Reflection(mirror)
 	require.NoError(t, err)
-	reflected, err := decad.Transform(t.Context(), moved, reflection)
+	reflected, err := decad.Transform(moved, reflection).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, reflected.Shells(), 2)
 	require.True(t, reflected.Shells()[1].IsVoid())

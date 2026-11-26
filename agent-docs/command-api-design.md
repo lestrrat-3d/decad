@@ -108,7 +108,7 @@ command's unexported implementation owns steps 4–6.
 |---|---|
 | A1 | **Constructors and methods only store copied values.** They never read document state, body liveness, a profile's staleness, `ctx`, or another argument. |
 | A2 | A slice argument is copied with `slices.Clone` at the call. A variadic slot is copied too, so a caller's later write to its slice changes nothing. |
-| A3 | A selector query is deep-copied at the call, branch by branch, as `ChamferCommand.Asymmetric` copies its reference (`modify_options.go`, `copyFaceQuery` in `selector.go`): `Or`, `Exactly` and `AtLeast` change a query in place (`selector.go`). A selector that is not a decad query is stored as given; the selector gate refuses it at `Do` without calling it. A sealed argument that holds a selector is copied at the call with that selector deep-copied: `NeutralFace.Face` inside the `NeutralPlane` of `Draft` (a `NeutralFace` value or a non-nil `*NeutralFace`), and the same for each later argument that holds one (`ToFace` and the angular stops inside an extent, `MirrorFace`, a spec struct). The pattern is one copy helper per sealed family, named `copy<Type>` and called by the constructor: `copyExtent` and `copyAngularExtent` (`extent.go`) and `copyAxis` (`revolve.go`) copy the selectors in an extent, an angular extent and an `EdgeAxis`. Stack PR 5 adds the helper for `MirrorFace`, and stack PR 6 one for each spec struct that holds a selector (`HoleSpec.Face` and the stops). |
+| A3 | A selector query is deep-copied at the call, branch by branch, as `ChamferCommand.Asymmetric` copies its reference (`modify_options.go`, `copyFaceQuery` in `selector.go`): `Or`, `Exactly` and `AtLeast` change a query in place (`selector.go`). A selector that is not a decad query is stored as given; the selector gate refuses it at `Do` without calling it. A sealed argument that holds a selector is copied at the call with that selector deep-copied: `NeutralFace.Face` inside the `NeutralPlane` of `Draft` (a `NeutralFace` value or a non-nil `*NeutralFace`), and the same for each later argument that holds one (`ToFace` and the angular stops inside an extent, `MirrorFace`, a spec struct). The pattern is one copy helper per sealed family, named `copy<Type>` and called by the constructor: `copyExtent` and `copyAngularExtent` (`extent.go`) and `copyAxis` (`revolve.go`) copy the selectors in an extent, an angular extent and an `EdgeAxis`. `copyMirrorPlane` (`mirror.go`) is the helper for a `MirrorFace` and a pointer to a `MirrorFrame`, and stack PR 6 adds one for each spec struct that holds a selector (`HoleSpec.Face` and the stops). |
 | A4 | Bodies, sketches, profiles, chains, paths and meshes are stored as pointers. Liveness, foreign-document, stale-profile and selector-resolution checks run at `Do` against the live document (`agent-docs/modify-design.md` §4 order). A profile is never snapshotted at build time. |
 | A5 | **A constructor or method records a fault only when both hold.** Its own argument shows the fault without reading anything else (A1), and the operation's documented gate order reports that fault ahead of every check that reads document state, liveness, `ctx.Err()` or another argument. Example: `Union` with fewer than two bodies is recorded, because `Union` refuses the count right after the nil-ctx check today. |
 | A6 | Every other invalid value is stored and refused by the operation's own gate at `Do`, in today's position. Example: a negative `Fillet` radius is stored, and S15 refuses it after the S17 liveness gate. |
@@ -124,11 +124,11 @@ or method return an error.
 | Rule | Statement |
 |---|---|
 | M1 | A method has a pointer receiver, changes the command and returns the same pointer, so `cmd.TangentChain()` written as a statement changes `cmd` rather than a dropped copy. |
-| M2 | **A second call replaces the earlier value.** This holds for every method. A repeated `Asymmetric` replaces the earlier reference and distance, and today's `ErrDegenerate` for a repeated `WithPathCount` or `WithConeTangentEnd` has no command counterpart. `Shell.FaceThickness(normal, t)` names one world axis direction per call, so a repeat for that direction replaces its thickness and calls for other directions add to it. |
+| M2 | **A second call replaces the earlier value.** This holds for every method. A repeated `Asymmetric` replaces the earlier reference and distance, and a repeated `Place` replaces the earlier placement. The `ErrDegenerate` that the old option tiers gave a repeated option has no command counterpart. `Shell.FaceThickness(normal, t)` names one world axis direction per call, so a repeat for that direction replaces its thickness and calls for other directions add to it. |
 | M3 | **Exclusive alternatives are one method taking a sealed variant.** `Copy(src).Place(p CopyPlacement)` takes `CopyTransform`, `CopyRotation` or `CopyLiftTranslation`, so the type system allows one placement. |
 | M4 | **A required choice is a sealed constructor argument**, as `Extent` and `PatternSpec` already are: `PathPattern(b, path, stations PathStations)` with `PathCount` or `PathSpacing`. |
 | M5 | A dependent option takes its parent's slot: `PathPattern(...).Follow()` or `.FollowAbout(pivot)`. Both write the one follow slot, and the last call wins (M2). |
-| M6 | **An option that changes the result kind or what a mandatory argument means is its own constructor.** `WithJoin` becomes `MirroredJoin(b, plane)`, `ShellClosed(b, t)` is the shell that keeps every face and takes no selector, and `WithConeTangentEnd` becomes `LoftFacesToCone(sections, cone, radial)`. |
+| M6 | **An option that changes the result kind or what a mandatory argument means is its own constructor.** `MirroredJoin(b, plane)` is the mirror that joins its image, `ShellClosed(b, t)` is the shell that keeps every face and takes no selector, and `WithConeTangentEnd` becomes `LoftFacesToCone(sections, cone, radial)`. |
 | M7 | **A twin whose mandatory size means another quantity stays its own constructor.** `FilletChord(b, sel, chord)` sizes by chord, and `ChamferAngle(b, sel, d, reference, angle)` has its own gate order (`chamfer_angle.go`). |
 | M8 | **A twin that exists only because the parent had no option slot folds into a method.** the refined union is `Union(bodies...).RefineTo(bound)`, and `LoftSectionsWithCircularCorrespondence(d, c, sections...)` becomes `LoftSections(d, sections...).CircularCorrespondence(c)`. The fold keeps the twin's gates, result identities and history exactly. |
 | M9 | A conflict between two different methods is refused at `Do` with today's sentinel: `Taper` with `SurfaceResult` stays `ErrUnsupported` (`extrude.go`). |
@@ -172,8 +172,8 @@ serves Fillet and Chamfer, and `MatchingFaces` serves Cut and Intersect.
 - **There is no shared `Command` interface.** Nothing needs one, and one would force a wrapper type per result.
 - **Every error from `Do` except cancellation is tagged with the command's own `OperationKind`.** This covers the
   nil-ctx error. `PathPattern`
-  tags `OperationCopy` and `Arrange` tags `OperationTransform` today, and their PRs keep those kinds, since
-  `OperationKind` gains no constant in this design.
+  tags `OperationCopy` and `Arrange` tags `OperationTransform`, since `OperationKind` gains no constant in this
+  design.
 - **A recorded fault names its subject (A8) in `OperationSubject.Name`.** A gate that refuses a stored method
   value names the method by returning `subjectError(kind, method, err)`; the tag `runCommand` adds keeps it.
 - **Subject names follow the constructor's parameter names.** `Union(bodies ...*Body)` reports operand `i` as
@@ -200,8 +200,8 @@ serves Fillet and Chamfer, and `MatchingFaces` serves Cut and Intersect.
 ## 9. Atomicity
 
 A failed or canceled `Do` leaves `Document.Bodies()`, the operation history and producer numbering as it found
-them (api-design §2). `PathPattern` and `Arrange` publish several results through the public
-`Copy` and `Transform`, so each takes a `Document` snapshot (`document.go`) before its first publication and restores
+them (api-design §2). `PathPattern` and `Arrange` publish several results through the `copyBody` and
+`transform` implementations, so each takes a `Document` snapshot (`document.go`) before its first publication and restores
 it when the call fails or is canceled. The restore returns the live set in its order, the producer counter, the
 operation history with its producer and consumer indexes, and the container placement. No command is an exception.
 A reader that runs concurrently with such a call (already forbidden for mutators, §8) can observe copies and history
@@ -296,9 +296,17 @@ name its methods and special rules.
   against the path is refused at the same gate as the factors themselves, naming `SectionScale`. A composite that
   sweeps a private tool calls `extrudeTool`, which tags the error with `OperationExtrude`; the composite's public
   `Do` then re-tags it with its own kind (§11).
-- Placement and patterns: `Copy.Place` takes a sealed placement (M3). `MirroredJoin` replaces `WithJoin` (M6).
-  `PathPattern` takes sealed `PathStations` (M4) and has `Follow` and `FollowAbout` (M5). Arrange has `Angle` and
-  `Turns`.
+- Placement and patterns: `Copy.Place` takes a sealed `CopyPlacement`: `CopyTransform`, `CopyRotation` or
+  `CopyLiftTranslation` (M3). `MirroredJoin` is its own constructor (M6). `PathPattern` takes sealed `PathStations`,
+  `PathCount` or `PathSpacing` (M4), and has `Follow` and `FollowAbout` (M5). `Arrange` has `Angle` and `Turns`.
+  `Transform`, `Mirrored`, `MirroredCopy`, `ScaledAt`, `QuarterTurn`, `Stretch`, `PatternCopies` and `Patterned`
+  have no method. Each constructor records a nil body, named `body`, except `Copy`, whose gate order reads the
+  placement before the source, so a nil source reaches the source's own gate at `Do`. `PathPattern` records a nil
+  path (`path`), `Arrange` an empty slice or a nil first body (`bodies`), and a refused stations value is named
+  `stations`. `Place`, `FollowAbout` and `Angle` store their validation errors, and `Do` refuses each where the old
+  option decode did: before the source's liveness gate, after the nil-ctx, recorded-fault and `stations` refusals.
+  `PatternCopies` and `Patterned` newly tag their errors with their own kind. `Stretch` and `QuarterTurn` return
+  `ctx.Err()` itself when a cancel lands inside the mesh-to-solid conversion (§3).
 - Spec composites: `Infill` has no outer tag today, so the stack PR that converts it re-tags its nested `Union`,
   `Intersect` and `Shell` diagnostics as `OperationInfill` (§11). Each spec struct splits. Required fields become constructor arguments, and each
   zero-means-default field becomes a method whose absence means the default: `SheetMetalSpec.KFactor` zero

@@ -15,7 +15,7 @@ func TestCombineToolsAdditionalConsumptionIsAtomic(t *testing.T) {
 		t.Run(mode, func(t *testing.T) {
 			doc := New()
 			source := internalBoxBody(t, doc, 0, 0, 3, 3, 3)
-			target, err := Copy(t.Context(), source)
+			target, err := Copy(source).Do(t.Context())
 			require.NoError(t, err)
 			tool := internalBoxBody(t, doc, 1, 1, 2, 2, 3)
 			defer removeTools([]*Body{tool})

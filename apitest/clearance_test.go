@@ -381,7 +381,7 @@ func TestClearanceStackedCubes(t *testing.T) {
 	b := boxBody(t, doc, 0, 0, 10, 10, 10)
 	shift, err := r3.Translation(r3.NewVec(0, 0, 12))
 	require.NoError(t, err)
-	_, err = decad.Transform(t.Context(), b, shift)
+	_, err = decad.Transform(b, shift).Do(t.Context())
 	require.NoError(t, err)
 	report, err := doc.Verify(t.Context(), decad.WithClearances())
 	require.NoError(t, err)
@@ -436,7 +436,7 @@ func TestClearancePlacedStopBuiltStackTouchingIsUndecided(t *testing.T) {
 	b := boxBody(t, doc, 30, 20, 50, 40, 10)
 	shift, err := r3.Translation(r3.NewVec(0, 0, 10))
 	require.NoError(t, err)
-	_, err = decad.Transform(t.Context(), b, shift)
+	_, err = decad.Transform(b, shift).Do(t.Context())
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context())
@@ -461,7 +461,7 @@ func TestClearanceTangentSpheresSuspect(t *testing.T) {
 	step := 15 / math.Sqrt(3)
 	shift, err := r3.Translation(r3.NewVec(step, step, step))
 	require.NoError(t, err)
-	_, err = decad.Transform(t.Context(), b, shift)
+	_, err = decad.Transform(b, shift).Do(t.Context())
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context())
@@ -567,7 +567,7 @@ func TestClearanceToriP8(t *testing.T) {
 	b := torusBody(t, doc, 10, 2)
 	shift, err := r3.Translation(r3.NewVec(0, 30, 0))
 	require.NoError(t, err)
-	_, err = decad.Transform(t.Context(), b, shift)
+	_, err = decad.Transform(b, shift).Do(t.Context())
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context(), decad.WithClearances())
@@ -626,7 +626,7 @@ func TestClearanceNonFinitePolynomialIsUndecided(t *testing.T) {
 	require.NoError(t, err)
 	shift, err := r3.Translation(r3.NewVec(offset, 0, height/2))
 	require.NoError(t, err)
-	_, err = decad.Transform(t.Context(), torus, shift)
+	_, err = decad.Transform(torus, shift).Do(t.Context())
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context(), decad.WithClearances())
@@ -743,7 +743,7 @@ func TestClearancePlacedRotatedCube(t *testing.T) {
 	require.NoError(t, err)
 	motion, err := rot.Then(shift)
 	require.NoError(t, err)
-	_, err = decad.Transform(t.Context(), b, motion)
+	_, err = decad.Transform(b, motion).Do(t.Context())
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context(), decad.WithClearances())
@@ -765,7 +765,7 @@ func TestClearanceSubTolAxialOverlapMeasured(t *testing.T) {
 	other := boxBody(t, doc, 0, 0, 10, 10, 8)
 	shift, err := r3.Translation(r3.NewVec(0, 0, 8-5e-9))
 	require.NoError(t, err)
-	_, err = decad.Transform(t.Context(), other, shift)
+	_, err = decad.Transform(other, shift).Do(t.Context())
 	require.NoError(t, err)
 	report, err := doc.Verify(t.Context(), decad.WithClearances())
 	require.NoError(t, err)
@@ -808,7 +808,7 @@ func TestClearanceBallCenteredInHole(t *testing.T) {
 	ball := ballBody(t, doc, 5)
 	shift, err := r3.Translation(r3.NewVec(0, 0, 5))
 	require.NoError(t, err)
-	_, err = decad.Transform(t.Context(), ball, shift)
+	_, err = decad.Transform(ball, shift).Do(t.Context())
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context(), decad.WithClearances())
@@ -834,7 +834,7 @@ func TestClearanceNearParallelPlateReadsTheCorner(t *testing.T) {
 	require.NoError(t, err)
 	motion, err := rot.Then(shift)
 	require.NoError(t, err)
-	_, err = decad.Transform(t.Context(), other, motion)
+	_, err = decad.Transform(other, motion).Do(t.Context())
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context(), decad.WithClearances())
@@ -920,7 +920,7 @@ func TestClearanceNearCoaxialToriAreNotExact(t *testing.T) {
 	inner := torusBody(t, doc, 5, 1)
 	shift, err := r3.Translation(r3.NewVec(0, 0, 1e-12))
 	require.NoError(t, err)
-	_, err = decad.Transform(t.Context(), inner, shift)
+	_, err = decad.Transform(inner, shift).Do(t.Context())
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context(), decad.WithClearances())
@@ -968,7 +968,7 @@ func TestVerifyClearanceCancellationInsideSturmChainBuild(t *testing.T) {
 	b := torusBody(t, doc, 10, 2)
 	shift, err := r3.Translation(r3.NewVec(0, 30, 0))
 	require.NoError(t, err)
-	_, err = decad.Transform(t.Context(), b, shift)
+	_, err = decad.Transform(b, shift).Do(t.Context())
 	require.NoError(t, err)
 	before := snapshotDocument(t, doc)
 	ctx := &sturmBuildCancelContext{Context: t.Context()}

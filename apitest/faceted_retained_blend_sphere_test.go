@@ -58,7 +58,7 @@ func ballCap(t *testing.T, sc *retentionScene, h float64) *decad.Body {
 	require.NoError(t, err)
 	move, err := r3.Translation(r3.Vec{Z: h})
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), box, move)
+	placed, err := decad.Transform(box, move).Do(t.Context())
 	require.NoError(t, err)
 	return placed
 }
@@ -341,8 +341,8 @@ func TestFacetedRetainedBlendSphereRim(t *testing.T) {
 		// A rotated placement makes the record's axis frame a held float, not
 		// an exact frame.
 		sc := newRetentionScene()
-		turned, err := decad.Transform(t.Context(), revolvedBall(t, sc, 0, 0),
-			rotation(t, r3.Vec{}, r3.NewVec(0, 0, 1), 0.3))
+		turned, err := decad.Transform(revolvedBall(t, sc, 0, 0),
+			rotation(t, r3.Vec{}, r3.NewVec(0, 0, 1), 0.3)).Do(t.Context())
 		require.NoError(t, err)
 		cut, err := decad.Cut(turned, ballCap(t, sc, ballCut)).Do(t.Context())
 		require.NoError(t, err)

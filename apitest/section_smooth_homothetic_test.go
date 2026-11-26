@@ -151,7 +151,7 @@ func TestSectionHomotheticThreeSectionLoftRefusesUnprovedInputs(t *testing.T) {
 			require.ErrorIs(t, err, decad.ErrUnsupported)
 		})
 	}
-	copied, err := decad.Copy(t.Context(), body)
+	copied, err := decad.Copy(body).Do(t.Context())
 	require.NoError(t, err)
 	frame, err := r3.NewFrame(r3.NewVec(0, 0, 1), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	require.NoError(t, err)

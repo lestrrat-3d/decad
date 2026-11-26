@@ -58,7 +58,7 @@ func TestStraightSweepShellCapOpenings(t *testing.T) {
 			if tc.placed {
 				move, err := r3.Translation(r3.NewVec(3, -4, 5))
 				require.NoError(t, err)
-				body, err = decad.Transform(t.Context(), body, move)
+				body, err = decad.Transform(body, move).Do(t.Context())
 				require.NoError(t, err)
 			}
 			result, err := decad.Shell(body, tc.selectFaces(body), units.Millimeters(1)).Do(t.Context())
@@ -117,7 +117,7 @@ func TestStraightSweepShellSideOpeningCapsSenseAndPlacement(t *testing.T) {
 			if tc.placed {
 				move, err := r3.Translation(r3.NewVec(3, -4, 5))
 				require.NoError(t, err)
-				body, err = decad.Transform(t.Context(), body, move)
+				body, err = decad.Transform(body, move).Do(t.Context())
 				require.NoError(t, err)
 			}
 			sel := decad.Faces(decad.Facing(r3.NewVec(1, 0, 0)))

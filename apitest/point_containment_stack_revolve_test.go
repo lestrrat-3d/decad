@@ -177,8 +177,7 @@ func TestPointLocationExactRevolvePlaced(t *testing.T) {
 		{name: "axis", at: r3.NewVec(100, 0, 30), want: decad.PointInside},
 	})
 	_, second := steppedShaft(t)
-	turned, err := decad.Copy(t.Context(), second,
-		decad.WithCopyRotation(r3.NewVec(0, 0, 0), r3.NewVec(1, 0, 0), units.Degrees(45)))
+	turned, err := decad.Copy(second).Place(decad.CopyRotation{Center: r3.NewVec(0, 0, 0), Axis: r3.NewVec(1, 0, 0), Angle: units.Degrees(45)}).Do(t.Context())
 	require.NoError(t, err)
 	rotation, err := r3.RotationAround(r3.NewVec(0, 0, 0), r3.NewVec(1, 0, 0), units.Degrees(45))
 	require.NoError(t, err)
@@ -220,8 +219,7 @@ func TestPointLocationThroughHistoryStackedLeaf(t *testing.T) {
 	doc := decad.New()
 	pocketed := pocketedCube(t, doc)
 	pin := circleBodyAtZ(t, doc, 8, 1, -5, 20)
-	turned, err := decad.Copy(t.Context(), pin,
-		decad.WithCopyRotation(r3.NewVec(8, 0, 0), r3.NewVec(0, 0, 1), units.Degrees(45)))
+	turned, err := decad.Copy(pin).Place(decad.CopyRotation{Center: r3.NewVec(8, 0, 0), Axis: r3.NewVec(0, 0, 1), Angle: units.Degrees(45)}).Do(t.Context())
 	require.NoError(t, err)
 	got, err := decad.Cut(pocketed, turned).Do(t.Context())
 	require.NoError(t, err)
@@ -249,8 +247,7 @@ func TestPointLocationThroughHistoryStackBrepLeaf(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "decad.brepPayload", decadtest.PayloadClass(brep))
 	pin := circleBodyAtZ(t, doc, -10, 1, -5, 40)
-	turned, err := decad.Copy(t.Context(), pin,
-		decad.WithCopyRotation(r3.NewVec(-10, 0, 0), r3.NewVec(0, 0, 1), units.Degrees(45)))
+	turned, err := decad.Copy(pin).Place(decad.CopyRotation{Center: r3.NewVec(-10, 0, 0), Axis: r3.NewVec(0, 0, 1), Angle: units.Degrees(45)}).Do(t.Context())
 	require.NoError(t, err)
 	got, err := decad.Cut(brep, turned).Do(t.Context())
 	require.NoError(t, err)

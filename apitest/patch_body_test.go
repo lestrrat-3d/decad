@@ -267,7 +267,7 @@ func TestBodyPatchReproducesThroughPlacement(t *testing.T) {
 	// below a generous relative tolerance rather than bit-exact.
 	motion, err := r3.Translation(r3.NewVec(50, 0, 0))
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), capped, motion)
+	placed, err := decad.Transform(capped, motion).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, decad.BodySheet, placed.Kind())
 	decadtest.MeasuresArea(t, placed, units.SquareMillimeters(3200+2*6000), decadtest.WithinRel(units.Scalar(1e-6)))
@@ -275,13 +275,13 @@ func TestBodyPatchReproducesThroughPlacement(t *testing.T) {
 	_, err = decad.Edges(decad.Free()).SelectEdges(placed)
 	require.ErrorIs(t, err, decad.ErrNoMatch)
 
-	dup, err := decad.Copy(t.Context(), placed)
+	dup, err := decad.Copy(placed).Do(t.Context())
 	require.NoError(t, err)
 	decadtest.MeasuresArea(t, dup, units.SquareMillimeters(3200+2*6000), decadtest.WithinRel(units.Scalar(1e-6)))
 
 	copyMotion, err := r3.Translation(r3.NewVec(0, 50, 0))
 	require.NoError(t, err)
-	copied, err := decad.Copy(t.Context(), dup, decad.WithCopyPlacement(copyMotion))
+	copied, err := decad.Copy(dup).Place(decad.CopyTransform{Transform: copyMotion}).Do(t.Context())
 	require.NoError(t, err)
 	decadtest.MeasuresArea(t, copied, units.SquareMillimeters(3200+2*6000), decadtest.WithinRel(units.Scalar(1e-6)))
 	decadtest.MeasuresBounds(t, copied, r3.NewVec(50, 50, 0), r3.NewVec(150, 110, 10), decadtest.WithinRel(units.Scalar(1e-6)))
@@ -568,7 +568,7 @@ func TestBodyPatchCopyKeepsBandNormalBound(t *testing.T) {
 
 		far, err := r3.Translation(r3.NewVec(0.3, 0, 0))
 		require.NoError(t, err)
-		_, err = decad.Transform(t.Context(), patched, far)
+		_, err = decad.Transform(patched, far).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		checked++
 	}

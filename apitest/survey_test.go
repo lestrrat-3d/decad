@@ -868,7 +868,7 @@ func TestWallPlacedBodyReadsThePart(t *testing.T) {
 	require.NoError(t, err)
 	motion, err := rot.Then(shift)
 	require.NoError(t, err)
-	_, err = decad.Transform(t.Context(), body, motion)
+	_, err = decad.Transform(body, motion).Do(t.Context())
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))

@@ -144,7 +144,7 @@ func TestMassPropertiesStitchedTetrahedron(t *testing.T) {
 	// refused rather than read off a mesh that proves only signed volume.
 	shift, err := r3.Translation(r3.NewVec(.1, 0, 0))
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), tetrahedron, shift)
+	placed, err := decad.Transform(tetrahedron, shift).Do(t.Context())
 	require.NoError(t, err)
 	reading, err := placed.MassProperties(t.Context(), meshMassDensity)
 	require.ErrorIs(t, err, decad.ErrUnsupported)

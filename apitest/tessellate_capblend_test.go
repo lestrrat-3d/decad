@@ -356,7 +356,7 @@ func TestTessellateCapBlendPlacedStaysWatertight(t *testing.T) {
 	chamfered := chamferedPlate(t)
 	rot, err := r3.Rotation(r3.Vec{X: 1, Y: 2, Z: 3}, units.Radians(0.7))
 	require.NoError(t, err)
-	moved, err := decad.Transform(t.Context(), chamfered, rot)
+	moved, err := decad.Transform(chamfered, rot).Do(t.Context())
 	require.NoError(t, err)
 	mesh, err := moved.Tessellate(t.Context(), units.Millimeters(1))
 	require.NoError(t, err)
@@ -494,7 +494,7 @@ func TestCapBlendOverlapReadsSuspect(t *testing.T) {
 	require.NoError(t, err)
 	shift, err := r3.Translation(r3.Vec{X: 5, Y: 2, Z: 0})
 	require.NoError(t, err)
-	overlapping, err := decad.Copy(t.Context(), chamfered, decad.WithCopyPlacement(shift))
+	overlapping, err := decad.Copy(chamfered).Place(decad.CopyTransform{Transform: shift}).Do(t.Context())
 	require.NoError(t, err)
 	require.NotNil(t, overlapping)
 

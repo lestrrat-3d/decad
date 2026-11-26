@@ -117,7 +117,7 @@ func TestSectionStackedPrismGateRefusals(t *testing.T) {
 		t.Parallel()
 		move, err := r3.Translation(r3.Vec{X: 20, Y: 30, Z: 1})
 		require.NoError(t, err)
-		placed, err := decad.Transform(t.Context(), blindPocketBody(t), move)
+		placed, err := decad.Transform(blindPocketBody(t), move).Do(t.Context())
 		require.NoError(t, err)
 		f, err := r3.NewFrame(r3.Vec{X: 20, Y: 30, Z: 9}, r3.Vec{X: 1}, r3.Vec{Y: 1})
 		require.NoError(t, err)

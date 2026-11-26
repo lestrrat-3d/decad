@@ -34,7 +34,7 @@ func refineSpan(t *testing.T, doc *decad.Document, a, c r3.Vec, r float64) *deca
 	require.NoError(t, err)
 	xf, err := r3.FromFrame(f)
 	require.NoError(t, err)
-	body, err = decad.Transform(t.Context(), body, xf)
+	body, err = decad.Transform(body, xf).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -162,7 +162,7 @@ func TestRefineLeaderLiftsTheTessellateRefusal(t *testing.T) {
 	// rounding the placement charges each vertex.
 	turn, err := r3.RotationAround(r3.Vec{X: -140, Y: 300, Z: 700}, r3.Vec{Y: -1}, units.Radians(0.05))
 	require.NoError(t, err)
-	turned, err := decad.Transform(t.Context(), refined, turn)
+	turned, err := decad.Transform(refined, turn).Do(t.Context())
 	require.NoError(t, err)
 	tm, err := turned.Tessellate(t.Context(), units.Millimeters(0.12))
 	require.NoError(t, err)
@@ -221,7 +221,7 @@ func TestRefineRefusals(t *testing.T) {
 		chain, _ := refineChain(t, doc, pair, 0.35)
 		turn, err := r3.RotationAround(r3.Vec{}, r3.Vec{Z: 1}, units.Radians(0.3))
 		require.NoError(t, err)
-		moved, err := decad.Transform(t.Context(), chain, turn)
+		moved, err := decad.Transform(chain, turn).Do(t.Context())
 		require.NoError(t, err)
 		_, err = decad.Refine(moved, units.Millimeters(0.1)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
@@ -267,7 +267,7 @@ func refineCord(t *testing.T, doc *decad.Document, start r3.Vec, rho float64) *d
 	require.NoError(t, err)
 	xf, err := r3.FromFrame(f)
 	require.NoError(t, err)
-	cord, err = decad.Transform(t.Context(), cord, xf)
+	cord, err = decad.Transform(cord, xf).Do(t.Context())
 	require.NoError(t, err)
 	return cord
 }
@@ -368,7 +368,7 @@ func TestRefineDrilledBar(t *testing.T) {
 	require.NoError(t, err)
 	turn, err := r3.RotationAround(r3.Vec{X: 20, Y: 5, Z: 5}, r3.Vec{X: 1, Y: 2, Z: -1}, units.Radians(0.4))
 	require.NoError(t, err)
-	bar, err = decad.Transform(t.Context(), bar, turn)
+	bar, err = decad.Transform(bar, turn).Do(t.Context())
 	require.NoError(t, err)
 	drill := refineSpan(t, doc, turn.Apply(r3.Vec{X: 30, Y: -5, Z: 5}), turn.Apply(r3.Vec{X: 30, Y: 15, Z: 5}), 1.5)
 	drilled, err := decad.Cut(bar, drill).Do(t.Context())

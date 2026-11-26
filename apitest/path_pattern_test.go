@@ -13,7 +13,7 @@ import (
 )
 
 // This file is agent-docs/path-pattern-design.md's public-surface tests for
-// PathPattern with WithPathCount, on a 4 x 4 x 2 block at the origin.
+// PathPattern with PathCount, on a 4 x 4 x 2 block at the origin.
 
 func patternBlock(tb testing.TB) (*decad.Document, *decad.Body) {
 	tb.Helper()
@@ -34,7 +34,7 @@ func TestPathPatternCountAlongALine(t *testing.T) {
 	doc, block := patternBlock(t)
 	path, err := decad.NewPath(r3.Vec{}, decad.LineTo{End: r3.Vec{X: 30}})
 	require.NoError(t, err)
-	copies, err := decad.PathPattern(t.Context(), block, path, decad.WithPathCount(4))
+	copies, err := decad.PathPattern(block, path, decad.PathCount{Count: 4}).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, copies, 3)
 	require.Len(t, doc.Bodies(), 4, "the receiver stays live beside its copies")
@@ -53,7 +53,7 @@ func TestPathPatternCountAlongAnArc(t *testing.T) {
 	path, err := decad.NewPath(r3.Vec{X: 10},
 		decad.ArcThrough{Through: r3.Vec{X: mid, Y: mid}, End: r3.Vec{Y: 10}})
 	require.NoError(t, err)
-	copies, err := decad.PathPattern(t.Context(), block, path, decad.WithPathCount(3))
+	copies, err := decad.PathPattern(block, path, decad.PathCount{Count: 3}).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, copies, 2)
 	// The copies keep the block's orientation and move by the chord from the
@@ -69,7 +69,7 @@ func TestPathPatternCountSpacesByArcLength(t *testing.T) {
 	// sits at the corner, 20 mm along the path.
 	path, err := decad.NewPath(r3.Vec{}, decad.LineTo{End: r3.Vec{X: 20}}, decad.LineTo{End: r3.Vec{X: 20, Y: 20}})
 	require.NoError(t, err)
-	copies, err := decad.PathPattern(t.Context(), block, path, decad.WithPathCount(3))
+	copies, err := decad.PathPattern(block, path, decad.PathCount{Count: 3}).Do(t.Context())
 	require.NoError(t, err)
 	requireBoundsNear(t, copies[0], r3.Vec{X: 20}, r3.Vec{X: 24, Y: 4, Z: 2})
 	requireBoundsNear(t, copies[1], r3.Vec{X: 20, Y: 20}, r3.Vec{X: 24, Y: 24, Z: 2})
@@ -94,7 +94,7 @@ func TestPathPatternCountRefusals(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			doc, block := patternBlock(t)
-			_, err := decad.PathPattern(t.Context(), block, tc.path, decad.WithPathCount(tc.count))
+			_, err := decad.PathPattern(block, tc.path, decad.PathCount{Count: tc.count}).Do(t.Context())
 			require.ErrorIs(t, err, tc.want)
 			require.Equal(t, []*decad.Body{block}, doc.Bodies(), "a refused pattern makes no copy")
 		})
@@ -103,7 +103,7 @@ func TestPathPatternCountRefusals(t *testing.T) {
 		t.Parallel()
 		_, block := patternBlock(t)
 		require.NoError(t, decad.Remove(block))
-		_, err := decad.PathPattern(t.Context(), block, path, decad.WithPathCount(3))
+		_, err := decad.PathPattern(block, path, decad.PathCount{Count: 3}).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrRetiredBody)
 	})
 	t.Run("canceled context", func(t *testing.T) {
@@ -111,43 +111,41 @@ func TestPathPatternCountRefusals(t *testing.T) {
 		doc, block := patternBlock(t)
 		ctx, cancel := context.WithCancel(t.Context())
 		cancel()
-		_, err := decad.PathPattern(ctx, block, path, decad.WithPathCount(3))
+		_, err := decad.PathPattern(block, path, decad.PathCount{Count: 3}).Do(ctx)
 		require.ErrorIs(t, err, context.Canceled)
 		require.Equal(t, []*decad.Body{block}, doc.Bodies())
 	})
 }
 
-func TestPathPatternStationOptionRefusals(t *testing.T) {
+// A path pattern needs stations: a nil one, a count below 2 and a nil pointer
+// variant are each ErrDegenerate with the OperationCopy tag, naming stations.
+func TestPathPatternStationRefusals(t *testing.T) {
 	t.Parallel()
 	path, err := decad.NewPath(r3.Vec{}, decad.LineTo{End: r3.Vec{X: 30}})
 	require.NoError(t, err)
-	ten := units.Millimeters(10)
 	cases := []struct {
-		name string
-		opts []decad.PathPatternOption
+		name     string
+		stations decad.PathStations
 	}{
-		{"no option", nil},
-		{"follow only", []decad.PathPatternOption{decad.WithPathFollow()}},
-		{"count then spacing", []decad.PathPatternOption{decad.WithPathCount(3), decad.WithPathSpacing(ten)}},
-		{"spacing then count", []decad.PathPatternOption{decad.WithPathSpacing(ten), decad.WithPathCount(3)}},
-		{"count twice", []decad.PathPatternOption{decad.WithPathCount(3), decad.WithPathCount(3)}},
-		{"spacing twice", []decad.PathPatternOption{decad.WithPathSpacing(ten), decad.WithPathSpacing(ten)}},
+		{"nil stations", nil},
+		{"count of one", decad.PathCount{Count: 1}},
+		{"zero count", decad.PathCount{}},
+		{"nil count pointer", (*decad.PathCount)(nil)},
+		{"nil spacing pointer", (*decad.PathSpacing)(nil)},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			doc, block := patternBlock(t)
-			_, err := decad.PathPattern(t.Context(), block, path, tc.opts...)
+			_, err := decad.PathPattern(block, path, tc.stations).Do(t.Context())
 			require.ErrorIs(t, err, decad.ErrDegenerate)
 			require.Equal(t, []*decad.Body{block}, doc.Bodies())
-			if tc.name != "no option" {
-				return
-			}
 			var de decad.OperationDiagnosticError
 			require.ErrorAs(t, err, &de)
 			diags := de.OperationDiagnostics()
 			require.NotEmpty(t, diags)
 			require.Equal(t, decad.OperationCopy, diags[0].Operation)
+			require.Equal(t, "stations", diags[0].Subject.Name)
 		})
 	}
 }

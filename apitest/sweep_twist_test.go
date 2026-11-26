@@ -95,7 +95,7 @@ func TestSweepTwistStraightPolygon(t *testing.T) {
 
 	move, err := r3.Translation(r3.NewVec(7, -3, 11))
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), body, move)
+	placed, err := decad.Transform(body, move).Do(t.Context())
 	require.NoError(t, err)
 	placedVolume, err := placed.Volume()
 	require.NoError(t, err)
@@ -150,7 +150,7 @@ func TestSweepTwistStraightStationsVerifyAll(t *testing.T) {
 	}
 	move, err := r3.Translation(r3.NewVec(7, -3, 11))
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), body, move)
+	placed, err := decad.Transform(body, move).Do(t.Context())
 	require.NoError(t, err)
 	placedMesh, err := placed.Tessellate(t.Context(), units.Millimeters(0.1),
 		decad.WithVerification(decad.VerifyAll))
@@ -277,7 +277,7 @@ func TestSweepTwistCompositeCardinalArc(t *testing.T) {
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	move, err := r3.Translation(r3.NewVec(7, -3, 11))
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), body, move)
+	placed, err := decad.Transform(body, move).Do(t.Context())
 	require.NoError(t, err)
 	placedMesh, err := placed.Tessellate(t.Context(), units.Millimeters(0.5),
 		decad.WithVerification(decad.VerifyAll))
@@ -288,7 +288,7 @@ func TestSweepTwistCompositeCardinalArc(t *testing.T) {
 	require.NoError(t, err)
 	mirror, err := r3.Reflection(mirrorFrame)
 	require.NoError(t, err)
-	reflected, err := decad.Copy(t.Context(), placed, decad.WithCopyPlacement(mirror))
+	reflected, err := decad.Copy(placed).Place(decad.CopyTransform{Transform: mirror}).Do(t.Context())
 	require.NoError(t, err)
 	reflectedMesh, err := reflected.Tessellate(t.Context(), units.Millimeters(0.5),
 		decad.WithVerification(decad.VerifyAll))

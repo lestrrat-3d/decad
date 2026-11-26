@@ -52,7 +52,7 @@ func publicCirclePrimitive(t *testing.T) *Body {
 	if err != nil {
 		t.Fatal(err)
 	}
-	placed, err := Transform(t.Context(), source, placement)
+	placed, err := Transform(source, placement).Do(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}

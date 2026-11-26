@@ -383,17 +383,17 @@ func TestSurfaceSweepStaysASheetThroughPlacement(t *testing.T) {
 
 			motion, err := r3.Translation(r3.NewVec(50, 0, 0))
 			require.NoError(t, err)
-			placed, err := decad.Transform(t.Context(), sheet, motion)
+			placed, err := decad.Transform(sheet, motion).Do(t.Context())
 			require.NoError(t, err)
 			requireSweepSheetWithFreeEdges(t, placed, n)
 
-			dup, err := decad.Copy(t.Context(), placed)
+			dup, err := decad.Copy(placed).Do(t.Context())
 			require.NoError(t, err)
 			requireSweepSheetWithFreeEdges(t, dup, n)
 
 			copyMotion, err := r3.Translation(r3.NewVec(0, 50, 0))
 			require.NoError(t, err)
-			copied, err := decad.Copy(t.Context(), dup, decad.WithCopyPlacement(copyMotion))
+			copied, err := decad.Copy(dup).Place(decad.CopyTransform{Transform: copyMotion}).Do(t.Context())
 			require.NoError(t, err)
 			requireSweepSheetWithFreeEdges(t, copied, n)
 		})

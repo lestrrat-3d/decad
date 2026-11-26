@@ -177,7 +177,7 @@ func TestVertexPlacedPrismBoundEnclosesDisplacement(t *testing.T) {
 	doc := decad.New()
 	body := boxBody(t, doc, 0, 0, 100, 60, 40)
 	motion := generalMotion(t, 37, 500)
-	placed, err := decad.Transform(t.Context(), body, motion)
+	placed, err := decad.Transform(body, motion).Do(t.Context())
 	require.NoError(t, err)
 
 	frame := xyFrame(t)
@@ -234,7 +234,7 @@ func TestVertexPlacedRevolveBoundEnclosesDisplacement(t *testing.T) {
 	body, err := decad.Revolve(doc, s, p, uAxis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	motion := generalMotion(t, 37, 0)
-	placed, err := decad.Transform(t.Context(), body, motion)
+	placed, err := decad.Transform(body, motion).Do(t.Context())
 	require.NoError(t, err)
 
 	frame := xyFrame(t)
@@ -264,7 +264,7 @@ func TestVertexPlacedCapBlendBoundEnclosesDisplacement(t *testing.T) {
 	body, err := decad.Chamfer(box, loop, units.Millimeters(5)).Do(t.Context())
 	require.NoError(t, err)
 	motion := generalMotion(t, 37, 500)
-	placed, err := decad.Transform(t.Context(), body, motion)
+	placed, err := decad.Transform(body, motion).Do(t.Context())
 	require.NoError(t, err)
 
 	frame := xyFrame(t)

@@ -130,7 +130,7 @@ func TestDraftOneWall(t *testing.T) {
 	}
 
 	// The record re-derives the same subset under a placement.
-	placed, err := decad.Transform(t.Context(), got, generalMotion(t, 23, -7.5))
+	placed, err := decad.Transform(got, generalMotion(t, 23, -7.5)).Do(t.Context())
 	require.NoError(t, err)
 	pv, err := placed.Volume()
 	require.NoError(t, err)

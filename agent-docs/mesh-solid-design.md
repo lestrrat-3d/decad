@@ -39,7 +39,7 @@ the result's bound, and check that the tetrahedron's slanted face is Faceted and
 
 ## 3. Stretching a mesh solid
 
-`Stretch(ctx, b, anchor, x, y, z)` scales a faceted solid by a separate factor along each world axis about `anchor`
+`Stretch(b, anchor, x, y, z).Do(ctx)` scales a faceted solid by a separate factor along each world axis about `anchor`
 and returns a new solid, retiring `b`. `b` MUST be faceted with all-zero vertex bounds, otherwise `ErrUnsupported`;
 a body with a vertex bound would need the bound charged through the stretch, which this route does not do. The
 mesh is stretched by `ScaleMesh`, which reorders corners under an odd number of negative factors, and read back by

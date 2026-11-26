@@ -45,8 +45,8 @@ func Example_mirror_join() {
 
 	// Mirror across the half's -X wall and join the two sides into one body.
 	wall := decad.Faces(decad.Planar(), decad.Facing(r3.NewVec(-1, 0, 0)))
-	whole, err := decad.Mirrored(context.Background(), half,
-		decad.MirrorFace{Body: half, Face: wall}, decad.WithJoin())
+	whole, err := decad.MirroredJoin(half,
+		decad.MirrorFace{Body: half, Face: wall}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to mirror: %s\n", err)
 		return

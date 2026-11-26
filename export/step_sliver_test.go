@@ -73,7 +73,7 @@ func TestSTEPSplitBoreRoundingSliver(t *testing.T) {
 	bore := sliverPrism(t, doc, r3.Vec{Y: 21.3}, x, z, nil, [][3]float64{{205, -9, 2.1}}, 42.6)
 	body, err := decad.Cut(body, bore).Do(t.Context())
 	require.NoError(t, err)
-	right, err := decad.Copy(t.Context(), body)
+	right, err := decad.Copy(body).Do(t.Context())
 	require.NoError(t, err)
 	box := sliverPrism(t, doc, r3.Vec{Z: -51.5}, x, y, [][2]float64{{139, 0}, {307, 0}, {307, 21.3}, {139, 21.3}}, nil, 52.5)
 	right, err = decad.Cut(right, box).Do(t.Context())

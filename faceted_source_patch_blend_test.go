@@ -49,7 +49,7 @@ func (sc *blendScene) zTool(ctx context.Context, t *testing.T, cx, cy, r float64
 	require.NoError(t, err)
 	move, err := r3.Translation(r3.Vec{Z: -29.999})
 	require.NoError(t, err)
-	placed, err := Transform(ctx, pin, move)
+	placed, err := Transform(pin, move).Do(ctx)
 	require.NoError(t, err)
 	return placed
 }

@@ -872,7 +872,7 @@ func TestRevolveEdgeAxisGates(t *testing.T) {
 		require.NoError(t, err)
 		move, err := r3.Translation(r3.NewVec(1, 0, 0))
 		require.NoError(t, err)
-		_, err = decad.Transform(t.Context(), old, move)
+		_, err = decad.Transform(old, move).Do(t.Context())
 		require.NoError(t, err)
 		_, err = decad.Revolve(doc2, s, p, decad.EdgeAxis{Body: old, Edge: decad.Edges().Exactly(1)}, decad.FullRevolution{}).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrRetiredBody)
@@ -982,7 +982,7 @@ func TestRevolvePlacedRigidMotion(t *testing.T) {
 	xf, err := rot.Then(move)
 	require.NoError(t, err)
 
-	placed, err := decad.Transform(t.Context(), body, xf)
+	placed, err := decad.Transform(body, xf).Do(t.Context())
 	require.NoError(t, err)
 	decadtest.MeasuresVolume(t, placed, units.CubicMillimeters(500*math.Pi))
 	require.Len(t, placed.Faces(), 6)
@@ -1018,7 +1018,7 @@ func TestRevolveReflectedPlacementKeepsOutwardNormals(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, refl.IsReflection())
 
-	placed, err := decad.Transform(t.Context(), body, refl)
+	placed, err := decad.Transform(body, refl).Do(t.Context())
 	require.NoError(t, err)
 	decadtest.MeasuresVolume(t, placed, units.CubicMillimeters(500*math.Pi))
 	requireManifold(t, placed)
@@ -1080,7 +1080,7 @@ func TestRevolveReflectedSphereAndConeNormals(t *testing.T) {
 	require.NoError(t, err)
 	refl, err := r3.Reflection(mirror)
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), sphere, refl)
+	placed, err := decad.Transform(sphere, refl).Do(t.Context())
 	require.NoError(t, err)
 	decadtest.MeasuresVolume(t, placed, units.CubicMillimeters(4.0/3*math.Pi*125))
 	c, err := placed.Centroid()
@@ -1726,7 +1726,7 @@ func TestRevolveBoundsEnclosesTranslatedExtreme(t *testing.T) {
 
 	shift, err := r3.Translation(r3.NewVec(0.1, 0, 0))
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), body, shift)
+	placed, err := decad.Transform(body, shift).Do(t.Context())
 	require.NoError(t, err)
 
 	bounds, err := placed.Bounds()
@@ -1865,7 +1865,7 @@ func TestRevolveBoundsEnclosesPlacedScanArithmetic(t *testing.T) {
 		require.Equal(t, 0.0, basis.EZ.X, "the extreme material point below assumes a rotation about Z")
 		require.Equal(t, r3.NewVec(0, 0, 0), rot.Translation())
 
-		placed, err := decad.Transform(t.Context(), revolved(t), rot)
+		placed, err := decad.Transform(revolved(t), rot).Do(t.Context())
 		require.NoError(t, err)
 		bounds, err := placed.Bounds()
 		require.NoError(t, err)

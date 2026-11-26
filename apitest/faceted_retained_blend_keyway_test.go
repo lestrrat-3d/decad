@@ -389,7 +389,7 @@ func TestFacetedRetainedBlendKeyway(t *testing.T) {
 		require.NoError(t, err)
 		shift, err := r3.Translation(r3.Vec{X: 10})
 		require.NoError(t, err)
-		tool, err = decad.Transform(t.Context(), tool, shift)
+		tool, err = decad.Transform(tool, shift).Do(t.Context())
 		require.NoError(t, err)
 		grooved, err := decad.Cut(blendPlate(t, sc), tool).Do(t.Context())
 		require.NoError(t, err)
@@ -539,7 +539,7 @@ func xCylinderAt(t *testing.T, doc *decad.Document, cy, cz, r, x0, x1 float64) *
 	require.NoError(t, err)
 	move, err := r3.Translation(r3.Vec{X: x0 + 0.001})
 	require.NoError(t, err)
-	out, err := decad.Transform(t.Context(), pin, move)
+	out, err := decad.Transform(pin, move).Do(t.Context())
 	require.NoError(t, err)
 	return out
 }

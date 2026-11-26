@@ -58,13 +58,13 @@ func TestDraftCircleEndRimChamferPlacement(t *testing.T) {
 	base := draftedDisk(t, r3.NewVec(3, -2, 4), 5)
 	shift, err := r3.Translation(r3.NewVec(6, 7, -3))
 	require.NoError(t, err)
-	placed, err := decad.Copy(t.Context(), base, decad.WithCopyPlacement(shift))
+	placed, err := decad.Copy(base).Place(decad.CopyTransform{Transform: shift}).Do(t.Context())
 	require.NoError(t, err)
 	beveled, err := decad.Chamfer(placed, draftedDiskEndRim(placed), units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	checkDraftCircleModifyRoles(t, beveled,
 		map[decad.SurfaceKind]int{decad.KindCone: 2, decad.KindPlane: 2}, "chamfer(")
-	moved, err := decad.Copy(t.Context(), beveled, decad.WithCopyPlacement(shift))
+	moved, err := decad.Copy(beveled).Place(decad.CopyTransform{Transform: shift}).Do(t.Context())
 	require.NoError(t, err)
 	checkDraftCircleModifyRoles(t, moved,
 		map[decad.SurfaceKind]int{decad.KindCone: 2, decad.KindPlane: 2}, "chamfer(")

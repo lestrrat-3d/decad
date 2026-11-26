@@ -337,9 +337,9 @@ func TestClearanceCoarseWitnessContainsTruth(t *testing.T) {
 			if tc.off != (r3.Vec{}) {
 				tr, err := r3.Translation(tc.off)
 				require.NoError(t, err)
-				_, err = decad.Transform(t.Context(), cone, tr)
+				_, err = decad.Transform(cone, tr).Do(t.Context())
 				require.NoError(t, err)
-				_, err = decad.Transform(t.Context(), slice, tr)
+				_, err = decad.Transform(slice, tr).Do(t.Context())
 				require.NoError(t, err)
 			}
 			requireGapEnclosesSurd(t, clearanceRow(t, doc), big.NewRat(-1, 4), 1, big.NewRat(2, 1))
@@ -392,12 +392,12 @@ func TestClearanceTiltedBoxContainsTruth(t *testing.T) {
 	lower := appleBody(t, doc)
 	rot, err := r3.Rotation(r3.NewVec(1, 0, 0), units.Radians(1e-8))
 	require.NoError(t, err)
-	_, err = decad.Transform(t.Context(), lower, rot)
+	_, err = decad.Transform(lower, rot).Do(t.Context())
 	require.NoError(t, err)
 	upper := appleBody(t, doc)
 	up, err := r3.Translation(r3.NewVec(0, 11, 0))
 	require.NoError(t, err)
-	_, err = decad.Transform(t.Context(), upper, up)
+	_, err = decad.Transform(upper, up).Do(t.Context())
 	require.NoError(t, err)
 
 	// The rotation's own matrix: its z column is (0, −s, c), read exactly.

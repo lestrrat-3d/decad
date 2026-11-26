@@ -46,7 +46,7 @@ func BenchmarkFacetedRetainedBlendFourSideFillet(b *testing.B) {
 		if err != nil {
 			b.Fatal(err)
 		}
-		post, err = decad.Transform(b.Context(), post, move)
+		post, err = decad.Transform(post, move).Do(b.Context())
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -108,7 +108,7 @@ func benchRetainedPlaced(b *testing.B, body *decad.Body, dz float64) *decad.Body
 	if err != nil {
 		b.Fatal(err)
 	}
-	out, err := decad.Transform(b.Context(), body, tr)
+	out, err := decad.Transform(body, tr).Do(b.Context())
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -168,7 +168,7 @@ func benchRetainedLipSocket(b *testing.B, sc *retentionScene) *decad.Body {
 	if err != nil {
 		b.Fatal(err)
 	}
-	if tool, err = decad.Transform(b.Context(), tool, tr); err != nil {
+	if tool, err = decad.Transform(tool, tr).Do(b.Context()); err != nil {
 		b.Fatal(err)
 	}
 	socket, err := decad.Cut(block, tool).Do(b.Context())

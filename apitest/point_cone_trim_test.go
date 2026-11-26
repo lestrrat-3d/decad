@@ -160,7 +160,7 @@ func TestPointConeTrimConeNormalAndCopyPlacement(t *testing.T) {
 	require.Equal(t, sourceNormal.Bound, normal.Bound)
 	move, err := r3.Translation(r3.NewVec(1, 2, 3))
 	require.NoError(t, err)
-	placed, err := decad.Copy(t.Context(), cut, decad.WithCopyPlacement(move))
+	placed, err := decad.Copy(cut).Place(decad.CopyTransform{Transform: move}).Do(t.Context())
 	require.NoError(t, err)
 	requirePointConeMesh(t, placed)
 	var moved decad.Cone

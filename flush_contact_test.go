@@ -271,7 +271,7 @@ func TestFlushContactTurnedRefused(t *testing.T) {
 	for _, deg := range []float64{37, -37} {
 		turn, err := r3.Rotation(z, units.Degrees(deg))
 		require.NoError(t, err)
-		tongue, err = Transform(t.Context(), tongue, turn)
+		tongue, err = Transform(tongue, turn).Do(t.Context())
 		require.NoError(t, err)
 	}
 	joined, err := Union(host, tongue).Do(t.Context())

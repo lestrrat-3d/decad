@@ -293,7 +293,7 @@ func TestFacetedRetainedBlendBossFoot(t *testing.T) {
 		require.NoError(t, err)
 		shift, err := r3.Translation(r3.Vec{Y: 10})
 		require.NoError(t, err)
-		prism, err = decad.Transform(t.Context(), prism, shift)
+		prism, err = decad.Transform(prism, shift).Do(t.Context())
 		require.NoError(t, err)
 		stepped, err := decad.Cut(prism, zCylinderAt(t, sc, 30, 10, 3, -30, 30)).Do(t.Context())
 		require.NoError(t, err)

@@ -443,10 +443,10 @@ func TestBodyDocumentIsTheDocument(t *testing.T) {
 
 	up, err := r3.Translation(r3.Vec{X: 0, Y: 0, Z: 50})
 	require.NoError(t, err)
-	moved, err := decad.Transform(t.Context(), a, up)
+	moved, err := decad.Transform(a, up).Do(t.Context())
 	require.NoError(t, err)
 	require.Same(t, doc, moved.Document())
-	copied, err := decad.Copy(t.Context(), b)
+	copied, err := decad.Copy(b).Do(t.Context())
 	require.NoError(t, err)
 	require.Same(t, doc, copied.Document())
 
@@ -458,7 +458,7 @@ func TestBodyDocumentIsTheDocument(t *testing.T) {
 	require.False(t, slices.Contains(live, a), "a moved source leaves the live set")
 	live[0] = nil
 	require.NotNil(t, doc.Bodies()[0], "Bodies returns a fresh slice")
-	_, err = decad.Transform(t.Context(), a, up)
+	_, err = decad.Transform(a, up).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrRetiredBody)
 
 	for _, body := range doc.Bodies() {
@@ -505,13 +505,13 @@ func TestZeroAndNilBodyOperandsAreRejected(t *testing.T) {
 			decad.ErrDegenerate, "a nil body names nothing to operate on"},
 		"intersect zero": {func() (*decad.Body, error) { return decad.Intersect(&decad.Body{}, box).Do(ctx) },
 			decad.ErrDegenerate, "the first operand belongs to no document"},
-		"copy zero": {func() (*decad.Body, error) { return decad.Copy(ctx, &decad.Body{}) },
+		"copy zero": {func() (*decad.Body, error) { return decad.Copy(&decad.Body{}).Do(ctx) },
 			decad.ErrDegenerate, "the body belongs to no document"},
-		"copy nil": {func() (*decad.Body, error) { return decad.Copy(ctx, nil) },
+		"copy nil": {func() (*decad.Body, error) { return decad.Copy(nil).Do(ctx) },
 			decad.ErrDegenerate, "the body belongs to no document"},
-		"transform zero": {func() (*decad.Body, error) { return decad.Transform(ctx, &decad.Body{}, move) },
+		"transform zero": {func() (*decad.Body, error) { return decad.Transform(&decad.Body{}, move).Do(ctx) },
 			decad.ErrDegenerate, "the body belongs to no document"},
-		"transform nil": {func() (*decad.Body, error) { return decad.Transform(ctx, nil, move) },
+		"transform nil": {func() (*decad.Body, error) { return decad.Transform(nil, move).Do(ctx) },
 			decad.ErrDegenerate, "the body belongs to no document"},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -568,7 +568,7 @@ func TestMeshSourceFacesAreTheBodyFaces(t *testing.T) {
 
 	up, err := r3.Translation(r3.Vec{X: 0, Y: 0, Z: 50})
 	require.NoError(t, err)
-	moved, err := decad.Transform(t.Context(), box, up)
+	moved, err := decad.Transform(box, up).Do(t.Context())
 	require.NoError(t, err)
 	movedMesh, err := moved.Tessellate(t.Context(), tol)
 	require.NoError(t, err)

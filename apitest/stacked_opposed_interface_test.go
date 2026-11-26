@@ -43,7 +43,7 @@ func TestStackedOpposedInterfacePockets(t *testing.T) {
 			requireWatertight(t, mesh)
 			rotation, err := r3.Rotation(r3.NewVec(1, 2, 3), units.Degrees(37))
 			require.NoError(t, err)
-			placed, err := decad.Transform(t.Context(), part, rotation)
+			placed, err := decad.Transform(part, rotation).Do(t.Context())
 			require.NoError(t, err)
 			require.False(t, tookMeshPath(placed))
 			placedVolume, err := placed.Volume()

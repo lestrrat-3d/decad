@@ -702,7 +702,7 @@ func TestLoftQuarterHeldPairRealProducerGate(t *testing.T) {
 		require.Equal(t, "live_pair", got.Reason)
 	})
 	t.Run("copied prism", func(t *testing.T) {
-		copied, copyErr := Copy(t.Context(), prism)
+		copied, copyErr := Copy(prism).Do(t.Context())
 		require.NoError(t, copyErr)
 		defer func() { require.NoError(t, Remove(copied)) }()
 		got, accepted, readErr := loftcontact.CertifyQuarterHeldPair(t.Context(),
@@ -734,7 +734,7 @@ func TestLoftQuarterHeldPairRealProducerGate(t *testing.T) {
 		original, buildErr := Extrude(copyDoc, prismSketch, found[0],
 			Distance{D: units.Millimeters(12), Dir: Along}).Do(t.Context())
 		require.NoError(t, buildErr)
-		copied, copyErr := Copy(t.Context(), original)
+		copied, copyErr := Copy(original).Do(t.Context())
 		require.NoError(t, copyErr)
 		require.NoError(t, Remove(original))
 		originalRecord, recordOK := original.n.Payload.(prismPayload)
@@ -936,7 +936,7 @@ func TestLoftQuarterOriginalHeldY1RealProducer(t *testing.T) {
 	})
 
 	t.Run("live copied producer refuses", func(t *testing.T) {
-		copied, copyErr := Copy(t.Context(), loft)
+		copied, copyErr := Copy(loft).Do(t.Context())
 		require.NoError(t, copyErr)
 		copyPayload, payloadOK := copied.n.Payload.(loftPayload)
 		require.True(t, payloadOK)

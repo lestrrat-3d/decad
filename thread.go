@@ -186,7 +186,7 @@ func Thread(ctx context.Context, b *Body, spec ThreadSpec) (result *Body, retErr
 	}
 	// Build on a copy, then retire b together with the chamfered copy only when
 	// the cut succeeds. The frame and plan still come from b's unchamfered face.
-	probe, err := Copy(ctx, b)
+	probe, err := copyAsIs(ctx, b)
 	if err != nil {
 		return nil, err
 	}

@@ -68,7 +68,7 @@ func TestSweepSpatialPathTurnsThroughOrthogonalPlanes(t *testing.T) {
 	require.NoError(t, err)
 	motion, err := turn.Then(shift)
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), body, motion)
+	placed, err := decad.Transform(body, motion).Do(t.Context())
 	require.NoError(t, err)
 
 	placedVertices := make([]r3.Vec, len(vertices))

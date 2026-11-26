@@ -40,7 +40,7 @@ func newTeethFixture(t *testing.T) teethFixture {
 	middleSketch, middleProfile := teethSection(t, world, middlePlane, 0.03)
 	lower, err := Loft(d, bottomSketch, bottomProfile, middleSketch, middleProfile).Do(t.Context())
 	require.NoError(t, err)
-	upper, err := MirroredCopy(t.Context(), lower, MirrorFrame{Frame: middleFrame})
+	upper, err := MirroredCopy(lower, MirrorFrame{Frame: middleFrame}).Do(t.Context())
 	require.NoError(t, err)
 	pair, err := Union(lower, upper).Do(t.Context())
 	require.NoError(t, err)
@@ -48,7 +48,7 @@ func newTeethFixture(t *testing.T) teethFixture {
 	for i := 1; i <= 2; i++ {
 		turn, err := r3.Rotation(r3.Vec{Z: 1}, units.Degrees(float64(45*i)))
 		require.NoError(t, err)
-		turned, err := Copy(t.Context(), pair, WithCopyPlacement(turn))
+		turned, err := Copy(pair).Place(CopyTransform{Transform: turn}).Do(t.Context())
 		require.NoError(t, err)
 		pairs = append(pairs, turned)
 	}

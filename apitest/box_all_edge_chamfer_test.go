@@ -68,12 +68,12 @@ func TestChamferAllEdgesOfBareBoxStaysPlaced(t *testing.T) {
 	// route needs, and it is not a turn that keeps a bore along y.
 	turn, err := r3.FromBasis(r3.Basis{EX: r3.NewVec(1, 0, 0), EY: r3.NewVec(0, 0, 1), EZ: r3.NewVec(0, -1, 0)}, r3.Vec{})
 	require.NoError(t, err)
-	moved, err := decad.Transform(t.Context(), out, turn)
+	moved, err := decad.Transform(out, turn).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, []*decad.Body{moved}, doc.Bodies())
 	decadtest.MeasuresVolume(t, moved, units.CubicMillimeters(bareLx*bareLy*bareLz-2*(bareLx+bareLy+bareLz)+6), decadtest.Exactly())
 	decadtest.MeasuresBounds(t, moved, r3.Vec{Y: -bareLz}, r3.Vec{X: bareLx, Y: 0, Z: bareLy}, decadtest.Exactly())
-	copied, err := decad.Copy(t.Context(), moved)
+	copied, err := decad.Copy(moved).Do(t.Context())
 	require.NoError(t, err)
 	decadtest.MeasuresVolume(t, copied, units.CubicMillimeters(bareLx*bareLy*bareLz-2*(bareLx+bareLy+bareLz)+6), decadtest.Exactly())
 }

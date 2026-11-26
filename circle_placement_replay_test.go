@@ -51,7 +51,7 @@ func TestCirclePlacementReplaySnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	placed, err := Transform(t.Context(), source, motion)
+	placed, err := Transform(source, motion).Do(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -164,7 +164,7 @@ func TestCirclePlacementReplaySnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	placedAgain, err := Transform(t.Context(), placed, secondMotion)
+	placedAgain, err := Transform(placed, secondMotion).Do(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}

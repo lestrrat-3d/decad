@@ -52,7 +52,7 @@ func diamondSet(t *testing.T, j parts.Joint) (*parts.Set, *decad.Document) {
 	diamond := block(t, doc, 11, 11, 21, 21, 0, 5)
 	turn, err := r3.RotationAround(r3.Vec{X: 16, Y: 16}, r3.Vec{Z: 1}, units.Degrees(45))
 	require.NoError(t, err)
-	diamond, err = decad.Transform(t.Context(), diamond, turn)
+	diamond, err = decad.Transform(diamond, turn).Do(t.Context())
 	require.NoError(t, err)
 	mustAdd(t, set,
 		parts.Part{Name: nameBase, Kind: parts.Manufactured, Body: block(t, doc, 0, 0, 10, 10, 0, 5)},

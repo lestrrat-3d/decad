@@ -222,7 +222,7 @@ func (p revolveAxisPlacement) union(t *testing.T, outline [][2]float64, turns []
 	for _, degrees := range turns {
 		turn, err := r3.Rotation(p.axis, units.Degrees(degrees))
 		require.NoError(t, err)
-		placed, err := decad.Copy(t.Context(), lug, decad.WithCopyPlacement(turn))
+		placed, err := decad.Copy(lug).Place(decad.CopyTransform{Transform: turn}).Do(t.Context())
 		require.NoError(t, err)
 		operands = append(operands, placed)
 	}

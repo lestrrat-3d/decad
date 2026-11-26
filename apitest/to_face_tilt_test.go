@@ -242,7 +242,7 @@ func TestToFacePlacedStopNormal(t *testing.T) {
 			require.NoError(t, err)
 			turn, err := r3.Rotation(tc.axis, units.Degrees(tc.angle))
 			require.NoError(t, err)
-			placed, err := decad.Transform(t.Context(), plate, turn)
+			placed, err := decad.Transform(plate, turn).Do(t.Context())
 			require.NoError(t, err)
 
 			before := len(doc.Bodies())

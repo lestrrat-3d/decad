@@ -72,7 +72,7 @@ func (pp placedPrism) body(t *testing.T, doc *decad.Document) *decad.Body {
 	require.NoError(t, err)
 	body, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(pp.l), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
-	body, err = decad.Transform(t.Context(), body, pp.frame)
+	body, err = decad.Transform(body, pp.frame).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }

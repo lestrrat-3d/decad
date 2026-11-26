@@ -251,7 +251,7 @@ func TestSectionRevolveMeridianPlacement(t *testing.T) {
 		EX: r3.Vec{Y: 1}, EY: r3.Vec{Z: 1}, EZ: r3.Vec{X: 1},
 	}, r3.NewVec(20, 30, 40))
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), shaft, motion)
+	placed, err := decad.Transform(shaft, motion).Do(t.Context())
 	require.NoError(t, err)
 	// The axis now runs along +X through (20, 30, 40).
 	axial := meridianFrame(t, r3.NewVec(20, 30, 40), r3.Vec{X: 1}, r3.Vec{Y: 1})

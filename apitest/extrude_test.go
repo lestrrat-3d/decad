@@ -204,7 +204,7 @@ func TestTransformRetiresSourceAndPreservesGeometry(t *testing.T) {
 	motion, err := rot.Then(shift)
 	require.NoError(t, err)
 
-	placed, err := decad.Transform(t.Context(), body, motion)
+	placed, err := decad.Transform(body, motion).Do(t.Context())
 	require.NoError(t, err)
 
 	// The motion is rigid: volume and area are untouched, the centroid maps
@@ -222,7 +222,7 @@ func TestTransformRetiresSourceAndPreservesGeometry(t *testing.T) {
 	_, err = body.Volume()
 	require.NoError(t, err, `a retired body remains readable`)
 	decadtest.MeasuresVolume(t, body, units.CubicMillimeters(60000))
-	_, err = decad.Transform(t.Context(), body, motion)
+	_, err = decad.Transform(body, motion).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrRetiredBody)
 }
 
@@ -462,7 +462,7 @@ func TestReflectedPlacementKeepsOutwardNormals(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, refl.IsReflection())
 
-	placed, err := decad.Transform(t.Context(), body, refl)
+	placed, err := decad.Transform(body, refl).Do(t.Context())
 	require.NoError(t, err)
 	c, err := placed.Centroid()
 	require.NoError(t, err)
@@ -891,7 +891,7 @@ func TestPlacedUsesEvaluatorCache(t *testing.T) {
 	require.NoError(t, err)
 	motion, err := r3.Translation(r3.NewVec(0, 0, 25))
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), body, motion)
+	placed, err := decad.Transform(body, motion).Do(t.Context())
 	require.NoError(t, err)
 	decadtest.MeasuresVolume(t, placed, units.CubicMillimeters(60000), decadtest.Exactly())
 	decadtest.MeasuresCentroid(t, placed, r3.NewVec(50, 30, 30))

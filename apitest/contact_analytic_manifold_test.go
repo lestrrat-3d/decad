@@ -220,7 +220,7 @@ func TestContactPairRulingRefusals(t *testing.T) {
 		}},
 		{name: "placed", build: func(t *testing.T, doc *decad.Document) (*decad.Body, *decad.Body) {
 			cylinder := revolvedCylinder(t, doc, 0, 10, 0, 8)
-			placed, err := decad.Copy(t.Context(), cylinder, decad.WithCopyPlacement(contactPose(t, r3.Vec{Z: .5})))
+			placed, err := decad.Copy(cylinder).Place(decad.CopyTransform{Transform: contactPose(t, r3.Vec{Z: .5})}).Do(t.Context())
 			require.NoError(t, err)
 			return boxBodyAtZ(t, doc, -20, -20, 20, 20, -17.5, 10), placed
 		}},

@@ -17,7 +17,7 @@ Boolean files and modify operations. The rules for rows live in `agent-docs/layo
 | `internal/facemerge/` | Relabels a mesh Boolean result's source groups so adjacent exactly coplanar same-facing faces of the two operands become one face. See union-face-merge design §4. |
 | `boolean_regroup.go` | Root history, handle, error and commit adapters for chain regroup, rim-split rebuild and paired Cut continuation. `internal/booleandispatch` owns the private node plan. See boolean-chain-regroup-design. |
 | `surface_trim.go` | Public `Trim`, `Extend` and `Split` entry checks and commits; `internal/surfacetrim/` builds them. See surface-intersection §2–§3. |
-| `point_plane_scale.go` | ScaledAt: resolves the similarity source by payload kind and commits the image; facetedrecord.ScaleImage admits and scales it. See loft-point design and evaluator §8. |
+| `point_plane_scale.go` | The `ScaledAt` command: resolves the similarity source by payload kind and commits the image; facetedrecord.ScaleImage admits and scales it. See loft-point design and evaluator §8. |
 | `prism_scale.go` | Admits prism and full-Revolve certified similarity sources and transfers their face roles. See evaluator §8. |
 | `stack_brep_scale.go` | Admits exact line-only stacks and stack-backed BReps for certified similarity. See evaluator §8. |
 | `point_cap_extremes.go` | Resolves Split cap faces and selects the ends using facetedrecord's centroid-order proof. See loft-point design. |
@@ -51,7 +51,7 @@ Boolean files and modify operations. The rules for rows live in `agent-docs/layo
 | `chamfer_angle.go` | Public `ChamferAngle` and `ChamferAngleCommand`: reads the angle, gates each edge as right-angled, then calls the `Chamfer` implementation with the second setback. See chamfer-angle design. |
 | `modify_options.go` | The `TangentChain` and `Asymmetric` settings the Fillet and Chamfer commands share, and asymmetric reference resolution (SX3). See modify-reach §2, §6. |
 | `move_face.go` | Public `MoveFace` and `MoveFaceCommand`: gates on a faceted receiver and one selected face, then `internal/orthoshell/` presses the face and `solidFromMeshBody` makes the result. See orthogonal-move design. |
-| `quarter_turn.go` | Public `QuarterTurn`: exact quarter turns of a faceted solid about a world axis by exchanging coordinates, each sum proved exact. See orthogonal-boolean design B10. |
+| `quarter_turn.go` | The `QuarterTurn` command: exact quarter turns of a faceted solid about a world axis by exchanging coordinates, each sum proved exact. See orthogonal-boolean design B10. |
 | `boolean_orthogonal.go` | Pair handle and result adapters for `internal/booleandispatch`; many-body admission and `internal/orthoshell/` grid assembly. See orthogonal-boolean design. |
 | `shell_orthogonal.go` | The orthogonal-polyhedron route of `Shell`: gates on a faceted receiver, then `internal/orthoshell/` builds the walls and `solidFromMeshBody` makes them the result. See orthogonal-shell design. |
 | `shell.go` | Public `ShellSense`, `Shell`, `ShellCommand`, `ShellClosed`, `ShellClosedCommand` and the `Sense` and `FaceThickness` settings both commands share: method values, selector and thickness gates, then `internal/brepmodify/` builds the shell. Also `shellTol`. See modify §7–§9 and Table R. |

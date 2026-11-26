@@ -43,7 +43,7 @@ func spreadTool(t *testing.T, doc *decad.Document, z float64) *decad.Body {
 	require.NoError(t, err)
 	move, err := r3.Translation(r3.NewVec(spreadToolOffset, 0, z))
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), tool, move)
+	placed, err := decad.Transform(tool, move).Do(t.Context())
 	require.NoError(t, err)
 	return placed
 }

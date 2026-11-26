@@ -57,7 +57,7 @@ func TestUnionMirroredRadialTabsWithNearAxialCopy(t *testing.T) {
 	middleSketch, middleProfile := loftMirrorTabSection(t, world, middlePlane, 0.2)
 	lower, err := decad.Loft(doc, bottomSketch, bottomProfile, middleSketch, middleProfile).Do(t.Context())
 	require.NoError(t, err)
-	upper, err := decad.MirroredCopy(t.Context(), lower, decad.MirrorFrame{Frame: middleFrame})
+	upper, err := decad.MirroredCopy(lower, decad.MirrorFrame{Frame: middleFrame}).Do(t.Context())
 	require.NoError(t, err)
 	pair, err := decad.Union(lower, upper).Do(t.Context())
 	require.NoError(t, err)
@@ -66,12 +66,12 @@ func TestUnionMirroredRadialTabsWithNearAxialCopy(t *testing.T) {
 	// requires a height-dependent separator for their full source walls.
 	firstMotion, err := r3.Rotation(r3.Vec{Z: 1}, units.Radians(10*angle-0.45))
 	require.NoError(t, err)
-	firstCopy, err := decad.Copy(t.Context(), pair, decad.WithCopyPlacement(firstMotion))
+	firstCopy, err := decad.Copy(pair).Place(decad.CopyTransform{Transform: firstMotion}).Do(t.Context())
 	require.NoError(t, err)
 	nearMotion, err := r3.Rotation(r3.Vec{Z: 1}, units.Radians(10*angle))
 	require.NoError(t, err)
 	require.Equal(t, math.Nextafter(1, 0), nearMotion.Basis().EZ.Z)
-	nearCopy, err := decad.Copy(t.Context(), pair, decad.WithCopyPlacement(nearMotion))
+	nearCopy, err := decad.Copy(pair).Place(decad.CopyTransform{Transform: nearMotion}).Do(t.Context())
 	require.NoError(t, err)
 	blank := circleBodyAtZ(t, doc, 0, 3, 0, 2)
 	joined, err := decad.Union(blank, pair, firstCopy, nearCopy).Do(t.Context())
@@ -112,7 +112,7 @@ func loftMirrorCylinderTwoTabParts(t *testing.T, nearAxial bool) (
 	middleSketch, middleProfile := loftMirrorTabSection(t, world, middlePlane, 0.1)
 	lower, err := decad.Loft(doc, bottomSketch, bottomProfile, middleSketch, middleProfile).Do(t.Context())
 	require.NoError(t, err)
-	upper, err := decad.MirroredCopy(t.Context(), lower, decad.MirrorFrame{Frame: middleFrame})
+	upper, err := decad.MirroredCopy(lower, decad.MirrorFrame{Frame: middleFrame}).Do(t.Context())
 	require.NoError(t, err)
 	pair, err = decad.Union(lower, upper).Do(t.Context())
 	require.NoError(t, err)
@@ -125,7 +125,7 @@ func loftMirrorCylinderTwoTabParts(t *testing.T, nearAxial bool) (
 	if nearAxial {
 		require.Equal(t, math.Nextafter(1, 0), quarterTurn.Basis().EZ.Z)
 	}
-	turnedPair, err = decad.Copy(t.Context(), pair, decad.WithCopyPlacement(quarterTurn))
+	turnedPair, err = decad.Copy(pair).Place(decad.CopyTransform{Transform: quarterTurn}).Do(t.Context())
 	require.NoError(t, err)
 	blank = circleBodyAtZ(t, doc, 0, 3, 0, 2)
 	return doc, blank, pair, turnedPair

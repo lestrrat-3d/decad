@@ -129,7 +129,7 @@ func TestCutTwistedSweepCrossesTubeWall(t *testing.T) {
 		tool := twistBoreTool(t, doc, deg)
 		move, err := r3.Translation(r3.NewVec(offset, 0, lift))
 		require.NoError(t, err)
-		tool, err = decad.Transform(t.Context(), tool, move)
+		tool, err = decad.Transform(tool, move).Do(t.Context())
 		require.NoError(t, err)
 		return tube, tool
 	}
@@ -231,11 +231,11 @@ func TestCutTwistedSweepTiltedAcrossTubeWall(t *testing.T) {
 		tool := twistBoreTool(t, doc, deg)
 		turn, err := r3.RotationAround(r3.NewVec(0, 0, length/2), r3.NewVec(0, 1, 0), units.Degrees(tilt))
 		require.NoError(t, err)
-		tool, err = decad.Transform(t.Context(), tool, turn)
+		tool, err = decad.Transform(tool, turn).Do(t.Context())
 		require.NoError(t, err)
 		move, err := r3.Translation(r3.NewVec(offset, 0, lift))
 		require.NoError(t, err)
-		tool, err = decad.Transform(t.Context(), tool, move)
+		tool, err = decad.Transform(tool, move).Do(t.Context())
 		require.NoError(t, err)
 		return tube, tool
 	}

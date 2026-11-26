@@ -49,7 +49,7 @@ func yBearing(t *testing.T, doc *decad.Document, cx, y0, bore float64) *decad.Bo
 	require.NoError(t, err)
 	move, err := r3.Translation(r3.Vec{Y: y0 - box.Min.Y})
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), body, move)
+	placed, err := decad.Transform(body, move).Do(t.Context())
 	require.NoError(t, err)
 	return placed
 }

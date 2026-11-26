@@ -422,7 +422,7 @@ func TestNormalAtExactnessIsProven(t *testing.T) {
 		require.NoError(t, err)
 		rotation, err := r3.Rotation(r3.NewVec(1, 2, 3), units.Degrees(37))
 		require.NoError(t, err)
-		placed, err := decad.Transform(t.Context(), body, rotation)
+		placed, err := decad.Transform(body, rotation).Do(t.Context())
 		require.NoError(t, err)
 
 		for _, role := range []string{roleCapStart, roleCapEnd} {
@@ -475,7 +475,7 @@ func TestNormalAtExactnessIsProven(t *testing.T) {
 		require.NoError(t, err)
 		shift, err := r3.Translation(r3.NewVec(1000, -250, 80))
 		require.NoError(t, err)
-		placed, err := decad.Transform(t.Context(), body, shift)
+		placed, err := decad.Transform(body, shift).Do(t.Context())
 		require.NoError(t, err)
 
 		// A translation moves no direction at all, and the plate's own cap
@@ -516,7 +516,7 @@ func TestNormalAtPlaneArmCoversItsFrameCross(t *testing.T) {
 	s, p := plateSketch(t)
 	body, err := decad.Extrude(decad.New(), s, p, decad.Distance{D: units.Millimeters(8), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), body, planeArmSpin(t))
+	placed, err := decad.Transform(body, planeArmSpin(t)).Do(t.Context())
 	require.NoError(t, err)
 
 	faces := placed.Faces()
@@ -566,7 +566,7 @@ func plateCapFace(t *testing.T, role string, motion *r3.Transform) *decad.Face {
 	body, err := decad.Extrude(decad.New(), s, p, decad.Distance{D: units.Millimeters(8), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	if motion != nil {
-		body, err = decad.Transform(t.Context(), body, *motion)
+		body, err = decad.Transform(body, *motion).Do(t.Context())
 		require.NoError(t, err)
 	}
 	return normalFaceByRole(t, body, role)
@@ -580,7 +580,7 @@ func placedFace(t *testing.T, build func(t *testing.T) *decad.Body, kind decad.S
 	t.Helper()
 	body := build(t)
 	if motion != nil {
-		placed, err := decad.Transform(t.Context(), body, *motion)
+		placed, err := decad.Transform(body, *motion).Do(t.Context())
 		require.NoError(t, err)
 		body = placed
 	}

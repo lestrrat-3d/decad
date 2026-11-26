@@ -76,7 +76,7 @@ func TestSweepChainOneLineRibbonMatchesExtrudeChain(t *testing.T) {
 	// motion, so the ribbon's area is unmoved and its box translates with it.
 	motion, err := r3.Translation(r3.NewVec(100, 0, 0))
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), body, motion)
+	placed, err := decad.Transform(body, motion).Do(t.Context())
 	require.NoError(t, err)
 	placedArea, err := placed.Area()
 	require.NoError(t, err)

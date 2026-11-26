@@ -44,7 +44,7 @@ func Example_transform() {
 		fmt.Printf("failed to build motion: %s\n", err)
 		return
 	}
-	moved, err := decad.Transform(context.Background(), plate, motion)
+	moved, err := decad.Transform(plate, motion).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to transform: %s\n", err)
 		return

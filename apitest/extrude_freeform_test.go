@@ -489,19 +489,19 @@ func TestExtrudeFreeformPlacementReproducesVolume(t *testing.T) {
 
 	// Copy leaves the input LIVE; Transform retires it
 	// (core §8), so it runs last.
-	dup, err := decad.Copy(t.Context(), body)
+	dup, err := decad.Copy(body).Do(t.Context())
 	require.NoError(t, err)
 	dv, err := dup.Volume()
 	require.NoError(t, err)
 	require.InDelta(t, base.Value.Mag(), dv.Value.Mag(), 1e-9, "Copy reproduces the volume")
 
-	copied, err := decad.Copy(t.Context(), body, decad.WithCopyPlacement(move))
+	copied, err := decad.Copy(body).Place(decad.CopyTransform{Transform: move}).Do(t.Context())
 	require.NoError(t, err)
 	cv, err := copied.Volume()
 	require.NoError(t, err)
 	require.InDelta(t, base.Value.Mag(), cv.Value.Mag(), 1e-9, "placed Copy reproduces the volume")
 
-	placed, err := decad.Transform(t.Context(), body, move)
+	placed, err := decad.Transform(body, move).Do(t.Context())
 	require.NoError(t, err)
 	pv, err := placed.Volume()
 	require.NoError(t, err)
@@ -900,7 +900,7 @@ func TestFreeformPrismCutsAnInteriorBox(t *testing.T) {
 
 	lift, err := r3.Translation(r3.NewVec(0, 0, 3))
 	require.NoError(t, err)
-	inner, err := decad.Transform(t.Context(), boxBody(t, doc, 3, 0.5, 5, 1.5, 4), lift)
+	inner, err := decad.Transform(boxBody(t, doc, 3, 0.5, 5, 1.5, 4), lift).Do(t.Context())
 	require.NoError(t, err)
 	innerVolume, err := inner.Volume()
 	require.NoError(t, err)
@@ -928,7 +928,7 @@ func TestFreeformPrismInterferenceDecided(t *testing.T) {
 	// shares no face plane with its twin.
 	shift, err := r3.Translation(r3.NewVec(2, 0.2, 1))
 	require.NoError(t, err)
-	_, err = decad.Copy(t.Context(), body, decad.WithCopyPlacement(shift))
+	_, err = decad.Copy(body).Place(decad.CopyTransform{Transform: shift}).Do(t.Context())
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context())

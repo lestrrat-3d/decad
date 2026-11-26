@@ -97,7 +97,7 @@ func TestBodyPatchCircularPrismPlacementAndReflection(t *testing.T) {
 		require.NoError(t, err)
 		return motion
 	}()} {
-		placed, err := decad.Copy(t.Context(), filled, decad.WithCopyPlacement(pose))
+		placed, err := decad.Copy(filled).Place(decad.CopyTransform{Transform: pose}).Do(t.Context())
 		require.NoError(t, err)
 		mesh, err := placed.Tessellate(t.Context(), units.Millimeters(0.2), decad.WithVerification(decad.VerifyAll))
 		require.NoError(t, err)
@@ -106,7 +106,7 @@ func TestBodyPatchCircularPrismPlacementAndReflection(t *testing.T) {
 		require.Zero(t, directedEdgeCensus(t, mesh))
 		requireLiveBodyPatchMeshFaces(t, placed, mesh)
 	}
-	reflectedSource, err := decad.Transform(t.Context(), circularPatchTube(t), reflection)
+	reflectedSource, err := decad.Transform(circularPatchTube(t), reflection).Do(t.Context())
 	require.NoError(t, err)
 	filledAfterReflection, err := decad.PatchEdges(t.Context(), reflectedSource, decad.Edges(decad.Free()).Exactly(2))
 	require.NoError(t, err)

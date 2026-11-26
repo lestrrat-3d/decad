@@ -58,7 +58,7 @@ func facetedCutPlate(t *testing.T) *decad.Body {
 	require.NoError(t, err)
 	down, err := r3.Translation(r3.Vec{Z: -6})
 	require.NoError(t, err)
-	tool, err := decad.Transform(t.Context(), pin, down)
+	tool, err := decad.Transform(pin, down).Do(t.Context())
 	require.NoError(t, err)
 	body, err := decad.Cut(plate, tool).Do(t.Context())
 	require.NoError(t, err)

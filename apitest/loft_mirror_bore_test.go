@@ -24,7 +24,7 @@ func roundedMirrorJoin(t *testing.T, half, twist float64) *decad.Body {
 	require.NoError(t, err)
 	end, err := r3.NewFrame(r3.Vec{Z: half}, r3.Vec{X: 1}, r3.Vec{Y: 1})
 	require.NoError(t, err)
-	mirrored, err := decad.MirroredCopy(t.Context(), rounded, decad.MirrorFrame{Frame: end})
+	mirrored, err := decad.MirroredCopy(rounded, decad.MirrorFrame{Frame: end}).Do(t.Context())
 	require.NoError(t, err)
 	joined, err := decad.Union(rounded, mirrored).Do(t.Context())
 	require.NoError(t, err)

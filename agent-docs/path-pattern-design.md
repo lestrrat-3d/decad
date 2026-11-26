@@ -7,22 +7,31 @@ millimetre vectors.
 ## 1. Contract
 
 ```go
-func PathPattern(ctx context.Context, b *Body, path *Path, opts ...PathPatternOption) ([]*Body, error)
-func WithPathCount(n int) PathPatternOption
-func WithPathSpacing(spacing units.Value) PathPatternOption
-func WithPathFollow() PathPatternOption
-func WithPathPivot(pivot r3.Vec) PathPatternOption
+type PathStations interface{ pathStations() }
+type PathCount struct{ Count int }
+type PathSpacing struct{ Spacing units.Value }
+
+func PathPattern(b *Body, path *Path, stations PathStations) *PathPatternCommand
+func (c *PathPatternCommand) Follow() *PathPatternCommand
+func (c *PathPatternCommand) FollowAbout(pivot r3.Vec) *PathPatternCommand
+func (c *PathPatternCommand) Do(ctx context.Context) ([]*Body, error)
 ```
+
+`PathPattern` is an operation command (`agent-docs/command-api-design.md`). The choice between a count and a spacing is
+the sealed `stations` argument (rule M4), so a call names exactly one. `Follow` and `FollowAbout` write one follow slot
+and the last call wins (rule M5). The constructor records a nil `b` (subject `body`) and a nil `path` (subject `path`).
+`FollowAbout` stores its pivot and the fault validating it, which `Do` refuses at F7's position naming `FollowAbout`.
+Every error carries `OperationCopy`.
 
 | Decision | Rule |
 |---|---|
-| P1 | Instance 0 is `b`, taken to sit at the path's start. With `WithPathCount(count)` the result holds the `count − 1` other instances, as `PatternCopies` does, and `b` stays live. |
-| P2 | Instance `i` is `Copy(b, WithCopyPlacement(Translation(point(i) − point(0))))`, where `point(i)` lies `i/(count − 1)` of the way along the path's total length. The last instance sits at the path's end. |
-| P3 | Instances keep the orientation of `b` unless `WithPathFollow` is given (§5). |
+| P1 | Instance 0 is `b`, taken to sit at the path's start. With `PathCount(count)` the result holds the `count − 1` other instances, as `PatternCopies` does, and `b` stays live. |
+| P2 | Instance `i` is `Copy(b).Place(CopyTransform{Translation(point(i) − point(0))})`, where `point(i)` lies `i/(count − 1)` of the way along the path's total length. The last instance sits at the path's end. |
+| P3 | Instances keep the orientation of `b` unless `Follow` or `FollowAbout` is called (§5). |
 | P4 | Points are spaced by arc length over the whole path, not per segment. A short segment can hold no instance and a long one many. |
-| P5 | A `WithPathCount` below 2, a nil path, a nil context and a body of no document are `ErrDegenerate`. A retired body is `ErrRetiredBody`. |
+| P5 | A `PathCount` below 2, a nil `stations`, a nil path, a nil context and a body of no document are `ErrDegenerate`. A retired body is `ErrRetiredBody`. |
 | P6 | A failed or canceled call returns the error and leaves the document as it found it: no copy is live, and no history entry or producer number of the call remains. A successful call records one `OperationCopy` entry per copy. |
-| P7 | Exactly one of `WithPathCount` (P1, P2) and `WithPathSpacing` (§6) places the instances. Neither, both, or either given twice is `ErrDegenerate`. The count is an `int`: it counts instances and measures nothing, like `LinearPattern.Count`. The spacing is a length `units.Value`. A failure is reported as an `OperationCopy` failure. |
+| P7 | Exactly one of `PathCount` (P1, P2) and `PathSpacing` (§6) places the instances, as the type of `stations`. A nil `stations` or a nil pointer to either is `ErrDegenerate`, named `stations`. The count is an `int`: it counts instances and measures nothing, like `LinearPattern.Count`. The spacing is a length `units.Value`. A failure is reported as an `OperationCopy` failure. |
 
 ## 2. Sampling
 
@@ -49,7 +58,7 @@ The translation of an arc point is not exact, so such an instance reads as `Appr
 
 ## 5. Following the path
 
-`WithPathFollow` turns each copy to follow the path's direction of travel. `pathsample.SampleStations` returns each
+`Follow` and `FollowAbout` turn each copy to follow the path's direction of travel. `pathsample.SampleStations` returns each
 point with the unit direction there, and `pathsample.Turn` gives the shortest rotation between two directions.
 
 | Decision | Rule |
@@ -58,21 +67,21 @@ point with the unit direction there, and `pathsample.Turn` gives the shortest ro
 | F2 | Instance `i` is the turn about the path's start by the shortest rotation taking the start direction onto the direction at `point(i)`, followed by the move of P2. A body away from the start swings round it. |
 | F3 | A line's direction is constant, and an arc's is the derivative of its circle at that length. A point where two segments meet takes the direction of the segment that holds it, and the last point takes the direction at the path's end. |
 | F4 | The turn has no roll about the direction of travel: it is the shortest rotation, so a copy never twists about its own forward beyond what the path's bending carries. |
-| F5 | A direction exactly opposite the start's has no shortest axis and is `ErrDegenerate`. A nil option is `ErrDegenerate`. |
-| F7 | `WithPathPivot` replaces the path's start in F2: the turn is about the stated point, in millimetres, and the move of P2 follows it. A body centred on the pivot turns in place. The last pivot wins. A pivot with no `WithPathFollow` is `ErrDegenerate`, and a non-finite pivot is `ErrNotFinite`. |
-| F6 | A direction equal to the start's leaves the copy unturned, so a straight path gives the same copies with and without the option. |
+| F5 | A direction exactly opposite the start's has no shortest axis and is `ErrDegenerate`. |
+| F7 | `FollowAbout` replaces the path's start in F2: the turn is about the stated point, in millimetres, and the move of P2 follows it. A body centred on the pivot turns in place. A non-finite pivot is `ErrNotFinite`, after the `stations` refusals and before the liveness gate. |
+| F6 | A direction equal to the start's leaves the copy unturned, so a straight path gives the same copies with and without `Follow`. |
 
 ## 6. Spacing by distance
 
-`WithPathSpacing` places copies at a stated arc length instead of a count. `pathsample.SampleSpaced` returns the points.
+`PathSpacing` places copies at a stated arc length instead of a count. `pathsample.SampleSpaced` returns the points.
 
 | Decision | Rule |
 |---|---|
 | S1 | Instance `i` lies `i · spacing` of arc length along the path, for every `i` with `i · spacing` within the path's length. The first is at the path's start. |
 | S2 | A spacing that divides the length, up to a relative 1e-12 of rounding, gives the last instance at the path's end exactly. Otherwise the last lies short of the end. |
-| S3 | The `WithPathSpacing` value is a positive length. A wrong unit kind is `ErrUnitKind`, a negative value is `ErrNegativeMagnitude`, and zero is `ErrDegenerate`. |
+| S3 | The `PathSpacing` value is a positive length. A wrong unit kind is `ErrUnitKind`, a negative value is `ErrNegativeMagnitude`, and zero is `ErrDegenerate`. |
 | S4 | A spacing that leaves no copy, because it is longer than the path, is `ErrDegenerate`. One that would place more than 100000 points is `ErrDegenerate`. |
-| S5 | Orientation, `WithPathFollow`, the path's segments, failure and the copies' exactness are as with `WithPathCount` (P1 to P6, §5). |
+| S5 | Orientation, `Follow`, the path's segments, failure and the copies' exactness are as with `PathCount` (P1 to P6, §5). |
 
 ## 7. Joining the copies
 

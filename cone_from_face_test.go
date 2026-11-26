@@ -125,7 +125,7 @@ func TestConeFromFaceRefuses(t *testing.T) {
 		blank := spiralTestRevolveBlank(t, section)
 		move, err := r3.Translation(r3.Vec{X: 1})
 		require.NoError(t, err)
-		placed, err := Transform(t.Context(), blank, move)
+		placed, err := Transform(blank, move).Do(t.Context())
 		require.NoError(t, err)
 		_, err = ConeFromFace(placed, faceOf(t, placed, isCone), far).Do(t.Context())
 		require.ErrorIs(t, err, ErrUnsupported)

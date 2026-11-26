@@ -31,12 +31,12 @@ func TestCopyRotationOptionErrors(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := decad.Copy(t.Context(), box, decad.WithCopyRotation(tc.center, tc.axis, tc.angle))
+			_, err := decad.Copy(box).Place(decad.CopyRotation{Center: tc.center, Axis: tc.axis, Angle: tc.angle}).Do(t.Context())
 			require.ErrorIs(t, err, tc.want)
 			require.Len(t, doc.Bodies(), 1)
 		})
 	}
-	_, err := decad.Copy(t.Context(), box, decad.WithCopyRotation(r3.Vec{}, z, units.Radians(0)))
+	_, err := decad.Copy(box).Place(decad.CopyRotation{Center: r3.Vec{}, Axis: z, Angle: units.Radians(0)}).Do(t.Context())
 	require.NoError(t, err, "a zero angle is the identity rotation")
 }
 
@@ -46,16 +46,16 @@ func TestCopyRotationLastPlacementOptionWins(t *testing.T) {
 	box := boxBody(t, doc, 0, 0, 4, 4, 2)
 	shift, err := r3.Translation(r3.NewVec(10, 0, 0))
 	require.NoError(t, err)
-	turn := decad.WithCopyRotation(r3.Vec{}, r3.Vec{Z: 1}, units.Degrees(90))
+	turn := decad.CopyRotation{Axis: r3.Vec{Z: 1}, Angle: units.Degrees(90)}
 
-	first, err := decad.Copy(t.Context(), box, turn, decad.WithCopyPlacement(shift))
+	first, err := decad.Copy(box).Place(turn).Place(decad.CopyTransform{Transform: shift}).Do(t.Context())
 	require.NoError(t, err)
 	c, err := first.Centroid()
 	require.NoError(t, err)
 	require.InDelta(t, 12, c.Value.X, 1e-9)
 	require.InDelta(t, 2, c.Value.Y, 1e-9)
 
-	second, err := decad.Copy(t.Context(), box, decad.WithCopyPlacement(shift), turn)
+	second, err := decad.Copy(box).Place(decad.CopyTransform{Transform: shift}).Place(turn).Do(t.Context())
 	require.NoError(t, err)
 	c, err = second.Centroid()
 	require.NoError(t, err)
@@ -71,9 +71,9 @@ func TestCopyRotationPrismMatchesPlacement(t *testing.T) {
 	angle := units.Degrees(37)
 	placement, err := r3.RotationAround(center, axis, angle)
 	require.NoError(t, err)
-	want, err := decad.Copy(t.Context(), box, decad.WithCopyPlacement(placement))
+	want, err := decad.Copy(box).Place(decad.CopyTransform{Transform: placement}).Do(t.Context())
 	require.NoError(t, err)
-	got, err := decad.Copy(t.Context(), box, decad.WithCopyRotation(center, axis, angle))
+	got, err := decad.Copy(box).Place(decad.CopyRotation{Center: center, Axis: axis, Angle: angle}).Do(t.Context())
 	require.NoError(t, err)
 
 	wv, err := want.Volume()
@@ -96,12 +96,12 @@ func TestCopyRotationFacetedCopyIsFacetedAndRotates(t *testing.T) {
 	doc := decad.New()
 	lower, err := decad.Loft(doc, s0, p0, s1, p1).Do(t.Context())
 	require.NoError(t, err)
-	upper, err := decad.MirroredCopy(t.Context(), lower, loftMirrorPlane(t))
+	upper, err := decad.MirroredCopy(lower, loftMirrorPlane(t)).Do(t.Context())
 	require.NoError(t, err)
 	joined, err := decad.Union(upper, lower).Do(t.Context())
 	require.NoError(t, err)
 	angle := units.Degrees(30)
-	copied, err := decad.Copy(t.Context(), joined, decad.WithCopyRotation(r3.Vec{}, r3.Vec{Z: 1}, angle))
+	copied, err := decad.Copy(joined).Place(decad.CopyRotation{Center: r3.Vec{}, Axis: r3.Vec{Z: 1}, Angle: angle}).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, doc.Bodies(), 2)
 
@@ -139,14 +139,14 @@ func TestCopyRotationMintsCapRolesUnderEveryCopy(t *testing.T) {
 	doc := decad.New()
 	lower, err := decad.Loft(doc, s0, p0, s1, p1).Do(t.Context())
 	require.NoError(t, err)
-	upper, err := decad.MirroredCopy(t.Context(), lower, loftMirrorPlane(t))
+	upper, err := decad.MirroredCopy(lower, loftMirrorPlane(t)).Do(t.Context())
 	require.NoError(t, err)
 	joined, err := decad.Union(upper, lower).Do(t.Context())
 	require.NoError(t, err)
-	turn := decad.WithCopyRotation(r3.Vec{}, r3.Vec{Z: 1}, units.Degrees(45))
-	first, err := decad.Copy(t.Context(), joined, turn)
+	turn := decad.CopyRotation{Axis: r3.Vec{Z: 1}, Angle: units.Degrees(45)}
+	first, err := decad.Copy(joined).Place(turn).Do(t.Context())
 	require.NoError(t, err)
-	second, err := decad.Copy(t.Context(), first, turn)
+	second, err := decad.Copy(first).Place(turn).Do(t.Context())
 	require.NoError(t, err)
 	for _, body := range []*decad.Body{first, second} {
 		for _, role := range []decad.FeatureRef{decad.CapStart(body), decad.CapEnd(body)} {

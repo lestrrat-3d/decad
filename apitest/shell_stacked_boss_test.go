@@ -53,7 +53,7 @@ func TestShellCenteredStackedBoss(t *testing.T) {
 	require.Equal(t, decad.Sound, report.Status)
 	motion, err := r3.Translation(r3.NewVec(12, -7, 3))
 	require.NoError(t, err)
-	moved, err := decad.Transform(t.Context(), shelled, motion)
+	moved, err := decad.Transform(shelled, motion).Do(t.Context())
 	require.NoError(t, err)
 	placedVolume, err := moved.Volume()
 	require.NoError(t, err)

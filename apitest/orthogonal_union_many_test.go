@@ -44,7 +44,7 @@ func TestPatternUnionOfAMeshSolidIsExact(t *testing.T) {
 	doc := decad.New()
 	base := blockIn(t, doc, r3.NewVec(0, 0, 0), r3.NewVec(100, 20, 4))
 	tooth := blockIn(t, doc, r3.NewVec(2, 2, 4), r3.NewVec(6, 18, 12))
-	copies, err := decad.PatternCopies(t.Context(), tooth, decad.LinearPattern{Dir: r3.NewVec(1, 0, 0), Step: units.Millimeters(10), Count: 9})
+	copies, err := decad.PatternCopies(tooth, decad.LinearPattern{Dir: r3.NewVec(1, 0, 0), Step: units.Millimeters(10), Count: 9}).Do(t.Context())
 	require.NoError(t, err)
 	comb, err := decad.Union(append([]*decad.Body{base}, append([]*decad.Body{tooth}, copies...)...)...).Do(t.Context())
 	require.NoError(t, err)

@@ -38,7 +38,7 @@ func TestReplayTrialChordRealPublicProducers(t *testing.T) {
 	raw := internalBoxBody(t, doc, 0, -4, 4, 4, 3)
 	move, err := r3.Translation(r3.Vec{Z: 1.5})
 	require.NoError(t, err)
-	tool, err := Transform(ctx, raw, move)
+	tool, err := Transform(raw, move).Do(ctx)
 	require.NoError(t, err)
 	cut, err := Cut(cylinder, tool).Do(ctx)
 	require.NoError(t, err)

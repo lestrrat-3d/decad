@@ -297,7 +297,7 @@ func TestSectionDirectLoftVaryingCircleRefusesPlacement(t *testing.T) {
 	require.NoError(t, err)
 	move, err := r3.Translation(r3.NewVec(10, 0, 0))
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), source, move)
+	placed, err := decad.Transform(source, move).Do(t.Context())
 	require.NoError(t, err)
 	requireDirectLoftSectionUnsupported(t, placed, r3.NewVec(0, 0, 1))
 }
@@ -373,7 +373,7 @@ func TestSectionDirectLoftRefusesPlacementAndShiftedOrigin(t *testing.T) {
 	constant := directLoftCircles(t, false, 1, 1, 0, 0)
 	move, err := r3.Translation(r3.NewVec(10, 0, 0))
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), constant, move)
+	placed, err := decad.Transform(constant, move).Do(t.Context())
 	require.NoError(t, err)
 	requireDirectLoftSectionUnsupported(t, placed, r3.NewVec(0, 0, 1))
 }

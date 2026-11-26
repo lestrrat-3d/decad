@@ -10,7 +10,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// WithCopyRotation places a copy by turning it about an axis, given as a
+// CopyRotation places a copy by turning it about an axis, given as a
 // center point, a direction and an angle. Use it when the copy should be
 // swung into position instead of slid, for example around a shaft.
 func Example_copy_with_rotation() {
@@ -38,8 +38,7 @@ func Example_copy_with_rotation() {
 	// Turn a copy a quarter turn about the Z axis through the origin. That
 	// swings the peg from the first quadrant (x and y positive) into the
 	// second (x negative, y positive).
-	turned, err := decad.Copy(context.Background(), master,
-		decad.WithCopyRotation(r3.Vec{}, r3.Vec{Z: 1}, units.Degrees(90)))
+	turned, err := decad.Copy(master).Place(decad.CopyRotation{Center: r3.Vec{}, Axis: r3.Vec{Z: 1}, Angle: units.Degrees(90)}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to copy: %s\n", err)
 		return

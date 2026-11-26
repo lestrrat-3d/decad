@@ -76,7 +76,7 @@ func TestBrepUnionSectionPlacementAndRefusals(t *testing.T) {
 
 	move, err := r3.Translation(r3.Vec{X: 20, Y: 30, Z: 1})
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), joined, move)
+	placed, err := decad.Transform(joined, move).Do(t.Context())
 	require.NoError(t, err)
 	frame, err := r3.NewFrame(r3.Vec{X: 20, Y: 30, Z: 10}, r3.Vec{X: 1}, r3.Vec{Y: 1})
 	require.NoError(t, err)

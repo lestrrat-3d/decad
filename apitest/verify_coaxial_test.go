@@ -45,7 +45,7 @@ func placedAlongZ(t *testing.T, body *decad.Body, dz float64) *decad.Body {
 	}
 	move, err := r3.Translation(r3.Vec{Z: dz})
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), body, move)
+	placed, err := decad.Transform(body, move).Do(t.Context())
 	require.NoError(t, err)
 	return placed
 }
@@ -79,7 +79,7 @@ func turned(t *testing.T, body *decad.Body, angle float64) *decad.Body {
 	}
 	turn, err := r3.Rotation(r3.Vec{X: 1}, units.Radians(angle))
 	require.NoError(t, err)
-	out, err := decad.Transform(t.Context(), body, turn)
+	out, err := decad.Transform(body, turn).Do(t.Context())
 	require.NoError(t, err)
 	return out
 }

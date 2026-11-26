@@ -66,7 +66,7 @@ func flatTool(t *testing.T, sc *retentionScene) *decad.Body {
 	require.NoError(t, err)
 	move, err := r3.Translation(r3.Vec{Z: flatZ})
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), box, move)
+	placed, err := decad.Transform(box, move).Do(t.Context())
 	require.NoError(t, err)
 	return placed
 }
@@ -172,7 +172,7 @@ func TestFacetedRetainedBlendRevolvedShaft(t *testing.T) {
 		// exact frame, so the tag is not provably the record's surface.
 		sc := newRetentionScene()
 		turn := rotation(t, r3.Vec{}, r3.NewVec(0, 0, 1), 0.3)
-		turned, err := decad.Transform(t.Context(), revolvedShaft(t, sc), turn)
+		turned, err := decad.Transform(revolvedShaft(t, sc), turn).Do(t.Context())
 		require.NoError(t, err)
 		cut, err := decad.Cut(turned, flatTool(t, sc)).Do(t.Context())
 		require.NoError(t, err)
@@ -269,7 +269,7 @@ func slotTool(t *testing.T, sc *retentionScene) *decad.Body {
 	require.NoError(t, err)
 	move, err := r3.Translation(r3.Vec{Z: 3})
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), box, move)
+	placed, err := decad.Transform(box, move).Do(t.Context())
 	require.NoError(t, err)
 	return placed
 }

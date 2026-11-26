@@ -135,7 +135,7 @@ func unionFold(ctx context.Context, bodies []*Body) (*Body, error) {
 	copies := make([]*Body, 0, len(bodies))
 	defer func() { removeTools(copies) }()
 	for _, b := range bodies {
-		c, err := Copy(ctx, b)
+		c, err := copyAsIs(ctx, b)
 		if err != nil {
 			return nil, err
 		}

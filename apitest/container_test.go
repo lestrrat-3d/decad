@@ -134,16 +134,16 @@ func TestContainerPlacement(t *testing.T) {
 	require.NoError(t, err)
 	require.Same(t, a, containerOf(t, doc, cut), "a boolean lands in its target's container")
 
-	moved, err := decad.Transform(t.Context(), cut, mustTranslation(t, 5, 0, 0))
+	moved, err := decad.Transform(cut, mustTranslation(t, 5, 0, 0)).Do(t.Context())
 	require.NoError(t, err)
 	require.Same(t, a, containerOf(t, doc, moved), "a transform stays with its source")
 
-	copied, err := decad.Copy(t.Context(), moved, decad.WithCopyPlacement(mustTranslation(t, 0, 9, 0)))
+	copied, err := decad.Copy(moved).Place(decad.CopyTransform{Transform: mustTranslation(t, 0, 9, 0)}).Do(t.Context())
 	require.NoError(t, err)
 	require.Same(t, a, containerOf(t, doc, copied), "a copy stays with its source")
 	require.Same(t, a, containerOf(t, doc, moved), "the source stays too")
 
-	pattern, err := decad.PatternCopies(t.Context(), copied, decad.LinearPattern{Dir: r3.NewVec(1, 0, 0), Step: units.Millimeters(20), Count: 3})
+	pattern, err := decad.PatternCopies(copied, decad.LinearPattern{Dir: r3.NewVec(1, 0, 0), Step: units.Millimeters(20), Count: 3}).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, pattern, 2)
 	for _, b := range pattern {

@@ -62,7 +62,7 @@ func earTube(t *testing.T) *decad.Body {
 	require.NoError(t, err)
 	move, err := r3.Translation(r3.Vec{X: -15 + 0.001})
 	require.NoError(t, err)
-	tube, err := decad.Transform(t.Context(), pipe, move)
+	tube, err := decad.Transform(pipe, move).Do(t.Context())
 	require.NoError(t, err)
 	rib := placed(t, rectBox(t, sc.w, sc.doc, 0, -earHalf, earLen, earHalf, 3), -4)
 	body, err := decad.Union(tube, rib).Do(t.Context())

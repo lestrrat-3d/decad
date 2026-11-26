@@ -22,12 +22,12 @@ func roundedBoxAt(t *testing.T, w *sketch.World, doc *Document, x, y, z, sx, sy,
 	for _, deg := range []float64{20, -20} {
 		turn, err := r3.RotationAround(centre, r3.Vec{X: 1, Y: 1, Z: 1}, units.Degrees(deg))
 		require.NoError(t, err)
-		box, err = Transform(t.Context(), box, turn)
+		box, err = Transform(box, turn).Do(t.Context())
 		require.NoError(t, err)
 	}
 	move, err := r3.Translation(r3.Vec{X: x, Y: y, Z: z})
 	require.NoError(t, err)
-	placed, err := Transform(t.Context(), box, move)
+	placed, err := Transform(box, move).Do(t.Context())
 	require.NoError(t, err)
 	return placed
 }

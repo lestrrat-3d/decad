@@ -286,8 +286,8 @@ func TestPatternedGroupKeepsDenotedLevel(t *testing.T) {
 	doc := decad.New()
 	plate := upPlate(t, doc, inch)
 	peg := twoSidedRect(t, doc, 2, 8, 6, 12, inch, units.Millimeters(2))
-	group, err := decad.Patterned(t.Context(), peg, decad.LinearPattern{Dir: r3.NewVec(1, 0, 0),
-		Step: units.Millimeters(8), Count: 2})
+	group, err := decad.Patterned(peg, decad.LinearPattern{Dir: r3.NewVec(1, 0, 0),
+		Step: units.Millimeters(8), Count: 2}).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, stackedPrismClass, decadtest.PayloadClass(group))
 	part, err := decad.Cut(plate, group).Do(t.Context())

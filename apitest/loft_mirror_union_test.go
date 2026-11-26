@@ -23,7 +23,7 @@ func TestLoftMirrorUnionSealsTheSharedCap(t *testing.T) {
 	doc := decad.New()
 	lower, err := decad.Loft(doc, s0, p0, s1, p1).Do(t.Context())
 	require.NoError(t, err)
-	upper, err := decad.MirroredCopy(t.Context(), lower, loftMirrorPlane(t))
+	upper, err := decad.MirroredCopy(lower, loftMirrorPlane(t)).Do(t.Context())
 	require.NoError(t, err)
 	joined, err := decad.Union(upper, lower).Do(t.Context())
 	require.NoError(t, err)
@@ -51,7 +51,7 @@ func TestLoftMirrorUnionSealsTheSharedCap(t *testing.T) {
 
 	spin, err := r3.RotationAround(r3.Vec{}, r3.Vec{Z: 1}, units.Degrees(45))
 	require.NoError(t, err)
-	placed, err := decad.Copy(t.Context(), joined, decad.WithCopyPlacement(spin))
+	placed, err := decad.Copy(joined).Place(decad.CopyTransform{Transform: spin}).Do(t.Context())
 	require.NoError(t, err)
 	copyMesh, err := placed.Tessellate(t.Context(), units.Millimeters(0.1),
 		decad.WithVerification(decad.VerifyAll))
@@ -77,7 +77,7 @@ func TestLoftMirrorUnionKeepsUnrelatedSourcesSeparate(t *testing.T) {
 	require.NoError(t, err)
 	other, err := decad.Loft(doc, s0, p0, s1, p1).Do(t.Context())
 	require.NoError(t, err)
-	upper, err := decad.MirroredCopy(t.Context(), other, loftMirrorPlane(t))
+	upper, err := decad.MirroredCopy(other, loftMirrorPlane(t)).Do(t.Context())
 	require.NoError(t, err)
 	joined, err := decad.Union(lower, upper).Do(t.Context())
 	require.NoError(t, err)

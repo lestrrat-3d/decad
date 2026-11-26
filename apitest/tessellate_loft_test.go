@@ -131,7 +131,7 @@ func TestLoftTessellatePlacedLoftUsesThePositiveBoundPath(t *testing.T) {
 	require.NoError(t, err)
 	motion, err := rot.Then(shift)
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), loft, motion)
+	placed, err := decad.Transform(loft, motion).Do(t.Context())
 	require.NoError(t, err)
 
 	mesh, err := placed.Tessellate(t.Context(), units.Millimeters(1))

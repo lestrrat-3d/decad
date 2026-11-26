@@ -9195,7 +9195,7 @@ Navigation only; the sections own the content.
 | Two-distance chamfer of a retained edge | §4 |
 | Fillet or chamfer of a rounded outline (line, arc, line …) | §5 |
 | Chamfer of a tangent chain whose edges share no base plane | §15b |
-| `Copy` with `WithCopyRotation` | §6 |
+| `Copy` with `CopyRotation` | §6 |
 | `ScaledAt` | §7 |
 | Edge between two parallel cylinders | §8 |
 | Why `Shell`, `Draft`, `Offset`, many-body `Union`, cone and torus blends stay refused | §9 |
@@ -9223,8 +9223,8 @@ Every refusal is `ErrUnsupported`; the quoted text follows `decad: not supported
 | `PatternCopies`, linear and circular | builds | 6 `Plane`, 5 `Cylinder` | retention |
 | `Mirrored`, `MirroredCopy` across the +x face | builds | 6 `Plane`, 5 `Cylinder` | retention |
 | `Transform`, translation or 20° about z | builds | 6 `Plane`, 5 `Cylinder` | retention |
-| `Copy`, no option or `WithCopyPlacement` | builds | 6 `Plane`, 5 `Cylinder` | retention |
-| `Copy` with `WithCopyRotation`, 20° about z | builds | 6 `Plane`, 5 `Cylinder` | GAP-A; M2 (§6) |
+| `Copy`, no option or `CopyTransform` | builds | 6 `Plane`, 5 `Cylinder` | retention |
+| `Copy` with `CopyRotation`, 20° about z | builds | 6 `Plane`, 5 `Cylinder` | GAP-A; M2 (§6) |
 | `ScaledAt` 1.5 about `(20,10,0)` | builds | 6 `Plane`, 5 `Cylinder` | M5 (§7) |
 | `Fillet` r=1 or `Chamfer` d=1 of one or all four x-parallel edges | refused (SM2) | — | GAP-E; §5.3, §15 |
 | `Chamfer` of the four, `Asymmetric` 1 and 2 | refused (SM2) | — | as above |
@@ -9719,7 +9719,7 @@ its own unit test.
 
 ### 6. Exact-rotation `Copy` keeps its tags (GAP-A)
 
-`WithCopyRotation` gives a faceted copy that denotes `Q·S + t_Q`, with `Q` an exactly orthogonal rational rotation
+`CopyRotation` gives a faceted copy that denotes `Q·S + t_Q`, with `Q` an exactly orthogonal rational rotation
 (`internal/exactrotation`). `ExactGroupPlaced` drops every group's `Denoted`, and every `Surface` and `CapRecord`
 except those of a plane that `Q` maps onto itself (below), because they describe the float placement and not `Q`.
 
@@ -9967,11 +9967,11 @@ shown red first by the change named. `A_f = r²(1 − π/4)` is a fillet's corne
 | `internal/facetedrecord/place.go`, `place_tag.go`, `placed.go` | §6 |
 | `internal/facetedrecord/point_plane_scale.go`, `place_tag.go` | §7 |
 | `internal/facetedrecord/edge_curve.go` | E10 |
-| `document.go` | `WithCopyRotation`'s doc comment states the tags it keeps (§6) |
+| `document.go` | `CopyRotation`'s doc comment states the tags it keeps (§6) |
 | Part E | Table RR: the two-distance chamfer, R5, a pointer to this document's chains; §7 |
 | `agent-docs/faceted-source-retention-design.md` | §3.4 (exact rotation), §6 (`ScaledAt`), §10.1 (E10) |
 | Part R | RX6 row and SX9 text; §5's sentence that faceted curves never enter the oracle |
-| `agent-docs/missing-features.md` | the rows for faceted `Fillet`/`Chamfer` and for analytic readings of a `WithCopyRotation` copy |
+| `agent-docs/missing-features.md` | the rows for faceted `Fillet`/`Chamfer` and for analytic readings of a `CopyRotation` copy |
 | `apitest/` | the tests of §12; `apitest/faceted_retained_blend_test.go` holds the blend rows |
 | `examples/` | one executable example: the rounded box's top rim filleted after a placed-tool Cut |
 | `docs/api.md`, `docs/data-structures.md` | none: no exported name or signature changes, and their rows name no receiver class |
@@ -11650,7 +11650,7 @@ nothing else.
 | **DD9** | `Verify` clearance (`WithClearances`) | `Suspect` (`boundaryaudit.PairUndecided`): `newBodyGeomBudget` has no carrier model for the class. The Plane/Cone carriers are not implemented |
 | **DD10** | `Verify` interference | box-disjoint proofs from the body's `Bounds`; the read-only mesh intersection over DD1's mesh |
 | **DD11** | `MassProperties` and `dynamics` | the verified-mesh path (`verifiedMeshMassProperties`) over DD1's mesh; `ErrUnsupported` where the band admission refuses |
-| **DD12** | `Transform`, `Copy`, `Mirrored`, `MirroredCopy` | the payload implements `Transform()` and `Placed()`: a placement re-runs §7 under the composed motion, as a prism's does. `WithJoin` refuses (it rewrites a prism's or stacked prism's section) |
+| **DD12** | `Transform`, `Copy`, `Mirrored`, `MirroredCopy` | the payload implements `Transform()` and `Placed()`: a placement re-runs §7 under the composed motion, as a prism's does. `MirroredJoin` refuses (it rewrites a prism's or stacked prism's section) |
 | **DD13** | `Patterned` | `placedInstance` and a boolean `Union` (the mesh path); the frame-keeping arm does not take the class |
 | **DD14** | `Fillet`, `Chamfer`, `Shell` | A positive-taper, one-sided, full circular solid admits one complete far-cap outer rim fillet (§10.4), symmetric chamfer (§10.5), or inward shell with that cap removed (§10.6). Other selections and draft shapes remain modify S3, `ErrUnsupported` |
 | **DD15** | `Draft` of a draft body | SD23 |

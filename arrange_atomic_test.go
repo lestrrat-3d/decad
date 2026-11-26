@@ -36,13 +36,13 @@ func TestArrangeCanceledMidwayLeavesTheDocumentUnchanged(t *testing.T) {
 	cases := []struct {
 		name         string
 		width, depth float64
-		opts         []ArrangeOption
+		configure    func(*ArrangeCommand) *ArrangeCommand
 		circles      bool
 	}{
-		{"plain", 60, 40, nil, false},
-		{"turns", 30, 20, []ArrangeOption{WithArrangeTurns()}, false},
-		{"angle", 60, 40, []ArrangeOption{WithArrangeAngle(units.Degrees(45))}, false},
-		{"child circles", 60, 40, nil, true},
+		{"plain", 60, 40, func(c *ArrangeCommand) *ArrangeCommand { return c }, false},
+		{"turns", 30, 20, (*ArrangeCommand).Turns, false},
+		{"angle", 60, 40, func(c *ArrangeCommand) *ArrangeCommand { return c.Angle(units.Degrees(45)) }, false},
+		{"child circles", 60, 40, func(c *ArrangeCommand) *ArrangeCommand { return c }, true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -67,7 +67,7 @@ func TestArrangeCanceledMidwayLeavesTheDocumentUnchanged(t *testing.T) {
 				}
 				before := captureDocumentState(t.Context(), t, doc)
 				return func(ctx context.Context) bool {
-					moved, err := Arrange(ctx, blocks, atomicArrangeBed(tc.width, tc.depth), tc.opts...)
+					moved, err := tc.configure(Arrange(blocks, atomicArrangeBed(tc.width, tc.depth))).Do(ctx)
 					if err == nil {
 						require.Len(t, moved, len(blocks))
 						return true
@@ -94,10 +94,10 @@ func TestArrangeSuccessRecordsOneTransformEntryPerBody(t *testing.T) {
 	doc := New()
 	blocks := atomicArrangeBlocks(t, doc, [][2]float64{{10, 5}, {10, 8}})
 	first := doc.producerAt(t.Context())
-	moved, err := Arrange(t.Context(), blocks, ArrangeBed{
+	moved, err := Arrange(blocks, ArrangeBed{
 		Origin: r3.Vec{X: 100, Y: 200, Z: 5},
 		Width:  units.Millimeters(30), Depth: units.Millimeters(20), Gap: units.Millimeters(2),
-	})
+	}).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, moved, 2)
 	require.Len(t, doc.Bodies(), 2)

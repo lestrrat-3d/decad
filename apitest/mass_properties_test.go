@@ -49,7 +49,7 @@ func TestMassPropertiesTrianglePrism(t *testing.T) {
 		EZ: r3.NewVec(0, 0, 1),
 	}, r3.NewVec(30, 0, 0))
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), body, turn)
+	placed, err := decad.Transform(body, turn).Do(t.Context())
 	require.NoError(t, err)
 	rotated, err := placed.MassProperties(t.Context(), density)
 	require.NoError(t, err)
@@ -101,7 +101,7 @@ func TestMassPropertiesSourceBox(t *testing.T) {
 
 	translation, err := r3.Translation(r3.NewVec(3, -4, 7))
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), box, translation)
+	placed, err := decad.Transform(box, translation).Do(t.Context())
 	require.NoError(t, err)
 	shifted, err := placed.MassProperties(t.Context(), density)
 	require.NoError(t, err)
@@ -131,7 +131,7 @@ func TestMassPropertiesSourceBox(t *testing.T) {
 		EZ: r3.NewVec(0, 0, 1),
 	}, r3.NewVec(50, 0, 0))
 	require.NoError(t, err)
-	turned, err := decad.Transform(t.Context(), rectangular, quarterTurn)
+	turned, err := decad.Transform(rectangular, quarterTurn).Do(t.Context())
 	require.NoError(t, err)
 	rotated, err := turned.MassProperties(t.Context(), density)
 	require.NoError(t, err)
@@ -167,7 +167,7 @@ func TestMassPropertiesSourceSphere(t *testing.T) {
 
 	pose, err := r3.RotationAround(r3.NewVec(20, -3, 7), r3.NewVec(1, 1, 1), units.Degrees(37))
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), ball, pose)
+	placed, err := decad.Transform(ball, pose).Do(t.Context())
 	require.NoError(t, err)
 	rotated, err := placed.MassProperties(t.Context(), density)
 	require.NoError(t, err)
@@ -218,7 +218,7 @@ func TestMassPropertiesRevolvedCylinder(t *testing.T) {
 		EX: r3.NewVec(0, 1, 0), EY: r3.NewVec(-1, 0, 0), EZ: r3.NewVec(0, 0, 1),
 	}, r3.NewVec(2, 3, 4))
 	require.NoError(t, err)
-	placed, err := decad.Copy(t.Context(), body, decad.WithCopyPlacement(cardinal))
+	placed, err := decad.Copy(body).Place(decad.CopyTransform{Transform: cardinal}).Do(t.Context())
 	require.NoError(t, err)
 	turned, err := placed.MassProperties(t.Context(), density)
 	require.NoError(t, err)
@@ -240,7 +240,7 @@ func TestMassPropertiesRevolvedCylinder(t *testing.T) {
 	require.Equal(t, decad.MassProperties{}, reading)
 	obliquePose, err := r3.RotationAround(r3.Vec{}, r3.NewVec(0, 0, 1), units.Degrees(37))
 	require.NoError(t, err)
-	oblique, err := decad.Copy(t.Context(), body, decad.WithCopyPlacement(obliquePose))
+	oblique, err := decad.Copy(body).Place(decad.CopyTransform{Transform: obliquePose}).Do(t.Context())
 	require.NoError(t, err)
 	// An oblique placement leaves the source-cylinder path for the general
 	// revolve path, which reads the image of the cylinder under the held
@@ -318,7 +318,7 @@ func TestMassPropertiesRefusals(t *testing.T) {
 	// path admits it.
 	shift, err := r3.Translation(r3.NewVec(.1, 0, 0))
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), stitchedBox(t, decad.New()), shift)
+	placed, err := decad.Transform(stitchedBox(t, decad.New()), shift).Do(t.Context())
 	require.NoError(t, err)
 	got, err = placed.MassProperties(t.Context(), units.KilogramsPerCubicMillimeter(1))
 	require.ErrorIs(t, err, decad.ErrUnsupported)

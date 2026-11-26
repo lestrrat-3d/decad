@@ -50,7 +50,7 @@ func TestCircularPrismScaledAtKeepsMeasuredProofAndSourceRoles(t *testing.T) {
 			source := circularScaleSource(t, tc.quarter)
 			anchor := r3.NewVec(1, 2, 3)
 			factor := 1.5
-			scaled, err := decad.ScaledAt(t.Context(), source, anchor, units.Scalar(factor))
+			scaled, err := decad.ScaledAt(source, anchor, units.Scalar(factor)).Do(t.Context())
 			require.NoError(t, err)
 			mesh, err := scaled.Tessellate(t.Context(), units.Millimeters(0.1),
 				decad.WithVerification(decad.VerifyAll))
@@ -94,15 +94,15 @@ func TestCircularPrismScaledAtAcceptsPlacedAndRepeatedImage(t *testing.T) {
 	source := circularScaleSource(t, false)
 	turn, err := r3.RotationAround(r3.NewVec(1, 1, 0), r3.NewVec(0, 1, 0), units.Radians(0.2))
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), source, turn)
+	placed, err := decad.Transform(source, turn).Do(t.Context())
 	require.NoError(t, err)
-	first, err := decad.ScaledAt(t.Context(), placed, r3.NewVec(1, 2, 3), units.Scalar(1.25))
+	first, err := decad.ScaledAt(placed, r3.NewVec(1, 2, 3), units.Scalar(1.25)).Do(t.Context())
 	require.NoError(t, err)
 	shift, err := r3.Translation(r3.NewVec(2, -1, 0.5))
 	require.NoError(t, err)
-	placedCopy, err := decad.Copy(t.Context(), first, decad.WithCopyPlacement(shift))
+	placedCopy, err := decad.Copy(first).Place(decad.CopyTransform{Transform: shift}).Do(t.Context())
 	require.NoError(t, err)
-	again, err := decad.ScaledAt(t.Context(), placedCopy, r3.NewVec(0, 0, 0), units.Scalar(0.8))
+	again, err := decad.ScaledAt(placedCopy, r3.NewVec(0, 0, 0), units.Scalar(0.8)).Do(t.Context())
 	require.NoError(t, err)
 	mesh, err := again.Tessellate(t.Context(), units.Millimeters(0.1),
 		decad.WithVerification(decad.VerifyAll))

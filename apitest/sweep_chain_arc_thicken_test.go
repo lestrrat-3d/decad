@@ -60,7 +60,7 @@ func TestSweepChainArcThickenSolidAndReplay(t *testing.T) {
 
 	motion, err := r3.Translation(r3.NewVec(3, 7, 11))
 	require.NoError(t, err)
-	placed, err := decad.Copy(t.Context(), solid, decad.WithCopyPlacement(motion))
+	placed, err := decad.Copy(solid).Place(decad.CopyTransform{Transform: motion}).Do(t.Context())
 	require.NoError(t, err)
 	placedVolume, err := placed.Volume()
 	require.NoError(t, err)

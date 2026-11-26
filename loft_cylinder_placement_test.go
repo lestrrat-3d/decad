@@ -215,9 +215,9 @@ func TestLoftCylinderUnionCommonPlacement(t *testing.T) {
 			if tc.translate != 0 {
 				motion := loftCylinderTestTranslation(t, tc.translate)
 				var err error
-				blank, err = Transform(t.Context(), blank, motion)
+				blank, err = Transform(blank, motion).Do(t.Context())
 				require.NoError(t, err)
-				tooth, err = Transform(t.Context(), tooth, motion)
+				tooth, err = Transform(tooth, motion).Do(t.Context())
 				require.NoError(t, err)
 			}
 			joined, err := Union(blank, tooth).Do(t.Context())
@@ -233,7 +233,7 @@ func TestLoftCylinderUnionCommonPlacement(t *testing.T) {
 				loftCylinderCheckCanonicalReadings(t, joined,
 					localJoin, placement.Pose)
 				if tc.name == "translation_1e-12" {
-					moved, err := Transform(t.Context(), joined, loftCylinderTestTranslation(t, 1))
+					moved, err := Transform(joined, loftCylinderTestTranslation(t, 1)).Do(t.Context())
 					require.NoError(t, err)
 					movedPayload := moved.n.Payload.(facetedPayload)
 					require.Nil(t, movedPayload.LoftCylinderJoin,
@@ -251,14 +251,14 @@ func TestLoftCylinderCommonPlacementConsumers(t *testing.T) {
 	doc, blank, tooth := loftCylinderPlacedTabPair(t, lower, upper)
 	turn, err := r3.Rotation(r3.Vec{Z: 1}, units.Degrees(180))
 	require.NoError(t, err)
-	second, err := Copy(ctx, tooth, WithCopyPlacement(turn))
+	second, err := Copy(tooth).Place(CopyTransform{Transform: turn}).Do(ctx)
 	require.NoError(t, err)
 	move := loftCylinderTestTranslation(t, 7)
-	blank, err = Transform(ctx, blank, move)
+	blank, err = Transform(blank, move).Do(ctx)
 	require.NoError(t, err)
-	tooth, err = Transform(ctx, tooth, move)
+	tooth, err = Transform(tooth, move).Do(ctx)
 	require.NoError(t, err)
-	second, err = Transform(ctx, second, move)
+	second, err = Transform(second, move).Do(ctx)
 	require.NoError(t, err)
 	firstJoin, err := Union(blank, tooth).Do(ctx)
 	require.NoError(t, err)
@@ -287,7 +287,7 @@ func TestLoftCylinderCommonPlacementConsumers(t *testing.T) {
 	for _, source := range []*Body{blank, tooth, second} {
 		require.True(t, seenJoin[source.originProducer()], "later join lost source %d", source.originProducer())
 	}
-	copyOfJoin, err := Copy(ctx, joined)
+	copyOfJoin, err := Copy(joined).Do(ctx)
 	require.NoError(t, err)
 	copyPayload := copyOfJoin.n.Payload.(facetedPayload)
 	require.Nil(t, copyPayload.LoftCylinderJoin, "public Copy must clear the structural record")
@@ -309,7 +309,7 @@ func TestLoftCylinderCommonPlacementConsumers(t *testing.T) {
 		tool.originProducer(), localJoin, tool)
 	require.NoError(t, err)
 	require.True(t, admitted)
-	tool, err = Transform(ctx, tool, move)
+	tool, err = Transform(tool, move).Do(ctx)
 	require.NoError(t, err)
 	bored, err := Cut(joined, tool).Do(ctx)
 	require.NoError(t, err)
@@ -357,11 +357,11 @@ func TestLoftCylinderCommonPlacementDifferentLoftSourceFallsBack(t *testing.T) {
 	require.True(t, firstSource != otherSource, "independent Lofts must have distinct source identities")
 
 	move := loftCylinderTestTranslation(t, 7)
-	blank, err = Transform(ctx, blank, move)
+	blank, err = Transform(blank, move).Do(ctx)
 	require.NoError(t, err)
-	tooth, err = Transform(ctx, tooth, move)
+	tooth, err = Transform(tooth, move).Do(ctx)
 	require.NoError(t, err)
-	other, err = Transform(ctx, other, move)
+	other, err = Transform(other, move).Do(ctx)
 	require.NoError(t, err)
 	joined, err := Union(blank, tooth).Do(ctx)
 	require.NoError(t, err)
@@ -394,9 +394,9 @@ func TestLoftCylinderCommonPlacementBoreEligibilityPrecedesRebuild(t *testing.T)
 	doc, blank, tooth := loftCylinderPlacedTabPair(t, lower, upper)
 	move := loftCylinderTestTranslation(t, 7)
 	var err error
-	blank, err = Transform(ctx, blank, move)
+	blank, err = Transform(blank, move).Do(ctx)
 	require.NoError(t, err)
-	tooth, err = Transform(ctx, tooth, move)
+	tooth, err = Transform(tooth, move).Do(ctx)
 	require.NoError(t, err)
 	joined, err := Union(blank, tooth).Do(ctx)
 	require.NoError(t, err)
@@ -418,7 +418,7 @@ func TestLoftCylinderCommonPlacementBoreEligibilityPrecedesRebuild(t *testing.T)
 		tool, err := Extrude(doc, s, s.Profiles()[0],
 			Distance{D: units.Millimeters(height), Dir: Along}).Do(ctx)
 		require.NoError(t, err)
-		tool, err = Transform(ctx, tool, move)
+		tool, err = Transform(tool, move).Do(ctx)
 		require.NoError(t, err)
 		return tool
 	}
@@ -456,7 +456,7 @@ func TestLoftCylinderCommonPlacementNativeYZConsumers(t *testing.T) {
 	turnFrame := loftCylinderTestFrame(t, r3.Vec{}, r3.Vec{X: 1}, r3.Vec{Y: -1})
 	turn, err := r3.FromFrame(turnFrame)
 	require.NoError(t, err)
-	second, err := Copy(ctx, tooth, WithCopyPlacement(turn))
+	second, err := Copy(tooth).Place(CopyTransform{Transform: turn}).Do(ctx)
 	require.NoError(t, err)
 	firstJoin, err := Union(blank, tooth).Do(ctx)
 	require.NoError(t, err)
@@ -511,9 +511,9 @@ func TestLoftCylinderCommonPlacementRefusesUnequalPoses(t *testing.T) {
 	upper := loftCylinderTestFrame(t, r3.Vec{Z: 2}, r3.Vec{X: 1}, r3.Vec{Y: 1})
 	_, blank, tooth := loftCylinderPlacedTabPair(t, lower, upper, ExactOnly())
 	var err error
-	blank, err = Transform(t.Context(), blank, loftCylinderTestTranslation(t, 7))
+	blank, err = Transform(blank, loftCylinderTestTranslation(t, 7)).Do(t.Context())
 	require.NoError(t, err)
-	tooth, err = Transform(t.Context(), tooth, loftCylinderTestTranslation(t, 7.001))
+	tooth, err = Transform(tooth, loftCylinderTestTranslation(t, 7.001)).Do(t.Context())
 	require.NoError(t, err)
 	admitted, err := tryPlacedLoftCylinderUnion(t.Context(), documentHandle(blank.n.Doc),
 		blank.originProducer(), blank, tooth)
@@ -530,9 +530,9 @@ func TestLoftCylinderCommonPlacementLeavesArbitraryAngleGeneric(t *testing.T) {
 	_, blank, tooth := loftCylinderPlacedTabPair(t, lower, upper)
 	pose, err := r3.Rotation(r3.Vec{Y: 1}, units.Degrees(15))
 	require.NoError(t, err)
-	blank, err = Transform(t.Context(), blank, pose)
+	blank, err = Transform(blank, pose).Do(t.Context())
 	require.NoError(t, err)
-	tooth, err = Transform(t.Context(), tooth, pose)
+	tooth, err = Transform(tooth, pose).Do(t.Context())
 	require.NoError(t, err)
 	admitted, err := tryPlacedLoftCylinderUnion(t.Context(), documentHandle(blank.n.Doc),
 		blank.originProducer(), blank, tooth)
@@ -568,9 +568,9 @@ func TestLoftCylinderCommonPlacementRejectsRoundedComposition(t *testing.T) {
 	lower := loftCylinderTestFrame(t, r3.Vec{Z: 0.1}, r3.Vec{X: 1}, r3.Vec{Y: 1})
 	upper := loftCylinderTestFrame(t, r3.Vec{Z: 2.1}, r3.Vec{X: 1}, r3.Vec{Y: 1})
 	doc, blank, tooth := loftCylinderPlacedTabPair(t, lower, upper)
-	blank, err = Transform(t.Context(), blank, second)
+	blank, err = Transform(blank, second).Do(t.Context())
 	require.NoError(t, err)
-	tooth, err = Transform(t.Context(), tooth, second)
+	tooth, err = Transform(tooth, second).Do(t.Context())
 	require.NoError(t, err)
 	admitted, err := tryPlacedLoftCylinderUnion(t.Context(), doc,
 		blank.originProducer(), blank, tooth)
@@ -592,7 +592,7 @@ func TestLoftCylinderCommonPlacementLeavesOtherPrismsGeneric(t *testing.T) {
 	lower := loftCylinderTestFrame(t, r3.Vec{}, r3.Vec{X: 1}, r3.Vec{Y: 1})
 	upper := loftCylinderTestFrame(t, r3.Vec{Z: 2}, r3.Vec{X: 1}, r3.Vec{Y: 1})
 	doc, blank, _ := loftCylinderPlacedTabPair(t, lower, upper)
-	other, err := Copy(t.Context(), blank)
+	other, err := Copy(blank).Do(t.Context())
 	require.NoError(t, err)
 	admitted, err := tryPlacedLoftCylinderUnion(t.Context(), doc,
 		blank.originProducer(), blank, other)
@@ -616,9 +616,9 @@ func TestLoftCylinderCommonPlacementLargeRepeatedShift(t *testing.T) {
 	for _, z := range []float64{1e6, 7} {
 		move := loftCylinderTestTranslation(t, z)
 		var err error
-		blank, err = Transform(t.Context(), blank, move)
+		blank, err = Transform(blank, move).Do(t.Context())
 		require.NoError(t, err)
-		tooth, err = Transform(t.Context(), tooth, move)
+		tooth, err = Transform(tooth, move).Do(t.Context())
 		require.NoError(t, err)
 	}
 	joined, err := Union(blank, tooth).Do(t.Context())

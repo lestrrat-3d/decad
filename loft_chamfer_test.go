@@ -110,7 +110,7 @@ func TestLoftCapBandReflexVolumeProofAndSharpBore(t *testing.T) {
 	shift, err := r3.Translation(r3.NewVec(12, -7, 3))
 	require.NoError(t, err)
 	documentHandle(out.n.Doc).commit(t.Context(), out)
-	placed, err := Copy(t.Context(), out, WithCopyPlacement(shift))
+	placed, err := Copy(out).Place(CopyTransform{Transform: shift}).Do(t.Context())
 	require.NoError(t, err)
 	placedMesh, err := placed.Tessellate(t.Context(), units.Millimeters(0.1), WithVerification(VerifyAll))
 	require.NoError(t, err)

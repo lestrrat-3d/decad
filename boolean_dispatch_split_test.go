@@ -90,7 +90,7 @@ func TestBooleanDispatchAnalyticPrefix(t *testing.T) {
 		require.NoError(t, err)
 		move, err := r3.Translation(r3.Vec{Y: 30})
 		require.NoError(t, err)
-		tool, err := Transform(t.Context(), cyl, move)
+		tool, err := Transform(cyl, move).Do(t.Context())
 		require.NoError(t, err)
 
 		ctx, err := doc.evalContext(t.Context())

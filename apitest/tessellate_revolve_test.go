@@ -314,7 +314,7 @@ func TestRevolveTessellateReflectedPlacementKeepsOutwardWinding(t *testing.T) {
 	require.NoError(t, err)
 	xf, err := r3.Reflection(mirror)
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), body, xf)
+	placed, err := decad.Transform(body, xf).Do(t.Context())
 	require.NoError(t, err)
 
 	mesh, err := placed.Tessellate(t.Context(), units.Millimeters(0.05))
@@ -341,7 +341,7 @@ func TestRevolveTessellateChargesPlacementRoundingSeparately(t *testing.T) {
 
 	rot, err := r3.Rotation(r3.Vec{X: 1, Y: 2, Z: 3}, units.Degrees(37))
 	require.NoError(t, err)
-	rotated, err := decad.Copy(t.Context(), body, decad.WithCopyPlacement(rot))
+	rotated, err := decad.Copy(body).Place(decad.CopyTransform{Transform: rot}).Do(t.Context())
 	require.NoError(t, err)
 	rotMesh, err := rotated.Tessellate(t.Context(), tol)
 	require.NoError(t, err)
@@ -351,7 +351,7 @@ func TestRevolveTessellateChargesPlacementRoundingSeparately(t *testing.T) {
 
 	far, err := r3.Translation(r3.Vec{X: 1e7, Y: 3e6, Z: -2e6})
 	require.NoError(t, err)
-	moved, err := decad.Copy(t.Context(), body, decad.WithCopyPlacement(far))
+	moved, err := decad.Copy(body).Place(decad.CopyTransform{Transform: far}).Do(t.Context())
 	require.NoError(t, err)
 	farMesh, err := moved.Tessellate(t.Context(), tol)
 	require.NoError(t, err)

@@ -57,7 +57,7 @@ func TestBodyPatchPlanarMeshPlacementAndVerification(t *testing.T) {
 
 	motion, err := r3.Translation(r3.NewVec(3, 4, 5))
 	require.NoError(t, err)
-	placed, err := decad.Copy(t.Context(), filled, decad.WithCopyPlacement(motion))
+	placed, err := decad.Copy(filled).Place(decad.CopyTransform{Transform: motion}).Do(t.Context())
 	require.NoError(t, err)
 	mesh, err := placed.Tessellate(t.Context(), tol)
 	require.NoError(t, err)
@@ -69,7 +69,7 @@ func TestBodyPatchPlanarMeshPlacementAndVerification(t *testing.T) {
 	require.NoError(t, err)
 	reflection, err := r3.Reflection(mirror)
 	require.NoError(t, err)
-	reflected, err := decad.Copy(t.Context(), filled, decad.WithCopyPlacement(reflection))
+	reflected, err := decad.Copy(filled).Place(decad.CopyTransform{Transform: reflection}).Do(t.Context())
 	require.NoError(t, err)
 	reflMesh, err := reflected.Tessellate(t.Context(), tol)
 	require.NoError(t, err)
@@ -77,7 +77,7 @@ func TestBodyPatchPlanarMeshPlacementAndVerification(t *testing.T) {
 	require.InDelta(t, 60000, meshVolume(reflMesh), 1e-7)
 
 	other := decad.New()
-	reflectedWalls, err := decad.Transform(t.Context(), surfaceTube(t, other), reflection)
+	reflectedWalls, err := decad.Transform(surfaceTube(t, other), reflection).Do(t.Context())
 	require.NoError(t, err)
 	filledAfterReflection, err := decad.PatchEdges(t.Context(), reflectedWalls, decad.Edges(decad.Free()).Exactly(8))
 	require.NoError(t, err)

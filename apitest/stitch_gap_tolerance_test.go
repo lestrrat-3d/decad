@@ -112,7 +112,7 @@ func TestStitchGapTolerance(t *testing.T) {
 		box := stitched(t, 1e-4)
 		slide, err := r3.Translation(r3.Vec{X: 5, Y: 7, Z: 11})
 		require.NoError(t, err)
-		placed, err := decad.Transform(t.Context(), box, slide)
+		placed, err := decad.Transform(box, slide).Do(t.Context())
 		require.NoError(t, err)
 		require.Equal(t, decad.BodySolid, placed.Kind())
 		volume, err := placed.Volume()

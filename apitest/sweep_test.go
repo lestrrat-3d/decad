@@ -88,7 +88,7 @@ func TestSweepLineBuildsVerifiesAndReevaluatesPlacement(t *testing.T) {
 
 	move, err := r3.Translation(r3.NewVec(7, -3, 11))
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), body, move)
+	placed, err := decad.Transform(body, move).Do(t.Context())
 	require.NoError(t, err)
 
 	decadtest.MeasuresVolume(t, placed, units.CubicMillimeters(60000), decadtest.Exactly())
@@ -103,7 +103,7 @@ func TestSweepLineBuildsVerifiesAndReevaluatesPlacement(t *testing.T) {
 	)
 	require.Equal(t, []*decad.Body{placed}, doc.Bodies())
 	decadtest.MeasuresVolume(t, body, units.CubicMillimeters(60000), decadtest.Exactly())
-	_, err = decad.Transform(t.Context(), body, move)
+	_, err = decad.Transform(body, move).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrRetiredBody)
 
 	placedReport, err := doc.Verify(t.Context())

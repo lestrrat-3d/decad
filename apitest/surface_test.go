@@ -212,7 +212,7 @@ func TestSurfaceExtrudeStaysASheetThroughPlacement(t *testing.T) {
 	motion, err := r3.Translation(offset)
 	require.NoError(t, err)
 
-	placed, err := decad.Transform(t.Context(), sheet, motion)
+	placed, err := decad.Transform(sheet, motion).Do(t.Context())
 	require.NoError(t, err)
 	requireSheetWithFreeEdges(t, placed)
 	placedBox, err := placed.Bounds()
@@ -220,13 +220,13 @@ func TestSurfaceExtrudeStaysASheetThroughPlacement(t *testing.T) {
 	require.Equal(t, sheetBox.Min.Add(offset), placedBox.Min)
 	require.Equal(t, sheetBox.Max.Add(offset), placedBox.Max)
 
-	dup, err := decad.Copy(t.Context(), placed)
+	dup, err := decad.Copy(placed).Do(t.Context())
 	require.NoError(t, err)
 	requireSheetWithFreeEdges(t, dup)
 
 	copyMotion, err := r3.Translation(r3.NewVec(0, 50, 0))
 	require.NoError(t, err)
-	copied, err := decad.Copy(t.Context(), dup, decad.WithCopyPlacement(copyMotion))
+	copied, err := decad.Copy(dup).Place(decad.CopyTransform{Transform: copyMotion}).Do(t.Context())
 	require.NoError(t, err)
 	requireSheetWithFreeEdges(t, copied)
 }
@@ -726,7 +726,7 @@ func TestSheetSolidPairContainedProvenSound(t *testing.T) {
 	raw := sheetBoxBody(t, doc, 5, 5, 15, 15, 10)
 	shift, err := r3.Translation(r3.NewVec(0, 0, 5))
 	require.NoError(t, err)
-	sheet, err := decad.Transform(t.Context(), raw, shift)
+	sheet, err := decad.Transform(raw, shift).Do(t.Context())
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context())

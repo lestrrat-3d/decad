@@ -40,7 +40,7 @@ func TestLoftCylinderUnionCentroidDiameter(t *testing.T) {
 
 	move, err := r3.Translation(r3.NewVec(1e6, -2e6, 3e6))
 	require.NoError(t, err)
-	placed, err := Transform(ctx, joined, move)
+	placed, err := Transform(joined, move).Do(ctx)
 	require.NoError(t, err)
 	placedPayload, ok := placed.n.Payload.(facetedPayload)
 	require.True(t, ok)

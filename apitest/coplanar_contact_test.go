@@ -20,7 +20,7 @@ func roundTrip(t *testing.T, b *decad.Body) *decad.Body {
 	for _, deg := range []float64{20, -20} {
 		turn, err := r3.Rotation(r3.Vec{X: 1, Y: 1, Z: 1}, units.Degrees(deg))
 		require.NoError(t, err)
-		b, err = decad.Transform(t.Context(), b, turn)
+		b, err = decad.Transform(b, turn).Do(t.Context())
 		require.NoError(t, err)
 	}
 	return b

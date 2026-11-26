@@ -40,7 +40,7 @@ func embeddingReachSource(t *testing.T, doc *decad.Document) *decad.Body {
 	require.NoError(t, err)
 	// Public similarity construction supplies the held mesh that placement
 	// repairs; no private payload or handwritten warning enters the fixture.
-	held, err := decad.ScaledAt(t.Context(), solid, r3.Vec{}, units.Scalar(1))
+	held, err := decad.ScaledAt(solid, r3.Vec{}, units.Scalar(1)).Do(t.Context())
 	require.NoError(t, err)
 	require.Empty(t, held.OperationDiagnostics())
 	return held
@@ -55,7 +55,7 @@ func TestCopyReportsAcceptedEmbeddingReach(t *testing.T) {
 		t.Parallel()
 		doc := decad.New(decad.WithGapTolerance(units.Millimeters(1)))
 		source := embeddingReachSource(t, doc)
-		image, err := decad.Copy(t.Context(), source, decad.WithCopyPlacement(move))
+		image, err := decad.Copy(source).Place(decad.CopyTransform{Transform: move}).Do(t.Context())
 		require.NoError(t, err)
 		require.True(t, image.IsSolid())
 		require.Len(t, image.Lumps(), 1)
@@ -92,7 +92,7 @@ func TestCopyReportsAcceptedEmbeddingReach(t *testing.T) {
 		t.Parallel()
 		doc := decad.New(decad.ExactOnly())
 		source := embeddingReachSource(t, doc)
-		image, err := decad.Copy(t.Context(), source, decad.WithCopyPlacement(move))
+		image, err := decad.Copy(source).Place(decad.CopyTransform{Transform: move}).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.Nil(t, image)
 		live := doc.Bodies()

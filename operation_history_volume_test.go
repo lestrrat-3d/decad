@@ -43,7 +43,7 @@ func TestContainedCutUsesCertifiedSourceVolumeAndRecordsHistory(t *testing.T) {
 	require.NoError(t, err)
 	placement, err := rotation.Then(translation)
 	require.NoError(t, err)
-	tool, err = Transform(t.Context(), tool, placement)
+	tool, err = Transform(tool, placement).Do(t.Context())
 	require.NoError(t, err)
 
 	result, err := Cut(target, tool).Do(t.Context())

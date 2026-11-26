@@ -211,7 +211,7 @@ func TestMassPropertiesRevolveQuarterRectangle(t *testing.T) {
 		EX: r3.NewVec(0, 1, 0), EY: r3.NewVec(-1, 0, 0), EZ: r3.NewVec(0, 0, 1),
 	}, r3.NewVec(2, 3, 4))
 	require.NoError(t, err)
-	placed, err := decad.Copy(t.Context(), body, decad.WithCopyPlacement(turn))
+	placed, err := decad.Copy(body).Place(decad.CopyTransform{Transform: turn}).Do(t.Context())
 	require.NoError(t, err)
 	turned, err := placed.MassProperties(t.Context(), density)
 	require.NoError(t, err)
@@ -352,7 +352,7 @@ func TestMassPropertiesRevolveRotated(t *testing.T) {
 	body, err := decad.Revolve(doc, sk, profile, uAxis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	pose := composedRotation(t, r3.NewVec(2, -3, 5), r3.NewVec(1, 1, 1), 30, 8)
-	placed, err := decad.Copy(t.Context(), body, decad.WithCopyPlacement(pose))
+	placed, err := decad.Copy(body).Place(decad.CopyTransform{Transform: pose}).Do(t.Context())
 	require.NoError(t, err)
 	density := units.KilogramsPerCubicMillimeter(1.0 / 1024)
 	got, err := placed.MassProperties(t.Context(), density)

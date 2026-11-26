@@ -33,7 +33,7 @@ func slab(t *testing.T, doc *decad.Document, x0, y0, x1, y1, z0, height float64,
 	body, err := decad.Extrude(doc, s, s.Profiles()[0],
 		decad.Distance{D: units.Millimeters(height), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), body, move)
+	placed, err := decad.Transform(body, move).Do(t.Context())
 	require.NoError(t, err)
 	return placed
 }

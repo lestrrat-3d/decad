@@ -126,7 +126,7 @@ func TestExtrudeThroughAllStacked(t *testing.T) {
 	require.NoError(t, err)
 	move, err := r3.Translation(r3.NewVec(0, 0, 25))
 	require.NoError(t, err)
-	_, err = decad.Transform(t.Context(), second, move)
+	_, err = decad.Transform(second, move).Do(t.Context())
 	require.NoError(t, err)
 
 	// The sweep runs through the far side of EVERY live body it meets:
@@ -273,7 +273,7 @@ func TestExtrudeToFaceGates(t *testing.T) {
 		require.NoError(t, err)
 		move, err := r3.Translation(r3.NewVec(0, 0, 1))
 		require.NoError(t, err)
-		_, err = decad.Transform(t.Context(), old, move)
+		_, err = decad.Transform(old, move).Do(t.Context())
 		require.NoError(t, err)
 		_, err = decad.Extrude(doc2, s2, pinProf2, decad.ToFace{Body: old, Face: capEndFace(old)}).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrRetiredBody)
@@ -880,7 +880,7 @@ func TestExtrudeToFaceInheritsPlacedLoftBound(t *testing.T) {
 
 	move, err := r3.Translation(r3.NewVec(0.1, 0.2, 0.3))
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), loft, move)
+	placed, err := decad.Transform(loft, move).Do(t.Context())
 	require.NoError(t, err)
 
 	loftBound := 0.0

@@ -344,7 +344,7 @@ func TestLoftChainPlacedRibbonKeepsItsAreaAndChargesItsVertices(t *testing.T) {
 
 	spin, err := r3.RotationAround(r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 1), units.Degrees(30))
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), body, spin)
+	placed, err := decad.Transform(body, spin).Do(t.Context())
 	require.NoError(t, err)
 
 	after, err := placed.Area()

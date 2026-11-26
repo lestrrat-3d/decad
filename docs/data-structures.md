@@ -140,8 +140,13 @@ configuration option.
 | `decad.MeshRepairOption` | option set | A repair step of `decad.RepairMesh`: `decad.WithMeshWeld`, `decad.WithMeshOrient` or `decad.WithMeshFillHoles`. | The caller |
 | `decad.MeshRepairReport` | struct | The counts `decad.RepairMesh` changed: vertices welded, triangles dropped and flipped, loops filled or skipped, triangles added. | `decad.RepairMesh` |
 | `decad.MeshReport` | struct | The counts a mesh body reads from its triangles: edges by use, shells, zero-area triangles, closed and inverted. | `MeshBody.Report` |
-| `decad.PathPatternOption` | option set | A setting on `decad.PathPattern`: `decad.WithPathCount` or `decad.WithPathSpacing` chooses where the copies go, and `decad.WithPathFollow` turns each copy to follow the path, about its start or the point `decad.WithPathPivot` names. | The caller |
-| `decad.ArrangeOption` | option set | A setting on `decad.Arrange`: `decad.WithArrangeTurns` lets bodies turn a quarter turn to fit and `decad.WithArrangeAngle` turns each to the angle of least footprint. | The caller |
+| `decad.PathStations` | sealed interface | Where `decad.PathPattern` puts its instances: a `decad.PathCount` or a `decad.PathSpacing`. | The caller |
+| `decad.PathCount` | struct | A count of instances at equal arc length. | The caller |
+| `decad.PathSpacing` | struct | A length between instances along the path. | The caller |
+| `decad.CopyPlacement` | sealed interface | How `CopyCommand.Place` places a copy: a `decad.CopyTransform`, `decad.CopyRotation` or `decad.CopyLiftTranslation`. | The caller |
+| `decad.CopyTransform` | struct | A rigid transform that places a copy. | The caller |
+| `decad.CopyRotation` | struct | A center, an axis and an angle that place a copy by an exact rotation. | The caller |
+| `decad.CopyLiftTranslation` | struct | A lift transform and two lift-local points: the copy moves by the exact world vector between them. | The caller |
 | `decad.ArrangeBed` | struct | The flat area `decad.Arrange` fills: a corner, a width, a depth, a gap and an optional height to stack in layers. | The caller |
 | `decad.ThreadSpec` | struct | One thread: the cylindrical face to cut, the pitch, the hand, an optional length, an optional groove form and an optional lead-in chamfer. | The caller |
 | `decad.ThreadSize` | struct | A thread's major diameter and pitch, as `decad.LookupThread` reads them from a designation like `M10` or `1/4-20`. | `decad.LookupThread` |
@@ -336,6 +341,18 @@ returns `decad.ErrConsumed`.
 | `decad.WebPathCommand` | struct | The body, the sketch, the path entities, the thickness, the extent and the `WebPathCommand.Draft` and `WebPathCommand.Overrun` settings. `Do` returns `*decad.Body`. | `decad.WebPath` |
 | `decad.CutExtrudeCommand` | struct | The target, the sketch, the profiles, the extent and the `CutExtrudeCommand.Taper` setting. `Do` returns `*decad.Body`. | `decad.CutExtrude` |
 | `decad.CutRevolveCommand` | struct | The target, the sketch, the profiles, the axis and the angular extent. `Do` returns `*decad.Body`. | `decad.CutRevolve` |
+| `decad.TransformCommand` | struct | The body and the rigid transform. `Do` returns the placed body and retires the input. | `decad.Transform` |
+| `decad.CopyCommand` | struct | The source body and the `CopyCommand.Place` placement. `Do` returns `*decad.Body` and leaves the source live. | `decad.Copy` |
+| `decad.MirroredCommand` | struct | The body and the mirror plane. `Do` returns the mirror image and retires the input. | `decad.Mirrored` |
+| `decad.MirroredJoinCommand` | struct | The body and the mirror plane, a face of the body. `Do` returns the body joined to its image. | `decad.MirroredJoin` |
+| `decad.MirroredCopyCommand` | struct | The body and the mirror plane. `Do` returns the mirror image and leaves the source live. | `decad.MirroredCopy` |
+| `decad.ScaledAtCommand` | struct | The body, the anchor point and the dimensionless factor. `Do` returns `*decad.Body`. | `decad.ScaledAt` |
+| `decad.QuarterTurnCommand` | struct | The mesh solid, the world axis, a point on it and the number of quarter turns. `Do` returns `*decad.Body`. | `decad.QuarterTurn` |
+| `decad.StretchCommand` | struct | The mesh solid, the anchor point and one factor per world axis. `Do` returns `*decad.Body`. | `decad.Stretch` |
+| `decad.PatternCopiesCommand` | struct | The body and the pattern layout. `Do` returns the extra instances as `[]*decad.Body` and leaves the body live. | `decad.PatternCopies` |
+| `decad.PatternedCommand` | struct | The body and the pattern layout. `Do` returns one body holding every instance. | `decad.Patterned` |
+| `decad.PathPatternCommand` | struct | The body, the path, the stations and the `PathPatternCommand.Follow` or `PathPatternCommand.FollowAbout` turn. `Do` returns the copies as `[]*decad.Body`. | `decad.PathPattern` |
+| `decad.ArrangeCommand` | struct | The bodies, the bed and the `ArrangeCommand.Turns` and `ArrangeCommand.Angle` settings. `Do` returns the moved bodies as `[]*decad.Body`. | `decad.Arrange` |
 
 ### Options
 
@@ -344,7 +361,6 @@ other sections return them.
 
 | Type | Configures |
 |---|---|
-| `decad.CopyOption`, `decad.MirrorOption` | `decad.Copy`, `decad.Mirrored` |
 | `decad.TessellateOption` | `Body.Tessellate` |
 | `decad.Verification` | How much of the tessellation proof runs, set by `decad.WithVerification`. |
 | `decad.VerifyOption`, `decad.WallOption` | `Document.Verify`, `decad.WithMinWallThickness` |

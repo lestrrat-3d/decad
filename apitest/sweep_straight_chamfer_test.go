@@ -44,7 +44,7 @@ func TestStraightSweepChamferSingleCapEdgeAndVerifyAll(t *testing.T) {
 			if tc.shift != (r3.Vec{}) {
 				motion, err := r3.Translation(tc.shift)
 				require.NoError(t, err)
-				source, err = decad.Copy(t.Context(), source, decad.WithCopyPlacement(motion))
+				source, err = decad.Copy(source).Place(decad.CopyTransform{Transform: motion}).Do(t.Context())
 				require.NoError(t, err)
 			}
 			corner := decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0)),
@@ -72,7 +72,7 @@ func TestStraightSweepChamferOneEdgeAndPlacedReplay(t *testing.T) {
 	doc, source := straightSweepSquare(t)
 	shift, err := r3.Translation(r3.NewVec(5, -3, 7))
 	require.NoError(t, err)
-	placed, err := decad.Copy(t.Context(), source, decad.WithCopyPlacement(shift))
+	placed, err := decad.Copy(source).Place(decad.CopyTransform{Transform: shift}).Do(t.Context())
 	require.NoError(t, err)
 	corner := decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)),
 		decad.EndpointAt(r3.NewVec(5, -3, 7))).Exactly(1)
@@ -86,7 +86,7 @@ func TestStraightSweepChamferOneEdgeAndPlacedReplay(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, mesh.BoundaryVerified())
 	require.True(t, mesh.VolumeVerified())
-	replayed, err := decad.Copy(t.Context(), beveled, decad.WithCopyPlacement(shift))
+	replayed, err := decad.Copy(beveled).Place(decad.CopyTransform{Transform: shift}).Do(t.Context())
 	require.NoError(t, err)
 	decadtest.MeasuresVolume(t, replayed, units.CubicMillimeters(3995), decadtest.Exactly())
 	replayedMesh, err := replayed.Tessellate(t.Context(), units.Millimeters(0.1),

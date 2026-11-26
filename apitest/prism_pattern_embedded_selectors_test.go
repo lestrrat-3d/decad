@@ -49,8 +49,8 @@ func TestPrismPatternEmbeddedJoinKeepsAxialRootsAndCapLoops(t *testing.T) {
 		decad.Distance{D: units.Millimeters(2), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	disc := circleBodyAtZ(t, doc, 0, 5.375, 0, 2)
-	copies, err := decad.PatternCopies(t.Context(), tooth,
-		decad.CircularPattern{Axis: r3.Vec{Z: 1}, Count: teeth})
+	copies, err := decad.PatternCopies(tooth,
+		decad.CircularPattern{Axis: r3.Vec{Z: 1}, Count: teeth}).Do(t.Context())
 	require.NoError(t, err)
 	joined, err := decad.Union(append([]*decad.Body{disc}, append([]*decad.Body{tooth}, copies...)...)...).Do(t.Context())
 	require.NoError(t, err)

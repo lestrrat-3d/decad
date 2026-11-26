@@ -71,8 +71,8 @@ func TestPatternUnionFlanksCrossTheBase(t *testing.T) {
 			doc := decad.New()
 			disc := circleBodyAtZ(t, doc, 0, r, 0, height)
 			lobe := crossingLoft(t, doc, r, half, height)
-			copies, err := decad.PatternCopies(t.Context(), lobe,
-				decad.CircularPattern{Axis: r3.NewVec(0, 0, 1), Count: n})
+			copies, err := decad.PatternCopies(lobe,
+				decad.CircularPattern{Axis: r3.NewVec(0, 0, 1), Count: n}).Do(t.Context())
 			require.NoError(t, err)
 			joined, err := decad.Union(append([]*decad.Body{disc}, append([]*decad.Body{lobe}, copies...)...)...).Do(t.Context())
 			require.NoError(t, err)
@@ -106,7 +106,7 @@ func TestPatternUnionFlanksCrossTheBaseThenFilletBoreChamfer(t *testing.T) {
 	doc := decad.New()
 	disc := circleBodyAtZ(t, doc, 0, r, 0, height)
 	lobe := crossingLoft(t, doc, r, half, height)
-	copies, err := decad.PatternCopies(t.Context(), lobe, decad.CircularPattern{Axis: r3.NewVec(0, 0, 1), Count: n})
+	copies, err := decad.PatternCopies(lobe, decad.CircularPattern{Axis: r3.NewVec(0, 0, 1), Count: n}).Do(t.Context())
 	require.NoError(t, err)
 	joined, err := decad.Union(append([]*decad.Body{disc}, append([]*decad.Body{lobe}, copies...)...)...).Do(t.Context())
 	require.NoError(t, err)

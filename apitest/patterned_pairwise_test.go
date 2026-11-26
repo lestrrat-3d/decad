@@ -88,7 +88,7 @@ func TestPatternedPairwiseRing(t *testing.T) {
 	port, area := sc.roundedPort(t, plane, 30, 42, math.Pi/(2*count), 1, mirrorAlong(height))
 
 	start := time.Now()
-	ring, err := decad.Patterned(t.Context(), port, decad.CircularPattern{Axis: patternZ, Count: count})
+	ring, err := decad.Patterned(port, decad.CircularPattern{Axis: patternZ, Count: count}).Do(t.Context())
 	require.NoError(t, err)
 	require.Less(t, time.Since(start), 5*time.Second)
 	require.False(t, tookMeshPath(ring))
@@ -132,7 +132,7 @@ func TestPatternedPairwiseRingOverlap(t *testing.T) {
 	plane, err := sc.w.CreateOffsetPlane(sc.w.XY(), -1)
 	require.NoError(t, err)
 	port, _ := sc.roundedPort(t, plane, 30, 42, 2.5*math.Pi/(2*count), 1, mirrorAlong(5))
-	ring, err := decad.Patterned(t.Context(), port, decad.CircularPattern{Axis: patternZ, Count: count})
+	ring, err := decad.Patterned(port, decad.CircularPattern{Axis: patternZ, Count: count}).Do(t.Context())
 	if err != nil {
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		return

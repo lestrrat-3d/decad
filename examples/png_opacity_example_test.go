@@ -33,7 +33,7 @@ func Example_png_opacity() {
 		fmt.Printf("failed to build the lift: %s\n", err)
 		return
 	}
-	plate, err = decad.Transform(context.Background(), plate, lift)
+	plate, err = decad.Transform(plate, lift).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to lift the plate: %s\n", err)
 		return

@@ -66,8 +66,8 @@ func separateBossesCases() []separateBossesCase {
 			t.Helper()
 			plate := boxBody(t, doc, 0, 0, 100, 60, 10)
 			boss := onTop(20).prism(t, doc)
-			copies, err := decad.PatternCopies(t.Context(), boss,
-				decad.LinearPattern{Dir: r3.NewVec(1, 0, 0), Step: units.Millimeters(30), Count: 3})
+			copies, err := decad.PatternCopies(boss,
+				decad.LinearPattern{Dir: r3.NewVec(1, 0, 0), Step: units.Millimeters(30), Count: 3}).Do(t.Context())
 			require.NoError(t, err)
 			joined, err := decad.Union(append([]*decad.Body{plate}, append([]*decad.Body{boss}, copies...)...)...).Do(t.Context())
 			require.NoError(t, err)

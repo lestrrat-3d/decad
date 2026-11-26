@@ -383,7 +383,7 @@ func TestVerifyUnsupportedOverlapStaysSuspectAndReadOnly(t *testing.T) {
 	ball := ballBody(t, doc, 8)
 	shift, err := r3.Translation(r3.NewVec(5, 0, 0))
 	require.NoError(t, err)
-	_, err = decad.Transform(t.Context(), ball, shift)
+	_, err = decad.Transform(ball, shift).Do(t.Context())
 	require.NoError(t, err)
 	before := snapshotDocument(t, doc)
 

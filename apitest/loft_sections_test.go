@@ -143,7 +143,7 @@ func TestLoftSectionsPlacedCapsRemainPlanar(t *testing.T) {
 	checkNormals(body, map[float64]float64{0: -1, 10: 1})
 	move, err := r3.Translation(r3.NewVec(40, 0, 0))
 	require.NoError(t, err)
-	placed, err := decad.Copy(t.Context(), body, decad.WithCopyPlacement(move))
+	placed, err := decad.Copy(body).Place(decad.CopyTransform{Transform: move}).Do(t.Context())
 	require.NoError(t, err)
 	planes := 0
 	for _, face := range placed.Faces() {
@@ -161,7 +161,7 @@ func TestLoftSectionsPlacedCapsRemainPlanar(t *testing.T) {
 	require.NoError(t, err)
 	reflection, err := r3.Reflection(mirror)
 	require.NoError(t, err)
-	reflected, err := decad.Copy(t.Context(), body, decad.WithCopyPlacement(reflection))
+	reflected, err := decad.Copy(body).Place(decad.CopyTransform{Transform: reflection}).Do(t.Context())
 	require.NoError(t, err)
 	checkNormals(reflected, map[float64]float64{0: 1, -10: -1})
 	_, err = reflected.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))

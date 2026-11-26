@@ -125,9 +125,9 @@ func TestChamferPlateAfterPatternSocketCut(t *testing.T) {
 			doc, world := decad.New(), sketch.NewWorld()
 			plate := roundedTrianglePlate(t, doc, world, plateOrbit, plateRadius)
 			socket := socketTool(t, doc, world, tc.d)
-			copies, err := decad.PatternCopies(t.Context(), socket, decad.CircularPattern{
+			copies, err := decad.PatternCopies(socket, decad.CircularPattern{
 				Center: r3.NewVec(0, 0, 0), Axis: r3.NewVec(0, 0, 1), Count: 3,
-			})
+			}).Do(t.Context())
 			require.NoError(t, err)
 			require.Len(t, copies, 2)
 			carrier := plate

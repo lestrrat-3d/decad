@@ -86,7 +86,7 @@ func placedFar(t *testing.T, b *decad.Body, shift float64) *decad.Body {
 	t.Helper()
 	m, err := r3.Translation(r3.NewVec(shift, 0, 0))
 	require.NoError(t, err)
-	out, err := decad.Transform(t.Context(), b, m)
+	out, err := decad.Transform(b, m).Do(t.Context())
 	require.NoError(t, err)
 	return out
 }

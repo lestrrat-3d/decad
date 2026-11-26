@@ -28,7 +28,7 @@ func boxAt(t *testing.T, w *sketch.World, doc *Document, x, y, z, sx, sy, sz flo
 	require.NoError(t, err)
 	move, err := r3.Translation(r3.Vec{X: x, Y: y, Z: z})
 	require.NoError(t, err)
-	placed, err := Transform(t.Context(), box, move)
+	placed, err := Transform(box, move).Do(t.Context())
 	require.NoError(t, err)
 	return placed
 }
@@ -114,7 +114,7 @@ func TestSplitPlaneSharesOneSourceRecord(t *testing.T) {
 	// A Transform keeps the pointers.
 	move, err := r3.Translation(r3.Vec{X: 3})
 	require.NoError(t, err)
-	moved, err := Transform(t.Context(), again, move)
+	moved, err := Transform(again, move).Do(t.Context())
 	require.NoError(t, err)
 	before, after := facetedGroups(t, again), facetedGroups(t, moved)
 	require.Len(t, after, len(before))

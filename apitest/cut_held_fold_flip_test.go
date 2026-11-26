@@ -80,7 +80,7 @@ func toothedToolBody(t *testing.T, doc *decad.Document, teeth int, root, tip, le
 		decad.Distance{D: units.Millimeters(length), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	disc := circleBodyAtZ(t, doc, 0, root, 0, length)
-	copies, err := decad.PatternCopies(t.Context(), tooth, decad.CircularPattern{Axis: r3.Vec{Z: 1}, Count: teeth})
+	copies, err := decad.PatternCopies(tooth, decad.CircularPattern{Axis: r3.Vec{Z: 1}, Count: teeth}).Do(t.Context())
 	require.NoError(t, err)
 	tool, err := decad.Union(append([]*decad.Body{disc}, append([]*decad.Body{tooth}, copies...)...)...).Do(t.Context())
 	require.NoError(t, err)

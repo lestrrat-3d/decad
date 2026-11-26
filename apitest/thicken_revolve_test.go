@@ -238,7 +238,7 @@ func TestThickenArcSweepSheetKeepsPathAndMesh(t *testing.T) {
 	require.NoError(t, err)
 	motion, err := r3.Translation(r3.NewVec(7, -3, 11))
 	require.NoError(t, err)
-	placed, err := decad.Copy(t.Context(), solid, decad.WithCopyPlacement(motion))
+	placed, err := decad.Copy(solid).Place(decad.CopyTransform{Transform: motion}).Do(t.Context())
 	require.NoError(t, err)
 	copyVolume, err := placed.Volume()
 	require.NoError(t, err)

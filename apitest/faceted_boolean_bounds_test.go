@@ -43,7 +43,7 @@ func TestFacetedUnionKeepsUntouchedVertexAndFaceBounds(t *testing.T) {
 		require.NoError(t, err)
 		placement, err := r3.FromFrame(frame)
 		require.NoError(t, err)
-		branch, err = decad.Transform(t.Context(), branch, placement)
+		branch, err = decad.Transform(branch, placement).Do(t.Context())
 		require.NoError(t, err)
 		result, err = decad.Union(result, branch).Do(t.Context())
 		require.NoError(t, err)
@@ -144,7 +144,7 @@ func TestFacetedPlacementKeepsNearOriginVertexBoundTight(t *testing.T) {
 	require.NoError(t, err)
 	motion, err := rotation.Then(shift)
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), drilled, motion)
+	placed, err := decad.Transform(drilled, motion).Do(t.Context())
 	require.NoError(t, err)
 	boundAt := func(target r3.Vec) units.Value {
 		for _, vertex := range placed.Vertices() {

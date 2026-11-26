@@ -125,7 +125,7 @@ func TestSectionObliqueRectanglePlacementAndAxisSense(t *testing.T) {
 		EX: r3.Vec{Y: 1}, EY: r3.Vec{X: -1}, EZ: r3.Vec{Z: 1},
 	}, r3.Vec{X: 20, Y: 30, Z: 7})
 	require.NoError(t, err)
-	body, err := decad.Transform(t.Context(), source, placement)
+	body, err := decad.Transform(source, placement).Do(t.Context())
 	require.NoError(t, err)
 	for _, u := range []r3.Vec{{X: -1}, {X: 1}} {
 		frame, err := r3.NewFrame(r3.Vec{X: 20, Y: 30, Z: 12}, u, r3.Vec{Y: 5, Z: 1})

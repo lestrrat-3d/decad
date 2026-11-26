@@ -251,7 +251,7 @@ func TestCapBlendThroughAllBehindPlaneRefused(t *testing.T) {
 	require.NoError(t, err)
 	shift, err := r3.Translation(r3.NewVec(0, 0, -drop))
 	require.NoError(t, err)
-	behind, err := decad.Transform(t.Context(), chamfered, shift)
+	behind, err := decad.Transform(chamfered, shift).Do(t.Context())
 	require.NoError(t, err)
 
 	zHi := math.Inf(-1)
@@ -274,7 +274,7 @@ func TestCapBlendBooleanReceiverRefusedSX9(t *testing.T) {
 	// is a genuine interior crossing rather than a coplanar cap tangency.
 	shift, err := r3.Translation(r3.NewVec(0, 0, 2))
 	require.NoError(t, err)
-	b, err = decad.Transform(t.Context(), b, shift)
+	b, err = decad.Transform(b, shift).Do(t.Context())
 	require.NoError(t, err)
 	union, err := decad.Union(a, b).Do(t.Context())
 	require.NoError(t, err)
@@ -1304,7 +1304,7 @@ func TestCapBlendContourHeldExtentCarriesItsDisplacement(t *testing.T) {
 
 	rot, err := r3.Rotation(r3.NewVec(1, 0, 0), units.Radians(0.4))
 	require.NoError(t, err)
-	tilted, err := decad.Transform(t.Context(), chamfered, rot)
+	tilted, err := decad.Transform(chamfered, rot).Do(t.Context())
 	require.NoError(t, err)
 	tiltedBounds, err := tilted.Bounds()
 	require.NoError(t, err)
@@ -1707,7 +1707,7 @@ func TestCapBlendFarPlacementOrientationRefusal(t *testing.T) {
 
 	far, err := r3.Translation(r3.NewVec(math.Ldexp(1, 60), 0, 0))
 	require.NoError(t, err)
-	_, err = decad.Transform(t.Context(), chamfered, far)
+	_, err = decad.Transform(chamfered, far).Do(t.Context())
 	require.Error(t, err)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.False(t, errors.Is(err, decad.ErrDegenerate),
@@ -1718,7 +1718,7 @@ func TestCapBlendFarPlacementOrientationRefusal(t *testing.T) {
 	// capblend.FixPatchOrientation decides it when NormalAt succeeds.
 	near, err := r3.Translation(r3.NewVec(1000, 0, 0))
 	require.NoError(t, err)
-	nearBody, err := decad.Transform(t.Context(), chamfered, near)
+	nearBody, err := decad.Transform(chamfered, near).Do(t.Context())
 	require.NoError(t, err)
 
 	// The hole's cap-level radius grows from r to r+d (a countersink widens a
@@ -1945,7 +1945,7 @@ func TestCapBlendBoundsEnclosesPlacedVertices(t *testing.T) {
 
 	rot, err := r3.Rotation(r3.NewVec(1, 0, 0), units.Degrees(37))
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), chamfered, rot)
+	placed, err := decad.Transform(chamfered, rot).Do(t.Context())
 	require.NoError(t, err)
 
 	bounds, err := placed.Bounds()

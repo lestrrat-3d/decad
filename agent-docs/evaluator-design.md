@@ -929,7 +929,7 @@ allowance. Each held vertex starts at the nearest float to its exact rational
 image under that map, before the embedding check can move it to another
 corner of the image's float box. Vertex rounding and a swept-volume allowance
 are added after the exact map. A non-finite bound refuses the placement.
-A faceted copy made with `WithCopyRotation` instead denotes an exactly
+A faceted copy made with `CopyRotation` instead denotes an exactly
 orthogonal rational rotation `Q` with translation `t`, recorded at Copy time.
 The evaluator first places held vertices by the same float basis. Each vertex pays
 `|Q - D|` times its largest coordinate plus `|t - t_D|` in place of the length

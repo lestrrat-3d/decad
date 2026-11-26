@@ -107,7 +107,7 @@ func Example_stretch() {
 		fmt.Printf("failed to make a solid: %s\n", err)
 		return
 	}
-	longer, err := decad.Stretch(context.Background(), box, r3.NewVec(0, 0, 0), units.Scalar(2), units.Scalar(0.5), units.Scalar(1))
+	longer, err := decad.Stretch(box, r3.NewVec(0, 0, 0), units.Scalar(2), units.Scalar(0.5), units.Scalar(1)).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to stretch: %s\n", err)
 		return
@@ -275,7 +275,7 @@ func Example_quarter_turn() {
 		fmt.Printf("failed to make a solid: %s\n", err)
 		return
 	}
-	turned, err := decad.QuarterTurn(context.Background(), box, r3.NewVec(0, 0, 1), r3.NewVec(0, 0, 0), 1)
+	turned, err := decad.QuarterTurn(box, r3.NewVec(0, 0, 1), r3.NewVec(0, 0, 0), 1).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to turn: %s\n", err)
 		return

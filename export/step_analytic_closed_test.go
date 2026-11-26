@@ -71,7 +71,7 @@ func TestNewSTEPFileWholeSphereAnalytic(t *testing.T) {
 	require.Empty(t, body.Faces()[0].Loops())
 	moved, err := r3.Translation(r3.NewVec(8, -4, 2))
 	require.NoError(t, err)
-	placed, err := decad.Copy(t.Context(), body, decad.WithCopyPlacement(moved))
+	placed, err := decad.Copy(body).Place(decad.CopyTransform{Transform: moved}).Do(t.Context())
 	require.NoError(t, err)
 	coverage, ok, err := closedstep.Read(t.Context(), placed, placed.Faces()[0])
 	require.NoError(t, err)
@@ -111,7 +111,7 @@ func TestNewSTEPFileWholeSphereAnalytic(t *testing.T) {
 	} {
 		move, err := r3.Translation(tc.translation)
 		require.NoError(t, err)
-		copyBody, err := decad.Copy(t.Context(), body, decad.WithCopyPlacement(move))
+		copyBody, err := decad.Copy(body).Place(decad.CopyTransform{Transform: move}).Do(t.Context())
 		require.NoError(t, err)
 		_, ok, err := closedstep.Read(t.Context(), copyBody, copyBody.Faces()[0])
 		require.NoError(t, err)
@@ -134,7 +134,7 @@ func TestNewSTEPFileWholeSphereAnalytic(t *testing.T) {
 			require.Positive(t, planes)
 		}
 	}
-	transformed, err := decad.Transform(t.Context(), placed, moved)
+	transformed, err := decad.Transform(placed, moved).Do(t.Context())
 	require.NoError(t, err)
 	again, ok, err := closedstep.Read(t.Context(), transformed, transformed.Faces()[0])
 	require.NoError(t, err)
@@ -197,7 +197,7 @@ func TestNewSTEPFileWholeRingAnalytic(t *testing.T) {
 	require.Empty(t, body.Faces()[0].Loops())
 	move, err := r3.Translation(r3.NewVec(8, -4, 2))
 	require.NoError(t, err)
-	placed, err := decad.Copy(t.Context(), body, decad.WithCopyPlacement(move))
+	placed, err := decad.Copy(body).Place(decad.CopyTransform{Transform: move}).Do(t.Context())
 	require.NoError(t, err)
 	coverage, ok, err := closedstep.Read(t.Context(), placed, placed.Faces()[0])
 	require.NoError(t, err)
@@ -225,7 +225,7 @@ func TestNewSTEPFileWholeRingAnalytic(t *testing.T) {
 	}
 	moveInexact, err := r3.Translation(r3.NewVec(0, 0.1, 0))
 	require.NoError(t, err)
-	inexact, err := decad.Copy(t.Context(), body, decad.WithCopyPlacement(moveInexact))
+	inexact, err := decad.Copy(body).Place(decad.CopyTransform{Transform: moveInexact}).Do(t.Context())
 	require.NoError(t, err)
 	_, ok, err = closedstep.Read(t.Context(), inexact, inexact.Faces()[0])
 	require.NoError(t, err)

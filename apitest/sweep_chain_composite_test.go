@@ -68,7 +68,7 @@ func TestSweepChainCardinalLineArcSheet(t *testing.T) {
 	require.Equal(t, before, len(doc.Bodies()))
 	motion, err := r3.Translation(r3.NewVec(1, 0, 0))
 	require.NoError(t, err)
-	_, err = decad.Transform(t.Context(), sheet, motion)
+	_, err = decad.Transform(sheet, motion).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Equal(t, before, len(doc.Bodies()))
 }

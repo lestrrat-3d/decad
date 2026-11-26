@@ -163,7 +163,7 @@ func TestStackedOpposedOverlapGates(t *testing.T) {
 			tool := boxBodyAtZ(t, doc, -4.1, -2, 0.9, 2, 0, 6)
 			move, err := r3.Translation(r3.NewVec(0.1, 0, 0))
 			require.NoError(t, err)
-			placed, err := decad.Transform(t.Context(), tool, move)
+			placed, err := decad.Transform(tool, move).Do(t.Context())
 			require.NoError(t, err)
 			return placed
 		}},

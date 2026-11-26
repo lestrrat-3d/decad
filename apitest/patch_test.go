@@ -118,18 +118,18 @@ func TestPatchReproducesThroughPlacement(t *testing.T) {
 	motion, err := r3.Translation(r3.NewVec(50, 0, 0))
 	require.NoError(t, err)
 
-	placed, err := decad.Transform(t.Context(), patch, motion)
+	placed, err := decad.Transform(patch, motion).Do(t.Context())
 	require.NoError(t, err)
 	decadtest.MeasuresArea(t, placed, units.SquareMillimeters(6000), decadtest.Exactly())
 	decadtest.MeasuresBounds(t, placed, r3.NewVec(50, 0, 0), r3.NewVec(150, 60, 0), decadtest.Exactly())
 
-	dup, err := decad.Copy(t.Context(), placed)
+	dup, err := decad.Copy(placed).Do(t.Context())
 	require.NoError(t, err)
 	decadtest.MeasuresArea(t, dup, units.SquareMillimeters(6000), decadtest.Exactly())
 
 	copyMotion, err := r3.Translation(r3.NewVec(0, 50, 0))
 	require.NoError(t, err)
-	copied, err := decad.Copy(t.Context(), dup, decad.WithCopyPlacement(copyMotion))
+	copied, err := decad.Copy(dup).Place(decad.CopyTransform{Transform: copyMotion}).Do(t.Context())
 	require.NoError(t, err)
 	decadtest.MeasuresArea(t, copied, units.SquareMillimeters(6000), decadtest.Exactly())
 	decadtest.MeasuresBounds(t, copied, r3.NewVec(50, 50, 0), r3.NewVec(150, 110, 0), decadtest.Exactly())

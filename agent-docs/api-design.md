@@ -883,9 +883,11 @@ run long: a free-form wall proves its curvature sign over a bounded work budget
 (`agent-docs/spline-design.md` §5.2), and a nonzero taper builds through the
 draft evaluator.
 
-`Union`, `Cut`, `Intersect`, `Stitch`, `Transform` and `Copy` have this form.
-`Transform(b, t).Do(ctx)` places a body, and `Copy` copies one under a rigid
-motion (§8).
+Every operation has this form, the placement family included. `Transform(b, t).Do(ctx)` places a body, and
+`Copy(b).Place(p).Do(ctx)` copies one under a rigid motion (§8). `Mirrored`, `MirroredJoin`, `MirroredCopy`,
+`ScaledAt`, `QuarterTurn`, `Stretch`, `PatternCopies`, `Patterned`, `PathPattern` and `Arrange` take their
+mandatory inputs the same way, and `agent-docs/mirror-pattern-design.md`, `agent-docs/path-pattern-design.md` and
+`agent-docs/arrange-design.md` own their rules.
 
 **A query keeps the function form.** A query method takes `ctx` first when it
 takes one and its options last, as functional options (`option/v3`):
@@ -1570,14 +1572,15 @@ Transform is a body operation on the same terms: it retires the input and
 registers the transformed body.
 
 ```go
-func Transform(ctx context.Context, body *Body, t r3.Transform) (*Body, error)
-func ScaledAt(ctx context.Context, b *Body, anchor r3.Vec, factor units.Value) (*Body, error)
+func Transform(body *Body, t r3.Transform) *TransformCommand
+func ScaledAt(b *Body, anchor r3.Vec, factor units.Value) *ScaledAtCommand
+// each command has Do(ctx context.Context) (*Body, error) and no method.
 ```
 
-`Arrange(ctx, bodies, bed)` places several bodies on a flat bed by one `Transform` each (two for a body that `WithArrangeTurns` turns), in shelves of their bounding
-boxes, and `agent-docs/arrange-design.md` owns its rules. With `WithArrangeAngle`, each probe copy also records one
-`Copy` history entry, and the helper that retires the probes records no `Remove` entry: three blocks give nine
-history entries, not six.
+`Arrange(bodies, bed)` places several bodies on a flat bed by one `Transform` each (two for a body that `Turns` turns), in shelves of their bounding
+boxes, and `agent-docs/arrange-design.md` owns its rules. With `Angle`, each probe copy also records one
+`Copy` history entry on a successful call, and the helper that retires the probes records no `Remove` entry: three
+blocks give nine history entries, not six. A failed or canceled call withdraws them with the rest.
 
 This is the whole of the "explicit transforms" story: a body is positioned by an
 argument the caller states — an `r3.Transform`, a rigid motion (§5.2) — never by
@@ -1618,42 +1621,48 @@ interference placements, one cutting tool reused for several holes — would mea
 rebuilding the whole feature chain per instance. `Copy` closes that gap:
 
 ```go
-func Copy(ctx context.Context, source *Body, opts ...CopyOption) (*Body, error)
-func WithCopyPlacement(t r3.Transform) CopyOption
-func WithCopyRotation(center, axis r3.Vec, angle units.Value) CopyOption
+func Copy(source *Body) *CopyCommand
+func (c *CopyCommand) Place(p CopyPlacement) *CopyCommand
+func (c *CopyCommand) Do(ctx context.Context) (*Body, error)
+
+type CopyPlacement interface{ copyPlacement() } // sealed
+type CopyTransform struct{ Transform r3.Transform }
+type CopyRotation struct{ Center, Axis r3.Vec; Angle units.Value }
+type CopyLiftTranslation struct{ Lift r3.Transform; From, To r3.Vec }
 ```
 
-`Copy` returns a NEW live body and leaves its source **live**: the source is
-depended on, never consumed. With no options, it re-registers the source's
+`Copy` returns a command whose `Do` makes a NEW live body and leaves its source **live**: the source is
+depended on, never consumed. With no `Place` call, it re-registers the source's
 immutable payload under a new producer identity at the same placement. With
-`WithCopyPlacement(t)`, it re-evaluates the payload under the composed rigid
-motion exactly as `Transform` does. Repeated placement options use the last value.
+`Place(CopyTransform{t})`, it re-evaluates the payload under the composed rigid
+motion exactly as `Transform` does. `CopyPlacement` is sealed, so a copy takes one
+placement, and a second `Place` call replaces the first (command design rules M2, M3).
 The zero `Transform{}` is `ErrDegenerate`; `r3.Identity()` is a valid no-op.
-`WithCopyRotation(center, axis, angle)` places the copy by the rotation about the axis
-through `center`. `WithCopyPlacement` and `WithCopyRotation` are both placement
-options, so the last of either wins. A zero or non-finite axis is `ErrDegenerate`, a non-finite
+`Place(CopyRotation{Center, Axis, Angle})` places the copy by the rotation about the axis
+through `Center`. A zero or non-finite axis is `ErrDegenerate`, a non-finite
 center or angle is `ErrNotFinite`, an angle that is not an angle is
-`ErrUnitKind`, and a zero angle is the identity. A faceted copy made with it
+`ErrUnitKind`, and a zero angle is the identity. `Place` validates a rotation or lift translation when it
+is called, and `Do` returns that fault, naming `Place`, ahead of the source's own gates. A faceted copy made with it
 denotes an exactly orthogonal rational rotation about exactly that axis, chosen
-near `angle`: it agrees with `angle` to within a few float steps and is not in
+near `Angle`: it agrees with `Angle` to within a few float steps and is not in
 general the rotation by exactly that transcendental angle. The copy's held
-vertices are the ones `WithCopyPlacement` of `r3.RotationAround(center, axis,
-angle)` would hold, and their bounds charge the distance to the exact rotation.
-Every other payload is placed by `r3.RotationAround(center, axis, angle)`,
-exactly as `WithCopyPlacement` of that transform.
+vertices are the ones a `CopyTransform` of `r3.RotationAround(Center, Axis,
+Angle)` would hold, and their bounds charge the distance to the exact rotation.
+Every other payload is placed by `r3.RotationAround(Center, Axis, Angle)`,
+exactly as a `CopyTransform` of that transform.
 An exact faceted copy carries no analytic surface tags: every face reads as
 `Faceted`, so `Face.NormalAt` refuses it, and `ToFace` stops and `MirrorFace`
 refuse it. It also stops being a point-loft source and a loft mirror join copy,
 so cone trims and the loft mirror cylinder joins treat it as any other faceted
-body. A copy that needs those readings uses `WithCopyPlacement`.
+body. A copy that needs those readings uses `CopyTransform`.
 `VerifyMotion` and `VerifyLinkage` refuse to re-place an exact faceted copy, or
 any body that descends from one by `Copy`, `Transform` or `ScaledAt`, with
 `ErrUnsupported`: the check has no pose proof for a re-placed exact rotation.
 The refusal applies where a mover is placed, so a mover that is fixed, or that
-has no evaluated pair, does not reach it. A copy made with `WithCopyPlacement`
+has no evaluated pair, does not reach it. A copy made with `CopyTransform`
 is not affected when its source has no preceding exact placement; a source
 that descends from an exact copy keeps the mark through every later copy.
-A nil option is `ErrDegenerate`, and a body this evaluator did not build is
+A nil placement is `ErrDegenerate`, and a body this evaluator did not build is
 `ErrUnsupported`. Cancellation during a faceted rebuild leaves the source
 and live-body set unchanged.
 

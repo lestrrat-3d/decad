@@ -116,11 +116,11 @@ func TestCutTwistedOffAxisSweepThroughTubeWall(t *testing.T) {
 		require.NoError(t, err)
 		turn, err := r3.Rotation(r3.NewVec(0, 1, 0), units.Degrees(90))
 		require.NoError(t, err)
-		tool, err = decad.Transform(t.Context(), tool, turn)
+		tool, err = decad.Transform(tool, turn).Do(t.Context())
 		require.NoError(t, err)
 		move, err := r3.Translation(r3.NewVec(radialStart, 0, mid))
 		require.NoError(t, err)
-		tool, err = decad.Transform(t.Context(), tool, move)
+		tool, err = decad.Transform(tool, move).Do(t.Context())
 		require.NoError(t, err)
 		return tube, tool
 	}

@@ -23,9 +23,9 @@ func TestLoftChainVerifyValidityAfterAudit(t *testing.T) {
 				require.NoError(t, err)
 				require.NotEqual(t, r3.Identity(), motion)
 				if mode == "placed" {
-					body, err = decad.Transform(t.Context(), body, motion)
+					body, err = decad.Transform(body, motion).Do(t.Context())
 				} else {
-					body, err = decad.Copy(t.Context(), body, decad.WithCopyPlacement(motion))
+					body, err = decad.Copy(body).Place(decad.CopyTransform{Transform: motion}).Do(t.Context())
 				}
 				require.NoError(t, err)
 			}

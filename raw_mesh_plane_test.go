@@ -45,7 +45,7 @@ func TestRawMeshPlaneOnBooleanFragments(t *testing.T) {
 	require.True(t, kept, "the cut retains the untouched part of the original oblique source plane")
 	translation, err := r3.Translation(r3.Vec{X: 2})
 	require.NoError(t, err)
-	moved, err := Transform(ctx, result, translation)
+	moved, err := Transform(result, translation).Do(ctx)
 	require.NoError(t, err)
 	for _, face := range moved.Faces() {
 		require.Nil(t, face.n.MeshPlaneSlab())

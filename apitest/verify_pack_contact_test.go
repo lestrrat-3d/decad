@@ -76,7 +76,7 @@ func witnessBar(t *testing.T, doc *decad.Document, inner float64, sweep decad.An
 	require.NoError(t, err)
 	xf, err := r3.FromFrame(f)
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), body, xf)
+	placed, err := decad.Transform(body, xf).Do(t.Context())
 	require.NoError(t, err)
 	return placed
 }
@@ -148,7 +148,7 @@ func yarnRod(t *testing.T, doc *decad.Document, a, c r3.Vec) *decad.Body {
 	require.NoError(t, err)
 	body, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(d.Len()), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), body, xf)
+	placed, err := decad.Transform(body, xf).Do(t.Context())
 	require.NoError(t, err)
 	return placed
 }
@@ -203,7 +203,7 @@ func TestVerifyIdentityPlacedChain(t *testing.T) {
 				require.NoError(t, err)
 				refined, err := decad.Refine(joined, units.Millimeters(0.12)).Do(t.Context())
 				require.NoError(t, err)
-				yarn, err = decad.Transform(t.Context(), refined, r3.Identity())
+				yarn, err = decad.Transform(refined, r3.Identity()).Do(t.Context())
 				require.NoError(t, err)
 			}
 			report, err := doc.Verify(t.Context())

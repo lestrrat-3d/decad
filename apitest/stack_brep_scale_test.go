@@ -38,7 +38,7 @@ func TestStackBrepScaledAtVerified(t *testing.T) {
 				sourceRoles = append(sourceRoles, face.Origins()...)
 			}
 
-			scaled, err := decad.ScaledAt(t.Context(), joined, r3.NewVec(2, -3, 4), units.Scalar(1.5))
+			scaled, err := decad.ScaledAt(joined, r3.NewVec(2, -3, 4), units.Scalar(1.5)).Do(t.Context())
 			require.NoError(t, err)
 			require.Equal(t, []*decad.Body{scaled}, doc.Bodies())
 			volume, err := scaled.Volume()
@@ -79,11 +79,11 @@ func TestStackBrepScaledAtPlacedAndRepeated(t *testing.T) {
 			require.NoError(t, err)
 			move, err := r3.Translation(r3.NewVec(3, -2, 7))
 			require.NoError(t, err)
-			placed, err := decad.Transform(t.Context(), joined, move)
+			placed, err := decad.Transform(joined, move).Do(t.Context())
 			require.NoError(t, err)
-			first, err := decad.ScaledAt(t.Context(), placed, r3.NewVec(2, -3, 4), units.Scalar(1.5))
+			first, err := decad.ScaledAt(placed, r3.NewVec(2, -3, 4), units.Scalar(1.5)).Do(t.Context())
 			require.NoError(t, err)
-			again, err := decad.ScaledAt(t.Context(), first, r3.NewVec(-1, 2, 3), units.Scalar(0.5))
+			again, err := decad.ScaledAt(first, r3.NewVec(-1, 2, 3), units.Scalar(0.5)).Do(t.Context())
 			require.NoError(t, err)
 			volume, err := again.Volume()
 			require.NoError(t, err)
@@ -116,7 +116,7 @@ func TestStackBrepScaledAtRefusesCurvedStack(t *testing.T) {
 	require.NoError(t, err)
 	joined, err := decad.Union(plate, boss).Do(t.Context())
 	require.NoError(t, err)
-	_, err = decad.ScaledAt(t.Context(), joined, r3.NewVec(2, -3, 4), units.Scalar(1.5))
+	_, err = decad.ScaledAt(joined, r3.NewVec(2, -3, 4), units.Scalar(1.5)).Do(t.Context())
 	require.True(t, errors.Is(err, decad.ErrUnsupported), "ScaledAt returned %v", err)
 	require.Equal(t, []*decad.Body{joined}, doc.Bodies())
 }

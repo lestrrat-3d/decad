@@ -22,8 +22,8 @@ func TestPatternUnionFoldsPolygonalPinsIntoAMeshPlate(t *testing.T) {
 	// times: each pin overlaps the last, and all lie inside the plate.
 	hex := polygonPrismAtZ(t, doc, 0, 10,
 		[2]float64{11, 15}, [2]float64{9.5, 17.6}, [2]float64{6.5, 17.6}, [2]float64{5, 15}, [2]float64{6.5, 12.4}, [2]float64{9.5, 12.4})
-	copies, err := decad.PatternCopies(t.Context(), hex,
-		decad.LinearPattern{Dir: r3.NewVec(0, 1, 0), Step: units.Millimeters(4), Count: 3})
+	copies, err := decad.PatternCopies(hex,
+		decad.LinearPattern{Dir: r3.NewVec(0, 1, 0), Step: units.Millimeters(4), Count: 3}).Do(t.Context())
 	require.NoError(t, err)
 	out, err := decad.Union(append([]*decad.Body{plate}, append([]*decad.Body{hex}, copies...)...)...).Do(t.Context())
 	require.NoError(t, err)
@@ -43,8 +43,8 @@ func TestPatternUnionFoldsRoundPinsIntoAMeshPlate(t *testing.T) {
 	// flush with the plate's faces. A round pin is held within its chord tolerance, so the shrink that keeps it inside
 	// the plate must pass that bound, and the result's bound states it.
 	pin := flushPin(t, doc)
-	copies, err := decad.PatternCopies(t.Context(), pin,
-		decad.LinearPattern{Dir: r3.NewVec(0, 1, 0), Step: units.Millimeters(4), Count: 3})
+	copies, err := decad.PatternCopies(pin,
+		decad.LinearPattern{Dir: r3.NewVec(0, 1, 0), Step: units.Millimeters(4), Count: 3}).Do(t.Context())
 	require.NoError(t, err)
 	out, err := decad.Union(append([]*decad.Body{plate}, append([]*decad.Body{pin}, copies...)...)...).Do(t.Context())
 	require.NoError(t, err)
@@ -65,8 +65,8 @@ func TestPatternUnionFoldRefusalLeavesEveryBodyLive(t *testing.T) {
 	// (agent-docs/flush-contact-design.md §8).
 	pin := roundPinAt(t, doc, 20, 15)
 	before := doc.Bodies()
-	copies, err := decad.PatternCopies(t.Context(), pin,
-		decad.LinearPattern{Dir: r3.NewVec(0, 1, 0), Step: units.Millimeters(4), Count: 3})
+	copies, err := decad.PatternCopies(pin,
+		decad.LinearPattern{Dir: r3.NewVec(0, 1, 0), Step: units.Millimeters(4), Count: 3}).Do(t.Context())
 	require.NoError(t, err)
 	_, err = decad.Union(append([]*decad.Body{plate}, append([]*decad.Body{pin}, copies...)...)...).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)

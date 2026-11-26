@@ -94,7 +94,7 @@ func TestRegroupPlansBuildByHand(t *testing.T) {
 		first, err := decad.Cut(sc.roundedBox(t), sc.tool(t, 20)).Do(t.Context())
 		require.NoError(t, err)
 		// A Copy ends the history chain, so the final call is the sequential gate, not a regroup.
-		held, err := decad.Copy(t.Context(), first)
+		held, err := decad.Copy(first).Do(t.Context())
 		require.NoError(t, err)
 		// The second hole's rim reads the first hole's cylinder slab, not the first rim's
 		// bound (agent-docs/faceted-source-retention-design.md §11, Claim C).
@@ -119,7 +119,7 @@ func TestRegroupPlansBuildByHand(t *testing.T) {
 		first, err := decad.Cut(sc.roundedBox(t), sc.tool(t, 20)).Do(t.Context())
 		require.NoError(t, err)
 		// A Copy ends the history chain, so the final call is the sequential gate, not a regroup.
-		held, err := decad.Copy(t.Context(), first)
+		held, err := decad.Copy(first).Do(t.Context())
 		require.NoError(t, err)
 		_, err = decad.Cut(held, regroupCylinderZ(t, sc)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
@@ -150,7 +150,7 @@ func TestRegroupPlansBuildByHand(t *testing.T) {
 		require.NoError(t, err)
 		// A Copy ends the history chain, so the final call is not a regroup. The copy of an axis-square result keeps
 		// its exact vertices, so the grid route joins it with the box where the sequential gate once refused.
-		held, err := decad.Copy(t.Context(), first)
+		held, err := decad.Copy(first).Do(t.Context())
 		require.NoError(t, err)
 		joined, err := decad.Union(held, box2).Do(t.Context())
 		require.NoError(t, err)
@@ -171,7 +171,7 @@ func TestRegroupPlansBuildByHand(t *testing.T) {
 		first, err := decad.Cut(sc.roundedBox(t), sc.tool(t, 20)).Do(t.Context())
 		require.NoError(t, err)
 		// A Copy ends the history chain, so the final call is the sequential gate, not a regroup.
-		held, err := decad.Copy(t.Context(), first)
+		held, err := decad.Copy(first).Do(t.Context())
 		require.NoError(t, err)
 		_, err = decad.Intersect(held, regroupSlabC(t, sc)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
@@ -193,7 +193,7 @@ func TestRegroupPlansBuildByHand(t *testing.T) {
 		sc := newRetentionScene()
 		first, err := decad.Cut(sc.roundedBox(t), sc.taperedTool(t)).Do(t.Context())
 		require.NoError(t, err)
-		cp, err := decad.Copy(t.Context(), first)
+		cp, err := decad.Copy(first).Do(t.Context())
 		require.NoError(t, err)
 		_, err = decad.Cut(cp, slabYTool(t, sc, 22, 3)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
@@ -204,7 +204,7 @@ func TestRegroupPlansBuildByHand(t *testing.T) {
 		tilted := func(t *testing.T, sc *retentionScene) *decad.Body {
 			tr, err := r3.RotationAround(r3.NewVec(22, 10, 10), r3.NewVec(1, 0, 0), units.Radians(0.01))
 			require.NoError(t, err)
-			b, err := decad.Transform(t.Context(), slabYTool(t, sc, 22, 3), tr)
+			b, err := decad.Transform(slabYTool(t, sc, 22, 3), tr).Do(t.Context())
 			require.NoError(t, err)
 			return b
 		}
@@ -212,7 +212,7 @@ func TestRegroupPlansBuildByHand(t *testing.T) {
 		first, err := decad.Cut(sc.roundedBox(t), sc.taperedTool(t)).Do(t.Context())
 		require.NoError(t, err)
 		// A Copy ends the history chain, so the final call is the sequential gate, not a regroup.
-		held, err := decad.Copy(t.Context(), first)
+		held, err := decad.Copy(first).Do(t.Context())
 		require.NoError(t, err)
 		_, err = decad.Cut(held, tilted(t, sc)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)

@@ -44,7 +44,7 @@ func (m mtiltTree) branch(t *testing.T, doc *decad.Document, theta float64) *dec
 	require.NoError(t, err)
 	move, err := r3.Translation(u.Scale(m.ring).Add(r3.NewVec(0, 0, m.trunkTop-1)))
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), body, move)
+	placed, err := decad.Transform(body, move).Do(t.Context())
 	require.NoError(t, err)
 	return placed
 }
@@ -165,7 +165,7 @@ func TestSweepMitredCrossingUnion(t *testing.T) {
 	require.NoError(t, err)
 	turn, err := r3.FromFrame(frame)
 	require.NoError(t, err)
-	b, err = decad.Transform(t.Context(), b, turn)
+	b, err = decad.Transform(b, turn).Do(t.Context())
 	require.NoError(t, err)
 
 	// Table DM row DM4: Verify reads the same pair's overlap through the
@@ -210,7 +210,7 @@ func TestSweepMitredTaperedBranchesCross(t *testing.T) {
 		require.NoError(t, err)
 		turn, err := r3.FromFrame(frame)
 		require.NoError(t, err)
-		b, err = decad.Transform(t.Context(), b, turn)
+		b, err = decad.Transform(b, turn).Do(t.Context())
 		require.NoError(t, err)
 		return a, b
 	}
@@ -284,7 +284,7 @@ func (h hollowTrunk) bore(t *testing.T, doc *decad.Document) *decad.Body {
 	require.NoError(t, err)
 	lift, err := r3.Translation(up)
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), body, lift)
+	placed, err := decad.Transform(body, lift).Do(t.Context())
 	require.NoError(t, err)
 	return placed
 }
@@ -303,7 +303,7 @@ func (h hollowTrunk) branch(t *testing.T, doc *decad.Document) *decad.Body {
 	require.NoError(t, err)
 	turn, err := r3.FromFrame(frame)
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), body, turn)
+	placed, err := decad.Transform(body, turn).Do(t.Context())
 	require.NoError(t, err)
 	return placed
 }
@@ -637,7 +637,7 @@ func clusteredBranchUnion(t *testing.T, branches int) *decad.Body {
 		require.NoError(t, err)
 		xf, err := r3.FromFrame(frame)
 		require.NoError(t, err)
-		branch, err := decad.Copy(t.Context(), unit, decad.WithCopyPlacement(xf))
+		branch, err := decad.Copy(unit).Place(decad.CopyTransform{Transform: xf}).Do(t.Context())
 		require.NoError(t, err)
 
 		treeVol, err := tree.Volume()
@@ -686,7 +686,7 @@ func TestSweepMitredClusteredBranchUnionPlaced(t *testing.T) {
 	axis := r3.NewVec(1, 2, 3)
 	turn, err := r3.Rotation(axis.Scale(1/axis.Len()), units.Radians(0.7))
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), tree, turn)
+	placed, err := decad.Transform(tree, turn).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, placed.Lumps(), 1)
 	after, err := placed.Volume()

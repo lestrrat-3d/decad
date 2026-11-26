@@ -98,10 +98,10 @@ func TestTwistedSweepRoundedPlacedShellVerifyAll(t *testing.T) {
 		live  int
 	}{
 		{name: "copy placement", place: func(source *decad.Body, motion r3.Transform) (*decad.Body, error) {
-			return decad.Copy(t.Context(), source, decad.WithCopyPlacement(motion))
+			return decad.Copy(source).Place(decad.CopyTransform{Transform: motion}).Do(t.Context())
 		}, live: 2},
 		{name: "transform placement", place: func(source *decad.Body, motion r3.Transform) (*decad.Body, error) {
-			return decad.Transform(t.Context(), source, motion)
+			return decad.Transform(source, motion).Do(t.Context())
 		}, live: 1},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -139,8 +139,7 @@ func TestTwistedSweepRoundedPlacedShellVerifyAll(t *testing.T) {
 
 func TestTwistedSweepRoundedPlacedShellRefusalsAreAtomic(t *testing.T) {
 	doc, source := twistedShellReceiver(t, units.Degrees(30))
-	placed, err := decad.Copy(t.Context(), source,
-		decad.WithCopyPlacement(twistedShellPlacement(t)))
+	placed, err := decad.Copy(source).Place(decad.CopyTransform{Transform: twistedShellPlacement(t)}).Do(t.Context())
 	require.NoError(t, err)
 	before := doc.Bodies()
 	start := decad.Faces(decad.FaceCreatedBy(decad.CapStart(placed))).Exactly(1)

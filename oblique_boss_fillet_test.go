@@ -58,7 +58,7 @@ func buildObliqueBossSources(t *testing.T, center, tiltAxis r3.Vec) (*Body, *Bod
 	if err != nil {
 		t.Fatal(err)
 	}
-	boss, err = Transform(ctx, boss, pose)
+	boss, err = Transform(boss, pose).Do(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}

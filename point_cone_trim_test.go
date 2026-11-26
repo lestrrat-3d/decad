@@ -33,9 +33,9 @@ func TestPointConeTrimRejectsRoundTrippedPointLoft(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, r3.Identity(), round)
 
-			moved, err := Transform(t.Context(), tooth, motion)
+			moved, err := Transform(tooth, motion).Do(t.Context())
 			require.NoError(t, err)
-			back, err := Transform(t.Context(), moved, inverse)
+			back, err := Transform(moved, inverse).Do(t.Context())
 			require.NoError(t, err)
 			fp, ok := back.n.Payload.(facetedPayload)
 			require.True(t, ok)
@@ -52,7 +52,7 @@ func TestPointConeTrimRejectsRoundTrippedPointLoft(t *testing.T) {
 
 	t.Run("unplaced copy", func(t *testing.T) {
 		doc := New()
-		cloned, err := Copy(t.Context(), pointLoftTooth(t, doc))
+		cloned, err := Copy(pointLoftTooth(t, doc)).Do(t.Context())
 		require.NoError(t, err)
 		fp, ok := cloned.n.Payload.(facetedPayload)
 		require.True(t, ok)

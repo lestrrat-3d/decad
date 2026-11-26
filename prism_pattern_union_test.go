@@ -106,7 +106,7 @@ func prismPatternTabBodies(t *testing.T, radius float64) (*Document, *Body, *Bod
 	require.NoError(t, err)
 	turn, err := r3.Rotation(r3.Vec{Z: 1}, units.Radians(math.Pi/2))
 	require.NoError(t, err)
-	rotated, err := Copy(ctx, tooth, WithCopyPlacement(turn))
+	rotated, err := Copy(tooth).Place(CopyTransform{Transform: turn}).Do(ctx)
 	require.NoError(t, err)
 	return doc, blank, tooth, rotated
 }

@@ -104,7 +104,7 @@ func placed(t *testing.T, b *decad.Body, dz float64) *decad.Body {
 	t.Helper()
 	move, err := r3.Translation(r3.Vec{Z: dz})
 	require.NoError(t, err)
-	out, err := decad.Transform(t.Context(), b, move)
+	out, err := decad.Transform(b, move).Do(t.Context())
 	require.NoError(t, err)
 	return out
 }

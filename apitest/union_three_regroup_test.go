@@ -48,7 +48,7 @@ func threePrismUnionInputs(t *testing.T, g r3.Frame, thickness float64) (*decad.
 		require.NoError(t, err)
 		xf, err := r3.FromFrame(f)
 		require.NoError(t, err)
-		body, err = decad.Transform(ctx, body, xf)
+		body, err = decad.Transform(body, xf).Do(ctx)
 		require.NoError(t, err)
 		return body
 	}

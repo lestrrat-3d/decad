@@ -12,7 +12,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `topology.go` | Topology types from `Body` to `Vertex` and public surface and curve variants. See API §6.1 and evaluator §3. |
 | `topology_handles.go` | Born-handle constructors, node-to-handle mapping, `handleAlloc` (with `ReplayNodeSize`) and `envOf` for internal builders, `bodyResult`, and `placePayload`. See evaluator §3, §8. |
 | `container.go` | `Container`, the document's grouping of sketches, planes and bodies; placement of results, `ErrCrossContainer`, `ChildNamed`, `NewUniqueChild` and `VerifyContainers`. See `agent-docs/container-design.md`. |
-| `document.go` | `Document`: live body set, atomic operation publication, `Remove`, liveness gates, `Transform` and `Copy`; the producer identity spelling and zero-vector predicate. See evaluator §8 and operation history. |
+| `document.go` | `Document`: live body set, atomic operation publication, `Remove`, liveness gates, `Transform` and `Copy` with `CopyPlacement` and `copyBody`; the producer identity spelling and zero-vector predicate. See evaluator §8 and operation history. |
 | `circle_affine_replay.go` | Exact affine differences for replay of placed circle sources. |
 | `circle_placement_replay.go` | Ordered placement witness and rounding checks for circle sources. |
 | `circle_primitive_seal.go` | Private circle source interface and candidate replay with placement bounds. |
@@ -25,14 +25,14 @@ The rules for rows live in `agent-docs/layout.md`.
 | `chain_tolerance.go` | `WithChainTolerance`, the document option that moves the chain-depth refusal. See faceted-vertex-bounds §5. |
 | `rim_split.go` | `WithRimSplit`, the document option that keeps a rim's bound beside the rim. See faceted-vertex-bounds §3.7. |
 | `gap_tolerance.go` | `WithGapTolerance`, `ExactOnly` and the context the root hands the evaluator. See gap-tolerance §1. |
-| `mirror.go` | `MirrorPlane` and `Mirrored`/`MirroredCopy`. See mirror-pattern §4. |
-| `mirror_join.go` | `WithJoin`, face selection and document commit around `internal/mirrorjoin/`'s record rewrite. See mirror-pattern §5. |
-| `arrange_angle.go` | Public `WithArrangeAngle` and its footprint probes: copies turned by each angle step are measured and retired, then the best turn is applied. See arrange design §6. |
-| `arrange.go` | Public `Arrange`, `ArrangeBed` (with its layers) and `WithArrangeTurns`: gates, footprints, then one `Transform` per body. `internal/arrangeplan/` packs the footprints. See arrange design. |
+| `mirror.go` | `MirrorPlane`, `copyMirrorPlane` and the `Mirrored`/`MirroredCopy` commands. See mirror-pattern §4. |
+| `mirror_join.go` | The `MirroredJoin` command, face selection and document commit around `internal/mirrorjoin/`'s record rewrite. See mirror-pattern §5. |
+| `arrange_angle.go` | `ArrangeCommand.Angle` and its footprint probes: copies turned by each angle step are measured and retired, then the best turn is applied. See arrange design §6. |
+| `arrange.go` | The `Arrange` command, `ArrangeBed` (with its layers) and `Turns`: gates, footprints, then one `Transform` per body. `internal/arrangeplan/` packs the footprints. See arrange design. |
 | `thread_table.go` | Public `LookupThread` and `ThreadSize`: the metric coarse and Unified pitch tables and the designation parser. See thread design §9. |
 | `thread.go` | Public `Thread` and `ThreadSpec`: face and pitch gates, the axis-plane frame, then a private `Coil` and `Cut`. `internal/threadplan/` plans the groove and its sampling density. See thread design. |
-| `path_pattern.go` | Public `PathPattern` and its options `WithPathCount`, `WithPathSpacing`, `WithPathFollow` and `WithPathPivot`: gates, path sampling through `internal/pathsample/`, then one `Copy` per instance. See path-pattern design. |
-| `pattern.go` | Public pattern specs, admission, Copy/Union fallback and publication; `internal/patternassembly/` plans frame-keeping instances and disjoint groups. See mirror-pattern §4.3, §6. |
+| `path_pattern.go` | The `PathPattern` command, its `PathCount` and `PathSpacing` stations and `Follow` and `FollowAbout`: gates, path sampling through `internal/pathsample/`, then one `Copy` per instance. See path-pattern design. |
+| `pattern.go` | The `PatternCopies` and `Patterned` commands, pattern specs, admission, Copy/Union fallback and publication; `internal/patternassembly/` plans frame-keeping instances and disjoint groups. See mirror-pattern §4.3, §6. |
 | `surface.go` | The sheet refusal of Table X. See surface §2–§4, §7, §11. |
 | `feature_options.go` | Shared settings of the sketch-fed commands: `SurfaceResult`, the extrude taper, the constructor nil faults and the section operands. See command-api §4, §6 and surface §4. |
 | `patch.go` | `PatchProfile` and `PatchProfileCommand`: records the profile and builds its face through `patchchain.Build`. See surface §5.1. |

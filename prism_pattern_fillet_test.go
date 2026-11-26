@@ -124,7 +124,7 @@ func prismPatternNarrowTabBodies(t *testing.T) (*Document, *Body, *Body, *Body) 
 	require.NoError(t, err)
 	turn, err := r3.Rotation(r3.Vec{Z: 1}, units.Radians(math.Pi/2))
 	require.NoError(t, err)
-	rotated, err := Copy(t.Context(), section, WithCopyPlacement(turn))
+	rotated, err := Copy(section).Place(CopyTransform{Transform: turn}).Do(t.Context())
 	require.NoError(t, err)
 	return doc, blank, section, rotated
 }
@@ -164,7 +164,7 @@ func TestPrismPatternFilletPastShortRadialLine(t *testing.T) {
 
 			doc, blank, tooth := prismPatternGearToothBodies(t, tc.teeth, tc.root, tc.base, tc.tip,
 				tc.half, tc.inset, 2)
-			copies, err := PatternCopies(t.Context(), tooth, CircularPattern{Axis: r3.Vec{Z: 1}, Count: tc.teeth})
+			copies, err := PatternCopies(tooth, CircularPattern{Axis: r3.Vec{Z: 1}, Count: tc.teeth}).Do(t.Context())
 			require.NoError(t, err)
 			joined, err := Union(append([]*Body{blank}, append([]*Body{tooth}, copies...)...)...).Do(t.Context())
 			require.NoError(t, err)
@@ -319,7 +319,7 @@ func rimToothFillet(t *testing.T, tc rimToothCase, height float64) (*Body, bool)
 	half := math.Pi/(2*n) + inv - tc.thin
 	radius := 0.9 * root * (math.Pi/n - 2*(half-math.Pi/(2*n))) / 2
 	doc, blank, tooth := prismPatternGearToothBodies(t, tc.teeth, root, n/2*math.Cos(pressure), (n+2)/2, half, 0, height)
-	copies, err := PatternCopies(t.Context(), tooth, CircularPattern{Axis: r3.Vec{Z: 1}, Count: tc.teeth})
+	copies, err := PatternCopies(tooth, CircularPattern{Axis: r3.Vec{Z: 1}, Count: tc.teeth}).Do(t.Context())
 	require.NoError(t, err)
 	joined, err := Union(append([]*Body{blank}, append([]*Body{tooth}, copies...)...)...).Do(t.Context())
 	require.NoError(t, err)

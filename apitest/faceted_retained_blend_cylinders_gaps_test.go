@@ -31,7 +31,7 @@ func slabCutter(t *testing.T, sc *retentionScene, z0, z1 float64) *decad.Body {
 	require.NoError(t, err)
 	move, err := r3.Translation(r3.Vec{Z: z0 + 0.001})
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), slab, move)
+	placed, err := decad.Transform(slab, move).Do(t.Context())
 	require.NoError(t, err)
 	return placed
 }

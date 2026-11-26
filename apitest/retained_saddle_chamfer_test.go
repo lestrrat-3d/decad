@@ -47,7 +47,7 @@ func saddleExtrudedCylinder(t *testing.T, sc *retentionScene, plane *sketch.Plan
 	}
 	m, err := r3.Translation(move)
 	require.NoError(t, err)
-	b, err = decad.Transform(t.Context(), b, m)
+	b, err = decad.Transform(b, m).Do(t.Context())
 	require.NoError(t, err)
 	return b
 }
@@ -69,7 +69,7 @@ func saddleShaftWithFlatBesideMouth(t *testing.T) *decad.Body {
 	require.NoError(t, err)
 	move, err := r3.Translation(r3.Vec{Z: 9.8})
 	require.NoError(t, err)
-	flat, err := decad.Transform(t.Context(), box, move)
+	flat, err := decad.Transform(box, move).Do(t.Context())
 	require.NoError(t, err)
 	body, err = decad.Cut(body, flat).Do(t.Context())
 	require.NoError(t, err)

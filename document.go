@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/exactrotation"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/massdispatch"
+	"github.com/lestrrat-3d/decad/internal/opcommand"
 	"github.com/lestrrat-3d/decad/internal/parambind"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/provenance"
@@ -513,26 +514,48 @@ func (d *Document) requireLive(b *Body) error {
 	return nil
 }
 
-// Transform returns a new body carrying body's geometry under the rigid
-// motion t, retiring body (core §8). body MUST NOT be nil. The zero transform is
-// invalid and is ErrDegenerate. A canceled context stops the rebuild before
-// the document changes. The motion composes onto the placement body already carries,
-// and it is that ACCUMULATED placement, never t alone, that the analytic
-// booleans and interference reading compare against a coplanar partner's:
-// where the two differ, the partner's coordinates are re-expressed and every
-// crossing they cut is charged that rounding over the crossing angle
+// Transform returns the command that places body under the rigid motion t.
+// Do returns a new body carrying body's geometry under t and retires body
+// (core §8). body MUST NOT be nil. The zero transform is invalid and is
+// ErrDegenerate. A canceled context stops the rebuild before the document
+// changes. The motion composes onto the placement body already carries, and it
+// is that ACCUMULATED placement, never t alone, that the analytic booleans and
+// interference reading compare against a coplanar partner's: where the two
+// differ, the partner's coordinates are re-expressed and every crossing they
+// cut is charged that rounding over the crossing angle
 // (agent-docs/prism-boolean-design.md §3.4), while motions composing back to the
 // partner's own placement leave the re-expression the identity.
-func Transform(ctx context.Context, body *Body, t r3.Transform) (*Body, error) {
-	placed, err := transform(ctx, body, t, OperationTransform)
-	return placed, operationError(OperationTransform, err)
+func Transform(body *Body, t r3.Transform) *TransformCommand {
+	c := &TransformCommand{body: body, t: t}
+	if body == nil {
+		c.state.Record("body", errNilBody)
+	}
+	return c
 }
 
+// TransformCommand places a body under a rigid motion. Build it with
+// [Transform].
+type TransformCommand struct {
+	state opcommand.State // consumed flag and first recorded fault
+	body  *Body           // stored as given
+	t     r3.Transform    // the motion, gated at Do
+}
+
+// Do places the body and retires it, or returns the error of the first gate
+// that refuses, leaving the body live. A nil ctx is ErrDegenerate, and a
+// second call returns ErrConsumed.
+func (c *TransformCommand) Do(ctx context.Context) (*Body, error) {
+	return runCommand(ctx, &c.state, OperationTransform, c.run)
+}
+
+func (c *TransformCommand) run(ctx context.Context) (*Body, error) {
+	return transform(ctx, c.body, c.t, OperationTransform)
+}
+
+// transform is Transform's implementation. ctx is not nil, and the errors it
+// returns carry no operation tag (agent-docs/command-api-design.md §11).
 func transform(ctx context.Context, body *Body, t r3.Transform, kind OperationKind,
 	additionalInputs ...OperationInput) (*Body, error) {
-	if ctx == nil {
-		return nil, fmt.Errorf(`%w: a nil context cannot control a placement`, ErrDegenerate)
-	}
 	if body == nil || body.n.Doc == nil {
 		return nil, fmt.Errorf(`%w: the body belongs to no document`, ErrDegenerate)
 	}
@@ -595,51 +618,25 @@ func exactIdentity(t r3.Transform) bool {
 	return b.EX == (r3.Vec{X: 1}) && b.EY == (r3.Vec{Y: 1}) && b.EZ == (r3.Vec{Z: 1}) && t.Translation() == (r3.Vec{})
 }
 
-// CopyOption configures Copy. Only WithCopyPlacement, WithCopyRotation and
-// WithCopyLiftTranslation change the copy's placement. An option from another package cannot implement
-// this sealed tier.
-type CopyOption interface {
-	option.Interface
-	copyOption()
+// CopyPlacement is how [CopyCommand.Place] places a copy: a [CopyTransform], a
+// [CopyRotation] or a [CopyLiftTranslation]. The set is sealed, so a copy takes
+// one placement (agent-docs/command-api-design.md rule M3).
+type CopyPlacement interface{ copyPlacement() }
+
+// CopyTransform places a new copy under Transform. A zero or otherwise invalid
+// transform is ErrDegenerate when Do evaluates the placement.
+type CopyTransform struct {
+	Transform r3.Transform
 }
 
-type copyOption struct{ option.Interface }
-
-func (copyOption) copyOption() {}
-
-type identCopyPlacement struct{}
-
-type identCopyRotation struct{}
-
-type identCopyLiftTranslation struct{}
-
-// copyLiftTranslation is the value WithCopyLiftTranslation stores under
-// identCopyLiftTranslation.
-type copyLiftTranslation struct {
-	lift     r3.Transform
-	from, to r3.Vec
-}
-
-// copyRotation is the value WithCopyRotation stores under identCopyRotation.
-type copyRotation struct {
-	center, axis r3.Vec
-	angle        units.Value
-}
-
-// WithCopyPlacement places a new copy under t. A zero or otherwise invalid
-// transform is ErrDegenerate when Copy evaluates the option.
-func WithCopyPlacement(t r3.Transform) CopyOption {
-	return copyOption{option.New(identCopyPlacement{}, t)}
-}
-
-// WithCopyRotation places a new copy by a rotation about the axis through
-// center along axis, by angle. The rotation a faceted copy denotes is an
-// exactly orthogonal rational rotation about exactly that axis, chosen near
-// angle: it agrees with angle to within a few float steps, but it is not in
-// general the rotation by exactly that transcendental angle. The held
-// placement's rounding is charged against that exact rotation. Other payloads
-// are placed by r3.RotationAround(center, axis, angle), exactly as
-// WithCopyPlacement of that transform.
+// CopyRotation places a new copy by a rotation about the axis through Center
+// along Axis, by Angle. The rotation a faceted copy denotes is an exactly
+// orthogonal rational rotation about exactly that axis, chosen near Angle: it
+// agrees with Angle to within a few float steps, but it is not in general the
+// rotation by exactly that transcendental angle. The held placement's rounding
+// is charged against that exact rotation. Other payloads are placed by
+// r3.RotationAround(Center, Axis, Angle), exactly as a [CopyTransform] of that
+// transform.
 //
 // A faceted copy made this way keeps the analytic tag of a face that a mesh
 // Boolean retained from its operands (a plane, cylinder, sphere or torus), with
@@ -647,24 +644,25 @@ func WithCopyPlacement(t r3.Transform) CopyOption {
 // rotation; a retained cone keeps the bound 2. Every other face reads as
 // Faceted with its held bound, so Face.NormalAt refuses it and ToFace stops
 // refuse it. A rotated plane tag is a float image, so MirrorFace refuses it.
-// The copy also stops being a point-loft source. Use WithCopyPlacement for a
+// The copy also stops being a point-loft source. Use a [CopyTransform] for a
 // copy that needs those readings.
 //
-// A zero or non-finite axis is ErrDegenerate, a non-finite center or angle is
-// ErrNotFinite, and an angle that is not an angle is ErrUnitKind, all when
-// Copy evaluates the option. A zero angle is the identity.
-func WithCopyRotation(center, axis r3.Vec, angle units.Value) CopyOption {
-	return copyOption{option.New(identCopyRotation{}, copyRotation{center: center, axis: axis, angle: angle})}
+// A zero or non-finite Axis is ErrDegenerate, a non-finite Center or Angle is
+// ErrNotFinite, and an Angle that is not an angle is ErrUnitKind, all when Do
+// evaluates the placement. A zero Angle is the identity.
+type CopyRotation struct {
+	Center, Axis r3.Vec
+	Angle        units.Value
 }
 
-// WithCopyLiftTranslation places a new copy by moving the point from to the
-// point to, both given in lift's local coordinates. The exact world translation
-// is the lift's linear part times to minus from, formed in exact rationals: the
+// CopyLiftTranslation places a new copy by moving the point From to the point
+// To, both given in Lift's local coordinates. The exact world translation is
+// the lift's linear part times To minus From, formed in exact rationals: the
 // subtraction and the product round nothing. A faceted copy denotes its
 // source's true solid moved by exactly that vector, and its held vertices are
 // charged for the rounding of the held placement to the nearest float
 // translation. Other payloads are placed by that float translation alone,
-// exactly as WithCopyPlacement of it.
+// exactly as a [CopyTransform] of it.
 //
 // The copy is marked as exactly placed like every exact copy, so VerifyMotion
 // and VerifyLinkage refuse to re-place it. Only a copy made directly from its
@@ -674,66 +672,130 @@ func WithCopyRotation(center, axis r3.Vec, angle units.Value) CopyOption {
 // moved from one bore sketched on the lift to another) is decided from the
 // recorded history.
 //
-// An invalid lift is ErrDegenerate and a non-finite from or to is
-// ErrNotFinite, both when Copy evaluates the option. A to that equals from is the
-// identity.
-func WithCopyLiftTranslation(lift r3.Transform, from, to r3.Vec) CopyOption {
-	return copyOption{option.New(identCopyLiftTranslation{}, copyLiftTranslation{lift: lift, from: from, to: to})}
+// An invalid Lift is ErrDegenerate and a non-finite From or To is
+// ErrNotFinite, both when Do evaluates the placement. A To that equals From is
+// the identity.
+type CopyLiftTranslation struct {
+	Lift     r3.Transform
+	From, To r3.Vec
 }
 
-// Copy returns a new live body carrying source's geometry and leaves source
-// live. With no options, the copy has source's placement. WithCopyPlacement
-// WithCopyRotation and WithCopyLiftTranslation compose a rigid motion onto it;
-// repeated placement options use the last value. The copy gets a new body identity and reproduces
-// source provenance. source MUST NOT be nil. A body this evaluator did not
-// build is ErrUnsupported. Invalid or nil options are ErrDegenerate. A
-// canceled context stops the rebuild before the document changes.
-func Copy(ctx context.Context, source *Body, opts ...CopyOption) (result *Body, retErr error) {
-	defer func() { retErr = operationError(OperationCopy, retErr) }()
-	if ctx == nil {
-		return nil, fmt.Errorf(`%w: a nil context cannot control a copy`, ErrDegenerate)
+func (CopyTransform) copyPlacement()       {}
+func (CopyRotation) copyPlacement()        {}
+func (CopyLiftTranslation) copyPlacement() {}
+
+// copyMotion is a placement resolved to the motion a copy composes onto its
+// source's, and the exact record a faceted source places by, which is nil for
+// a plain transform.
+type copyMotion struct {
+	motion r3.Transform
+	exact  *exactrotation.Rotation
+}
+
+// rotationMotion resolves a rotation placement.
+func rotationMotion(center, axis r3.Vec, angle units.Value) (copyMotion, error) {
+	record, t, err := exactrotation.New(center, axis, angle)
+	if err != nil {
+		return copyMotion{}, err
 	}
-	motion := r3.Identity()
-	var exact *exactrotation.Rotation
-	for _, opt := range opts {
-		if opt == nil {
-			return nil, fmt.Errorf(`%w: a nil option names nothing to apply`, ErrDegenerate)
-		}
-		if c, ok := opt.(copyOption); ok && c.Interface == nil {
-			return nil, fmt.Errorf(`%w: a zero option names nothing to apply`, ErrDegenerate)
-		}
-		switch opt.Ident().(type) {
-		case identCopyPlacement:
-			t, ok := option.Get[r3.Transform](opt)
-			if !ok {
-				return nil, fmt.Errorf(`%w: WithCopyPlacement carries no transform`, ErrDegenerate)
-			}
-			motion, exact = t, nil
-		case identCopyRotation:
-			rot, ok := option.Get[copyRotation](opt)
-			if !ok {
-				return nil, fmt.Errorf(`%w: WithCopyRotation carries no rotation`, ErrDegenerate)
-			}
-			record, t, err := exactrotation.New(rot.center, rot.axis, rot.angle)
-			if err != nil {
-				return nil, err
-			}
-			motion, exact = t, record
-		case identCopyLiftTranslation:
-			lt, ok := option.Get[copyLiftTranslation](opt)
-			if !ok {
-				return nil, fmt.Errorf(`%w: WithCopyLiftTranslation carries no translation`, ErrDegenerate)
-			}
-			record, t, err := exactrotation.NewLiftTranslation(lt.lift, lt.from, lt.to)
-			if err != nil {
-				return nil, err
-			}
-			motion, exact = t, record
-		default:
-			return nil, fmt.Errorf(`%w: the copy option is not a decad copy option (%T)`, ErrDegenerate, opt)
-		}
+	return copyMotion{motion: t, exact: record}, nil
+}
+
+func liftTranslationMotion(v CopyLiftTranslation) (copyMotion, error) {
+	record, t, err := exactrotation.NewLiftTranslation(v.Lift, v.From, v.To)
+	if err != nil {
+		return copyMotion{}, err
 	}
-	return source.copyUnder(ctx, motion, exact, OperationCopy)
+	return copyMotion{motion: t, exact: record}, nil
+}
+
+// resolveCopyPlacement validates p and returns the motion it places a copy by.
+// A nil placement, or a nil pointer to a variant, names nothing to apply.
+func resolveCopyPlacement(p CopyPlacement) (copyMotion, error) {
+	errNil := fmt.Errorf(`%w: a nil copy placement names nothing to apply`, ErrDegenerate)
+	switch v := p.(type) {
+	case CopyTransform:
+		return copyMotion{motion: v.Transform}, nil
+	case *CopyTransform:
+		if v == nil {
+			return copyMotion{}, errNil
+		}
+		return copyMotion{motion: v.Transform}, nil
+	case CopyRotation:
+		return rotationMotion(v.Center, v.Axis, v.Angle)
+	case *CopyRotation:
+		if v == nil {
+			return copyMotion{}, errNil
+		}
+		return rotationMotion(v.Center, v.Axis, v.Angle)
+	case CopyLiftTranslation:
+		return liftTranslationMotion(v)
+	case *CopyLiftTranslation:
+		if v == nil {
+			return copyMotion{}, errNil
+		}
+		return liftTranslationMotion(*v)
+	default:
+		// The interface is sealed, so the only value left is nil.
+		return copyMotion{}, errNil
+	}
+}
+
+// Copy returns the command that copies source. Do returns a new live body
+// carrying source's geometry and leaves source live. With no
+// [CopyCommand.Place] call, the copy has source's placement. The copy gets a
+// new body identity and reproduces source provenance. source MUST NOT be nil.
+// A body this evaluator did not build is ErrUnsupported. A canceled context
+// stops the rebuild before the document changes.
+func Copy(source *Body) *CopyCommand {
+	return &CopyCommand{source: source}
+}
+
+// CopyCommand copies a body. Build it with [Copy].
+type CopyCommand struct {
+	state  opcommand.State            // consumed flag and first recorded fault
+	source *Body                      // stored as given
+	place  opcommand.Slot[copyMotion] // set by Place, with the fault of its validation
+}
+
+// Place composes a rigid motion onto the copy's placement: p is a
+// [CopyTransform], a [CopyRotation] or a [CopyLiftTranslation]. A fault of p is
+// returned by Do ahead of the source's own gates, naming Place as its subject:
+// a nil p or an invalid value is ErrDegenerate, a non-finite one ErrNotFinite
+// and a wrong unit kind ErrUnitKind. A second call replaces the first.
+func (c *CopyCommand) Place(p CopyPlacement) *CopyCommand {
+	c.place.Set(resolveCopyPlacement(p))
+	return c
+}
+
+// Do copies the body, or returns the error of the first gate that refuses. A
+// nil ctx is ErrDegenerate, and a second call returns ErrConsumed.
+func (c *CopyCommand) Do(ctx context.Context) (*Body, error) {
+	return runCommand(ctx, &c.state, OperationCopy, c.run)
+}
+
+func (c *CopyCommand) run(ctx context.Context) (*Body, error) {
+	m := copyMotion{motion: r3.Identity()}
+	if c.place.IsSet() {
+		placed, err := c.place.Get()
+		if err != nil {
+			return nil, subjectError(OperationCopy, "Place", err)
+		}
+		m = placed
+	}
+	return copyBody(ctx, c.source, m)
+}
+
+// copyAsIs is copyBody under the source's own placement, the probe copy a
+// composite builds and retires again.
+func copyAsIs(ctx context.Context, source *Body) (*Body, error) {
+	return copyBody(ctx, source, copyMotion{motion: r3.Identity()})
+}
+
+// copyBody is Copy's implementation. ctx is not nil, and the errors it returns
+// carry no operation tag (agent-docs/command-api-design.md §11).
+func copyBody(ctx context.Context, source *Body, m copyMotion) (*Body, error) {
+	return source.copyUnder(ctx, m.motion, m.exact, OperationCopy)
 }
 
 // copyUnder leaves its source live while re-evaluating at a new identity.

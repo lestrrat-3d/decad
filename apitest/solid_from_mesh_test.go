@@ -151,7 +151,7 @@ func TestSolidFromMeshBodyKeepsWorkingAfterPlacementAndReadings(t *testing.T) {
 	// A translated copy lands where it should and keeps its faces and volume.
 	move, err := r3.Translation(r3.NewVec(5, 0, 0))
 	require.NoError(t, err)
-	moved, err := decad.Transform(t.Context(), body, move)
+	moved, err := decad.Transform(body, move).Do(t.Context())
 	require.NoError(t, err)
 	box, err := moved.Bounds()
 	require.NoError(t, err)

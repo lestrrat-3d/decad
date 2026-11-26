@@ -33,8 +33,7 @@ func crossedPlateUnion(t *testing.T, doc *decad.Document) *decad.Body {
 	t.Helper()
 	plate := boxBody(t, doc, 0, 0, 30, 30, 4)
 	narrow := boxBody(t, doc, 5, 0, 25, 30, 4)
-	turned, err := decad.Copy(t.Context(), narrow,
-		decad.WithCopyRotation(r3.NewVec(15, 15, 2), r3.NewVec(1, 0, 0), units.Degrees(45)))
+	turned, err := decad.Copy(narrow).Place(decad.CopyRotation{Center: r3.NewVec(15, 15, 2), Axis: r3.NewVec(1, 0, 0), Angle: units.Degrees(45)}).Do(t.Context())
 	require.NoError(t, err)
 	joined, err := decad.Union(plate, turned).Do(t.Context())
 	require.NoError(t, err)
@@ -66,7 +65,7 @@ func TestPointLocationHistoryCrossedPlates(t *testing.T) {
 		{name: "top face on the turned plate's end", at: r3.NewVec(5, 15, 4), want: decad.PointUndecided},
 	})
 
-	copied, err := decad.Copy(t.Context(), joined)
+	copied, err := decad.Copy(joined).Do(t.Context())
 	require.NoError(t, err)
 	requireLocations(t, copied, []locateCase{
 		{name: "mesh: 1e-9 under the top face", at: r3.NewVec(1, 1, 4-1e-9), want: decad.PointUndecided},
@@ -172,8 +171,7 @@ func TestPointLocationHistoryRefusals(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
 		plate := boxBody(t, doc, 0, 0, 30, 30, 4)
-		turned, err := decad.Copy(t.Context(), plate,
-			decad.WithCopyRotation(r3.NewVec(15, 15, 2), r3.NewVec(1, 0, 0), units.Degrees(45)))
+		turned, err := decad.Copy(plate).Place(decad.CopyRotation{Center: r3.NewVec(15, 15, 2), Axis: r3.NewVec(1, 0, 0), Angle: units.Degrees(45)}).Do(t.Context())
 		require.NoError(t, err)
 		joined, err := decad.Union(plate, turned).Do(t.Context())
 		require.NoError(t, err)
@@ -196,7 +194,7 @@ func TestPointLocationHistoryRefusals(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
 		rotation := turnAboutX(t)
-		placed, err := decad.Transform(t.Context(), crossedPlateUnion(t, doc), rotation)
+		placed, err := decad.Transform(crossedPlateUnion(t, doc), rotation).Do(t.Context())
 		require.NoError(t, err)
 		require.Equal(t, "decad.facetedPayload", decadtest.PayloadClass(placed))
 		requireLocations(t, placed, []locateCase{

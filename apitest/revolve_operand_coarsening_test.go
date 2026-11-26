@@ -43,7 +43,7 @@ func radialStemBody(t *testing.T, doc *decad.Document) *decad.Body {
 	require.NoError(t, err)
 	tr, err := r3.Translation(r3.Vec{Y: 4})
 	require.NoError(t, err)
-	moved, err := decad.Transform(t.Context(), body, tr)
+	moved, err := decad.Transform(body, tr).Do(t.Context())
 	require.NoError(t, err)
 	return moved
 }

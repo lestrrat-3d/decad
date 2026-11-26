@@ -17,7 +17,7 @@ func regroupTilted(t *testing.T, sc *retentionScene) *decad.Body {
 	t.Helper()
 	tr, err := r3.RotationAround(r3.NewVec(22, 10, 10), r3.NewVec(1, 0, 0), units.Radians(0.01))
 	require.NoError(t, err)
-	b, err := decad.Transform(t.Context(), slabYTool(t, sc, 22, 3), tr)
+	b, err := decad.Transform(slabYTool(t, sc, 22, 3), tr).Do(t.Context())
 	require.NoError(t, err)
 	return b
 }
@@ -159,7 +159,7 @@ func TestBooleanRegroupConjunction(t *testing.T) {
 		sc := newRetentionScene()
 		built, err := decad.Cut(sc.roundedBox(t), sc.taperedTool(t)).Do(t.Context())
 		require.NoError(t, err)
-		cp, err := decad.Copy(t.Context(), built)
+		cp, err := decad.Copy(built).Do(t.Context())
 		require.NoError(t, err)
 		tool := slabYTool(t, sc, 22, 3)
 		historyLen := len(sc.doc.OperationHistory().Operations())

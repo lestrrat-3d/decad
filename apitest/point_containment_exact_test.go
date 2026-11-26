@@ -68,8 +68,7 @@ func TestPointLocationExactPlacedPlate(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	plate := boxBody(t, doc, 0, 0, 30, 30, 4)
-	turned, err := decad.Copy(t.Context(), plate,
-		decad.WithCopyRotation(r3.NewVec(15, 15, 2), r3.NewVec(1, 0, 0), units.Degrees(45)))
+	turned, err := decad.Copy(plate).Place(decad.CopyRotation{Center: r3.NewVec(15, 15, 2), Axis: r3.NewVec(1, 0, 0), Angle: units.Degrees(45)}).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, "decad.prismPayload", decadtest.PayloadClass(turned))
 	rotation, err := r3.RotationAround(r3.NewVec(15, 15, 2), r3.NewVec(1, 0, 0), units.Degrees(45))
@@ -198,7 +197,7 @@ func TestPointLocationDenotedLevel(t *testing.T) {
 				require.ErrorIs(t, err, context.Canceled)
 				shift, err := r3.Translation(r3.NewVec(2, 0, 0))
 				require.NoError(t, err)
-				placed, err := decad.Transform(t.Context(), body, shift)
+				placed, err := decad.Transform(body, shift).Do(t.Context())
 				require.NoError(t, err)
 				// Translation leaves local z unchanged exactly.
 				requireLocations(t, placed, []locateCase{

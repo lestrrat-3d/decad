@@ -20,7 +20,7 @@ func BenchmarkMeshBooleanWorkers(b *testing.B) {
 			if err != nil {
 				b.Fatal(err)
 			}
-			placed, err := Transform(b.Context(), tool, tr)
+			placed, err := Transform(tool, tr).Do(b.Context())
 			if err != nil {
 				b.Fatal(err)
 			}

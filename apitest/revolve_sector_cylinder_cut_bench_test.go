@@ -47,7 +47,7 @@ func benchSectorBoreOperands(b *testing.B, radius float64, repeated bool) (*deca
 	if repeated {
 		turn, err := r3.Rotation(r3.Vec{X: 1}, units.Degrees(180))
 		require.NoError(b, err)
-		second, err := decad.Copy(b.Context(), lug, decad.WithCopyPlacement(turn))
+		second, err := decad.Copy(lug).Place(decad.CopyTransform{Transform: turn}).Do(b.Context())
 		require.NoError(b, err)
 		parts = append(parts, second)
 	}

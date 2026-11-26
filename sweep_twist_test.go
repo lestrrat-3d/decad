@@ -254,7 +254,7 @@ func TestTwistLocalAreaRealBooleanArcSubset(t *testing.T) {
 	require.NoError(t, err)
 	move, err := r3.Translation(r3.NewVec(0, 0, 2))
 	require.NoError(t, err)
-	box, err = Transform(t.Context(), box, move)
+	box, err = Transform(box, move).Do(t.Context())
 	require.NoError(t, err)
 	joined, err := Union(swept, box).Do(t.Context())
 	require.NoError(t, err)

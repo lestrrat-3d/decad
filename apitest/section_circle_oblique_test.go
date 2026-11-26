@@ -63,7 +63,7 @@ func TestSectionObliqueCylinderPlacementAndReverseAxis(t *testing.T) {
 		EX: r3.Vec{X: 1}, EY: r3.Vec{Y: 1}, EZ: r3.Vec{Z: 1},
 	}, r3.NewVec(3, 4, 7))
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), source, placement)
+	placed, err := decad.Transform(source, placement).Do(t.Context())
 	require.NoError(t, err)
 	frame := obliqueCylinderPlane(t, r3.NewVec(3, 4, 12), r3.NewVec(-1, 0, 0))
 	section, profiles, err := placed.Section(t.Context(), frame)
@@ -137,7 +137,7 @@ func TestSectionObliqueCylinderPlacedCapCrossingFeedsVerifiedExtrude(t *testing.
 		EX: r3.Vec{X: 1}, EY: r3.Vec{Y: 1}, EZ: r3.Vec{Z: 1},
 	}, r3.NewVec(3, 4, 7))
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), source, placement)
+	placed, err := decad.Transform(source, placement).Do(t.Context())
 	require.NoError(t, err)
 	frame := obliqueCylinderPlane(t, r3.NewVec(4, 2, 16), r3.NewVec(1, 0, 0))
 	section, profiles, err := placed.Section(t.Context(), frame)
