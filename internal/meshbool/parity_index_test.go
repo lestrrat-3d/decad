@@ -835,7 +835,7 @@ func TestParityIndexPollsLikeTheLegacyScan(t *testing.T) {
 		indexed := &parityPollContext{Context: t.Context(), cancelAt: 2}
 		_, _, ierr := MeshParityAllContext(indexed, p, pm)
 		require.ErrorIs(t, ierr, context.Canceled)
-		require.False(t, pm.indexDeferred[0], `a canceled first scan must not count as a completed query`)
+		require.Zero(t, pm.plainScans[0], `a canceled first scan must not count as a completed query`)
 		require.False(t, pm.indexBuilt[0], `a canceled first scan must not build the index`)
 		plain := NewParityMesh(verts, tris)
 		plain.Unfiltered = true
@@ -843,11 +843,15 @@ func TestParityIndexPollsLikeTheLegacyScan(t *testing.T) {
 		want := answerOf(MeshParityPreparedContext(t.Context(), p, plain, all))
 		got := answerOf(MeshParityAllContext(t.Context(), p, pm))
 		require.Equal(t, want, got)
-		require.True(t, pm.indexDeferred[0], `the next completed scan must defer the index`)
+		require.Equal(t, 1, pm.plainScans[0], `the next completed scan must count`)
 		require.False(t, pm.indexBuilt[0], `the first completed scan must use the plain path`)
+		for i := 2; i <= ParityIndexDeferScans; i++ {
+			require.Equal(t, want, answerOf(MeshParityAllContext(t.Context(), p, pm)))
+			require.False(t, pm.indexBuilt[0], `scan %d must stay plain`, i)
+		}
 		got = answerOf(MeshParityAllContext(t.Context(), p, pm))
 		require.Equal(t, want, got)
-		require.True(t, pm.indexBuilt[0], `the later call must build the index`)
+		require.True(t, pm.indexBuilt[0], `the call after the threshold must build the index`)
 	})
 	t.Run(`cancel at every poll number`, func(t *testing.T) {
 		rng := rand.New(rand.NewPCG(0x51, 0x52))
@@ -1084,7 +1088,7 @@ func TestParityIndexSkipsUnusableFloatProjections(t *testing.T) {
 				indexed++
 				pm := NewParityMesh(fx.verts, fx.tris)
 				require.Equal(t, want, answerOf(MeshParityAllContext(ctx, p, pm)), `query %d`, qi)
-				require.True(t, pm.indexDeferred[first.Axis], `query %d: a usable projection completes a plain scan`, qi)
+				require.Positive(t, pm.plainScans[first.Axis], `query %d: a usable projection completes a plain scan`, qi)
 				require.Equal(t, want, answerOf(MeshParityAllContext(ctx, p, shared)), `query %d`, qi)
 			}
 			require.Positive(t, indexed, `some queries must take the indexed path`)

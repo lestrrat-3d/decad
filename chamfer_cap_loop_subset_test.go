@@ -497,14 +497,19 @@ func TestChamferCapLoopSubsetEnds(t *testing.T) {
 		})
 	}
 
-	// A chain that comes back near a concave end would lose that stretch to the end's clip, so it is refused.
-	t.Run("refuses a chain that wraps a tab back past the concave end", func(t *testing.T) {
+	// A chain that wraps a tab 2 mm thick back past its concave end: the block's top passes 2 mm from the corner,
+	// inside the end clip's sector but farther than the cutter's reach from the tab's line, so the clip leaves its
+	// bevel alone. The run removes its three wedges less d^3/3 for each right-angle mitre.
+	t.Run("a chain that wraps a tab back past the concave end", func(t *testing.T) {
 		t.Parallel()
 		pts := [][2]float64{{-3, 0}, {0, 0}, {0, -10}, {10, -10}, {10, 2}, {-3, 2}}
 		body := polyBody(t, 1, pts)
-		_, err := chamfer(t, body, topEdges(lineEdge(1, pts[4], pts[5]), lineEdge(1, pts[5], pts[0]),
+		out, err := chamfer(t, body, topEdges(lineEdge(1, pts[4], pts[5]), lineEdge(1, pts[5], pts[0]),
 			lineEdge(1, pts[0], pts[1])))
-		require.ErrorIs(t, err, decad.ErrUnsupported)
+		require.NoError(t, err)
+		want := (13+2+3)*d*d/2 - 2*d*d*d/3
+		// The corner relief keeps at most 0.004^2 turn d / 2.
+		require.InDelta(t, volumeOf(t, body)-want, volumeOf(t, out), 1e-5)
 	})
 
 	// A convex arc run (radius R, 60 degrees, or 25 degrees from R = 20), then a tangent line of length l0, ends at a
@@ -549,7 +554,7 @@ func TestChamferCapLoopSubsetEnds(t *testing.T) {
 		}
 		return body, sel
 	}
-	for _, c := range []struct{ R, phi, l0 float64 }{{5, 22.5, 0}, {5, 22.5, 1}, {8, 10, 1}, {8, 15, 1}} {
+	for _, c := range []struct{ R, phi, l0 float64 }{{5, 22.5, 0}, {8, 10, 1}, {8, 15, 1}} {
 		t.Run(fmt.Sprintf("refuses convex arc of radius %v into a %v degree concave end after %v mm", c.R, c.phi, c.l0),
 			func(t *testing.T) {
 				t.Parallel()
@@ -558,6 +563,18 @@ func TestChamferCapLoopSubsetEnds(t *testing.T) {
 				require.ErrorIs(t, err, decad.ErrUnsupported)
 			})
 	}
+	// Here the plane crosses the arc's band again only farther from the corner's line than the cutter's reach, outside
+	// the end clip, so the arc keeps its bevel there.
+	t.Run("convex arc of radius 5 into a 22.5 degree concave end after 1 mm", func(t *testing.T) {
+		t.Parallel()
+		const R, phi, l0 = 5.0, 22.5, 1.0
+		body, sel := arcIntoConcave(t, R, phi, l0)
+		out, err := chamfer(t, body, sel)
+		require.NoError(t, err)
+		want := (20+l0)*d*d/2 + math.Pi/3*(R*d*d/2-d*d*d/6) - d*d*d*cot(phi)/6
+		// The convex arc's facets read high, so the removed volume reads a few hundredths low.
+		require.InDelta(t, volumeOf(t, body)-want, volumeOf(t, out), 0.06)
+	})
 	t.Run("convex arc of radius 13 into a 22.5 degree concave end", func(t *testing.T) {
 		t.Parallel()
 		const R, phi = 13.0, 22.5
@@ -624,9 +641,10 @@ func TestChamferCapLoopSubsetEnds(t *testing.T) {
 	})
 
 	// A tongue 1.8 mm wide with a round end, chained smoothly: its top line passes 1.8 mm from the concave corner that
-	// ends the chain, inside the end clip, so the chain is refused.
+	// ends the chain, inside the end clip's sector but farther than the cutter's reach from the bottom line, so the
+	// clip leaves its bevel alone. The run removes its two wedges and the round end's half cone.
 	for _, sx := range []float64{1, -1} {
-		t.Run(fmt.Sprintf("refuses a round-ended tongue back past the concave end, mirror %v", sx), func(t *testing.T) {
+		t.Run(fmt.Sprintf("a round-ended tongue back past the concave end, mirror %v", sx), func(t *testing.T) {
 			t.Parallel()
 			body := capLoopSubsetBody(t, func(s *sketch.Sketch) {
 				p := func(x, y float64) *sketch.Point { return s.CreatePoint(sx*x, y) }
@@ -648,8 +666,11 @@ func TestChamferCapLoopSubsetEnds(t *testing.T) {
 			})
 			sel := topEdges(topEdge{r3.Vec{X: sx * 10, Y: 1.8}, r3.Vec{X: 1}}, topEdge{r3.Vec{X: sx * -0.5}, r3.Vec{X: 1}}).
 				Or(decad.EndpointAt(r3.Vec{X: sx * -0.5, Z: 5}), decad.Circular())
-			_, err := chamfer(t, body, sel)
-			require.ErrorIs(t, err, decad.ErrUnsupported)
+			out, err := chamfer(t, body, sel)
+			require.NoError(t, err)
+			const r = 0.9
+			want := (10.5+0.5)*d*d/2 + math.Pi*(r*d*d/2-d*d*d/6)
+			require.InDelta(t, volumeOf(t, body)-want, volumeOf(t, out), 0.01)
 		})
 	}
 
