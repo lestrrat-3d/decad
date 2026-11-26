@@ -28,8 +28,8 @@ func combineTools(ctx context.Context, d *Document, kind OperationKind, b *Body,
 	if err := d.requireSameContainer(consumed); err != nil {
 		return nil, err
 	}
-	privateSpan := capture.producerSpan(d)
-	start := d.nextProducerID() + privateSpan
+	privateSpan := capture.producerSpan(ctx, d)
+	start := d.producerAt(ctx) + privateSpan
 	ref := start
 	var warnings opdiagnostic.CompositeSummaries
 	if merge && len(tools) > 1 {
@@ -104,8 +104,8 @@ func combineToolSteps(ctx context.Context, d *Document, kind OperationKind, b *B
 	if err := d.requireSameContainer([]*Body{b}); err != nil {
 		return nil, err
 	}
-	privateSpan := capture.producerSpan(d)
-	start := d.nextProducerID() + privateSpan
+	privateSpan := capture.producerSpan(ctx, d)
+	start := d.producerAt(ctx) + privateSpan
 	ref := start
 	var warnings opdiagnostic.CompositeSummaries
 	acc := b

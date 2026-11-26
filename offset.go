@@ -119,7 +119,7 @@ func Offset(ctx context.Context, b *Body, distance units.Value,
 	if b.Kind() != BodySheet {
 		return nil, fmt.Errorf(`%w: Offset requires a sheet body`, ErrUnsupported)
 	}
-	node, err := thickenbuild.Offset(ctx, envOf(documentNode(d), d.nextProducerID()), bodyNode(b), side == OffsetNegative, dmm, dDelta)
+	node, err := thickenbuild.Offset(ctx, envOf(documentNode(d), d.producerAt(ctx)), bodyNode(b), side == OffsetNegative, dmm, dDelta)
 	if err != nil {
 		return nil, err
 	}

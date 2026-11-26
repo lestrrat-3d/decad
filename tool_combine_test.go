@@ -20,7 +20,7 @@ func TestCombineToolsAdditionalConsumptionIsAtomic(t *testing.T) {
 			tool := internalBoxBody(t, doc, 1, 1, 2, 2, 3)
 			defer removeTools([]*Body{tool})
 			beforeHistory := len(doc.OperationHistory().Operations())
-			beforeProducer := doc.nextProducerID()
+			beforeProducer := doc.producerAt(t.Context())
 			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
 			_, capture := privateConstructionContext(ctx)
@@ -54,7 +54,7 @@ func TestCombineToolsAdditionalConsumptionIsAtomic(t *testing.T) {
 				require.NoError(t, doc.requireLive(target))
 				require.Len(t, doc.Bodies(), 3)
 				require.Len(t, doc.OperationHistory().Operations(), beforeHistory)
-				require.Equal(t, beforeProducer, doc.nextProducerID())
+				require.Equal(t, beforeProducer, doc.producerAt(t.Context()))
 				return
 			}
 			require.NoError(t, err)

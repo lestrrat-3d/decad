@@ -312,7 +312,7 @@ func (r *Run) ReadBodies(groups [][]*topo.Body) {
 	// live identity, then mint only on this copy: successive pose bodies stay
 	// distinct from static geometry without changing the caller's document.
 	live := r.live
-	r.transient = r.hooks.NewDocument(r.doc, live)
+	r.transient = r.hooks.NewDocument(r.doc.SeedsAt(r.Ctx), live)
 	isMover := make(map[*topo.Body]struct{})
 	for g, bodies := range groups {
 		for _, b := range bodies {

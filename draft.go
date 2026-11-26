@@ -190,7 +190,7 @@ func Draft(ctx context.Context, b *Body, sel FaceSelector, neutral NeutralPlane,
 	}
 
 	// Stages 3 to 7 are the tapered extrude's, over b's section.
-	ref := d.nextProducerID()
+	ref := d.producerAt(ctx)
 	body, err := bodyResult(draftrecord.FromPrism(ctx, envOf(documentNode(d), ref), pp, nearStart, alpha, alphaDelta, kept))
 	if err != nil {
 		return nil, err
@@ -308,7 +308,7 @@ func (d *Document) extrudeDraft(ctx context.Context, profile profileRecord, fram
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	ref := d.nextProducerID()
+	ref := d.producerAt(ctx)
 	base := draftPayload{
 		Profile:    profile,
 		Frame:      frame,

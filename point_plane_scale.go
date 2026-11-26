@@ -74,7 +74,7 @@ func ScaledAt(ctx context.Context, b *Body, anchor r3.Vec, factor units.Value) (
 	if err != nil {
 		return nil, err
 	}
-	ref := d.nextProducerID()
+	ref := d.producerAt(ctx)
 	scaled, err := bodyResult(facetedrecord.Build(ctx, envOf(documentNode(d), ref), next))
 	if err != nil {
 		return nil, err

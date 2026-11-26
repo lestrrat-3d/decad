@@ -71,13 +71,13 @@ func TestLoftContactDirectShellUnionVaryingRectangleBothOrders(t *testing.T) {
 			if !reverse {
 				// A pair outside the prism/Loft source class still falls through.
 				miss, attempted, missErr := loftdirect.DirectShellUnion(t.Context(),
-					meshbool.OpUnion, envOf(documentNode(d), d.nextProducerID()), bodyNode(prism), bodyNode(prism))
+					meshbool.OpUnion, envOf(documentNode(d), d.producerAt(t.Context())), bodyNode(prism), bodyNode(prism))
 				require.NoError(t, missErr)
 				require.False(t, attempted)
 				require.True(t, miss == nil)
 			}
 			candidate, admitted, err := loftdirect.DirectShellUnion(t.Context(),
-				meshbool.OpUnion, envOf(documentNode(d), d.nextProducerID()), bodyNode(first), bodyNode(second))
+				meshbool.OpUnion, envOf(documentNode(d), d.producerAt(t.Context())), bodyNode(first), bodyNode(second))
 			require.NoError(t, err)
 			require.True(t, admitted, "the public case must reach the direct shell")
 			require.True(t, candidate != nil)
@@ -96,7 +96,7 @@ func TestLoftContactDirectShellUnionVaryingRectangleBothOrders(t *testing.T) {
 				require.Less(t, proof.TotalOutputVisits, uint64(loftcontact.VolumeOutputSteps))
 				// A one-step remainder must refuse before conversion can build.
 				refused, accepted, refusalErr := loftdirect.LoftContactFacetedBody(t.Context(),
-					envOf(documentNode(d), d.nextProducerID()), bodyNode(first), bodyNode(second), bodyNode(prism), bodyNode(loft), lp, proof,
+					envOf(documentNode(d), d.producerAt(t.Context())), bodyNode(first), bodyNode(second), bodyNode(prism), bodyNode(loft), lp, proof,
 					proofbound.NewWallWorkBudgetWithOperation(1, operation))
 				require.ErrorIs(t, refusalErr, ErrUnsupported)
 				require.ErrorContains(t, refusalErr, "direct Loft/prism bounded proof limit")
@@ -115,7 +115,7 @@ func TestLoftContactDirectShellUnionVaryingRectangleBothOrders(t *testing.T) {
 					ErrFn: raceCtx.Err,
 				}
 				raceBody, accepted, raceErr := loftdirect.LoftContactFacetedBody(raceCtx,
-					envOf(documentNode(d), d.nextProducerID()), bodyNode(first), bodyNode(second), bodyNode(prism), bodyNode(loft), lp, proof,
+					envOf(documentNode(d), d.producerAt(t.Context())), bodyNode(first), bodyNode(second), bodyNode(prism), bodyNode(loft), lp, proof,
 					proofbound.NewWallWorkBudgetWithOperation(1, raceOperation))
 				require.ErrorIs(t, raceErr, context.Canceled)
 				require.False(t, accepted)
@@ -137,7 +137,7 @@ func TestLoftContactDirectShellUnionVaryingRectangleBothOrders(t *testing.T) {
 					ErrFn: cancelCtx.Err,
 				}
 				cancelled, accepted, cancelErr := loftdirect.LoftContactFacetedBody(cancelCtx,
-					envOf(documentNode(d), d.nextProducerID()), bodyNode(first), bodyNode(second), bodyNode(prism), bodyNode(loft), lp, proof,
+					envOf(documentNode(d), d.producerAt(t.Context())), bodyNode(first), bodyNode(second), bodyNode(prism), bodyNode(loft), lp, proof,
 					cancelBudget)
 				require.ErrorIs(t, cancelErr, context.Canceled)
 				require.False(t, accepted)
@@ -145,7 +145,7 @@ func TestLoftContactDirectShellUnionVaryingRectangleBothOrders(t *testing.T) {
 				require.Equal(t, 25, steps)
 			}
 			before := append([]*Body(nil), d.Bodies()...)
-			beforeProducer := d.nextProducerID()
+			beforeProducer := d.producerAt(t.Context())
 			firstDoc, secondDoc := first.n.Doc, second.n.Doc
 			firstOrigin, secondOrigin := first.n.Origin, second.n.Origin
 			firstLumps, secondLumps := first.Lumps(), second.Lumps()
@@ -195,7 +195,7 @@ func TestLoftContactDirectShellUnionVaryingRectangleBothOrders(t *testing.T) {
 				require.True(t, afterSecondLumps[i] == secondLumps[i],
 					"second operand lump %d changed after refusal", i)
 			}
-			require.Equal(t, beforeProducer, d.nextProducerID(),
+			require.Equal(t, beforeProducer, d.producerAt(t.Context()),
 				"the refusal must not advance the document producer")
 
 			result, err := Union(t.Context(), first, second)
@@ -281,13 +281,13 @@ func TestLoftContactDirectShellUnionVaryingRectangleBothOrders(t *testing.T) {
 					first, second = loft, prism
 				}
 				candidate, admitted, err := loftdirect.DirectShellUnion(t.Context(),
-					meshbool.OpUnion, envOf(documentNode(d), d.nextProducerID()), bodyNode(first), bodyNode(second))
+					meshbool.OpUnion, envOf(documentNode(d), d.producerAt(t.Context())), bodyNode(first), bodyNode(second))
 				require.NoError(t, err)
 				require.True(t, admitted, "the public trapezoid must reach the direct shell")
 				require.NotNil(t, candidate)
 				if !reverse {
 					before := append([]*Body(nil), d.Bodies()...)
-					beforeProducer := d.nextProducerID()
+					beforeProducer := d.producerAt(t.Context())
 					limited := context.WithValue(t.Context(), loftdirect.LoftDirectOutputLimitKey{}, uint64(1))
 					refused, refusalErr := Union(limited, first, second)
 					require.True(t, refused == nil)
@@ -298,7 +298,7 @@ func TestLoftContactDirectShellUnionVaryingRectangleBothOrders(t *testing.T) {
 					for i := range before {
 						require.True(t, before[i] == after[i], "body %d changed after refusal", i)
 					}
-					require.Equal(t, beforeProducer, d.nextProducerID(),
+					require.Equal(t, beforeProducer, d.producerAt(t.Context()),
 						"the refusal must not advance the document producer")
 				}
 				result, err := Union(t.Context(), first, second)
@@ -334,7 +334,7 @@ func TestLoftContactDirectShellUnionVaryingRectangleBothOrders(t *testing.T) {
 						require.NoError(t, createErr)
 
 						before := append([]*Body(nil), d.Bodies()...)
-						beforeProducer := d.nextProducerID()
+						beforeProducer := d.producerAt(t.Context())
 						cancelCtx, cancel := context.WithCancel(t.Context())
 						cancel()
 						refused, refusalErr := Union(cancelCtx, result, third)
@@ -345,7 +345,7 @@ func TestLoftContactDirectShellUnionVaryingRectangleBothOrders(t *testing.T) {
 						for i := range before {
 							require.True(t, before[i] == after[i], "refusal changed live body %d", i)
 						}
-						require.Equal(t, beforeProducer, d.nextProducerID(),
+						require.Equal(t, beforeProducer, d.producerAt(t.Context()),
 							"refusal advanced the document producer")
 
 						combined, unionErr := Union(t.Context(), result, third)

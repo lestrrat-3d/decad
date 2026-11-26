@@ -21,7 +21,7 @@ func TestPointConeBooleanGates(t *testing.T) {
 	d := documentHandle(tooth.n.Doc)
 	run := func(op meshbool.OperationKind, target, tool *topo.Body) (*topo.Body, bool, error) {
 		t.Helper()
-		out, ok, err := revolveplan.PointConeBoolean(t.Context(), op, envOf(documentNode(d), d.nextProducerID()),
+		out, ok, err := revolveplan.PointConeBoolean(t.Context(), op, envOf(documentNode(d), d.producerAt(t.Context())),
 			target, tool, false)
 		return out, ok, err
 	}

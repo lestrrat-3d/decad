@@ -18,7 +18,7 @@ func performUnionMany(ctx context.Context, operands []*Body) (*Body, error) {
 	if err != nil {
 		return nil, err
 	}
-	body, span, err := unionManyBodies(ctx, d, d.nextProducerID(), operands)
+	body, span, err := unionManyBodies(ctx, d, d.producerAt(ctx), operands)
 	if err != nil {
 		return nil, err
 	}

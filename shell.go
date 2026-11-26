@@ -260,7 +260,7 @@ func Shell(ctx context.Context, b *Body, sel FaceSelector, t units.Value,
 	if out, ok, err := shellOrthogonal(ctx, d, b, call); ok || err != nil {
 		return out, err
 	}
-	node, err := brepmodify.Shell(ctx, envOf(b.n.Doc, b.n.Doc.NextProducer), &b.n, call)
+	node, err := brepmodify.Shell(ctx, envOf(b.n.Doc, documentHandle(b.n.Doc).producerAt(ctx)), &b.n, call)
 	if err != nil {
 		return nil, err
 	}

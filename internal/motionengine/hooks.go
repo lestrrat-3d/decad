@@ -29,9 +29,9 @@ type Hooks struct {
 	Place func(ctx context.Context, p topo.Payload, doc *topo.Document, ref provenance.Producer,
 		composed r3.Transform) (*topo.Body, error)
 	// NewDocument returns the transient document node a check mints pose
-	// bodies in: a copy of doc's identity counters over the live bodies, born
-	// the way the root package's documents are.
-	NewDocument func(doc *topo.Document, live []*topo.Body) *topo.Document
+	// bodies in: the identity counters seeds over the live bodies, born the
+	// way the root package's documents are.
+	NewDocument func(seeds topo.Seeds, live []*topo.Body) *topo.Document
 }
 
 // The motion records of the public report package, with topology nodes as the

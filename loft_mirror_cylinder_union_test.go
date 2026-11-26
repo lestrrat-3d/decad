@@ -228,7 +228,7 @@ func (c *pollCancelContext) Err() error {
 func TestLoftMirrorCylinderPairsParallelMatchesSerial(t *testing.T) {
 	t.Parallel()
 	f := newTeethFixture(t)
-	ref := f.d.nextProducerID()
+	ref := f.d.producerAt(t.Context())
 	replaced := func(at ...int) []*Body {
 		pairs := append([]*Body(nil), f.pairs...)
 		for _, i := range at {
@@ -286,7 +286,7 @@ func TestLoftMirrorCylinderPairsParallelMatchesSerial(t *testing.T) {
 func TestLoftMirrorCylinderPlaceTeethCancelled(t *testing.T) {
 	t.Parallel()
 	f := newTeethFixture(t)
-	ref := f.d.nextProducerID()
+	ref := f.d.producerAt(t.Context())
 	record := f.pairs[0].n.Payload.(facetedPayload).LoftMirrorJoin
 	lower := record.Lower.Payload.(loftPayload)
 	checked := loftcylinder.CheckMirrorPairs(documentNode(f.d), bodyNodes(f.pairs), record, lower.Frame1.Origin().Z)
@@ -325,7 +325,7 @@ func TestLoftMirrorCylinderPlaceTeethCancelled(t *testing.T) {
 func TestLoftMirrorCylinderPairsRefusalPlacesNothingPastIt(t *testing.T) {
 	t.Parallel()
 	f := newTeethFixture(t)
-	ref := f.d.nextProducerID()
+	ref := f.d.producerAt(t.Context())
 	pairs := append([]*Body(nil), f.pairs...)
 	pairs[2] = f.blank
 	count := func(workers int) (int64, pairsOutcome) {
@@ -364,7 +364,7 @@ func TestLoftMirrorCylinderPairsRefusalPlacesNothingPastIt(t *testing.T) {
 func TestLoftMirrorCylinderPlaceTeethMatchesSerialPlacement(t *testing.T) {
 	t.Parallel()
 	f := newTeethFixture(t)
-	ref := f.d.nextProducerID()
+	ref := f.d.producerAt(t.Context())
 	record := f.pairs[0].n.Payload.(facetedPayload).LoftMirrorJoin
 	lower := record.Lower.Payload.(loftPayload)
 	checked := loftcylinder.CheckMirrorPairs(documentNode(f.d), bodyNodes(f.pairs), record, lower.Frame1.Origin().Z)

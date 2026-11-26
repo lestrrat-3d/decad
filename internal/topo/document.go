@@ -1,6 +1,7 @@
 package topo
 
 import (
+	"context"
 	"slices"
 	"sync"
 
@@ -39,18 +40,38 @@ type Document struct {
 	Owner any
 }
 
+// ProducerAt is the identity the next successful operation called with ctx
+// occupies. It is the only read of NextProducer outside root's commit
+// helpers; ctx names the caller so the source of the counter lives here.
+func (d *Document) ProducerAt(_ context.Context) provenance.Producer {
+	return d.NextProducer
+}
+
+// Seeds are the three identity counters a transient document starts from.
+type Seeds struct {
+	Level    denotation.LevelID
+	Curve    denotation.CurveID
+	Producer provenance.Producer
+}
+
+// SeedsAt reads the counters a transient document called with ctx starts
+// from: the identities the next operation would occupy.
+func (d *Document) SeedsAt(ctx context.Context) Seeds {
+	return Seeds{Level: d.NextLevel, Curve: d.NextCurve, Producer: d.ProducerAt(ctx)}
+}
+
 // MintLevel advances the level counter and returns a token for the new level
 // at origin with normal. Identities only increase, so none is reused, even by
-// a build that later fails.
-func (d *Document) MintLevel(origin, normal r3.Vec) denotation.LevelToken {
+// a build that later fails. ctx names the caller, like ProducerAt's.
+func (d *Document) MintLevel(_ context.Context, origin, normal r3.Vec) denotation.LevelToken {
 	d.NextLevel++
 	return denotation.NewLevel(d.NextLevel, origin, normal)
 }
 
 // MintCurve advances the curve counter and returns a token for the new curve.
 // Identities only increase, so none is reused, even by a build that later
-// fails.
-func (d *Document) MintCurve() denotation.CurveToken {
+// fails. ctx names the caller, like ProducerAt's.
+func (d *Document) MintCurve(_ context.Context) denotation.CurveToken {
 	d.NextCurve++
 	return denotation.NewCurve(d.NextCurve)
 }

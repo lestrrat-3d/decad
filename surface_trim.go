@@ -52,7 +52,7 @@ func Extend(ctx context.Context, b *Body, edges *EdgeQuery, tool *Body) (result 
 	if err != nil {
 		return nil, err
 	}
-	node, err := surfacetrim.Extend(ctx, envOf(documentNode(d), d.nextProducerID()), &b.n, edgeNodes(selected), &tool.n)
+	node, err := surfacetrim.Extend(ctx, envOf(documentNode(d), d.producerAt(ctx)), &b.n, edgeNodes(selected), &tool.n)
 	if err != nil {
 		return nil, err
 	}
@@ -125,7 +125,7 @@ func Trim(ctx context.Context, b *Body, tool *Body, side TrimSide) (result *Body
 		return nil, fmt.Errorf(`%w: unknown trim side %d`, ErrDegenerate, int(side))
 	}
 
-	node, err := surfacetrim.Trim(ctx, envOf(documentNode(d), d.nextProducerID()), &b.n, &tool.n, side == KeepInside)
+	node, err := surfacetrim.Trim(ctx, envOf(documentNode(d), d.producerAt(ctx)), &b.n, &tool.n, side == KeepInside)
 	if err != nil {
 		return nil, err
 	}
@@ -167,7 +167,7 @@ func Split(ctx context.Context, target, tool *Body) (results []*Body, retErr err
 	if target == tool {
 		return nil, fmt.Errorf(`%w: a split needs two distinct bodies`, ErrDegenerate)
 	}
-	nodes, err := surfacetrim.Split(ctx, envOf(documentNode(d), d.nextProducerID()), &target.n, &tool.n)
+	nodes, err := surfacetrim.Split(ctx, envOf(documentNode(d), d.producerAt(ctx)), &target.n, &tool.n)
 	if err != nil {
 		return nil, err
 	}
