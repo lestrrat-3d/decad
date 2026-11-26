@@ -47,8 +47,8 @@ if _, err := s.Solve(context.Background()); err != nil {
 }
 
 doc := decad.New()
-body, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
-	decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+body, err := decad.Extrude(doc, s, s.Profiles()[0],
+	decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(context.Background())
 if err != nil {
 	// Every failure wraps a sentinel from errors.go — branch with
 	// errors.Is(err, decad.ErrUnsupported), decad.ErrCardinality, etc.
@@ -100,15 +100,15 @@ Extrude       line/circle/arc/Tier A free-form segments   builds
   Tier A chain proving no single curvature sign across
     its spans and joints (spline design §6.5, R19)        ErrUnsupported
   free-form work past the fixed budget (R7)               ErrUnsupported
-  WithTaper   line/circle/arc walls, G1 circular joins,
+  Taper   line/circle/arc walls, G1 circular joins,
     Distance/ToFace/ThroughAll/Symmetric/TwoSided extent    builds
-  WithTaper   free-form wall, non-G1 circular corner,
-    WithSurfaceResult                                       ErrUnsupported
+  Taper   free-form wall, non-G1 circular corner,
+    SurfaceResult                                       ErrUnsupported
   Tessellate/export/boolean/mass of a draft body          builds
   boolean/mass of one with an inexact G1 join or a
     trimmed segment (draft §9.1)                          ErrUnsupported
   open chain section                                      builds a sheet
-  chain section with WithTaper or WithSurfaceResult       ErrUnsupported
+  chain section with Taper or SurfaceResult       ErrUnsupported
 Draft    prism operand, its complete wall set or a
   subset, about one of its caps (draft design PR 3, 5)    builds
   subset moving one of two walls at a circular corner,
@@ -118,11 +118,11 @@ Sweep         zero-twist LineTo / circular arc paths       builds
   composite path without exact transported frames or
     certified span separation                             ErrUnsupported
   closed path                                             ErrUnsupported
-  WithSweepTwist: centred convex whole-line or symmetric Line/Arc profile,
+  Twist: centred convex whole-line or symmetric Line/Arc profile,
     origin XY plane, one positive-Z line, <= 1 turn     builds
     or line then cardinal XZ quarter arc, <= 1 rad      builds
   other nonzero twist                                     ErrUnsupported
-  WithMitredJoins / WithSectionScale over a LineTo path
+  MitredJoins / SectionScale over a LineTo path
     and a whole-line profile                              builds
 Revolve       cylinder / cone / sphere / torus / annulus  builds
 Coil          profile of whole lines, arcs and circles
@@ -149,9 +149,9 @@ Union/Cut/Intersect  prism/revolve/loft/faceted/mitred sweep/coil,
   empty result (disjoint intersect, emptied cut)          ErrBooleanFailed
 Fillet/Chamfer  straight prism, lateral edges             builds
 Fillet/Chamfer  revolve meridian junction edges           builds
-Fillet/Chamfer  WithTangentChain over proven G1 joins     builds
+Fillet/Chamfer  TangentChain over proven G1 joins         builds
   a tangent chain that branches or cannot be decided      ErrUnsupported
-Chamfer       WithAsymmetricChamfer, prism lateral edge,
+Chamfer       Asymmetric, prism lateral edge,
   revolve junction or complete prism cap loop(s)          builds
   asymmetric brep independent straight-edge chamfer       builds
   asymmetric brep complete-loop chamfer                    builds
@@ -189,8 +189,8 @@ Shell         straight prism (tube, cup, or one band per
 Shell         positive-taper circular draft, far cap removed
               inward                                         builds
 Shell         partial revolve, both angular caps removed  builds
-Shell         full revolve, WithNoOpenings (closed)       builds
-Shell         hole-free prism, WithNoOpenings (closed)    builds
+Shell         full revolve, ShellClosed (closed)          builds
+Shell         hole-free prism, ShellClosed (closed)       builds
 Shell         revolve, one run of side faces removed (and
               both angular caps), any line or arc corner  builds
 Shell         hole-free prism, one run of side faces
@@ -204,7 +204,7 @@ Shell         hole-free prism, one run of side faces
     rim past the removed walk's far end                   ErrUnsupported
   holed meridian, or one meeting the axis twice           ErrUnsupported
   offset reaching across the axis                         ErrUnsupported
-  WithNoOpenings on other receivers                       ErrUnsupported
+  ShellClosed on other receivers                          ErrUnsupported
 Fillet/Chamfer/Shell  brep or stacked boolean result that
                       reads as a prism along an axis      builds
 Shell         brep read as a prism cut by through tools,
@@ -259,29 +259,29 @@ Tessellate / export.STL / export.OBJ  prism, revolve, cup, loft,
   a chorded free-form wall past the fixed work budget     ErrUnsupported
 ```
 
-Options: Revolve accepts WithSurfaceResult for a sheet result.
-WithTangentChain expands a Fillet's or Chamfer's edges
-across proven tangent continuations, WithAsymmetricChamfer gives a Chamfer
-two setbacks, WithShellSense picks a shell's wall sense, WithNoOpenings asks
-for a closed shell (built for a full revolve, a hole-free prism and an
+Methods: Revolve accepts SurfaceResult for a sheet result.
+The TangentChain method expands a Fillet's or Chamfer's edges
+across proven tangent continuations, Asymmetric gives a Chamfer
+two setbacks, Sense picks a shell's wall sense, and ShellClosed builds
+a closed shell (built for a full revolve, a hole-free prism and an
 inward nested rectangular-slab Union; [ErrUnsupported](<#ErrUnsupported>) elsewhere),
-and WithTaper drafts an extrude's walls by a signed angle, a positive one
+and Taper drafts an extrude's walls by a signed angle, a positive one
 narrowing the body away from the sketch plane (agent-docs/modify-design.md Part D); a
 taper the support map does not list is [ErrUnsupported](<#ErrUnsupported>), returned before
 the document changes. Draft leans an existing prism's walls, all of
 them or a selected subset, the same way about one of its caps.
-WithSweepTwist names a sweep's distributed twist. Its admitted straight
+Twist names a sweep's distributed twist. Its admitted straight
 polygon, symmetric Line/Arc, and cardinal curved polygon cases are
 described in agent-docs/sweep-design.md §17. A boolean restates a one-cell
 twisted sweep through its stationed boundary
 (agent-docs/twist-sweep-cut-design.md).
-WithLoftAlignment
+Alignment
 picks a loft's per-loop correspondence rotation
 and is accepted at most once; a repeat is [ErrDegenerate](<#ErrDegenerate>), as is a repeated
-WithLoftSplits, which cuts recorded segments of either section at stated
+Splits, which cuts recorded segments of either section at stated
 fractions of their parameter ranges so loops of different segment counts
 pair one to one, and a repeated
-WithLeftHand, which turns a coil left-handed. Separately,
+LeftHand, which turns a coil left-handed. Separately,
 Verify's options (WithTolerance, WithMinWallThickness, WithPullDirection,
 WithConcaveRadius, WithClearances) take effect. The export package's STL and
 OBJ writers take an explicit chord tolerance.
@@ -329,9 +329,7 @@ package.
 - [func CollapseMesh](<#CollapseMesh>)
 - [func ReduceMesh](<#ReduceMesh>)
 - [func ReduceMeshWithin](<#ReduceMeshWithin>)
-- [func Remove](<#Remove>)
 - [func RepairMesh](<#RepairMesh>)
-- [func SheetMetal](<#SheetMetal>)
 - [func TextProfiles](<#TextProfiles>)
 - [type AngleExtent](<#AngleExtent>)
 - [type AngleSide](<#AngleSide>)
@@ -340,9 +338,11 @@ package.
 - [type ArcAround](<#ArcAround>)
 - [type ArcThrough](<#ArcThrough>)
 - [type ArrangeBed](<#ArrangeBed>)
-- [type ArrangeOption](<#ArrangeOption>)
-  - [func WithArrangeAngle](<#WithArrangeAngle>)
-  - [func WithArrangeTurns](<#WithArrangeTurns>)
+- [type ArrangeCommand](<#ArrangeCommand>)
+  - [func Arrange](<#Arrange>)
+  - [func (\*ArrangeCommand) Angle](<#ArrangeCommand.Angle>)
+  - [func (\*ArrangeCommand) Do](<#ArrangeCommand.Do>)
+  - [func (\*ArrangeCommand) Turns](<#ArrangeCommand.Turns>)
 - [type Assessment](<#Assessment>)
 - [type Axis](<#Axis>)
 - [type Between](<#Between>)
@@ -350,61 +350,11 @@ package.
 - [type Binding](<#Binding>)
 - [type BlindHole](<#BlindHole>)
 - [type Body](<#Body>)
-  - [func Arrange](<#Arrange>)
-  - [func Boss](<#Boss>)
-  - [func Chamfer](<#Chamfer>)
-  - [func ChamferAngle](<#ChamferAngle>)
-  - [func Coil](<#Coil>)
-  - [func ConeFromFace](<#ConeFromFace>)
-  - [func Copy](<#Copy>)
-  - [func Cut](<#Cut>)
-  - [func CutExtrude](<#CutExtrude>)
-  - [func CutRevolve](<#CutRevolve>)
-  - [func Draft](<#Draft>)
-  - [func Emboss](<#Emboss>)
-  - [func Extend](<#Extend>)
-  - [func Extrude](<#Extrude>)
-  - [func Fillet](<#Fillet>)
-  - [func FilletChord](<#FilletChord>)
-  - [func Hole](<#Hole>)
-  - [func Infill](<#Infill>)
-  - [func Intersect](<#Intersect>)
-  - [func Loft](<#Loft>)
-  - [func LoftChain](<#LoftChain>)
-  - [func LoftFaces](<#LoftFaces>)
-  - [func LoftFromPoint](<#LoftFromPoint>)
-  - [func LoftSections](<#LoftSections>)
-  - [func LoftSectionsWithCircularCorrespondence](<#LoftSectionsWithCircularCorrespondence>)
-  - [func Mirrored](<#Mirrored>)
-  - [func MirroredCopy](<#MirroredCopy>)
-  - [func MoveFace](<#MoveFace>)
-  - [func Offset](<#Offset>)
-  - [func PatchEdges](<#PatchEdges>)
-  - [func PatchProfile](<#PatchProfile>)
-  - [func PathPattern](<#PathPattern>)
-  - [func PatternCopies](<#PatternCopies>)
-  - [func Patterned](<#Patterned>)
-  - [func QuarterTurn](<#QuarterTurn>)
-  - [func Refine](<#Refine>)
-  - [func Revolve](<#Revolve>)
-  - [func ScaledAt](<#ScaledAt>)
-  - [func Shell](<#Shell>)
-  - [func SolidFromMesh](<#SolidFromMesh>)
-  - [func Split](<#Split>)
-  - [func Stitch](<#Stitch>)
-  - [func Stretch](<#Stretch>)
-  - [func Sweep](<#Sweep>)
-  - [func Thicken](<#Thicken>)
-  - [func Thread](<#Thread>)
-  - [func Transform](<#Transform>)
-  - [func Trim](<#Trim>)
-  - [func Union](<#Union>)
-  - [func Unstitch](<#Unstitch>)
-  - [func WebPath](<#WebPath>)
   - [func (\*Body) Area](<#Body.Area>)
   - [func (\*Body) Bounds](<#Body.Bounds>)
   - [func (\*Body) Centroid](<#Body.Centroid>)
   - [func (\*Body) ClosestPoint](<#Body.ClosestPoint>)
+  - [func (\*Body) Digest](<#Body.Digest>)
   - [func (\*Body) DistanceToPoint](<#Body.DistanceToPoint>)
   - [func (\*Body) Document](<#Body.Document>)
   - [func (\*Body) Edges](<#Body.Edges>)
@@ -430,17 +380,39 @@ package.
   - [func (\*BooleanError) OperationDiagnostics](<#BooleanError.OperationDiagnostics>)
   - [func (\*BooleanError) Unwrap](<#BooleanError.Unwrap>)
 - [type BooleanErrorCode](<#BooleanErrorCode>)
-- [type BooleanOption](<#BooleanOption>)
-  - [func WithMatchingFaces](<#WithMatchingFaces>)
 - [type BossBore](<#BossBore>)
+  - [func NewBossBore](<#NewBossBore>)
+  - [func (BossBore) Draft](<#BossBore.Draft>)
+  - [func (BossBore) Head](<#BossBore.Head>)
+  - [func (BossBore) Thread](<#BossBore.Thread>)
+- [type BossCommand](<#BossCommand>)
+  - [func Boss](<#Boss>)
+  - [func (\*BossCommand) Bore](<#BossCommand.Bore>)
+  - [func (\*BossCommand) Do](<#BossCommand.Do>)
+  - [func (\*BossCommand) Draft](<#BossCommand.Draft>)
+  - [func (\*BossCommand) Ribs](<#BossCommand.Ribs>)
+  - [func (\*BossCommand) RootFillet](<#BossCommand.RootFillet>)
+  - [func (\*BossCommand) Tilt](<#BossCommand.Tilt>)
 - [type BossRibs](<#BossRibs>)
-- [type BossSpec](<#BossSpec>)
+  - [func NewBossRibs](<#NewBossRibs>)
+  - [func (BossRibs) Angle](<#BossRibs.Angle>)
+- [type BossShapedCommand](<#BossShapedCommand>)
+  - [func BossShaped](<#BossShaped>)
+  - [func (\*BossShapedCommand) Bore](<#BossShapedCommand.Bore>)
+  - [func (\*BossShapedCommand) Do](<#BossShapedCommand.Do>)
+  - [func (\*BossShapedCommand) Draft](<#BossShapedCommand.Draft>)
+  - [func (\*BossShapedCommand) Ribs](<#BossShapedCommand.Ribs>)
 - [type BoundsReading](<#BoundsReading>)
 - [type Box](<#Box>)
 - [type CellOutcome](<#CellOutcome>)
-- [type ChainLoftOption](<#ChainLoftOption>)
-- [type ChamferOption](<#ChamferOption>)
-  - [func WithAsymmetricChamfer](<#WithAsymmetricChamfer>)
+- [type ChamferAngleCommand](<#ChamferAngleCommand>)
+  - [func ChamferAngle](<#ChamferAngle>)
+  - [func (\*ChamferAngleCommand) Do](<#ChamferAngleCommand.Do>)
+- [type ChamferCommand](<#ChamferCommand>)
+  - [func Chamfer](<#Chamfer>)
+  - [func (\*ChamferCommand) Asymmetric](<#ChamferCommand.Asymmetric>)
+  - [func (\*ChamferCommand) Do](<#ChamferCommand.Do>)
+  - [func (\*ChamferCommand) TangentChain](<#ChamferCommand.TangentChain>)
 - [type Circle3](<#Circle3>)
 - [type CircularLoftCorrespondence](<#CircularLoftCorrespondence>)
 - [type CircularPattern](<#CircularPattern>)
@@ -451,12 +423,17 @@ package.
   - [func (CoEdge) End](<#CoEdge.End>)
   - [func (CoEdge) IsForward](<#CoEdge.IsForward>)
   - [func (CoEdge) Start](<#CoEdge.Start>)
-- [type CoilOption](<#CoilOption>)
-  - [func WithLeftHand](<#WithLeftHand>)
+- [type CoilCommand](<#CoilCommand>)
+  - [func Coil](<#Coil>)
+  - [func (\*CoilCommand) Do](<#CoilCommand.Do>)
+  - [func (\*CoilCommand) LeftHand](<#CoilCommand.LeftHand>)
 - [type Collision](<#Collision>)
 - [type ConcaveRadiusResult](<#ConcaveRadiusResult>)
 - [type Cone](<#Cone>)
   - [func (Cone) Kind](<#Cone.Kind>)
+- [type ConeFromFaceCommand](<#ConeFromFaceCommand>)
+  - [func ConeFromFace](<#ConeFromFace>)
+  - [func (\*ConeFromFaceCommand) Do](<#ConeFromFaceCommand.Do>)
 - [type ConstructionAxis](<#ConstructionAxis>)
 - [type ContactFeature](<#ContactFeature>)
 - [type ContactManifold](<#ContactManifold>)
@@ -482,19 +459,36 @@ package.
 - [type ContainerReport](<#ContainerReport>)
   - [func (\*ContainerReport) Err](<#ContainerReport.Err>)
   - [func (\*ContainerReport) Passed](<#ContainerReport.Passed>)
-- [type CopyOption](<#CopyOption>)
-  - [func WithCopyLiftTranslation](<#WithCopyLiftTranslation>)
-  - [func WithCopyPlacement](<#WithCopyPlacement>)
-  - [func WithCopyRotation](<#WithCopyRotation>)
+- [type CopyCommand](<#CopyCommand>)
+  - [func Copy](<#Copy>)
+  - [func (\*CopyCommand) Do](<#CopyCommand.Do>)
+  - [func (\*CopyCommand) Place](<#CopyCommand.Place>)
+- [type CopyLiftTranslation](<#CopyLiftTranslation>)
+- [type CopyPlacement](<#CopyPlacement>)
+- [type CopyRotation](<#CopyRotation>)
+- [type CopyTransform](<#CopyTransform>)
 - [type Counterbore](<#Counterbore>)
 - [type Countersink](<#Countersink>)
 - [type Coverage](<#Coverage>)
 - [type Curve](<#Curve>)
+- [type CutCommand](<#CutCommand>)
+  - [func Cut](<#Cut>)
+  - [func (\*CutCommand) Do](<#CutCommand.Do>)
+  - [func (\*CutCommand) MatchingFaces](<#CutCommand.MatchingFaces>)
+- [type CutExtrudeCommand](<#CutExtrudeCommand>)
+  - [func CutExtrude](<#CutExtrude>)
+  - [func (\*CutExtrudeCommand) Do](<#CutExtrudeCommand.Do>)
+  - [func (\*CutExtrudeCommand) Taper](<#CutExtrudeCommand.Taper>)
+- [type CutRevolveCommand](<#CutRevolveCommand>)
+  - [func CutRevolve](<#CutRevolve>)
+  - [func (\*CutRevolveCommand) Do](<#CutRevolveCommand.Do>)
 - [type Cylinder](<#Cylinder>)
   - [func (Cylinder) Kind](<#Cylinder.Kind>)
 - [type Diagnostic](<#Diagnostic>)
 - [type DiagnosticCode](<#DiagnosticCode>)
 - [type DiagnosticPair](<#DiagnosticPair>)
+- [type Digest](<#Digest>)
+  - [func (Digest) String](<#Digest.String>)
 - [type Direction](<#Direction>)
   - [func (Direction) String](<#Direction.String>)
 - [type Distance](<#Distance>)
@@ -507,7 +501,9 @@ package.
   - [func (\*Document) ContainerOf](<#Document.ContainerOf>)
   - [func (\*Document) ContainerOfSketch](<#Document.ContainerOfSketch>)
   - [func (\*Document) Expr](<#Document.Expr>)
+  - [func (\*Document) IntersectionVolume](<#Document.IntersectionVolume>)
   - [func (\*Document) OperationHistory](<#Document.OperationHistory>)
+  - [func (\*Document) PairDigest](<#Document.PairDigest>)
   - [func (\*Document) Param](<#Document.Param>)
   - [func (\*Document) ParamInt](<#Document.ParamInt>)
   - [func (\*Document) Params](<#Document.Params>)
@@ -526,7 +522,9 @@ package.
   - [func WithGapTolerance](<#WithGapTolerance>)
   - [func WithParams](<#WithParams>)
   - [func WithRimSplit](<#WithRimSplit>)
-- [type DraftOption](<#DraftOption>)
+- [type DraftCommand](<#DraftCommand>)
+  - [func Draft](<#Draft>)
+  - [func (\*DraftCommand) Do](<#DraftCommand.Do>)
 - [type Drive](<#Drive>)
 - [type Edge](<#Edge>)
   - [func (\*Edge) Curve](<#Edge.Curve>)
@@ -561,15 +559,23 @@ package.
 - [type EdgeWedge](<#EdgeWedge>)
   - [func (EdgeWedge) String](<#EdgeWedge.String>)
 - [type Ellipse3](<#Ellipse3>)
+- [type EmbossCommand](<#EmbossCommand>)
+  - [func Emboss](<#Emboss>)
+  - [func (\*EmbossCommand) Do](<#EmbossCommand.Do>)
+  - [func (\*EmbossCommand) Draft](<#EmbossCommand.Draft>)
+  - [func (\*EmbossCommand) RimFillet](<#EmbossCommand.RimFillet>)
 - [type EmbossMode](<#EmbossMode>)
   - [func (EmbossMode) String](<#EmbossMode.String>)
-- [type EmbossOption](<#EmbossOption>)
-  - [func WithEmbossDraft](<#WithEmbossDraft>)
-  - [func WithEmbossRimFillet](<#WithEmbossRimFillet>)
 - [type Exactness](<#Exactness>)
+- [type ExtendCommand](<#ExtendCommand>)
+  - [func Extend](<#Extend>)
+  - [func (\*ExtendCommand) Do](<#ExtendCommand.Do>)
 - [type Extent](<#Extent>)
-- [type ExtrudeOption](<#ExtrudeOption>)
-  - [func WithTaper](<#WithTaper>)
+- [type ExtrudeCommand](<#ExtrudeCommand>)
+  - [func Extrude](<#Extrude>)
+  - [func (\*ExtrudeCommand) Do](<#ExtrudeCommand.Do>)
+  - [func (\*ExtrudeCommand) SurfaceResult](<#ExtrudeCommand.SurfaceResult>)
+  - [func (\*ExtrudeCommand) Taper](<#ExtrudeCommand.Taper>)
 - [type Face](<#Face>)
   - [func (\*Face) Area](<#Face.Area>)
   - [func (\*Face) Centroid](<#Face.Centroid>)
@@ -608,22 +614,45 @@ package.
 - [type FeatureRef](<#FeatureRef>)
   - [func CapEnd](<#CapEnd>)
   - [func CapStart](<#CapStart>)
-- [type FilletChamferOption](<#FilletChamferOption>)
-  - [func WithTangentChain](<#WithTangentChain>)
+- [type FilletChordCommand](<#FilletChordCommand>)
+  - [func FilletChord](<#FilletChord>)
+  - [func (\*FilletChordCommand) Do](<#FilletChordCommand.Do>)
+- [type FilletCommand](<#FilletCommand>)
+  - [func Fillet](<#Fillet>)
+  - [func (\*FilletCommand) Do](<#FilletCommand.Do>)
+  - [func (\*FilletCommand) TangentChain](<#FilletCommand.TangentChain>)
 - [type FilletMiter3](<#FilletMiter3>)
-- [type FilletOption](<#FilletOption>)
 - [type FullRevolution](<#FullRevolution>)
 - [type HeldTopology](<#HeldTopology>)
 - [type HistoryCoverage](<#HistoryCoverage>)
+- [type HoleCommand](<#HoleCommand>)
+  - [func Hole](<#Hole>)
+  - [func (\*HoleCommand) Do](<#HoleCommand.Do>)
+  - [func (\*HoleCommand) Draft](<#HoleCommand.Draft>)
+  - [func (\*HoleCommand) Head](<#HoleCommand.Head>)
+  - [func (\*HoleCommand) Thread](<#HoleCommand.Thread>)
 - [type HoleDepth](<#HoleDepth>)
 - [type HoleHead](<#HoleHead>)
 - [type HoleShape](<#HoleShape>)
-- [type HoleSpec](<#HoleSpec>)
+- [type HoleShapedCommand](<#HoleShapedCommand>)
+  - [func HoleShaped](<#HoleShaped>)
+  - [func (\*HoleShapedCommand) Do](<#HoleShapedCommand.Do>)
 - [type HoleThread](<#HoleThread>)
+  - [func NewHoleThread](<#NewHoleThread>)
+  - [func (HoleThread) LeftHand](<#HoleThread.LeftHand>)
+  - [func (HoleThread) Length](<#HoleThread.Length>)
 - [type InertiaReading](<#InertiaReading>)
-- [type InfillSpec](<#InfillSpec>)
+- [type InfillCommand](<#InfillCommand>)
+  - [func Infill](<#Infill>)
+  - [func (\*InfillCommand) Do](<#InfillCommand.Do>)
+  - [func (\*InfillCommand) Resolution](<#InfillCommand.Resolution>)
+  - [func (\*InfillCommand) Skin](<#InfillCommand.Skin>)
 - [type InputUse](<#InputUse>)
 - [type Interference](<#Interference>)
+- [type IntersectCommand](<#IntersectCommand>)
+  - [func Intersect](<#Intersect>)
+  - [func (\*IntersectCommand) Do](<#IntersectCommand.Do>)
+  - [func (\*IntersectCommand) MatchingFaces](<#IntersectCommand.MatchingFaces>)
 - [type IntervalOutcome](<#IntervalOutcome>)
 - [type Joint](<#Joint>)
 - [type JointBox](<#JointBox>)
@@ -654,12 +683,27 @@ package.
 - [type LinkagePose](<#LinkagePose>)
 - [type LinkagePoseResult](<#LinkagePoseResult>)
 - [type LinkageReport](<#LinkageReport>)
-- [type LoftFacesOption](<#LoftFacesOption>)
-  - [func WithConeTangentEnd](<#WithConeTangentEnd>)
-- [type LoftOption](<#LoftOption>)
-  - [func WithLoftAlignment](<#WithLoftAlignment>)
-  - [func WithLoftSplits](<#WithLoftSplits>)
+- [type LoftChainCommand](<#LoftChainCommand>)
+  - [func LoftChain](<#LoftChain>)
+  - [func (\*LoftChainCommand) Do](<#LoftChainCommand.Do>)
+- [type LoftCommand](<#LoftCommand>)
+  - [func Loft](<#Loft>)
+  - [func (\*LoftCommand) Alignment](<#LoftCommand.Alignment>)
+  - [func (\*LoftCommand) Do](<#LoftCommand.Do>)
+  - [func (\*LoftCommand) Splits](<#LoftCommand.Splits>)
+  - [func (\*LoftCommand) SurfaceResult](<#LoftCommand.SurfaceResult>)
+- [type LoftFacesCommand](<#LoftFacesCommand>)
+  - [func LoftFaces](<#LoftFaces>)
+  - [func LoftFacesToCone](<#LoftFacesToCone>)
+  - [func (\*LoftFacesCommand) Do](<#LoftFacesCommand.Do>)
+- [type LoftFromPointCommand](<#LoftFromPointCommand>)
+  - [func LoftFromPoint](<#LoftFromPoint>)
+  - [func (\*LoftFromPointCommand) Do](<#LoftFromPointCommand.Do>)
 - [type LoftSection](<#LoftSection>)
+- [type LoftSectionsCommand](<#LoftSectionsCommand>)
+  - [func LoftSections](<#LoftSections>)
+  - [func (\*LoftSectionsCommand) CircularCorrespondence](<#LoftSectionsCommand.CircularCorrespondence>)
+  - [func (\*LoftSectionsCommand) Do](<#LoftSectionsCommand.Do>)
 - [type LoftSplit](<#LoftSplit>)
 - [type Loop](<#Loop>)
   - [func (\*Loop) CoEdges](<#Loop.CoEdges>)
@@ -724,9 +768,16 @@ package.
 - [type MeshReport](<#MeshReport>)
 - [type MirrorFace](<#MirrorFace>)
 - [type MirrorFrame](<#MirrorFrame>)
-- [type MirrorOption](<#MirrorOption>)
-  - [func WithJoin](<#WithJoin>)
 - [type MirrorPlane](<#MirrorPlane>)
+- [type MirroredCommand](<#MirroredCommand>)
+  - [func Mirrored](<#Mirrored>)
+  - [func (\*MirroredCommand) Do](<#MirroredCommand.Do>)
+- [type MirroredCopyCommand](<#MirroredCopyCommand>)
+  - [func MirroredCopy](<#MirroredCopy>)
+  - [func (\*MirroredCopyCommand) Do](<#MirroredCopyCommand.Do>)
+- [type MirroredJoinCommand](<#MirroredJoinCommand>)
+  - [func MirroredJoin](<#MirroredJoin>)
+  - [func (\*MirroredJoinCommand) Do](<#MirroredJoinCommand.Do>)
 - [type Motion](<#Motion>)
 - [type MotionInterval](<#MotionInterval>)
 - [type MotionOption](<#MotionOption>)
@@ -735,14 +786,19 @@ package.
   - [func WithResolution](<#WithResolution>)
 - [type MotionReport](<#MotionReport>)
 - [type MotionRequest](<#MotionRequest>)
+- [type MoveFaceCommand](<#MoveFaceCommand>)
+  - [func MoveFace](<#MoveFace>)
+  - [func (\*MoveFaceCommand) Do](<#MoveFaceCommand.Do>)
 - [type NURBSCurve](<#NURBSCurve>)
 - [type NURBSSurface](<#NURBSSurface>)
   - [func (NURBSSurface) Kind](<#NURBSSurface.Kind>)
 - [type NeutralFace](<#NeutralFace>)
 - [type NeutralFrame](<#NeutralFrame>)
 - [type NeutralPlane](<#NeutralPlane>)
-- [type OffsetOption](<#OffsetOption>)
-  - [func WithOffsetSide](<#WithOffsetSide>)
+- [type OffsetCommand](<#OffsetCommand>)
+  - [func Offset](<#Offset>)
+  - [func (\*OffsetCommand) Do](<#OffsetCommand.Do>)
+  - [func (\*OffsetCommand) Side](<#OffsetCommand.Side>)
 - [type OffsetSide](<#OffsetSide>)
 - [type Operation](<#Operation>)
   - [func (\*Operation) FaceSuccessors](<#Operation.FaceSuccessors>)
@@ -776,18 +832,33 @@ package.
 - [type OperationWorkLimit](<#OperationWorkLimit>)
 - [type OutlineHole](<#OutlineHole>)
 - [type PairPath](<#PairPath>)
+- [type PatchEdgesCommand](<#PatchEdgesCommand>)
+  - [func PatchEdges](<#PatchEdges>)
+  - [func (\*PatchEdgesCommand) Do](<#PatchEdgesCommand.Do>)
+- [type PatchProfileCommand](<#PatchProfileCommand>)
+  - [func PatchProfile](<#PatchProfile>)
+  - [func (\*PatchProfileCommand) Do](<#PatchProfileCommand.Do>)
 - [type Path](<#Path>)
   - [func NewPath](<#NewPath>)
   - [func (\*Path) End](<#Path.End>)
   - [func (\*Path) Segments](<#Path.Segments>)
   - [func (\*Path) Start](<#Path.Start>)
-- [type PathPatternOption](<#PathPatternOption>)
-  - [func WithPathCount](<#WithPathCount>)
-  - [func WithPathFollow](<#WithPathFollow>)
-  - [func WithPathPivot](<#WithPathPivot>)
-  - [func WithPathSpacing](<#WithPathSpacing>)
+- [type PathCount](<#PathCount>)
+- [type PathPatternCommand](<#PathPatternCommand>)
+  - [func PathPattern](<#PathPattern>)
+  - [func (\*PathPatternCommand) Do](<#PathPatternCommand.Do>)
+  - [func (\*PathPatternCommand) Follow](<#PathPatternCommand.Follow>)
+  - [func (\*PathPatternCommand) FollowAbout](<#PathPatternCommand.FollowAbout>)
 - [type PathSegment](<#PathSegment>)
+- [type PathSpacing](<#PathSpacing>)
+- [type PathStations](<#PathStations>)
+- [type PatternCopiesCommand](<#PatternCopiesCommand>)
+  - [func PatternCopies](<#PatternCopies>)
+  - [func (\*PatternCopiesCommand) Do](<#PatternCopiesCommand.Do>)
 - [type PatternSpec](<#PatternSpec>)
+- [type PatternedCommand](<#PatternedCommand>)
+  - [func Patterned](<#Patterned>)
+  - [func (\*PatternedCommand) Do](<#PatternedCommand.Do>)
 - [type Plane](<#Plane>)
   - [func (Plane) Kind](<#Plane.Kind>)
 - [type Point2](<#Point2>)
@@ -801,20 +872,32 @@ package.
   - [func (Prismatic) PoseAt](<#Prismatic.PoseAt>)
 - [type PrismaticJoint](<#PrismaticJoint>)
 - [type QuantityVec](<#QuantityVec>)
+- [type QuarterTurnCommand](<#QuarterTurnCommand>)
+  - [func QuarterTurn](<#QuarterTurn>)
+  - [func (\*QuarterTurnCommand) Do](<#QuarterTurnCommand.Do>)
 - [type ReadingKind](<#ReadingKind>)
 - [type RectangularHole](<#RectangularHole>)
+- [type RefineCommand](<#RefineCommand>)
+  - [func Refine](<#Refine>)
+  - [func (\*RefineCommand) Do](<#RefineCommand.Do>)
 - [type RegionReadings](<#RegionReadings>)
+- [type RemoveCommand](<#RemoveCommand>)
+  - [func Remove](<#Remove>)
+  - [func (\*RemoveCommand) Do](<#RemoveCommand.Do>)
 - [type Report](<#Report>)
 - [type Revolute](<#Revolute>)
   - [func (Revolute) PoseAt](<#Revolute.PoseAt>)
 - [type RevoluteJoint](<#RevoluteJoint>)
-- [type RevolveOption](<#RevolveOption>)
-- [type RibOption](<#RibOption>)
-  - [func WithRibDraft](<#WithRibDraft>)
-  - [func WithRibOverrun](<#WithRibOverrun>)
+- [type RevolveCommand](<#RevolveCommand>)
+  - [func Revolve](<#Revolve>)
+  - [func (\*RevolveCommand) Do](<#RevolveCommand.Do>)
+  - [func (\*RevolveCommand) SurfaceResult](<#RevolveCommand.SurfaceResult>)
 - [type RigidDriftSegment](<#RigidDriftSegment>)
 - [type ScalarOutcome](<#ScalarOutcome>)
 - [type ScalarReading](<#ScalarReading>)
+- [type ScaledAtCommand](<#ScaledAtCommand>)
+  - [func ScaledAt](<#ScaledAt>)
+  - [func (\*ScaledAtCommand) Do](<#ScaledAtCommand.Do>)
 - [type Schedule](<#Schedule>)
 - [type SecondMoments](<#SecondMoments>)
 - [type Section](<#Section>)
@@ -829,37 +912,59 @@ package.
   - [func (\*SelectionError) Unwrap](<#SelectionError.Unwrap>)
 - [type SelectorKind](<#SelectorKind>)
   - [func (SelectorKind) String](<#SelectorKind.String>)
+- [type SheetMetalCommand](<#SheetMetalCommand>)
+  - [func SheetMetal](<#SheetMetal>)
+  - [func (\*SheetMetalCommand) Do](<#SheetMetalCommand.Do>)
+  - [func (\*SheetMetalCommand) KFactor](<#SheetMetalCommand.KFactor>)
 - [type SheetMetalReport](<#SheetMetalReport>)
-- [type SheetMetalSpec](<#SheetMetalSpec>)
-- [type ShellOption](<#ShellOption>)
-  - [func WithNoOpenings](<#WithNoOpenings>)
-  - [func WithShellFaceThickness](<#WithShellFaceThickness>)
-  - [func WithShellSense](<#WithShellSense>)
+- [type ShellClosedCommand](<#ShellClosedCommand>)
+  - [func ShellClosed](<#ShellClosed>)
+  - [func (\*ShellClosedCommand) Do](<#ShellClosedCommand.Do>)
+  - [func (\*ShellClosedCommand) FaceThickness](<#ShellClosedCommand.FaceThickness>)
+  - [func (\*ShellClosedCommand) Sense](<#ShellClosedCommand.Sense>)
+- [type ShellCommand](<#ShellCommand>)
+  - [func Shell](<#Shell>)
+  - [func (\*ShellCommand) Do](<#ShellCommand.Do>)
+  - [func (\*ShellCommand) FaceThickness](<#ShellCommand.FaceThickness>)
+  - [func (\*ShellCommand) Sense](<#ShellCommand.Sense>)
 - [type ShellSense](<#ShellSense>)
   - [func (ShellSense) String](<#ShellSense.String>)
 - [type SideAngular](<#SideAngular>)
 - [type SideExtent](<#SideExtent>)
 - [type SketchLine](<#SketchLine>)
 - [type SlotHole](<#SlotHole>)
+- [type SolidFromMeshCommand](<#SolidFromMeshCommand>)
+  - [func SolidFromMesh](<#SolidFromMesh>)
+  - [func (\*SolidFromMeshCommand) Do](<#SolidFromMeshCommand.Do>)
 - [type Sphere](<#Sphere>)
   - [func (Sphere) Kind](<#Sphere.Kind>)
+- [type SplitCommand](<#SplitCommand>)
+  - [func Split](<#Split>)
+  - [func (\*SplitCommand) Do](<#SplitCommand.Do>)
 - [type Status](<#Status>)
+- [type StitchCommand](<#StitchCommand>)
+  - [func Stitch](<#Stitch>)
+  - [func (\*StitchCommand) Do](<#StitchCommand.Do>)
+- [type StretchCommand](<#StretchCommand>)
+  - [func Stretch](<#Stretch>)
+  - [func (\*StretchCommand) Do](<#StretchCommand.Do>)
 - [type SubDCage](<#SubDCage>)
 - [type Surface](<#Surface>)
 - [type SurfaceKind](<#SurfaceKind>)
-- [type SurfaceResultOption](<#SurfaceResultOption>)
-  - [func WithSurfaceResult](<#WithSurfaceResult>)
 - [type SurveyKind](<#SurveyKind>)
 - [type SweepCause](<#SweepCause>)
+- [type SweepCommand](<#SweepCommand>)
+  - [func Sweep](<#Sweep>)
+  - [func (\*SweepCommand) Do](<#SweepCommand.Do>)
+  - [func (\*SweepCommand) MitredJoins](<#SweepCommand.MitredJoins>)
+  - [func (\*SweepCommand) SectionScale](<#SweepCommand.SectionScale>)
+  - [func (\*SweepCommand) SurfaceResult](<#SweepCommand.SurfaceResult>)
+  - [func (\*SweepCommand) Twist](<#SweepCommand.Twist>)
 - [type SweepContactTrack](<#SweepContactTrack>)
 - [type SweepDeparture](<#SweepDeparture>)
 - [type SweepEvent](<#SweepEvent>)
 - [type SweepInstant](<#SweepInstant>)
 - [type SweepInterval](<#SweepInterval>)
-- [type SweepOption](<#SweepOption>)
-  - [func WithMitredJoins](<#WithMitredJoins>)
-  - [func WithSectionScale](<#WithSectionScale>)
-  - [func WithSweepTwist](<#WithSweepTwist>)
 - [type SweepOutcome](<#SweepOutcome>)
 - [type SweepReport](<#SweepReport>)
 - [type SweepRequest](<#SweepRequest>)
@@ -874,13 +979,24 @@ package.
   - [func WithVerification](<#WithVerification>)
 - [type TextArc](<#TextArc>)
 - [type TextSpec](<#TextSpec>)
-- [type ThickenOption](<#ThickenOption>)
-  - [func WithThickenSide](<#WithThickenSide>)
+- [type ThickenCommand](<#ThickenCommand>)
+  - [func Thicken](<#Thicken>)
+  - [func (\*ThickenCommand) Do](<#ThickenCommand.Do>)
+  - [func (\*ThickenCommand) Side](<#ThickenCommand.Side>)
 - [type ThickenSide](<#ThickenSide>)
+- [type ThreadCommand](<#ThreadCommand>)
+  - [func Thread](<#Thread>)
+  - [func (\*ThreadCommand) Do](<#ThreadCommand.Do>)
+  - [func (\*ThreadCommand) Form](<#ThreadCommand.Form>)
+  - [func (\*ThreadCommand) LeadIn](<#ThreadCommand.LeadIn>)
+  - [func (\*ThreadCommand) LeadInAngle](<#ThreadCommand.LeadInAngle>)
+  - [func (\*ThreadCommand) LeftHand](<#ThreadCommand.LeftHand>)
+  - [func (\*ThreadCommand) Length](<#ThreadCommand.Length>)
 - [type ThreadForm](<#ThreadForm>)
+  - [func ButtressThreadForm](<#ButtressThreadForm>)
+  - [func TrapezoidThreadForm](<#TrapezoidThreadForm>)
 - [type ThreadSize](<#ThreadSize>)
   - [func LookupThread](<#LookupThread>)
-- [type ThreadSpec](<#ThreadSpec>)
 - [type ThroughAll](<#ThroughAll>)
 - [type ThroughAllSide](<#ThroughAllSide>)
 - [type ThroughHole](<#ThroughHole>)
@@ -890,12 +1006,25 @@ package.
 - [type ToleranceState](<#ToleranceState>)
 - [type Torus](<#Torus>)
   - [func (Torus) Kind](<#Torus.Kind>)
+- [type TransformCommand](<#TransformCommand>)
+  - [func Transform](<#Transform>)
+  - [func (\*TransformCommand) Do](<#TransformCommand.Do>)
+- [type TrimCommand](<#TrimCommand>)
+  - [func Trim](<#Trim>)
+  - [func (\*TrimCommand) Do](<#TrimCommand.Do>)
 - [type TrimSide](<#TrimSide>)
   - [func (TrimSide) String](<#TrimSide.String>)
 - [type TwoSided](<#TwoSided>)
 - [type TwoSidedAngle](<#TwoSidedAngle>)
 - [type UndercutRequest](<#UndercutRequest>)
 - [type UndercutResult](<#UndercutResult>)
+- [type UnionCommand](<#UnionCommand>)
+  - [func Union](<#Union>)
+  - [func (\*UnionCommand) Do](<#UnionCommand.Do>)
+  - [func (\*UnionCommand) RefineTo](<#UnionCommand.RefineTo>)
+- [type UnstitchCommand](<#UnstitchCommand>)
+  - [func Unstitch](<#Unstitch>)
+  - [func (\*UnstitchCommand) Do](<#UnstitchCommand.Do>)
 - [type ValidityOutcome](<#ValidityOutcome>)
 - [type ValidityResult](<#ValidityResult>)
 - [type VecMeasurement](<#VecMeasurement>)
@@ -915,6 +1044,11 @@ package.
   - [func WithDraftAllowance](<#WithDraftAllowance>)
 - [type WallRequest](<#WallRequest>)
 - [type WallResult](<#WallResult>)
+- [type WebPathCommand](<#WebPathCommand>)
+  - [func WebPath](<#WebPath>)
+  - [func (\*WebPathCommand) Do](<#WebPathCommand.Do>)
+  - [func (\*WebPathCommand) Draft](<#WebPathCommand.Draft>)
+  - [func (\*WebPathCommand) Overrun](<#WebPathCommand.Overrun>)
 
 <a name="pkg-constants"></a>
 ## Constants
@@ -1147,6 +1281,16 @@ ErrCardinality is returned when a cardinality assertion fails: an explicit
 Exactly(n) / AtLeast(n) on a query, or the implicit exactly-one of a [ToFace](<#ToFace>),
 [ToFaceAngular](<#ToFaceAngular>) or [EdgeAxis](<#EdgeAxis>). It takes precedence at zero matches — a failed
 assertion is ErrCardinality even when the selector matched nothing.
+
+<a name="ErrConsumed"></a>
+
+<pre>var ErrConsumed = decaderr.ErrConsumed</pre>
+
+ErrConsumed is returned by an operation command's Do when that command has
+already run once. Do consumes its command on every outcome — success,
+refusal and cancellation alike — so a retry builds a new command
+(agent-docs/command-api-design.md §3). The error carries the command's own
+[OperationKind](<#OperationKind>) at stage OperationStageInput.
 
 <a name="ErrContainerLayout"></a>
 
@@ -1402,25 +1546,6 @@ length: zero is ErrDegenerate, a negative value ErrNegativeMagnitude and a
 wrong unit kind ErrUnitKind. A distance no cell can prove, or one that leaves no
 triangle, is ErrUnsupported. A canceled context returns its error.
 
-<a name="Remove"></a>
-### func Remove
-
-<pre>func Remove(b *<a href="#Body">Body</a>) <a href="https://pkg.go.dev/builtin#error">error</a></pre>
-
-Remove takes b out of the live model by the caller's own hand: b leaves
-Bodies() and Verify stops reporting on it, exactly as a body a feature
-consumed (core §6). A removed body IS a retired body. It stays readable —
-its measurements, topology, selectors and Origin still answer — but no
-operation takes it (ErrRetiredBody), and nothing returns it to the model.
-Remove produces no body, so no producer identity advances, and every other
-body, including one built from b, keeps its geometry and provenance.
-
-b MUST NOT be nil (ErrDegenerate), and a body that belongs to no document
-is ErrDegenerate. The document is the one b names; a body already retired
-— consumed by a feature or removed before — is ErrRetiredBody. A refused
-call leaves the document unchanged. Remove may run concurrently with Bodies and Verify; a Verify
-already under way reports on the set as it stood when the call began.
-
 <a name="RepairMesh"></a>
 ### func RepairMesh
 
@@ -1441,23 +1566,6 @@ ctx and m MUST NOT be nil, each otherwise ErrDegenerate. A weld distance that
 is negative is ErrNegativeMagnitude, one that is not a length is ErrUnitKind,
 and an option given twice or a nil option is ErrDegenerate. A mesh left with
 no triangle is ErrDegenerate. A canceled context returns its error.
-
-<a name="SheetMetal"></a>
-### func SheetMetal
-
-<pre>func SheetMetal(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, d *<a href="#Document">Document</a>, spec <a href="#SheetMetalSpec">SheetMetalSpec</a>) (*<a href="#Body">Body</a>, <a href="#SheetMetalReport">SheetMetalReport</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
-
-SheetMetal builds a bent strip as one solid in d and reports its flat pattern (agent-docs/sheet-metal-design.md).
-The strip lies in the XY plane with its first leg starting at the origin along +X, and is Width deep along +Z;
-move it with [Transform](<#Transform>). Each bend is a circular arc about a centre on the side it turns toward, the inside face
-of radius InnerRadius and the outside face InnerRadius + Thickness, so the legs meet their bends tangentially
-and the solid is the extrusion of the thickened centreline.
-
-Every length is positive and every angle nonzero and under a half turn (ErrDegenerate for a zero or
-a missing one, ErrNegativeMagnitude for a negative length, ErrUnitKind for a wrong kind, ErrNotFinite); there is
-one more leg than bends; a KFactor outside (0, 1\] is ErrDegenerate. A strip whose legs and bends cross
-themselves, so that its outline is not one simple loop, is ErrDegenerate. A nil context or document is
-ErrDegenerate.
 
 <a name="TextProfiles"></a>
 ### func TextProfiles
@@ -1572,22 +1680,45 @@ and Depth along Y. Gap is the clear distance kept between any two bodies and
 between a body and the bed's edge. Width and Depth are positive lengths and
 Gap is a non-negative length.
 
-<a name="ArrangeOption"></a>
-### type ArrangeOption
+<a name="ArrangeCommand"></a>
+### type ArrangeCommand
 
-<pre>type ArrangeOption interface {
-    option.Interface
-    // contains filtered or unexported methods
+<pre>type ArrangeCommand struct {
+    // contains filtered or unexported fields
 }</pre>
 
-ArrangeOption configures [Arrange](<#Arrange>).
+ArrangeCommand lays bodies side by side on a bed. Build it with [Arrange](<#Arrange>).
 
-<a name="WithArrangeAngle"></a>
-#### func WithArrangeAngle
+<a name="Arrange"></a>
+#### func Arrange
 
-<pre>func WithArrangeAngle(step units.Value) <a href="#ArrangeOption">ArrangeOption</a></pre>
+<pre>func Arrange(bodies []*<a href="#Body">Body</a>, bed <a href="#ArrangeBed">ArrangeBed</a>) *<a href="#ArrangeCommand">ArrangeCommand</a></pre>
 
-WithArrangeAngle lets [Arrange](<#Arrange>) turn each body about +Z to the angle that
+Arrange returns the command that lays bodies side by side on bed. Do moves
+bodies by translation so they lie side by side on bed, and returns the moved
+bodies in the order given, retiring the inputs (agent-docs/arrange-design.md). Each body's bounding box, grown on every side
+by the box's own error bound, rests on the bed's surface (its minimum Z is
+Origin.Z) and keeps Gap from the others and from the bed's edge. Bodies are
+placed deepest first in shelves along X. Arrange turns nothing unless
+[ArrangeCommand.Turns](<#ArrangeCommand.Turns>) or [ArrangeCommand.Angle](<#ArrangeCommand.Angle>) is called, so a body keeps
+its orientation. Arrange copies bodies when it is called, so a later write to
+the caller's slice changes nothing.
+
+bodies MUST be live, distinct and belong to one document, and must not be
+empty or hold a nil first body. A violation is ErrDegenerate, ErrForeignBody
+or ErrRetiredBody. A bed with a non-positive size or a negative gap is
+ErrDegenerate, a wrong unit kind is ErrUnitKind, and bodies that do not all
+fit on the bed are ErrDegenerate; no body moves in any of these cases. A
+failed or canceled call leaves the document as it found it: every body live
+at its own place, and no history entry or producer number added. Every error
+carries [OperationTransform](<#OperationTransform>).
+
+<a name="ArrangeCommand.Angle"></a>
+#### func (\*ArrangeCommand) Angle
+
+<pre>func (c *<a href="#ArrangeCommand">ArrangeCommand</a>) Angle(step units.Value) *<a href="#ArrangeCommand">ArrangeCommand</a></pre>
+
+Angle lets [Arrange](<#Arrange>) turn each body about +Z to the angle that
 gives its bounding box the smallest footprint, so a long part lying across the
 bed's diagonal is laid nearly square to it (agent-docs/arrange-design.md §6).
 Angles are the multiples of step from zero up to a quarter turn, because a
@@ -1599,23 +1730,36 @@ The footprint of each trial is read from a copy of the body turned by that
 angle and retired again, so the bounds are the turned body's own, grown by the
 bound of its box. A chosen turn is a [Transform](<#Transform>) about the body's bounding box
 centre before the move, a second [OperationTransform](<#OperationTransform>) entry. It combines with
-[WithArrangeTurns](<#WithArrangeTurns>), whose quarter turns then act on the turned footprints.
+[ArrangeCommand.Turns](<#ArrangeCommand.Turns>), whose quarter turns then act on the turned footprints.
+Each trial angle also records one [OperationCopy](<#OperationCopy>) entry that the probe's
+retirement leaves without a Remove entry (agent-docs/arrange-design.md §6).
 
 step is a positive angle no finer than a quarter degree: a wrong unit kind is
 ErrUnitKind, a negative step ErrNegativeMagnitude, and a zero or too fine step
-ErrDegenerate. A body that cannot be copied turned carries [Copy](<#Copy>)'s refusal.
+ErrDegenerate. Do returns that fault naming Angle as its subject. A body that
+cannot be copied turned carries [Copy](<#Copy>)'s refusal. A second call replaces the
+first.
 
-<a name="WithArrangeTurns"></a>
-#### func WithArrangeTurns
+<a name="ArrangeCommand.Do"></a>
+#### func (\*ArrangeCommand) Do
 
-<pre>func WithArrangeTurns() <a href="#ArrangeOption">ArrangeOption</a></pre>
+<pre>func (c *<a href="#ArrangeCommand">ArrangeCommand</a>) Do(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>) ([]*<a href="#Body">Body</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
 
-WithArrangeTurns lets [Arrange](<#Arrange>) turn a body a quarter turn about +Z to fit,
-which swaps its footprint's width and depth. A body that is deeper than wide
-is laid with its long side along X when that lets all of them fit, and no
-body turns otherwise. A turned body is rotated about the minimum corner of
-its bounding box and then moved, so it adds a second [OperationTransform](<#OperationTransform>)
-entry to the history.
+Do arranges the bodies, or returns the error of the first gate that refuses
+with the document unchanged. A nil ctx is ErrDegenerate, and a second call
+returns ErrConsumed.
+
+<a name="ArrangeCommand.Turns"></a>
+#### func (\*ArrangeCommand) Turns
+
+<pre>func (c *<a href="#ArrangeCommand">ArrangeCommand</a>) Turns() *<a href="#ArrangeCommand">ArrangeCommand</a></pre>
+
+Turns lets [Arrange](<#Arrange>) turn a body a quarter turn about +Z to fit, which swaps
+its footprint's width and depth. A body that is deeper than wide is laid with
+its long side along X when that lets all of them fit, and no body turns
+otherwise. A turned body is rotated about the minimum corner of its bounding
+box and then moved, so it adds a second [OperationTransform](<#OperationTransform>) entry to the
+history. Calling Turns again changes nothing.
 
 <a name="Assessment"></a>
 ### type Assessment
@@ -1680,1606 +1824,6 @@ Depth is a positive length.
 Body is an immutable solid: every operation returns a new one, and the
 input body is retired from its document (core §6).
 
-<a name="Arrange"></a>
-#### func Arrange
-
-<pre>func Arrange(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, bodies []*<a href="#Body">Body</a>, bed <a href="#ArrangeBed">ArrangeBed</a>, opts ...<a href="#ArrangeOption">ArrangeOption</a>) (result []*<a href="#Body">Body</a>, retErr <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
-
-Arrange moves bodies by translation so they lie side by side on bed, and
-returns the moved bodies in the order given, retiring the inputs
-(agent-docs/arrange-design.md). Each body's bounding box, grown on every side
-by the box's own error bound, rests on the bed's surface (its minimum Z is
-Origin.Z) and keeps Gap from the others and from the bed's edge. Bodies are
-placed deepest first in shelves along X. Arrange turns nothing unless
-[WithArrangeTurns](<#WithArrangeTurns>) is given, so a body keeps its orientation.
-
-bodies MUST be live, distinct and belong to one document, and must not be
-empty or hold a nil. A violation is ErrDegenerate, ErrForeignBody or
-ErrRetiredBody. A bed with a non-positive size or a negative gap is
-ErrDegenerate, a wrong unit kind is ErrUnitKind, and bodies that do not all
-fit on the bed are ErrDegenerate; no body moves in any of these cases. A
-canceled context stops the moves and leaves the bodies already moved at
-their new places and the rest where they were.
-
-<a name="Boss"></a>
-#### func Boss
-
-<pre>func Boss(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, b *<a href="#Body">Body</a>, spec <a href="#BossSpec">BossSpec</a>) (result *<a href="#Body">Body</a>, retErr <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
-
-Boss raises a round boss on a planar face of b, with an optional blind pilot
-hole, and returns the result, retiring b (agent-docs/boss-design.md).
-
-The boss is a cylinder that stands on [Face](<#Face>), runs Height out of it and reaches
-into the body behind the face so that the union crosses the face instead of
-touching it. The pilot hole is cut from the boss's top face by the same
-tools Hole builds, in the same atomic commit.
-
-b MUST be a live solid; a nil context, body or selector is ErrDegenerate. A
-selector that does not resolve to one face is the selector's own error or
-ErrDegenerate, and a face that is not an analytic plane or cylinder, nor a convex planar face of a faceted
-solid with exact vertices, is ErrUnsupported. A
-Diameter or Height that is not positive and finite is ErrDegenerate or
-ErrUnitKind. A bore as wide as the boss, or one deep enough to leave the
-boss's footing through the back of the body, is ErrDegenerate. An At more
-than 1e-6 mm off the face plane is ErrDegenerate. A boolean the evaluator
-cannot decide is the boolean's own error. Every failure leaves b live and the
-document unchanged.
-
-<a name="Chamfer"></a>
-#### func Chamfer
-
-<pre>func Chamfer(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, b *<a href="#Body">Body</a>, sel <a href="#EdgeSelector">EdgeSelector</a>, d units.Value,
-    opts ...<a href="#ChamferOption">ChamferOption</a>) (result *<a href="#Body">Body</a>, retErr <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
-
-Chamfer bevels the selected lateral edges of a straight prism with a straight
-chord set back a distance d along each adjacent wall, returning the new body
-and retiring b (agent-docs/modify-design.md §7, core §8). A nil b is ErrDegenerate.
-sel is resolved against the live b; a query matching nothing is loud (ErrNoMatch /
-ErrCardinality, S16). d is a length magnitude, gated like every other (S15); a
-zero d is S13. The rewritten section faces the §5 audit before anything is
-built, so no unproven body is ever made and an over-large setback is refused
-(S6), never clipped.
-
-On a revolve, Chamfer bevels swept meridian junctions instead
-(agent-docs/modify-design.md Part R §7): the meridian corner gets the same chord,
-faces the same audit and the revolve's axis gates, and the revolve is rebuilt
-over the receiver's own axis, sweep and placement. The bevel is a [Cone](<#Cone>), a
-[Cylinder](<#Cylinder>) where the chord runs parallel to the axis, or a [Plane](<#Plane>) where it runs
-perpendicular. One source-authenticated quarter-turn rectangular radial
-cap rim takes the bounded faceted route in agent-docs/modify-design.md Part R §7.2.
-Other cap edges and edges on the axis are SX5 (ErrUnsupported).
-
-A one-sided positive-taper circular extrude also accepts one complete
-far-cap rim at an equal setback on its disk and cone (draft §10.5).
-
-A one-span straight solid Sweep takes selected lateral edges through its
-stored exact prism reduction. One straight cap edge takes that reduction's
-prism face view through route E. Other cap selections and asymmetric
-reference roles remain unsupported; other Sweep kinds are S3 (ErrUnsupported).
-A receiver outside the admitted classes is S3 (ErrUnsupported).
-
-WithTangentChain expands the edges sel resolves to as Fillet's does
-(agent-docs/modify-design.md Part R §5). WithAsymmetricChamfer sets each edge back
-d across its reference face and the option's other distance across the
-other adjacent face (§6), on a prism's lateral edges and a revolve's
-junctions alike; each setback faces the S6 audit on its own walk. On a
-complete cap loop the reference picks per cap (§8.3.1): the cap face takes d
-across the cap and the other distance down the side walls, and a side wall
-takes d down the side and the other distance across the cap. A reference
-that names no adjacent face of a chamfered edge, or both, or a face beside
-no chamfered edge, is ErrCardinality (SX3). An asymmetric chamfer of an
-independent straight brep edge takes route E, and a complete loop of a
-planar brep face takes route L. Stacked receivers use those same routes
-through their face view; selections outside them remain SX16.
-
-A selection covering one straight prism cap edge uses route E or the
-bounded cutter for an admitted oblique edge. A selection
-covering every geometric edge of one or more complete prism cap loops uses
-agent-docs/modify-design.md Part R §8.3's cap-loop chamfer. It bevels each loop
-with a band of analytic patches, and the result is a cap-blend body whose
-volume, area, bounds, undercut and minimum-radius readings all answer.
-A selection covering the whole outer loop of one or both caps of a straight
-prism whose section holds fit splines and lines, with no corner past 10°,
-bevels it at an equal setback by cutting the prism with a polyhedral cutter
-(agent-docs/modify-design.md Part R §8.5). Decad cannot offset a fit spline
-exactly, so the cutter's offset curves are fit splines through points of the
-exact offset, and the call refuses an offset that departs from it by more than
-0\.002 of the setback. The result is a mesh Boolean's: faceted, with the Cut's
-own bounds, and it matches the ideal chamfer only within that ratio. A
-setback that reaches the outline's radius of curvature is ErrDegenerate.
-
-On a mesh Boolean result, whole loops of a retained planar face that the per-edge routes cannot bevel, such as a
-window of lines and arcs with sharp corners, are cut by a polyhedral cutter (agent-docs/modify-design.md Part M
-§15a): faceted, the Cut's own readings, and the bevel ruled between its two sections. A tangent chain whose edges
-share no one base plane, such as the rim of a bar rounded about z at one end and about y at the other, is cut by
-the bevel's section swept along the chain (§15b), with the same readings.
-
-Without WithTangentChain a selected edge that ends at a proven tangent junction still takes its continuation, as
-the target CAD's chamfer does (agent-docs/modify-design.md Part R §5.1): the selection grows to the whole chain. An
-expansion the oracle cannot decide leaves the selection as named.
-
-All twelve straight edges of an exact axis-aligned box take
-agent-docs/modify-design.md Part G §4.3b's simultaneous chamfer, with or
-without a cross bore. Other partial cap selections and mixed cap/lateral
-selections are SX4 (ErrUnsupported). A setback across the
-cap that empties the cap contour is SX6 (ErrDegenerate), and bands whose
-setbacks down the side reach the far end of the sweep are SX7
-(ErrUnsupported). A chamfer whose setback is so small beside the geometry it
-displaces that the displacement rounds away is SX13 (ErrUnsupported), rather
-than a band with the taper gone: a circular wall so large beside the setback
-across the cap that the offset's radial change rounds back onto its own
-radius, or a sweep so tall beside the setback down the side that the band's
-side level rounds back onto its cap level. A further modify op on the
-result is SX10 (ErrUnsupported), and a clearance pair its bounding boxes do
-not already decide reads Suspect (Table DX row DX6).
-
-An analytic boolean result (a brep or stacked body) that reads as a prism
-along a reference axis is chamfered as that prism
-(agent-docs/modify-design.md Part B route P): lateral edges and complete cap loops
-alike, so a cross-drilled hole's mouth takes a countersink. Any other
-selection of straight edges along one axis of such a body's face record
-takes route E (§5): a swept straight wall the edge ends on or runs along
-as a rim is first restated as the planar rectangle it sweeps (§5.2), both
-end faces of each edge take the chord at their corner, the two faces beside
-it are trimmed to the chord's feet, and one planar wall carrying a
-chamfer(k) role is added; the result is a brep body whose record pairs
-every edge again before it is built. A curved edge, two selected edges
-sharing a vertex, an edge whose end face is a curved face or an earlier
-blend, a straight wall the route needs as a plane that is oblique, split
-or carries a displaced level, end faces whose chords disagree, and a body
-whose faces carry a section displacement (SB1), outside brep-modify §4.4's
-lateral blend of a class-B crossing prism, are ErrUnsupported (Table SB).
-
-A selection of one or more complete loops of planar faces of such a body
-takes route L (agent-docs/modify-design.md Part G §4): each loop's face takes
-the loop offset dc into its material, every face beside the loop is trimmed
-ds along the face's normal, and a band of [Plane](<#Plane>) and [Cone](<#Cone>) patches joins the
-two, removing a wedge where the walls beside the loop descend into the body
-(a hole mouth, a plate's top loop) and filling the concave corner where
-they rise off it (a boss root). The result is a brep body whose volume,
-area, centroid and box answer, which Verify, placement and a further modify
-op read; it tessellates, exports to STEP (analytic where every patch is a
-plane, faceted where a cone is), and its undercut and concave-radius
-surveys read the patches. It is a boolean operand where each band is a whole
-turn, line-line miters or exact tangent joins; a band with a cone at a
-reflex corner is export-only and ErrUnsupported as an operand. Several convex edges of a faceted solid every face of
-which squares to a world axis, which share corners and so have no route of their own, are the solid less the wedge
-of each edge, or with concave edges the solid plus it (agent-docs/orthogonal-design.md B17, B18), a faceted result
-with a bound. A clearance
-pair its boxes do not decide reads Suspect. A selection that is part of a loop, mixes loops with lone edges or
-holds two loops sharing an edge is SL1, a face beside a loop that is curved,
-oblique, split or on both sides of the loop's face is SL2, and a band
-reaching a far face end is SX7 (each ErrUnsupported); a setback that
-empties a loop's offset is SX6 (ErrDegenerate).
-
-<a name="ChamferAngle"></a>
-#### func ChamferAngle
-
-<pre>func ChamferAngle(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, b *<a href="#Body">Body</a>, sel <a href="#EdgeSelector">EdgeSelector</a>, d units.Value, reference <a href="#FaceSelector">FaceSelector</a>,
-    angle units.Value) (result *<a href="#Body">Body</a>, retErr <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
-
-ChamferAngle bevels the edges sel selects by a distance d along the
-reference face and an angle between the bevel and that face, returning the
-new body and retiring b (agent-docs/modify-design.md Part A).
-
-The bevel leaves the reference face d from each edge and makes angle with it.
-It meets the other face d·sin(angle)/sin(φ + angle) from the edge, where φ is
-the angle between the two faces across the corner the bevel cuts (the interior
-angle of a convex edge, the open wedge of a concave one), which is d·tan(angle) on a right
-angle. ChamferAngle states that second distance and builds the result with
-[Chamfer](<#Chamfer>) and [WithAsymmetricChamfer](<#WithAsymmetricChamfer>), so the receivers, routes and refusals of
-those apply.
-
-Every selected edge MUST lie between two planar faces, or be circular between a plane and a cylinder, cone or sphere, and may be convex or
-concave: a concave edge's bevel adds a wedge of material to the corner. Any
-other edge is ErrUnsupported. All the selected edges MUST give the same second
-distance, within a relative 1e-12, which equal dihedrals do; edges at different
-angles take separate calls, and a selection that mixes them is ErrUnsupported.
-angle MUST be an angle strictly between 0 and a half turn, and an edge whose
-interior angle φ makes φ + angle reach a half turn has a bevel that never
-meets the other face: that is ErrDegenerate, as is an angle at or past those
-bounds. d MUST be a positive length. A negative angle or length is
-ErrNegativeMagnitude and a wrong unit kind is ErrUnitKind. reference follows
-WithAsymmetricChamfer's rule of one adjacent face per edge. A nil context,
-body or selector is ErrDegenerate. Every failure leaves b live and the
-document unchanged.
-
-<a name="Coil"></a>
-#### func Coil
-
-<pre>func Coil(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, d *<a href="#Document">Document</a>, s *sketch.Sketch, p *sketch.Profile, axis <a href="#Axis">Axis</a>, pitch, turns units.Value, opts ...<a href="#CoilOption">CoilOption</a>) (*<a href="#Body">Body</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
-
-Coil moves the closed profile p of sketch s along the screw motion about
-axis (agent-docs/helix-design.md): turns full rotations about the axis,
-right-handed about the axis direction, advancing pitch along that
-direction per rotation. The section stays in the axis plane throughout, so
-a thread profile drawn beside the axis cuts the thread it draws. The axis
-is Revolve's own vocabulary — [SketchLine](<#SketchLine>), [ConstructionAxis](<#ConstructionAxis>) or [EdgeAxis](<#EdgeAxis>) —
-and MUST lie in the sketch plane.
-
-pitch MUST be a finite positive length and turns a finite positive
-dimensionless count, whole or fractional (ErrUnitKind for the wrong kind,
-ErrNotFinite for a non-finite value, ErrDegenerate at or below zero). The
-profile MUST lie strictly on one side of the axis: a profile proven to
-touch or cross it is ErrDegenerate, and one whose side the axis's own
-rounding leaves undecided is ErrUnsupported. With one turn or more, the
-profile's extent along the axis MUST stay below the pitch, or two turns
-would meet (ErrUnsupported). Every profile segment MUST be a whole LineSeg,
-ArcSeg or CircleSeg (ErrUnsupported); an arc is held as 16 chords per turn
-of its sweep. A line is held as one chord or, where one chord's wall cells
-would depart from the true wall by more than 0.15% of the line's outer
-radius (a long radial run on a steep screw), as up to 256 chords graded by
-radius, each holding within 0.002 mm where the station step allows
-(agent-docs/helix-design.md §5.3). A coil needing more than
-32768 stations at 256 per turn, or
-more than 1048576 triangles, is ErrUnsupported, as is one whose held shell
-crosses itself where two turns pass closer than the station chords
-resolve, or whose crossing audit passes its triangle or pair ceiling.
-
-The result is a solid: two planar caps, one faceted wall per profile
-segment spanning every turn, read through Table CM's closed forms and, on
-an arc, agent-docs/helix-design.md §11.1's area bracket. A failed call leaves
-the document untouched.
-
-<a name="ConeFromFace"></a>
-#### func ConeFromFace
-
-<pre>func ConeFromFace(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, body *<a href="#Body">Body</a>, face <a href="#FaceSelector">FaceSelector</a>, far units.Value) (*<a href="#Body">Body</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
-
-ConeFromFace builds the full cone about body's axis that extends the
-selected face's straight meridian, using the nearest representable strict
-offset from that face's exact line. This need not be one float step: the
-rounded value may already be strictly sided, or the bound may be MaxFloat64.
-The construction guarantees separation only from the selected face line.
-Other blank and tool relations keep their own checks.
-
-body must be a live, unplaced, full Revolve about world X whose recorded
-section is a closed straight-sided walk of 4 to 128 whole segments with
-strictly positive X coordinates, nonnegative radii, no holes and one side of
-the axis. face must resolve under the implicit exactly-one to one conical
-side of that section. The cone is read from the recorded exact section data,
-never from the rounded public [Cone](<#Cone>) tag. The side's meridian is the exact
-line x + k\*r = C with k \> 0, so the radius decreases as x rises. The result
-is the full Revolve of the triangle (far, 0), (far, R), (A, 0), where A and
-R are the float64 values nearest C and (C-far)/k that lie strictly on the
-empty side of the face. The cone wall and the face line share no point, so
-the relation between them is a strict sign that does not depend on how the
-platform rounds a fused multiply-add, and for identical recorded endpoint
-and far bits the strict gap is the same on every build. That establishes
-only the separation from the selected face line. Other blank and tool
-relations keep their own checks. The result is an ordinary Revolve body that
-depends on body and does not retire it.
-
-far is the cone's far plane as an axial coordinate. It must be a finite
-negative length (below X = 0, so the cone spans the origin) and strictly
-below both ends of the face. A nil ctx, a nil body, a body of no document,
-or a far that is not a finite length is ErrDegenerate. Selector failures are
-those of a [ToFace](<#ToFace>) stop. A retired body is ErrRetiredBody. A body or face
-outside the supported class (a plane or cylinder side, a section edge on the
-axis, a side whose meridian does not slope toward the axis as x rises), a
-far that is not below the face, a far that is not negative, or a cone whose
-float64 generator is not read back as an exact point cone is ErrUnsupported.
-A canceled ctx returns ctx.Err() unchanged. Every failure leaves the
-document and its provenance numbering unchanged.
-
-<a name="Copy"></a>
-#### func Copy
-
-<pre>func Copy(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, source *<a href="#Body">Body</a>, opts ...<a href="#CopyOption">CopyOption</a>) (result *<a href="#Body">Body</a>, retErr <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
-
-Copy returns a new live body carrying source's geometry and leaves source
-live. With no options, the copy has source's placement. WithCopyPlacement
-WithCopyRotation and WithCopyLiftTranslation compose a rigid motion onto it;
-repeated placement options use the last value. The copy gets a new body identity and reproduces
-source provenance. source MUST NOT be nil. A body this evaluator did not
-build is ErrUnsupported. Invalid or nil options are ErrDegenerate. A
-canceled context stops the rebuild before the document changes.
-
-<a name="Cut"></a>
-#### func Cut
-
-<pre>func Cut(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, target, tool *<a href="#Body">Body</a>, opts ...<a href="#BooleanOption">BooleanOption</a>) (*<a href="#Body">Body</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
-
-Cut returns target minus tool, retiring both operands from their document
-(core §8). The target and tool roles are asymmetric. A cut that removes
-everything is ErrBooleanFailed;
-the other gates match Union's.
-A call refused with ErrUnsupported on a mesh result of earlier Cut and
-Intersect calls is retried from the source bodies of that chain
-(agent-docs/prism-boolean-design.md Part R); only a failure of that retry too
-returns the refusal.
-It returns ctx.Err() unchanged when ctx is canceled before the document commit.
-
-<a name="CutExtrude"></a>
-#### func CutExtrude
-
-<pre>func CutExtrude(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, target *<a href="#Body">Body</a>, s *sketch.Sketch, profiles []*sketch.Profile, e <a href="#Extent">Extent</a>,
-    opts ...<a href="#ExtrudeOption">ExtrudeOption</a>) (result *<a href="#Body">Body</a>, retErr <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
-
-CutExtrude removes from target the volume that sweeping profiles of s along
-the sketch normal per e would fill, and returns the result, retiring target
-(agent-docs/cut-profile-design.md). It is the feature form of Extrude
-followed by Cut: the swept tool exists only inside the call, is never
-registered, and leaves no body in the document.
-
-Every profile obeys Extrude's gates and options, and the extent resolves
-exactly as Extrude resolves it, so a [ToFace](<#ToFace>) or [ThroughAll](<#ThroughAll>) stop reads live
-bodies, target among them. Several profiles are one feature: their tools are
-united with one another and target is cut once. Profiles whose tools touch
-or overlap are therefore removed as one volume.
-
-target MUST be a live solid. A nil context, target or sketch, or an empty
-or nil profile list, is ErrDegenerate. A tool that removes everything is
-ErrBooleanFailed, and every other refusal is Extrude's or Cut's own. Every
-failure leaves target live and the document unchanged. The history records
-one OperationCutExtrude whose consumed input is target.
-
-<a name="CutRevolve"></a>
-#### func CutRevolve
-
-<pre>func CutRevolve(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, target *<a href="#Body">Body</a>, s *sketch.Sketch, profiles []*sketch.Profile, axis <a href="#Axis">Axis</a>,
-    a <a href="#AngularExtent">AngularExtent</a>, opts ...<a href="#RevolveOption">RevolveOption</a>) (result *<a href="#Body">Body</a>, retErr <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
-
-CutRevolve removes from target the volume that revolving profiles of s about
-axis through a would fill, and returns the result, retiring target
-(agent-docs/cut-profile-design.md). It is the feature form of Revolve
-followed by Cut, with the gates, grouping and failure behaviour of
-[CutExtrude](<#CutExtrude>). The history records one OperationCutRevolve.
-
-<a name="Draft"></a>
-#### func Draft
-
-<pre>func Draft(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, b *<a href="#Body">Body</a>, sel <a href="#FaceSelector">FaceSelector</a>, neutral <a href="#NeutralPlane">NeutralPlane</a>, angle units.Value,
-    opts ...<a href="#DraftOption">DraftOption</a>) (result *<a href="#Body">Body</a>, retErr <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
-
-Draft returns a new body whose walls lean by angle from the sweep axis about
-the neutral plane, retiring b (agent-docs/modify-design.md Part D §10). A
-positive angle narrows the body with distance from the neutral plane and a
-negative one widens it; the angle is a signed [units.Angle](<https://pkg.go.dev/github.com/lestrrat-3d/units#Angle>) outside
-[ErrNegativeMagnitude](<#ErrNegativeMagnitude>) (core §12). sel names the walls to lean, about one
-of b's caps. Faces(Walls(b)) names every wall, and the result is
-the body a tapered [Extrude](<#Extrude>) of the same section and sweep builds.
-A subset leans only the walls it names: each moved wall's far trace is its
-own moved line or circle, a kept wall stays vertical, and a corner between a
-moved and a kept line is the intersection of the two
-(agent-docs/modify-design.md Part D §10.2).
-
-A faceted solid with exact vertices that is a straight prism along a world axis is also drafted, on all its walls,
-about one of its two caps (agent-docs/orthogonal-design.md B21).
-
-b is a live straight prism: an extrude, a filleted or chamfered
-extrude, a tube, or any of these placed, whose recorded section is the
-section it denotes. The gates run in agent-docs/modify-design.md Part D §5's order, and a
-refused call leaves the document unchanged, including on ctx.Err():
-
-- an angle that is not an angle is [ErrUnitKind](<#ErrUnitKind>), one that is not finite
-  [ErrNotFinite](<#ErrNotFinite>), and one at or past a right angle [ErrDegenerate](<#ErrDegenerate>);
-- a retired or foreign b is [ErrRetiredBody](<#ErrRetiredBody>) or [ErrForeignBody](<#ErrForeignBody>),
-  and a sheet is [ErrUnsupported](<#ErrUnsupported>);
-- a zero angle is [ErrDegenerate](<#ErrDegenerate>) (the draft is b);
-- a neutral selector resolving to zero or several faces is [ErrCardinality](<#ErrCardinality>),
-  a curved neutral face [ErrDegenerate](<#ErrDegenerate>);
-- b that is not a prism, a section carrying a displacement, an
-  already drafted body, a [NeutralFrame](<#NeutralFrame>), a neutral face that is not a cap
-  of b, and a selected face that is no wall of b
-  are each [ErrUnsupported](<#ErrUnsupported>);
-- a selected cap is [ErrDegenerate](<#ErrDegenerate>), and an empty selection is the
-  selector's [ErrNoMatch](<#ErrNoMatch>);
-- a subset that moves one of two walls meeting at a circular corner (a
-  G1 join of a line and an arc, or of two arcs) is [ErrUnsupported](<#ErrUnsupported>): the
-  moved wall and the kept one no longer meet tangentially, and their
-  corner moves along a conic. A whole circle is one wall and moves or
-  stays whole.
-
-The far section's own gates (draft SD5 to SD16) are those of a tapered
-extrude. ctx, b, sel and neutral MUST NOT be nil; a nil one is [ErrDegenerate](<#ErrDegenerate>).
-Every measurement of the result is Approximate: the tangent of the angle is
-only ever enclosed.
-
-<a name="Emboss"></a>
-#### func Emboss
-
-<pre>func Emboss(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, b *<a href="#Body">Body</a>, s *sketch.Sketch, profiles []*sketch.Profile, face <a href="#FaceSelector">FaceSelector</a>,
-    mode <a href="#EmbossMode">EmbossMode</a>, height units.Value, opts ...<a href="#EmbossOption">EmbossOption</a>) (*<a href="#Body">Body</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
-
-Emboss raises or engraves the profiles on a planar or cylindrical face of b and
-returns the result, retiring b.
-
-face selects the face and must resolve to exactly one face. s is a sketch whose
-plane is the plane of that face, or on a cylindrical face a plane tangent to the
-cylinder (agent-docs/emboss-design.md §8), and profiles are closed
-profiles of s, such as the outlines of letters or a logo; a profile with
-holes keeps them. The relief is height tall: a raised relief stands height
-out of the face, and an engraved one is cut height into the body. The tool
-extends one extra millimetre to the other side of the face so that it
-overlaps the body instead of touching it (agent-docs/emboss-design.md). The
-result has the exactness Union or Cut gives for the same bodies.
-
-b MUST be a live solid. A nil context, body, sketch or selector, an empty
-or nil profile list, a non-positive height, a sketch plane that is more than
-1e-6 mm off the face plane or not parallel to it, and a relief that
-certifiably misses b or changes no volume are ErrDegenerate. A face that is
-not an analytic plane or cylinder, nor a convex planar face of a faceted solid with exact
-vertices, is ErrUnsupported. Profiles must not touch each other
-in a shared plane. A boolean the evaluator cannot decide is the boolean's
-own error. Every failure leaves the document unchanged and b live.
-
-<a name="Extend"></a>
-#### func Extend
-
-<pre>func Extend(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, b *<a href="#Body">Body</a>, edges *<a href="#EdgeQuery">EdgeQuery</a>, tool *<a href="#Body">Body</a>) (result *<a href="#Body">Body</a>, retErr <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
-
-Extend lengthens b along the named edges' own carriers until
-they meet tool, and returns the lengthened sheet. It admits a b and
-tool sharing ONE generator, exactly as Trim does — both a straight sweep, or
-both a revolve about one axis — under surface-intersection §2.1's own gate.
-A nil context or a nil b is ErrDegenerate.
-
-<a name="Extrude"></a>
-#### func Extrude
-
-<pre>func Extrude[S <a href="#Section">Section</a>](ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, d *<a href="#Document">Document</a>, s *sketch.Sketch, sec S, e <a href="#Extent">Extent</a>,
-    opts ...<a href="#ExtrudeOption">ExtrudeOption</a>) (*<a href="#Body">Body</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
-
-Extrude sweeps the section sec of sketch s along the sketch plane's normal
-per the linear extent e, registers the new body, and returns it. sec is a
-closed [\*sketch.Profile](<https://pkg.go.dev/github.com/lestrrat-3d/sketch#Profile>), which extrudes to a solid (sheet under
-[WithSurfaceResult](<#WithSurfaceResult>)), or an open [\*sketch.Chain](<https://pkg.go.dev/github.com/lestrrat-3d/sketch#Chain>), which extrudes to a
-ribbon sheet. Both are recorded from s; the type argument S is inferred.
-
-A profile section MUST be a profile of s (ErrForeignProfile) and a
-current, unaltered snapshot (ErrStaleProfile or ErrInvalidProfile); an
-invalid profile is also ErrInvalidProfile, and a boundary decad cannot
-record exactly is ErrUnrecordableProfile (core §7). This evaluator builds a
-bounded oblique [Body](<#Body>).Section profile only as a solid straight prism with an
-independent [Distance](<#Distance>) extent, carrying its certified source displacement.
-Its private Sketch certificate and marked reference loop must still match.
-Other bounded-section consumers and options return [ErrUnsupported](<#ErrUnsupported>).
-Otherwise this evaluator builds a
-straight prism from a profile of line, circle, arc and Tier A free-form
-segments (a spline, a closed spline, a fit spline, or a unit-weight NURBS
-curve — agent-docs/spline-design.md Table F); a Tier B or Tier C free-form
-segment (a conic, a whole ellipse, or a NURBS curve with unequal weights) is
-[ErrUnsupported](<#ErrUnsupported>). A Tier A kind is admitted but not thereby built: each
-free-form wall edge must also prove ONE curvature sign across every span and
-joint of its chain (agent-docs/spline-design.md §6.5), and the whole profile's
-free-form work must fit the fixed budget. A chain whose curvature genuinely
-changes sign, or whose certificate the fixed subdivision depth does not
-close, is [ErrUnsupported](<#ErrUnsupported>) (Table R row R19), as is a profile past the
-budget (row R7). A free-form curve must meet its neighbours at shared
-endpoints unless sketch certifies a fit-spline/circle trim
-(agent-docs/spline-design.md §2.1). Other crossing fragments are rejected as
-ErrUnrecordableProfile before this runs. WithSurfaceResult() omits the two
-caps and publishes a sheet body instead of a solid (agent-docs/surface-design.md
-§4).
-
-A nonzero [WithTaper](<#WithTaper>) on a profile builds a draft body instead
-(agent-docs/modify-design.md Part D): the far cap is the profile offset by h·tan α with
-every straight corner mitered, each straight wall a [Plane](<#Plane>) leaning by the
-taper and each circular wall a [Cone](<#Cone>). Its profile must hold line, arc and
-circle segments only, and a circular wall must meet each neighbour
-tangentially; anything else, and every other row of that design's Table SD,
-is [ErrUnsupported](<#ErrUnsupported>) or [ErrDegenerate](<#ErrDegenerate>) as the row states. Every measurement
-of a draft body is Approximate, since the taper's tangent is only ever
-enclosed.
-
-A chain section MUST be a chain of s and a current, unaltered snapshot,
-with the same sentinels (ErrForeignProfile, ErrStaleProfile,
-ErrInvalidProfile, ErrUnrecordableProfile; an invalid or self-intersecting
-chain is also ErrInvalidProfile; agent-docs/sketch-seam-design.md §2.2). The
-result is always a sheet — Kind() == BodySheet — one wall face per recorded
-segment (agent-docs/surface-design.md §13.4, Table G), with no cap and no closing
-face. A chain of any segment count and kind builds — a line wall Exact, an
-arc or circle fragment wall carrying rθ's own bound, a Tier A free-form
-wall carrying internal/freeform/spline\_length.go's proven bracket
-(agent-docs/spline-design.md); a Tier B or Tier C free-form segment is
-ErrUnsupported, exactly as a profile's own wall refuses it. A chain section
-returns ErrUnsupported for [WithSurfaceResult](<#WithSurfaceResult>), which has no solid to
-toggle, and for [WithTaper](<#WithTaper>) of any angle, zero included, since a chain
-extrude has no draft build. Both refusals follow the chain's seam gate and
-precede extent resolution (agent-docs/surface-design.md §13.2).
-
-A nil context, document, sketch or section returns ErrDegenerate. The
-context is checked at entry, between recording the section, resolving the
-extent and building the body, and inside the evaluators; a canceled context
-returns ctx.Err() unchanged. Every failure and cancellation leaves the
-document unchanged.
-
-<a name="Fillet"></a>
-#### func Fillet
-
-<pre>func Fillet(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, b *<a href="#Body">Body</a>, sel <a href="#EdgeSelector">EdgeSelector</a>, r units.Value,
-    opts ...<a href="#FilletOption">FilletOption</a>) (result *<a href="#Body">Body</a>, retErr <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
-
-Fillet rounds selected section corners of a straight prism, its admitted
-one-line Sweep reduction, or an axial loft whose sections match in segment
-kinds with a tangent arc of radius r, returning the new body and retiring b
-(agent-docs/modify-design.md §6, core §8). A nil b is ErrDegenerate. sel is
-resolved against the live b; a query matching nothing is loud (ErrNoMatch / ErrCardinality,
-S16). r is a length magnitude, gated like every other (S15); a zero r is
-S13. One straight cap edge of a prism or one-line solid Sweep takes route E;
-other unsupported cap selections are S1 (ErrUnsupported). A rewritten
-section faces the §5 audit before anything is built.
-
-WithTangentChain expands the edges sel resolves to across every edge that
-continues them with proven G1 continuity before any receiver gate runs
-(agent-docs/modify-design.md Part R §5); sel's cardinality assertion applies to
-the seeds it names. A continuation that branches or that this evaluator
-cannot decide is ErrUnsupported (SX2), and so is a faceted boolean result
-(SX9), refused before expansion.
-
-On a revolve, Fillet rounds swept meridian junctions instead
-(agent-docs/modify-design.md Part R §7): a latitude [Circle3](<#Circle3>) of a full turn or a
-junction [Arc3](<#Arc3>) of a partial one, each the sweep of one corner of the
-recorded meridian. The meridian gets the same tangent arc, faces the same
-audit, and is re-gated against the axis — a new axis contact is
-ErrDegenerate, an arc centred across the axis ErrUnsupported — before the
-revolve is rebuilt over the receiver's own axis, sweep and placement. The
-blend is a [Torus](<#Torus>), or a [Sphere](<#Sphere>) when its centre lies on the axis. One
-quarter-turn rectangular angular-cap radial rim has a bounded faceted
-route; other cap edges and edges on the axis are SX5 (ErrUnsupported).
-An axial loft whose two hole-free sections have the same segment kinds in
-the same order also accepts line/arc corners. The second section may be the
-first turned about the axis, as for a helical gear. Each section receives
-its own tangent arc at the selected corner and the loft is rebuilt from the
-two rewritten records (agent-docs/loft-design.md §17). Unchanged free-form
-segments retain their recorded curves; a new analytic piece must be proven
-clear of each non-adjacent free-form segment.
-
-An analytic boolean result (a brep or stacked body) that reads as a prism
-along a reference axis is filleted as that prism
-(agent-docs/modify-design.md Part B route P): its lateral edges are the prism's, and
-the result is a prism. Any other selection of straight edges along one axis
-of such a body's face record takes route E (§5): a swept straight wall
-the edge ends on or runs along as a rim is first restated as the planar
-rectangle it sweeps (§5.2), both end faces of each edge take the tangent
-arc at their corner, the two faces beside it are trimmed to the arc's
-feet, and one cylindrical wall carrying a fillet(k) role is added; the
-result is a brep body whose record pairs every edge again before it is
-built. A curved edge, two selected edges sharing a vertex, an edge whose
-end face is a curved face or an earlier blend, a straight wall the route
-needs as a plane that is oblique, split or carries a displaced level, end
-faces whose arcs disagree, and a body whose faces carry a section
-displacement (SB1), outside brep-modify §4.4's lateral blend of a class-B
-crossing prism, are ErrUnsupported (Table SB).
-P8's exact front top edge uses a radius-1 quarter-cylinder cutter before
-route E's SB7 curved-third-face gate (modify-general §4.3c).
-Any other selection of such a body's edges is route L's
-(agent-docs/modify-design.md Part G §4): complete
-loops of planar faces are filleted as a pipe band at radius r
-(agent-docs/modify-design.md Part L) — a quarter cylinder along each line, a torus
-around each arc and at each reflex corner, cylinders meeting along an
-[Ellipse3](<#Ellipse3>) at a line-line miter, and a [FilletMiter3](<#FilletMiter3>) at a regular sharp
-corner involving an arc — the walls beside each loop trimmed to its
-side level and the face holding it to its offset contour; the result is a
-brep body whose patches carry filletLoop(f,l,p). Selected straight edges
-on part of one planar loop form a partial band whose selected walls must
-all descend or all rise, as a block's root flush with a plate's side does;
-a swept common wall can be restated as that planar loop. Loops sharing an edge are SL1; complete loops
-mixed with independent straight edges take route V. A line–arc or arc–arc
-join tangent only to the record's rounding, as a sketch fillet or tangent
-constraint records it (sin²θ ≤ 2⁻⁶⁴), builds as a tangent join and its
-sliver widens the published bounds. A neighbour route L cannot trim SL2,
-and an offset miter that folds or cannot be bounded, or a join read as
-tangent that turns more, is SF1 (both ErrUnsupported).
-A prism's complete cap loops take the same arm through its face view and
-return a brep body (RF3). A single cap edge on a strictly convex straight
-prism uses a bounded faceted cutter when that edge or its terminal walls
-are oblique; the cutter and receiver commit atomically. A faceted Union of
-a rooted oblique circular boss and rectangular plate also accepts its one
-complete root junction (agent-docs/modify-design.md Part A). Any other
-receiver outside those routes, loft §17 and draft §10.4 is S3
-(ErrUnsupported).
-
-A faceted Union of two rectangular prisms also admits one untouched outer
-vertical edge when the other prism is certified clear of the full removed
-radius band (agent-docs/modify-design.md Part R §10.1).
-A loop-filleted body publishes its volume, centroid, area, box and
-through-all extent, and passes Verify; it meshes with an occupied-volume
-proof, exports to STEP, takes part in a mesh boolean, is surveyed for
-undercuts and concave radii, and is placed, mirrored and patterned like any
-brep body (agent-docs/modify-design.md Part L Table DF).
-
-<a name="FilletChord"></a>
-#### func FilletChord
-
-<pre>func FilletChord(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, b *<a href="#Body">Body</a>, sel <a href="#EdgeSelector">EdgeSelector</a>, chord units.Value) (result *<a href="#Body">Body</a>, retErr <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
-
-FilletChord rounds the edges sel selects with an arc whose chord, the
-straight line between its two tangent edges, is chord long, returning the
-new body and retiring b (agent-docs/modify-design.md Part A).
-
-Where the faces meet at the angle φ across the corner (the interior angle of a
-convex edge, the open wedge of a concave one) the arc turns π − φ, so its
-radius is chord/(2·cos(φ/2)), which is chord/√2 on a right angle.
-FilletChord states that radius and builds the result with [Fillet](<#Fillet>), so the
-receivers, routes and refusals of Fillet apply.
-
-Every selected edge MUST lie between two planar faces, or be circular between a plane and a cylinder, cone or sphere, and may be convex or
-concave: a concave edge's fillet adds the round's material to the corner. Any
-other edge is ErrUnsupported. All the selected edges MUST give the same radius,
-within a relative 1e-12, which equal dihedrals do; edges at different angles
-take separate calls, and a selection that mixes them is ErrUnsupported. chord
-MUST be a positive length; a zero or negative one is ErrDegenerate or
-ErrNegativeMagnitude, and a wrong unit kind is ErrUnitKind. A nil context,
-body or selector is ErrDegenerate. Every failure leaves b live and the
-document unchanged.
-
-<a name="Hole"></a>
-#### func Hole
-
-<pre>func Hole(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, b *<a href="#Body">Body</a>, spec <a href="#HoleSpec">HoleSpec</a>) (result *<a href="#Body">Body</a>, retErr <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
-
-Hole cuts a round hole into b and returns the result, retiring b.
-
-The hole starts at At on the face spec.Face selects, runs along the face's
-inward normal for spec.Depth, and widens at the mouth by spec.Head. The
-result is the same body that Extrude, Revolve and Cut would give for the
-same tool shapes, so its measurements are as exact as those booleans make
-them; a round hole is Approximate because pi is never exact.
-
-b MUST be a live solid; a nil context, body or selector, a missing depth,
-a non-positive diameter or depth, a head not wider than the hole, a
-counterbore not shallower than the hole and a countersink deeper than the
-hole are ErrDegenerate. A face that is not an analytic plane, nor a convex planar
-face of a faceted solid with exact vertices, is ErrUnsupported. A selector that does not resolve to one face is the
-selector's own error. An At more than 1e-6 mm off the face plane, or one
-that [Body](<#Body>).LocatePoint certifies lies outside the body along the hole axis,
-is ErrDegenerate; an undecided location does not refuse. A boolean the
-evaluator cannot decide is the boolean's own error. Every failure leaves
-the document unchanged and b live.
-
-<a name="Infill"></a>
-#### func Infill
-
-<pre>func Infill(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, b *<a href="#Body">Body</a>, spec <a href="#InfillSpec">InfillSpec</a>) (*<a href="#Body">Body</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
-
-Infill fills b with a lattice and returns the lattice material inside it: the lattice over a box
-that encloses b by a margin of a quarter cell, made a solid by [SolidFromMesh](<#SolidFromMesh>) and intersected with b
-(agent-docs/lattice-design.md §5). b and the lattice are consumed, as by [Intersect](<#Intersect>), and the result
-replaces them in b's document. The lattice is the part's whole interior; to keep a skin, [Shell](<#Shell>)
-the part and [Union](<#Union>) the infill into its cavity.
-
-b MUST be a live solid with a proven bounding box. The lattice is cut to b by the mesh Boolean, so
-the result is a faceted body whose volume reads inside the bound the Boolean proves. The lattice
-mesh must be one [SolidFromMesh](<#SolidFromMesh>) takes (a closed mesh of at most 65,528 triangles), so a coarser
-Resolution or a larger Cell admits a bigger part, and a lattice too fine for that is ErrUnsupported.
-The spec's errors are those of the lattice builders, an unknown Kind is ErrDegenerate and a nil
-context or body ErrDegenerate. An intersection that leaves nothing is the Boolean's own error.
-
-<a name="Intersect"></a>
-#### func Intersect
-
-<pre>func Intersect(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, a, b *<a href="#Body">Body</a>, opts ...<a href="#BooleanOption">BooleanOption</a>) (*<a href="#Body">Body</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
-
-Intersect returns the volume common to a and b, retiring both operands
-from their document (core §8). Disjoint operands share nothing, so the
-empty result is ErrBooleanFailed; the other gates match Union's.
-A call refused with ErrUnsupported on a mesh result of earlier Cut and
-Intersect calls is retried from the source bodies of that chain
-(agent-docs/prism-boolean-design.md Part R); only a failure of that retry too
-returns the refusal.
-It returns ctx.Err() unchanged when ctx is canceled before the document commit.
-
-<a name="Loft"></a>
-#### func Loft
-
-<pre>func Loft(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, d *<a href="#Document">Document</a>, s0 *sketch.Sketch, p0 *sketch.Profile, s1 *sketch.Sketch, p1 *sketch.Profile, opts ...<a href="#LoftOption">LoftOption</a>) (*<a href="#Body">Body</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
-
-Loft builds a solid ruled between two profiles recorded on distinct
-geometric planes (agent-docs/loft-design.md), registers it, and returns the new
-body. s0/p0 is the FROM section (capStart); s1/p1 is the TO section
-(capEnd) — the same naming Extrude already uses for its two caps. Both
-profiles pass the unmodified core §7 seam gates independently, in argument
-order (p0 of s0, then p1 of s1): a foreign, stale, invalid, or
-unrecordable profile is the seam's own sentinel.
-
-Every corresponding segment pair must be same-kind, over the recorded
-segment type: both LineSeg, both ArcSeg, both CircleSeg, or both the same
-Tier A free-form type (SplineSeg, ClosedSplineSeg, a NURBSSeg with equal
-weights, or FitSplineSeg). An ArcSeg paired against a CircleSeg, or a
-SplineSeg against a FitSplineSeg, is a mixed-kind pairing like any other,
-and a mixed-kind pairing is [ErrUnsupported](<#ErrUnsupported>) (§1, P5, S3). A free-form pair
-whose two curves convert to different Bézier span counts uses exact common
-subdivision (§5.1). A circular or free-form pair's walls are chorded
-(§5.1), which carries three refusals of its own, each [ErrUnsupported](<#ErrUnsupported>): a
-pair the fixed station cap cannot chord to its chord target (S15), a build
-whose certified sagitta or station displacement has no derivation from the
-two records (S14), and a chord cell that collapses to one point on exactly
-one of the two sections (S16).
-The two profiles must lie on distinct geometric planes;
-coplanar sections are [ErrDegenerate](<#ErrDegenerate>) (§4, S5), since every wall vertex
-would then lie in one plane and the solid has zero volume by construction.
-A hole-count or per-loop segment-count mismatch has no positional or
-one-to-one pairing and is [ErrUnsupported](<#ErrUnsupported>) (S1/S2). A build-time audit
-proves the ruled walls do not cross or self-touch anywhere but their
-recorded shared edges and vertices (§6); a proven crossing is
-[ErrDegenerate](<#ErrDegenerate>) (S7's audit arm). A circular pair whose two sides walk in
-opposite senses is that same crossing — the correspondence walls each side
-against the other's reversed walk — and is the same [ErrDegenerate](<#ErrDegenerate>) (S7's
-structural arm), decided from the two records before any triangle is built.
-Exhausting the audit's fixed pair-test budget is
-[ErrUnsupported](<#ErrUnsupported>) (S8). A section point whose world coordinate runs past the
-representable float64 range is [ErrUnsupported](<#ErrUnsupported>) (S13) — the body exists,
-and this evaluator cannot hold its vertex table. WithSurfaceResult() omits
-both section caps and publishes a sheet body instead of a solid
-(agent-docs/surface-design.md §4).
-
-A failed call leaves the document untouched.
-
-<a name="LoftChain"></a>
-#### func LoftChain
-
-<pre>func LoftChain(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, d *<a href="#Document">Document</a>, s0 *sketch.Sketch, c0 *sketch.Chain, s1 *sketch.Sketch, c1 *sketch.Chain, opts ...<a href="#ChainLoftOption">ChainLoftOption</a>) (*<a href="#Body">Body</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
-
-LoftChain builds a sheet ruled between the open chains c0 (of s0) and c1 (of
-s1), registers it, and returns the new body. c0 is the FROM walk and c1 the
-TO walk, the same argument order Loft uses for its two sections and the
-order §16.2's plane gate reads its positive normal from. Both chains pass
-the identical seam gates chain Extrude runs (RecordChain,
-agent-docs/surface-design.md §13.3), in argument order, and the seam's own
-sentinel wins before any shape gate.
-
-The two walks MUST carry the same recorded segment count (ErrUnsupported),
-and segment j of c0 pairs with segment j of c1 — there is no alignment
-offset for an open walk, since a nonzero one would pair a segment across a
-free end. Every paired segment MUST be a LineSeg pair in this increment: a
-mixed-kind pairing and a same-kind circular pairing are each ErrUnsupported
-(agent-docs/loft-design.md Table SL rows SL4 and SL7). The two recorded planes
-MUST be exactly parallel with the to-plane strictly on the from-plane's
-positive side, which is what states the ribbon's positive side
-(ErrUnsupported, SL5); coplanar sections are ErrDegenerate (S5). A build-time
-audit proves the ruled walls cross nowhere but their own shared edges and
-vertices, and a proven crossing is ErrDegenerate (S7) — which is what
-refuses a pair whose two published walks run opposite ways.
-
-The result is always a sheet — Kind() == BodySheet — two flat triangles per
-chord cell with no cap and no closing face, so WithSurfaceResult() does not
-compile against this call. A failed call leaves the document untouched.
-
-<a name="LoftFaces"></a>
-#### func LoftFaces
-
-<pre>func LoftFaces(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, sections []*<a href="#Face">Face</a>, opts ...<a href="#LoftFacesOption">LoftFacesOption</a>) (*<a href="#Body">Body</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
-
-LoftFaces builds one solid through ordered complete caps of the same
-authenticated point-loft Split source (agent-docs/loft-face-sections-design.md).
-
-sections are the least slab's toe cap, then heel caps in source order. There
-are 2 to 32 of them, or 1 to 31 with WithConeTangentEnd, which adds a last,
-constructed section. The document is the one owning the first section's
-body, and the result is in the container of that body. A nil context, a
-nil option, a repeated option, a nil cone, a section count outside the
-bounds, a first section that is not a body face, or a radial that
-WithConeTangentEnd cannot use is ErrDegenerate. A cone that is not an
-unplaced exact point cone about world X is ErrUnsupported. A section or cone
-of another document is ErrForeignBody and a retired one ErrRetiredBody.
-Selection failures are those of the section source. A canceled ctx returns
-ctx.Err() before the document changes.
-
-<a name="LoftFromPoint"></a>
-#### func LoftFromPoint
-
-<pre>func LoftFromPoint(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, d *<a href="#Document">Document</a>, apex r3.Vec,
-    s *sketch.Sketch, p *sketch.Profile) (*<a href="#Body">Body</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
-
-LoftFromPoint builds a solid from one exact world point to a closed Sketch
-profile. The apex is in millimetres. This operation accepts one outer loop
-and no holes; every fitted flank remains the recorded Sketch curve. The
-boundary is a certified chorded fan and a cap (agent-docs/loft-design.md §20).
-
-<a name="LoftSections"></a>
-#### func LoftSections
-
-<pre>func LoftSections(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, d *<a href="#Document">Document</a>, sections ...<a href="#LoftSection">LoftSection</a>) (*<a href="#Body">Body</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
-
-LoftSections builds one solid through three or more Sketch profiles.
-The three-section quadratic route admits positive homothetic whole-line loops
-star-shaped about their common origin. A varying four-arc circular section
-can build as a ruled cone; exactly matching curved records build as a
-straight prism. Two varying fitted flanks with unchanged circular arcs
-use the source interpolants' quadratic height wall. Four rounded rectangles
-with a common radius and height use a cubic-width wall. Three to thirty-two
-centered rectangles may vary width and height independently. All of those routes
-require ascending, equally spaced world-XY planes and interpolate every section
-exactly. Three to 1024 sections of one fitted edge and whole lines may turn
-about the plane origin on strictly ascending world-XY planes (agent-docs/loft-sections-design.md).
-A four-quarter-arc circle may also transition to four-edge sections of one
-fitted edge and three lines, with a certified rational wall.
-Other shapes refuse.
-
-<a name="LoftSectionsWithCircularCorrespondence"></a>
-#### func LoftSectionsWithCircularCorrespondence
-
-<pre>func LoftSectionsWithCircularCorrespondence(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, d *<a href="#Document">Document</a>,
-    correspondence <a href="#CircularLoftCorrespondence">CircularLoftCorrespondence</a>, sections ...<a href="#LoftSection">LoftSection</a>) (*<a href="#Body">Body</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
-
-LoftSectionsWithCircularCorrespondence builds a circular-to-spline loft
-using explicit cardinal-quarter parameter maps. The maps and the source
-sections must satisfy the exact admission and continuity proofs in
-agent-docs/loft-sections-design.md §14.
-
-<a name="Mirrored"></a>
-#### func Mirrored
-
-<pre>func Mirrored(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, b *<a href="#Body">Body</a>, plane <a href="#MirrorPlane">MirrorPlane</a>,
-    opts ...<a href="#MirrorOption">MirrorOption</a>) (result *<a href="#Body">Body</a>, retErr <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
-
-Mirrored returns a new body carrying b's mirror image across plane,
-retiring b. It calls [Transform](<#Transform>) under r3.Reflection of the
-resolved plane (agent-docs/mirror-pattern-design.md §4.2): the reflection is
-carried in the body's accumulated placement, and every reading — volume,
-centroid, outward normals, tessellation winding, export — follows it.
-
-The gates are Transform's — a nil context is ErrDegenerate, a body this
-evaluator did not build is ErrUnsupported, and a canceled context stops the
-rebuild before the document changes — plus the plane's own resolution (see
-[MirrorFrame](<#MirrorFrame>) and [MirrorFace](<#MirrorFace>)). A nil plane or a nil option is
-ErrDegenerate, as is a nil b. With [WithJoin](<#WithJoin>) it returns the union of b and
-its image instead, on the class WithJoin states. A refused call leaves the
-document unchanged.
-
-<a name="MirroredCopy"></a>
-#### func MirroredCopy
-
-<pre>func MirroredCopy(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, b *<a href="#Body">Body</a>, plane <a href="#MirrorPlane">MirrorPlane</a>) (result *<a href="#Body">Body</a>, retErr <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
-
-MirroredCopy returns a new live body carrying b's mirror image across
-plane, leaving b LIVE. It calls [Copy](<#Copy>) with [WithCopyPlacement](<#WithCopyPlacement>) under
-r3.Reflection of the resolved plane, with the gates [Mirrored](<#Mirrored>) states.
-A nil b is ErrDegenerate.
-
-<a name="MoveFace"></a>
-#### func MoveFace
-
-<pre>func MoveFace(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, b *<a href="#Body">Body</a>, sel <a href="#FaceSelector">FaceSelector</a>, distance units.Value) (result *<a href="#Body">Body</a>, retErr <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
-
-MoveFace moves one face of b along its normal by distance and returns the new body, retiring b: the
-press-pull of a CAD system (agent-docs/orthogonal-design.md). A positive distance moves the
-face outward, growing the body, and a negative one inward, cutting it, and the walls beside the face
-follow it. The result is the body joined to the prism the face sweeps, or less it, so a notch
-bottom moves as readily as an outer wall.
-
-The route is the grid one of the orthogonal shell (agent-docs/orthogonal-design.md): b
-MUST be a faceted solid, such as one made by [SolidFromMesh](<#SolidFromMesh>), every face of which squares to a
-world axis and whose held vertices carry no bound, otherwise ErrUnsupported. sel MUST resolve to
-exactly one planar face of b, otherwise ErrDegenerate. distance is a signed length: zero is
-ErrDegenerate and a wrong unit kind ErrUnitKind. A face that would move into material, or inward
-out through the opposite wall, or leave no solid, is ErrDegenerate. The new coordinate is the
-float sum of the face's plane and distance. A nil context, body or selector is ErrDegenerate. The
-result is a mesh solid, so its axis faces keep their exact planes.
-
-<a name="Offset"></a>
-#### func Offset
-
-<pre>func Offset(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, b *<a href="#Body">Body</a>, distance units.Value,
-    opts ...<a href="#OffsetOption">OffsetOption</a>) (result *<a href="#Body">Body</a>, retErr <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
-
-Offset returns a second sheet whose every face lies at the stated normal
-distance from the source face of b it came from, LEAVING b LIVE.
-
-distance is a strictly positive [units.Value](<https://pkg.go.dev/github.com/lestrrat-3d/units#Value>) of kind Length; its sign never
-chooses a side, and [WithOffsetSide](<#WithOffsetSide>) does, the last occurrence winning. A
-recorded planar patch offsets by translation along its own frame normal; a
-profile-fed prism sheet offsets by the certified per-feature section offset
-of agent-docs/modify-design.md §8, growing a radius-distance arc at each convex
-corner and mitering each concave one. Every other sheet family is ErrUnsupported (agent-docs/surface-design.md Table R row R37). A solid
-offsets only when it is a faceted solid whose faces all square to a world axis, such as a mesh solid
-(agent-docs/orthogonal-design.md): each face moves along its outward normal, outward for OffsetPositive
-and inward for OffsetNegative, the neighbouring faces extended or trimmed to meet, and the result is a second
-solid; any other solid is ErrUnsupported.
-
-A nil context, a nil b or an option this package did not mint is
-ErrDegenerate, as is a zero distance; a wrong-kind, non-finite or negative distance keeps
-sectionrecord.MagnitudeIn's own sentinel (R40). A retired b is ErrRetiredBody (R41).
-A refusal registers nothing and retires nothing, so b is live
-after a refusal exactly as it is after a success.
-
-<a name="PatchEdges"></a>
-#### func PatchEdges
-
-<pre>func PatchEdges(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, b *<a href="#Body">Body</a>, sel <a href="#EdgeSelector">EdgeSelector</a>) (result *<a href="#Body">Body</a>, retErr <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
-
-PatchEdges resolves sel against b's own live topology, fills every closed
-chain of free edges the selection proves, and returns a new body carrying
-b's own faces plus one new planar face per chain, retiring b
-(agent-docs/surface-design.md §5.2). b's own topology is never mutated: the
-result is built by REBUILDING b from its own faces, so a retired b stays
-readable and unmodified for any caller still holding it.
-
-A nil context or a nil b is [ErrDegenerate](<#ErrDegenerate>). A b this evaluator did not
-build (b.n.Payload == nil) is [ErrUnsupported](<#ErrUnsupported>) (Table R row R19): a body reads
-its readable topology regardless of payload, but PatchEdges's own
-re-evaluation contract — a placed copy replays from the recorded plane
-rather than re-proving it — needs the same payload-carrying contract every
-other rebuilding operation
-(Transform, Copy) already requires. A body owned by a
-different document is [ErrForeignBody](<#ErrForeignBody>), and a retired b is
-[ErrRetiredBody](<#ErrRetiredBody>). sel's own resolution failure ([SelectionError](<#SelectionError>) wrapping
-[ErrNoMatch](<#ErrNoMatch>) or [ErrCardinality](<#ErrCardinality>), Table R row R16) and every one of gates
-1-4's refusals (R4, R5, R6, R18) surface unchanged. A failed call leaves
-the document and b unchanged.
-
-<a name="PatchProfile"></a>
-#### func PatchProfile
-
-<pre>func PatchProfile(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, d *<a href="#Document">Document</a>, s *sketch.Sketch, p *sketch.Profile) (result *<a href="#Body">Body</a>, retErr <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
-
-PatchProfile records p through the seam exactly as Extrude does — the same
-authentication, staleness, foreign-entity and TExact admission gates of
-agent-docs/api-design.md §7 and agent-docs/sketch-seam-design.md, with no relaxation —
-and builds a single planar face on s.Plane().Frame(), carrying the
-profile's outer loop and every hole loop (agent-docs/surface-design.md §5.1). The
-result is a one-face sheet body: Kind() == BodySheet, one lump, one open
-shell, and one free edge per coalesced boundary walk. p MUST be a profile
-of s (ErrForeignProfile) and a current, unaltered snapshot (ErrStaleProfile
-or ErrInvalidProfile); an invalid profile is also ErrInvalidProfile, and a
-boundary decad cannot record exactly is ErrUnrecordableProfile. A recorded
-boundary carrying a free-form segment this evaluator cannot integrate is
-ErrUnsupported (Table R row R3). A failed evaluation leaves the document
-untouched. A nil context or a nil d is ErrDegenerate.
-
-<a name="PathPattern"></a>
-#### func PathPattern
-
-<pre>func PathPattern(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, b *<a href="#Body">Body</a>, path *<a href="#Path">Path</a>, opts ...<a href="#PathPatternOption">PathPatternOption</a>) (result []*<a href="#Body">Body</a>, retErr <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
-
-PathPattern repeats b along path and returns the extra copies as separate
-live bodies, leaving b live (agent-docs/path-pattern-design.md). Instance 0
-is b, taken to sit at the path's start. [WithPathCount](<#WithPathCount>) or [WithPathSpacing](<#WithPathSpacing>)
-chooses the other instances' points. Exactly one of them is required, and
-neither, both, or either given twice is ErrDegenerate. Instance i is a [Copy](<#Copy>)
-of b moved by the vector from the path's start to its point. Copies keep the
-orientation of b unless [WithPathFollow](<#WithPathFollow>) turns them to follow the path.
-
-The path is the sweep [Path](<#Path>) of straight [LineTo](<#LineTo>) and circular
-[ArcThrough](<#ArcThrough>) and [ArcAround](<#ArcAround>) segments. Points are spaced by arc length, not by segment.
-Join the copies with the base through one [Union](<#Union>), as with [PatternCopies](<#PatternCopies>).
-
-b MUST be live; path MUST NOT be nil. A nil context, a nil option, and a path
-segment with no length or no circle are ErrDegenerate. A failed or canceled
-call leaves b live and retires every copy it had already made, so no copy
-outlives the call. Each copy is a Copy, so it carries Copy's own refusals.
-
-<a name="PatternCopies"></a>
-#### func PatternCopies
-
-<pre>func PatternCopies(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, b *<a href="#Body">Body</a>, spec <a href="#PatternSpec">PatternSpec</a>) ([]*<a href="#Body">Body</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
-
-PatternCopies returns Count−1 new live bodies, instances 1..Count−1 of
-spec in order, and leaves b live (agent-docs/mirror-pattern-design.md §4.3).
-
-The gates are Copy's — a nil context or a nil b is ErrDegenerate, a body
-this evaluator did not build is ErrUnsupported, a retired or foreign b is
-refused — plus the spec's own: a nil spec or a Count below 2 is
-ErrDegenerate; a non-finite Dir, [Axis](<#Axis>) or Center is ErrNotFinite and a zero
-Dir or [Axis](<#Axis>) ErrDegenerate; a Step that is not a length is ErrUnitKind, a
-negative one ErrNegativeMagnitude and a zero one ErrDegenerate. Every
-instance is built before any is registered, so a refusal or a canceled
-context leaves the document unchanged.
-
-A straight or stacked prism patterned along a direction exactly
-perpendicular to its sweep, or about an axis bit-identical to its sweep
-normal, keeps one frame: each instance is the receiver's own record moved
-in its plane, so a pattern of integer-millimetre holes stays Exact. Its
-readings carry the motion's rounding as a section displacement.
-
-To join the instances to a base, pass the base, b and the result to one
-[Union](<#Union>): Union(ctx, base, append(\[\]\*[Body](<#Body>){b}, copies...)...). A refused
-Union leaves every operand live, the copies included; [Remove](<#Remove>) them.
-
-<a name="Patterned"></a>
-#### func Patterned
-
-<pre>func Patterned(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, b *<a href="#Body">Body</a>, spec <a href="#PatternSpec">PatternSpec</a>) (*<a href="#Body">Body</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
-
-Patterned returns ONE body holding every instance of spec, b included,
-and retires b (agent-docs/mirror-pattern-design.md §4.3, §6.1). Its gates are PatternCopies'. The instances combine by the first
-rule that applies:
-
-1. A straight prism or a prism group on the frame-keeping arm whose
-   instances sketch proves pairwise disjoint becomes one prism group: a
-   one-slab stacked prism holding every instance's regions on the
-   receiver's frame and interval. No boolean runs. Instances that touch
-   at one point, such as tangent discs, are not disjoint.
-2. Any other receiver whose instances are proven disjoint is
-   ErrUnsupported: no payload holds disjoint lumps of it. Use
-   PatternCopies and keep the instances as separate bodies.
-3. Otherwise the instances combine by Union in index order,
-   Union(Union(b0, b1), b2) …, each with that boolean's own gates and
-   refusals, and a refusal is returned as that Union's error.
-
-Every instance and every intermediate result is built before anything is
-registered, so a refusal or a canceled context leaves the document
-unchanged and b live.
-
-<a name="QuarterTurn"></a>
-#### func QuarterTurn
-
-<pre>func QuarterTurn(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, b *<a href="#Body">Body</a>, axis, about r3.Vec, turns <a href="https://pkg.go.dev/builtin#int">int</a>) (result *<a href="#Body">Body</a>, retErr <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
-
-QuarterTurn turns a faceted solid by a whole number of quarter turns about an axis through about, a world axis
-with the right-hand sense, and returns the result as a new solid, retiring b
-(agent-docs/orthogonal-design.md B9). A quarter turn only exchanges and negates coordinates, so the
-turned solid is exact where [Transform](<#Transform>) by a 90 degree [r3.Rotation](<https://pkg.go.dev/github.com/lestrrat-3d/r3#Rotation>) is not: its vertices stay unbounded and it
-stays on the exact routes of an axis-square solid.
-
-b MUST be a live faceted solid whose held vertices carry no bound, such as a mesh solid, otherwise
-ErrUnsupported. axis MUST be exactly a world axis, +X, +Y, +Z or its negative, otherwise ErrUnsupported; turns
-turn counter-clockwise looking down the axis toward its origin when positive and the other way when
-negative, and a multiple of four turns changes nothing, which is ErrDegenerate. A turn whose coordinates
-cannot be held exactly (about a point the sums round on) is ErrUnsupported and changes nothing. A nil
-context or body is ErrDegenerate.
-
-<a name="Refine"></a>
-#### func Refine
-
-<pre>func Refine(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, source *<a href="#Body">Body</a>, maxBound units.Value) (result *<a href="#Body">Body</a>, retErr <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
-
-Refine returns a new body holding source's held mesh with a surface bound
-no larger than maxBound, and retires source
-(agent-docs/body-refine-design.md §7). It moves no vertex: the result has
-source's vertices, triangles, topology, Volume, Area and every vertex and
-edge reading, and fresh face identities. What changes is the bound a
-public Tessellate publishes: every point of the held mesh lies within it of
-the true boundary, and every point of the true boundary within it of the
-held mesh, so Tessellate succeeds at any tolerance at or above
-[Mesh](<#Mesh>).Bound().
-
-source MUST be a live solid made by mesh Unions whose every operand traces
-back to a solid of one whole circle (an extruded cylinder, a Revolve clear of
-its axis, a Sweep along lines and arcs, or a Coil, placed or not), each Union taken
-on its own two operands, optionally followed by Cuts whose tools are
-extruded cylinders. Any other body, or a mesh
-whose bound cannot be proven within maxBound inside the fixed work ceiling,
-is ErrUnsupported and changes nothing. A Union result that was placed after
-its last Union is outside the class: placement drops the record Refine
-reads. Placing the refined result instead keeps its bound, grown by the
-rounding the placement charges. A later Boolean on the result reads
-the bounds source published, so refining never loosens what a chain admits.
-
-A straight-bevel sector join (a Union of a revolve blank and copies of one
-point-Loft tooth, still carrying its join record) is the exception to
-"moves no vertex": its cone caps stop refining at a 0.1 mm bound, so Refine
-rebuilds it with finer caps until its bound is at most maxBound. The result
-has new vertices and readings and keeps the bound for later Unions and Cuts.
-
-maxBound is a length: wrong kind is ErrUnitKind, non-finite ErrNotFinite,
-negative ErrNegativeMagnitude and zero ErrDegenerate. A nil context or body
-is ErrDegenerate. A canceled context stops the certificate before the
-document changes.
-
-<a name="Revolve"></a>
-#### func Revolve
-
-<pre>func Revolve[S <a href="#Section">Section</a>](ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, d *<a href="#Document">Document</a>, s *sketch.Sketch, sec S, axis <a href="#Axis">Axis</a>, a <a href="#AngularExtent">AngularExtent</a>,
-    opts ...<a href="#RevolveOption">RevolveOption</a>) (*<a href="#Body">Body</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
-
-Revolve spins the section sec of sketch s about axis per the angular
-extent a, registers the new body, and returns it. sec is a closed
-[\*sketch.Profile](<https://pkg.go.dev/github.com/lestrrat-3d/sketch#Profile>), which revolves to a solid (sheet under
-[WithSurfaceResult](<#WithSurfaceResult>)), or an open [\*sketch.Chain](<https://pkg.go.dev/github.com/lestrrat-3d/sketch#Chain>), which revolves to a
-sheet. Both are recorded from s; the type argument S is inferred.
-
-A profile section MUST be a profile of s (ErrForeignProfile) and a
-current, unaltered snapshot (ErrStaleProfile or ErrInvalidProfile); an
-invalid profile is also ErrInvalidProfile, and a boundary decad cannot
-record exactly is ErrUnrecordableProfile (core §7). The axis must be
-non-degenerate and coplanar with the profile plane, and it must not pass
-through the region's interior: the region lies in one closed half-plane of
-the axis, and boundary contact is allowed in exactly two forms — a segment
-endpoint on the axis, and a whole line segment lying along it; anything
-else is ErrDegenerate (agent-docs/evaluator-design.md §6). A fitted-spline or
-other Tier A free-form boundary requires proven strict clearance from the
-axis; a free-form contact is ErrUnsupported. WithSurfaceResult() omits the
-two caps a partial sweep closes with and publishes a sheet instead of a
-solid; a full revolution already closes with no cap to omit, so the option
-there yields a closed sheet rather than a refusal (agent-docs/surface-design.md
-§4, Table W).
-
-A chain section MUST be a chain of s and a current, unaltered snapshot,
-with the same sentinels (ErrForeignProfile, ErrStaleProfile,
-ErrInvalidProfile, ErrUnrecordableProfile; agent-docs/sketch-seam-design.md
-§2.2). The axis rules are the profile's, applied to the walk: it lies in
-one closed half-plane of the axis. One free end may lie on the resolved
-axis when its incident wall leaves the axis; it sweeps to a pole rather than
-a rim. Both free ends on the axis, or an on-axis free end whose incident
-walk lies along the axis, are ErrUnsupported (Table R, R22). The result is
-always a sheet — Kind() == BodySheet — one swept wall per off-axis recorded
-segment (agent-docs/surface-design.md §13.4, Table G), with no cap and no closing
-face. A full revolution of the chain is still OPEN: each off-axis free end
-sweeps one free circle, so a chain with one pole has one free rim. A chain
-section therefore returns ErrUnsupported for [WithSurfaceResult](<#WithSurfaceResult>), which has
-no solid to toggle. That refusal follows the chain's seam gate and precedes
-the axis, extent and build work (agent-docs/surface-design.md §13.2).
-
-A nil context, document, sketch or section returns ErrDegenerate. The
-context is checked at entry, between recording the section, resolving the
-axis and extent and building the body, and inside the evaluators; a
-canceled context returns ctx.Err() unchanged. Every failure and
-cancellation leaves the document unchanged.
-
-<a name="ScaledAt"></a>
-#### func ScaledAt
-
-<pre>func ScaledAt(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, b *<a href="#Body">Body</a>, anchor r3.Vec, factor units.Value) (result *<a href="#Body">Body</a>, retErr <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
-
-ScaledAt returns the positive uniform image of an authenticated point-loft
-Split slab, exact line/circular solid prism, line-only stack or stack-backed
-BRep, solid Revolve (complete or partial), audited faceted Boolean result,
-or other faceted solid whose held mesh passes its shell and crossing audit
-about anchor, then retires b. A nil context or a nil b is ErrDegenerate.
-Source roles and certified boundary and occupied-volume bounds follow the
-image. A faceted Boolean result keeps the retained [Plane](<#Plane>), [Cylinder](<#Cylinder>), [Sphere](<#Sphere>)
-and [Torus](<#Torus>) surfaces of its faces, scaled with the body; a retained [Cone](<#Cone>) or
-denoted face reads [Faceted](<#Faceted>). Another faceted solid follows the same rule:
-plane faces and retained [Cylinder](<#Cylinder>), [Sphere](<#Sphere>) and [Torus](<#Torus>) faces keep their scaled
-surfaces, and retained [Cone](<#Cone>), denoted and unretained curved faces read
-[Faceted](<#Faceted>). A refused or canceled call leaves the document unchanged.
-
-<a name="Shell"></a>
-#### func Shell
-
-<pre>func Shell(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, b *<a href="#Body">Body</a>, sel <a href="#FaceSelector">FaceSelector</a>, t units.Value,
-    opts ...<a href="#ShellOption">ShellOption</a>) (result *<a href="#Body">Body</a>, retErr <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
-
-Shell removes the faces of b that sel selects and lines the rest
-with a wall of thickness t, returning the new body and retiring b
-(agent-docs/modify-design.md §8, core §8). A nil b is ErrDegenerate. sel names the
-faces to REMOVE — the openings — resolved against the live b; a query matching nothing is
-loud (ErrNoMatch / ErrCardinality, S16). t is a length magnitude, gated like
-every other (S15); a zero t is S14 (the wall is the empty region). A
-receiver outside the admitted prism, straight Sweep, revolve, brep and draft routes is S3,
-ErrUnsupported. A straight prism's offset
-section faces the §5 audit before anything is built, so no unproven body is
-ever made. Removing both caps of a section with k holes returns 1 + k
-lumps: the band inside the outer loop, then one band lining each hole
-(agent-docs/modify-design.md Part R BX8).
-
-A prism or one-line solid Sweep also takes a side opening
-(agent-docs/modify-design.md Part O): one
-connected run of its outer side faces removed, with or without its caps, on
-a hole-free section whose every walk is a line, along a section axis or
-oblique, or a circular arc. Each end of the kept walks closes on the removed
-face's own plane or cylinder, cut by the kept wall's offset. With both caps
-removed the result is a prism over the wall section; otherwise it is an
-analytic face record with face(k)/wall(k) roles, an axis-aligned removed
-face's plane holding the opening as its hole and an oblique one stated as
-coplanar pieces. A removed hole wall, two runs, every side face, or a holed
-section is ErrUnsupported (SO6); so are a kept arc meeting a removed arc at
-an end corner, an oblique removed end face recorded as several segments,
-and, under a kept cap, a rim cut on a removed arc at a point that is not
-exactly on the arc's circle (SO5). Inward, the kept caps must leave a
-cavity height (SO3, ErrDegenerate).
-
-A partial revolve is shelled when sel removes both of its angular caps: the
-wall is its meridian's offset swept over the same angle, and a meridian walk
-on the axis grows no wall (agent-docs/modify-design.md Part R §9.3). A revolve
-also takes a side opening — one connected run of its generated side faces,
-on a full turn or beside both removed angular caps — where the kept chain is
-one piece; the rim at each opening end is the removed face's own cut
-through the wall (agent-docs/modify-design.md Part O §8). Any
-other side selection, a kept angular cap, a holed meridian, a meridian
-meeting the axis along more than one walk and an offset reaching the axis
-are ErrUnsupported.
-
-A faceted solid whose every face squares to a world axis and whose held vertices carry no bound,
-such as a part read from STL and made a solid by SolidFromMesh, shells inward on a grid:
-the cavity is the solid eroded by a cube of side twice t, so the walls are mitered at
-every edge, the removed faces open it, and the result is a mesh solid whose axis faces keep
-their planes (agent-docs/orthogonal-design.md). A wall is t thick to the rounding
-of x ± t; walls that meet are ErrDegenerate. An Outward shell of such a solid wraps it
-instead, the solid dilated by a cube less itself, ending flush with a removed face's plane.
-
-A positive-taper one-sided full-circle draft with its far cap removed
-inward builds a conical cup through draft §10.6's bounded meridian.
-
-WithNoOpenings asks for a closed hollow body that keeps every face; it is
-the one call form that takes a nil sel, and a non-nil sel beside it is
-ErrDegenerate (agent-docs/modify-design.md Part R §2, SX1). A full-turn revolve
-builds it: the meridian's wall region swept a whole turn, an outer shell
-around one void shell ([FaceShell](<#FaceShell>).IsVoid) that is the cavity. So does a
-straight prism: both caps keep a floor t thick, so an inward wall needs t
-below half the sweep (SX11, ErrDegenerate). A holed section builds too, its
-cavity a ring round each hole's lining; outward the cavity is the section
-itself and each lining grows into its hole, so a hole whose radius or
-half-width is at most t fills in, which is ErrUnsupported (S11a). So does a
-brep result that reads as a prism along some reference axis, such as a
-drilled bar (modify-general §3.2); outward it must read along one axis
-only. A two-slab rectangular boss Union builds the bounded inward cavity of
-modify-general §3.1a. Other receivers return ErrUnsupported after the
-stage-1 gates pass — a partial revolve, and brep or stacked results outside
-those classes (SG2). A convex mesh Boolean result whose faces all keep an
-exact plane tag and whose edges all meet at valence-3 vertices, such as the
-45 degree bevelled plate of a tilted Cut, builds the closed inward shell
-through the trim graph: each face's plane moved in by t and the cavity
-corners found as exact three-plane meets (agent-docs/trim-graph-design.md,
-Component 6). The cavity is one void shell with a plane face per outer face;
-a thickness that drops a face, or a receiver with a concave edge, keeps the
-ErrUnsupported refusal. Two WithShellSense options naming different senses are
-ErrDegenerate (SX1).
-
-An analytic boolean result (a brep or stacked body) that reads as a prism
-along a reference axis is shelled as that prism
-(agent-docs/modify-design.md Part B route P) when the removed faces are its caps.
-A brep that reads as a prism along one reference axis cut by through tools
-along others is shelled inward with one or both of that prism's caps, one
-connected run of its straight side walls along section axes, or both
-removed (agent-docs/modify-design.md Part G route S): the cavity is the eroded
-prism — with a wall run, the side opening's cavity section
-(agent-docs/modify-design.md Part O) — cut by each tool dilated by t, and the
-result is a brep holding the receiver's kept faces, the cavity's faces and
-the rim at each removed face. One whole-circle tool wall through a rectangular
-box builds a three-section shell (modify-general §3.1d). On other records,
-an outward shell (SG1), a removed tool or hole wall (SG4), a removed curved
-outer wall or a wall run ending at a reflex corner (SG5), and dilated tools
-that meet, reach a cap of the cavity or the material past the walls they pierce (SG6) are
-ErrUnsupported, and a wall run refuses as a prism side opening does
-(SO1–SO6, with their sentinels). A brep or
-stacked result that reads as neither is ErrUnsupported: SB3, the prism's own
-S2, where it reads as a prism, and SB10 where it does not, each naming the
-first face route S does not take (SG3). One exact exception is a pair of
-nested rectangular slabs: removing the boss top inward builds the plate
-and boss cavity with four cylinder root patches (modify-general §3.1a).
-A coaxial two-level counterbore has a separate inward route (§3.1e).
-
-<a name="SolidFromMesh"></a>
-#### func SolidFromMesh
-
-<pre>func SolidFromMesh(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, d *<a href="#Document">Document</a>, m *<a href="#MeshBody">MeshBody</a>) (result *<a href="#Body">Body</a>, retErr <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
-
-SolidFromMesh turns a closed [MeshBody](<#MeshBody>) into a solid [Body](<#Body>) of d, so an imported
-or built mesh takes part in Booleans, mass properties, selection and Verify as a
-body does (agent-docs/mesh-solid-design.md). The mesh is the solid: its vertices
-are held exactly, so the body's boundary bound is zero and its volume is the
-mesh's exact volume, read from the exact signed volume of its triangles. The body is
-[Faceted](<#Faceted>): coplanar triangles that share an exact plane through their vertices, found
-in rational arithmetic, form one face, so a block read from STL has six faces.
-
-m MUST be closed (every edge in two triangles), wound outward, and free of
-self-crossing, which the exact contact audit of the lofted bodies proves: a mesh with
-a crossing the audit finds, or one the audit cannot decide, is refused. A mesh that is
-open, non-manifold or wound inward is ErrNotSolid, one with no positive volume is
-ErrNotSolid, one with a crossing is ErrDegenerate, and one of more than 65,528
-triangles, or whose audit exceeds its work ceiling, is ErrUnsupported. A nil
-context, document or mesh is ErrDegenerate. A failure leaves d unchanged.
-
-<a name="Split"></a>
-#### func Split
-
-<pre>func Split(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, target, tool *<a href="#Body">Body</a>) (results []*<a href="#Body">Body</a>, retErr <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
-
-Split cuts target with tool and returns one solid per arranged target cell
-in sketch's cell order. The target is a solid and the tool a sheet sharing
-its generator: both straight sweeps, or both revolves about one axis
-(agent-docs/surface-intersection-design.md §2.1). Any other pair, or a miss on
-that section's gate, is ErrUnsupported. Both operands are consumed only
-after every piece has been built. A tool that separates no target cell is
-ErrDegenerate, as is a nil context or a nil target. The document is the
-target's own.
-
-<a name="Stitch"></a>
-#### func Stitch
-
-<pre>func Stitch(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, bodies ...*<a href="#Body">Body</a>) (result *<a href="#Body">Body</a>, retErr <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
-
-Stitch welds every free-edge pair it can prove coincident
-(agent-docs/surface-design.md §6.2's Table J) across bodies, assembles the
-result, and returns one new body, retiring every operand. One operand is
-meaningful: it re-audits that body's own boundary, which is how a closed
-sheet becomes a solid (§2.1, §4.1).
-
-Every operand must carry an evaluator payload and be a live [BodySheet](<#BodySheet>) of
-this call's document: a nil or payload-less operand is [ErrDegenerate](<#ErrDegenerate>)
-(Table R row R12), an operand owned by a different document is
-[ErrForeignBody](<#ErrForeignBody>) (R13), a retired operand is [ErrRetiredBody](<#ErrRetiredBody>) (R14), and a
-[BodySolid](<#BodySolid>) operand is [ErrUnsupported](<#ErrUnsupported>) (R17) — it has no free edge, so
-stitching cannot change it, and a caller combining two solids means
-[Union](<#Union>). Before Table C decides anything, every vertex's own link across
-the welded set must be a manifold — one connected fan (interior) or path
-(rim) — open or closed, all-planar or curved alike; a pinch there is
-[ErrDegenerate](<#ErrDegenerate>) (R7), the identical sentinel a non-orientable assembly
-gets, even when free edges also remain. Table C then decides the rest: a
-residual free edge is a [BodySheet](<#BodySheet>) and never an error; a fully welded,
-all-planar, non-crossing boundary is a [BodySolid](<#BodySolid>); a fully welded
-boundary holding a curved face is [ErrUnsupported](<#ErrUnsupported>) (R8); a welded set
-with no consistent orientation is [ErrDegenerate](<#ErrDegenerate>) (R7); and a proven
-self-contact or an exhausted audit budget surfaces the crossing audit's
-own [ErrDegenerate](<#ErrDegenerate>)/[ErrUnsupported](<#ErrUnsupported>) (R9/R10) unchanged. A failed call
-leaves the document and every operand unchanged.
-
-<a name="Stretch"></a>
-#### func Stretch
-
-<pre>func Stretch(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, b *<a href="#Body">Body</a>, anchor r3.Vec, x, y, z units.Value) (result *<a href="#Body">Body</a>, retErr <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
-
-Stretch scales a faceted solid by a separate factor along each world axis about anchor and returns the
-result as a new solid, retiring b (agent-docs/mesh-solid-design.md §3). It is the non-uniform scale
-[ScaledAt](<#ScaledAt>) does not offer: a box becomes a longer box, and a part with planar faces keeps every face
-planar while a slanted one tilts.
-
-b MUST be a live faceted solid whose held vertices carry no bound, such as one made by
-[SolidFromMesh](<#SolidFromMesh>) or by [MoveFace](<#MoveFace>); any other body is ErrUnsupported, because a stretched curved or
-bounded body is not a solid this route can prove. The result is built as [ScaleMesh](<#ScaleMesh>) builds a mesh and
-read back as [SolidFromMesh](<#SolidFromMesh>) reads one, so its planes are exact over the stretched coordinates. Each
-factor is dimensionless, finite and not zero (ErrUnitKind, ErrNotFinite, ErrDegenerate); a negative
-factor mirrors across the plane through anchor. A nil context or body is ErrDegenerate.
-
-<a name="Sweep"></a>
-#### func Sweep
-
-<pre>func Sweep[S <a href="#Section">Section</a>](ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, d *<a href="#Document">Document</a>, s *sketch.Sketch, sec S, path *<a href="#Path">Path</a>,
-    opts ...<a href="#SweepOption">SweepOption</a>) (*<a href="#Body">Body</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
-
-Sweep moves the section sec along path, registers the resulting body, and
-returns it. sec is a closed [\*sketch.Profile](<https://pkg.go.dev/github.com/lestrrat-3d/sketch#Profile>), which sweeps to a solid
-(sheet under [WithSurfaceResult](<#WithSurfaceResult>)), or an open [\*sketch.Chain](<https://pkg.go.dev/github.com/lestrrat-3d/sketch#Chain>), which sweeps
-to a sheet. Both are recorded from s; the type argument S is inferred.
-
-A profile section's path must start in the profile plane and its initial
-tangent must be exactly codirectional with the plane's positive normal.
-Composite paths also require tangent joins, exactly representable transported
-frames, and a certified absence of unintended span contact. [Section](<#Section>) 17 of
-the Sweep design states the bounded nonzero-twist reach. Sections 3.3–3.5
-admit bounded closed-path classes.
-
-A chain section is gated exactly as a chain [Extrude](<#Extrude>) gates it
-(agent-docs/surface-design.md §13.3); the seam's own sentinel wins before any path
-geometry is read. The path must start in the sketch plane with its initial
-tangent codirectional with that plane's positive normal (ErrDegenerate). The
-evaluator sweeps one straight span, one arc, or §15.8's cardinal line/arc pair;
-other composite paths are ErrUnsupported (Table SC). The result
-is always a sheet, one wall per recorded segment per span with no cap or
-closing face. A chain section therefore returns ErrUnsupported for
-[WithSurfaceResult](<#WithSurfaceResult>) (there is no solid to toggle), [WithSweepTwist](<#WithSweepTwist>),
-[WithMitredJoins](<#WithMitredJoins>) and [WithSectionScale](<#WithSectionScale>). That refusal follows the chain's
-seam gate and precedes every path-geometry gate (agent-docs/sweep-design.md §15.3).
-
-A nil context, document, sketch, section or path returns ErrDegenerate.
-Every failure and cancellation
-leaves the document unchanged.
-
-<a name="Thicken"></a>
-#### func Thicken
-
-<pre>func Thicken(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, b *<a href="#Body">Body</a>, thickness units.Value,
-    opts ...<a href="#ThickenOption">ThickenOption</a>) (result *<a href="#Body">Body</a>, retErr <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
-
-Thicken builds a solid from the admitted sheet b and retires b.
-A nil context or a nil b is ErrDegenerate.
-It extrudes a recorded planar patch through the signed thickness interval,
-builds a certified annular wall around a profile-fed prism sheet, spins a
-certified meridian annulus through a profile-fed revolve sheet's own
-interval, or sweeps a ribbon's own assembled section through the ribbon's
-interval and spins a chain shell's own through the shell's. A one-span
-sweep sheet uses its prism or revolve reduction and restores sweep roles.
-A hole-free multi-span sweep sheet re-sweeps one generated annulus along its
-path, after a radial gate on each arc span.
-A one-arc chain sweep uses its chain Revolve reduction; a cardinal composite
-chain sweep assembles one section and sweeps both spans.
-Other sheet families are staged under agent-docs/surface-design.md §16.8.
-
-<a name="Thread"></a>
-#### func Thread
-
-<pre>func Thread(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, b *<a href="#Body">Body</a>, spec <a href="#ThreadSpec">ThreadSpec</a>) (result *<a href="#Body">Body</a>, retErr <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
-
-Thread cuts a 60 degree ISO metric thread into a cylindrical
-face of b and returns the threaded body, retiring b (agent-docs/thread-design.md).
-
-A face whose outward normal points away from the axis is a rod: it is the
-thread's major diameter and a groove is cut into it. A face whose outward
-normal points toward the axis is a bore: it is the thread's minor (drilled)
-diameter and the groove is cut out of the wall around it. The groove follows
-the ISO basic profile, with an external root flat of an eighth of the pitch
-and an internal one of a quarter, and runs the whole length of the face, or
-the spec's Length of it. A groove over the whole face runs out past both of
-its ends, so a larger face or a shoulder beside the threaded one is cut as
-well: thread a rod that ends at the thread, or give a Length.
-
-The thread is a Coil of the groove profile cut from b, so the result is a
-mesh Boolean's: faceted, with the Cut's own bounds (agent-docs/helix-design.md
-§9). Its volume reading encloses the closed form in the thread design, and
-Verify reads it as the faceted verdict allows.
-
-b MUST be a live solid; a nil context, body or selector is ErrDegenerate. A
-selector that resolves to other than one face is ErrDegenerate, and a face
-that is not an analytic cylinder is ErrUnsupported. A pitch that is not a
-positive finite length is ErrDegenerate or ErrUnitKind, and one too coarse
-for the radius, so that the groove would reach the axis, is ErrDegenerate. A
-Coil or Cut the evaluator cannot decide is that call's own error. Every
-failure leaves b live and the document unchanged.
-
-<a name="Transform"></a>
-#### func Transform
-
-<pre>func Transform(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, body *<a href="#Body">Body</a>, t r3.Transform) (*<a href="#Body">Body</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
-
-Transform returns a new body carrying body's geometry under the rigid
-motion t, retiring body (core §8). body MUST NOT be nil. The zero transform is
-invalid and is ErrDegenerate. A canceled context stops the rebuild before
-the document changes. The motion composes onto the placement body already carries,
-and it is that ACCUMULATED placement, never t alone, that the analytic
-booleans and interference reading compare against a coplanar partner's:
-where the two differ, the partner's coordinates are re-expressed and every
-crossing they cut is charged that rounding over the crossing angle
-(agent-docs/prism-boolean-design.md §3.4), while motions composing back to the
-partner's own placement leave the re-expression the identity.
-
-<a name="Trim"></a>
-#### func Trim
-
-<pre>func Trim(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, b *<a href="#Body">Body</a>, tool *<a href="#Body">Body</a>, side <a href="#TrimSide">TrimSide</a>) (result *<a href="#Body">Body</a>, retErr <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
-
-Trim cuts b where it meets tool and returns the kept pieces as
-one sheet body (agent-docs/surface-intersection-design.md §8). b and
-tool are consumed on the document's uniform terms (core §6); a refusal
-consumes neither. It admits a pair whose two sweeps share ONE generator —
-both the prism family (a straight Extrude/chain Extrude sweep) or both the
-revolve family (a Revolve/chain Revolve spin about one axis,
-agent-docs/api-design.md's evaluator §5). A mixed pair, or any condition §2.1's
-S1-S7 states, is [ErrUnsupported](<#ErrUnsupported>) at the call, never a fallback: a sheet's
-mesh proves no occupied volume (booloperand.RequireVolumeProof),
-so there is no mesh path for a miss to reroute to. A tool that separates no
-fragment of b, or every fragment, is [ErrDegenerate](<#ErrDegenerate>) (R30): no
-trimmed body exists either way. A nil context or a nil b is ErrDegenerate.
-
-<a name="Union"></a>
-#### func Union
-
-<pre>func Union(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, first *<a href="#Body">Body</a>, others ...*<a href="#Body">Body</a>) (*<a href="#Body">Body</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
-
-Union returns the body enclosing the volume of two or more operands,
-retiring them together from their document (core §8). A nil operand or a
-repeated body is ErrDegenerate; a call with no other body is ErrDegenerate.
-Three or more bodies admit a one-scene exact union of equal-interval,
-same-placement, hole-free whole-line prisms with distinct source line
-carriers, plus certified straight bevel tooth patterns. Other
-prism inputs use the two-body evaluator in order, with one final commit.
-A three-source chain whose second pair refuses on its first operand's held
-bound can try the other grouping (prism-boolean §4.7). A two-body Union
-refused because a facet it touches holds an earlier rim's bound is rebuilt
-from its operands' recorded Union history with rim splitting on, as under
-WithRimSplit, and then joined (prism-boolean Part R, "Rim-split rebuild").
-Each pair must pass its own proof. Failure or cancellation leaves every
-input live. A two-body result from the mesh path is a [Faceted](<#Faceted>) body:
-its faces are grouped by the operands' source faces, with adjacent exactly
-coplanar same-facing faces of the two operands merged into one face
-(agent-docs/union-face-merge-design.md), so provenance
-(FaceCreatedBy) survives, and its measurements are Approximate with proven
-bounds (agent-docs/evaluator-design.md §9) — except that an all-planar pair whose
-contact points round exactly keeps an Exact VOLUME (the volume integral is
-computed in exact arithmetic); the surface area always carries at least an
-ulp-scale float-summation bound, so it reads Approximate with a bound tiny
-against any real tolerance. An admitted co-directional, coplanar analytic
-prism pair instead returns an analytic prism. Its faces have fresh roles under
-the Union step, including CapStart and CapEnd, and do not retain the operands'
-origins. A pair of full Revolves about one authenticated axis can instead
-return an analytic Revolve with the source-face origins of its kept walls.
-Two exact rectangular prisms with perpendicular sweeps can also join across
-a positive-area planar face patch as one analytic body. Operands from
-different documents are ErrForeignBody; retired operands ErrRetiredBody. A boolean
-that fails on the geometry returns a typed [BooleanError](<#BooleanError>) wrapping the §12
-sentinel: a valid but unclassifiable contact — a curved-surface tangency or
-near-contact whose chord facets never provably interpenetrate, an exact
-coplanar / face-on-face overlap, a grazing edge, an isolated-point pinch, or
-an analytic prism-arrangement refusal wrapping ErrUnsupported —
-is BooleanUnsupportedContact, never ErrDegenerate;
-a result with no volume is BooleanEmpty (wrapping ErrBooleanFailed); an
-internal invariant break is BooleanEvaluatorFailure (wrapping
-ErrBooleanFailed). errors.As(err, \&be) reads the Code.
-Every pair outside those analytic paths tessellates both operands at a chord
-tolerance derived from the pair's diameter, so an operand no boolean may
-consume — a cap-loop chamfer body whose band has a corner this evaluator
-cannot prove a line-line miter or an exactly tangent join, or a reflex
-corner, so its mesh carries no proof of the volume it and the body it stands
-for differ by (agent-docs/tessellation-reach-design.md §7) — surfaces a plain
-ErrUnsupported before any contact is examined: a capability limit, not a
-[BooleanError](<#BooleanError>). So does an operand restating a held mesh (a [Faceted](<#Faceted>) boolean
-result or a mitred sweep) whose facets where the pair meets carry bounds
-coarser than that pair tolerance, refused after the contacts are classified
-and before any facet is cut. A cap-loop chamfer whose
-every band is a whole turn or joins only line-line miters and exactly tangent
-corners — a filleted plate with drilled holes among them — is an ordinary
-operand, as is a tapered extrude whose line–arc and arc–arc joins turn by
-an angle whose sine is at most 2⁻³² (agent-docs/modify-design.md Part D §9.1.1). The
-matching axial loft's held-polygon cap band also has its own
-occupied-volume proof for reflex corners (loft §18). A valid operand whose
-boolean OUTPUT
-cannot be chorded finely enough to tessellate surfaces the retryable
-coarse-chording ErrDegenerate on that operand — a finer chord tolerance may
-clear it — not a [BooleanError](<#BooleanError>).
-
-The held-mesh half of that limit is what bounds how far booleans CHAIN, and
-it binds LOCALLY (agent-docs/api-design.md §8 "The chain depth"): a result's bound
-is composed per vertex from the operation that made it, and feeding that
-result back in as an operand refuses exactly when a facet the new pair
-meets, or comes within the tangency gate's slack of, carries a bound above
-the chord tolerance that pair derives from its own diameter. Geometry the
-pair does not touch never causes the refusal, so a result whose Bound
-exceeds that tolerance in untouched regions is an ordinary operand and
-chains. There is no caller-side tolerance to raise — §9 keeps the booleans
-free of a tolerance parameter on purpose — so where the comparison does
-refuse, it is geometry rather than an argument the caller got wrong. The
-bounds are readable, not only printed in that refusal: each [Vertex](<#Vertex>), edge
-and face of a [Faceted](<#Faceted>) body reports its own, and [Body.Tessellate](<#Body.Tessellate>) at any
-tolerance the faceted body already meets returns a [Mesh](<#Mesh>) whose Bound is the
-largest of them.
-
-A two-body call refused with ErrUnsupported on a mesh result of earlier Union
-calls is retried from the source bodies of that chain
-(agent-docs/prism-boolean-design.md Part R); only a failure of that retry too
-returns the refusal.
-
-A Union of three or more bodies that no certified route takes as a set joins
-the bodies two at a time, left to right, after trying the whole chain on copies
-(agent-docs/prism-boolean-design.md Part U): a chain whose step refuses returns the
-many-body refusal and leaves every body live.
-
-It returns ctx.Err() unchanged when ctx is canceled before the document
-commit.
-
-<a name="Unstitch"></a>
-#### func Unstitch
-
-<pre>func Unstitch(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, b *<a href="#Body">Body</a>) (results []*<a href="#Body">Body</a>, retErr <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
-
-Unstitch returns one single-face sheet body per face of
-b, in [Body.Faces](<#Body.Faces>) order, retiring b
-(agent-docs/surface-design.md §6.5). Each result carries that face's own
-surface, loops and readings, and every edge of every result is free: a
-fresh [Face](<#Face>), [Edge](<#Edge>) and [Vertex](<#Vertex>) set is minted for each result rather than
-reusing b's own topology, so the retired b stays
-readable and unmodified for any caller still holding it.
-
-It admits an analytic body, solid or sheet — the asymmetry with [Stitch](<#Stitch>),
-which takes sheets only (Table R row R17), is deliberate: Unstitch is how
-a caller gets sheets to work with in the first place. A [Faceted](<#Faceted>) body — a
-mesh boolean's result — is [ErrUnsupported](<#ErrUnsupported>) (R11): its faces are chord
-polygons with no analytic identity, and returning thousands of facet
-sheets would be a shape nobody asked for. A nil b or a b with no
-evaluator payload is [ErrDegenerate](<#ErrDegenerate>) (R12); a b owned by a
-different document is [ErrForeignBody](<#ErrForeignBody>) (R13); a retired b is
-[ErrRetiredBody](<#ErrRetiredBody>) (R14). A failed call leaves the document and
-b unchanged: every result is built before any is registered, and
-[Document](<#Document>).commitOperationManyFacesIn registers them and retires b in one atomic step.
-
-<a name="WebPath"></a>
-#### func WebPath
-
-<pre>func WebPath(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, b *<a href="#Body">Body</a>, s *sketch.Sketch, path []sketch.Entity, thickness units.Value, e <a href="#Extent">Extent</a>,
-    opts ...<a href="#RibOption">RibOption</a>) (result *<a href="#Body">Body</a>, retErr <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
-
-WebPath adds one rib along each entity of path, a run of lines and arcs of s in
-the order given, and returns the result, retiring b (agent-docs/rib-design.md).
-A path of one entity is one rib.
-
-A \*sketch.Line rib is the line thickened across its width by thickness,
-centred on the line. A \*sketch.Arc rib is the arc, which sweeps
-counter-clockwise from its Start to its End, thickened the same way into an
-annular band. The arc's end points MUST lie on one circle about its centre.
-Each outline is extruded by e from the plane of s, where e is any [Extent](<#Extent>) that
-Extrude accepts, resolved against that plane exactly as for an Extrude of the
-outline. The ribs share one thickness, extent and overrun, and may cross or
-meet. They are united with one another in path order and joined to b with
-Union in one commit, which records one OperationWeb entry. The result has the
-exactness Union gives for the same bodies.
-
-Ribs that meet end to end, as the legs of a polyline or an arc and the lines
-either side of it do, need an overrun to overlap at the joint: with the
-default of zero, two ribs that only touch end faces meet in coplanar contact,
-which Union refuses.
-
-b MUST be a live solid. A nil context, sketch or body, an empty path, an
-entity that is nil, neither a line nor an arc, not an entity of s or stale, a
-line with no length, a zero thickness, an arc rib so thick that its inner edge
-reaches the arc's centre, and an overrun that would wrap an arc rib a full
-turn are ErrDegenerate. A negative thickness or overrun is
-ErrNegativeMagnitude, and either of the wrong unit kind is ErrUnitKind. A rib
-whose bounding box is disjoint from b's, and ribs that Union certifies add no
-volume to b, are ErrDegenerate. A union the evaluator cannot decide is the
-union's own error. Every failure leaves the document unchanged and b live.
-
 <a name="Body.Area"></a>
 #### func (\*Body) Area
 
@@ -3315,6 +1859,32 @@ the result states how far that point can lie from the true boundary. When
 p is inside or on the solid, p is returned. tol is the positive
 tessellation chord tolerance. Retired bodies remain readable; sheets return
 ErrNotSolid.
+
+<a name="Body.Digest"></a>
+#### func (\*Body) Digest
+
+<pre>func (b *<a href="#Body">Body</a>) Digest(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>) (<a href="#Digest">Digest</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
+
+[Digest](<#Digest>) returns the identity of everything decad's evaluator can read from b:
+b and every value reachable from it, the document records that name a
+reached body, and the document's gap tolerance, chain tolerance and rim
+split. Producer, level and curve ids enter as the order in which the walk
+first meets them, so the digest does not depend on how many operations ran
+before. Containers, handle addresses and caches do not enter.
+
+Two bodies with equal digests answer the single-body queries that read
+only the body's own geometry identically (Volume, Bounds, Tessellate,
+LocatePoint, ...). Origin() is not among them: it returns the raw producer
+id, which the digest relabels. For a question about two bodies, use
+[Document.PairDigest](<#Document.PairDigest>): two equal body digests do not cover what the two
+bodies share. The first call walks the body, polling ctx; later calls
+return the stored digest. A nil body or a nil ctx is [ErrDegenerate](<#ErrDegenerate>). A
+value the encoding cannot state (a function, a channel, an unclassified
+synchronization field, two map keys that encode alike) is [ErrUnsupported](<#ErrUnsupported>)
+naming its field path.
+
+The digest is stable within one build of the program: it hashes machine
+representations, so it is not a file format.
 
 <a name="Body.DistanceToPoint"></a>
 #### func (\*Body) DistanceToPoint
@@ -3602,7 +2172,7 @@ before any chord is chosen, so a tol it exhausts is [ErrUnsupported](<#ErrUnsupp
 A body this evaluator did not build at all is also [ErrUnsupported](<#ErrUnsupported>).
 
 A [BodySheet](<#BodySheet>) built by a surface-result prism or revolve
-(\`WithSurfaceResult\`) meshes its walls exactly as the solid the same
+(\`SurfaceResult\`) meshes its walls exactly as the solid the same
 record would have built. A prism sheet, and a partial-sweep revolve
 sheet, omit both caps: no cap triangulation runs and no cap face appears
 in SourceFaces. A full-turn revolve mints no cap in either kind, so its
@@ -3780,115 +2350,245 @@ three moves (agent-docs/api-design.md §8 / H2).
     BooleanEvaluatorFailure
 )</pre>
 
-<a name="BooleanOption"></a>
-### type BooleanOption
-
-<pre>type BooleanOption interface {
-    option.Interface
-    // contains filtered or unexported methods
-}</pre>
-
-BooleanOption configures Cut and Intersect. An option from another package
-cannot implement this sealed tier.
-
-<a name="WithMatchingFaces"></a>
-#### func WithMatchingFaces
-
-<pre>func WithMatchingFaces() <a href="#BooleanOption">BooleanOption</a></pre>
-
-WithMatchingFaces tells Cut or Intersect that the operands' faces are meant
-to match where they meet: a cap drawn to touch the tool's cone, say, or two
-faces meant to coincide. Faces drawn in floating point seldom match exactly;
-each rounds on its own, so a design that matches on paper can miss by a few
-last-place steps and be refused for it. With this option a miss of that size
-is taken as the match the design intends, and its effect is charged into
-the result's error bounds. A miss larger than rounding disproves the
-declaration, and the operation refuses as it would without the option. The
-option never admits a shape that would otherwise be refused for another
-reason, and it has no effect on a pair whose faces do not meet.
-
 <a name="BossBore"></a>
 ### type BossBore
 
 <pre>type BossBore struct {
-    Diameter units.Value
-    Depth    units.Value
-    Head     <a href="#HoleHead">HoleHead</a>
-    Thread   *<a href="#HoleThread">HoleThread</a>
-    Draft    units.Value
+    // contains filtered or unexported fields
 }</pre>
 
-BossBore is the blind pilot hole of a [BossSpec](<#BossSpec>), a round hole drilled down
-from the boss's top face. Depth is measured from that top face and is a
-positive length. Head is optional and widens the pilot's mouth with a
-[Counterbore](<#Counterbore>) or [Countersink](<#Countersink>), as [HoleSpec](<#HoleSpec>).Head does. Thread is optional
-and taps the pilot, as [HoleSpec](<#HoleSpec>).Thread does, with Diameter as the tap drill
-(agent-docs/boss-design.md §4). Draft is optional and leans the pilot's wall as
-[HoleSpec](<#HoleSpec>).Draft does a hole's, narrower toward its bottom for a positive angle;
-a pilot that is tapped takes none (ErrDegenerate).
+BossBore is the blind pilot hole of a boss, a round hole drilled down from the
+boss's top face and passed to [BossCommand.Bore](<#BossCommand.Bore>) or [BossShapedCommand.Bore](<#BossShapedCommand.Bore>).
+Build it with [NewBossBore](<#NewBossBore>). Its depth is measured from that top face and is a
+positive length. [BossBore.Head](<#BossBore.Head>) widens the pilot's mouth with a [Counterbore](<#Counterbore>)
+or [Countersink](<#Countersink>), as [HoleCommand.Head](<#HoleCommand.Head>) does. [BossBore.Thread](<#BossBore.Thread>) taps the pilot,
+as [HoleCommand.Thread](<#HoleCommand.Thread>) does, with the diameter as the tap drill
+(agent-docs/boss-design.md §4). [BossBore.Draft](<#BossBore.Draft>) leans the pilot's wall as
+[HoleCommand.Draft](<#HoleCommand.Draft>) does a hole's, narrower toward its bottom for a positive
+angle; a pilot that is tapped takes none (ErrDegenerate).
+
+<a name="NewBossBore"></a>
+#### func NewBossBore
+
+<pre>func NewBossBore(diameter, depth units.Value) <a href="#BossBore">BossBore</a></pre>
+
+NewBossBore returns a plain pilot of the given diameter and depth, both
+positive lengths. The diameter must be less than the boss's diameter at its top.
+
+<a name="BossBore.Draft"></a>
+#### func (BossBore) Draft
+
+<pre>func (r <a href="#BossBore">BossBore</a>) Draft(angle units.Value) <a href="#BossBore">BossBore</a></pre>
+
+Draft returns the bore with its wall leaned by angle. A second call replaces
+the first.
+
+<a name="BossBore.Head"></a>
+#### func (BossBore) Head
+
+<pre>func (r <a href="#BossBore">BossBore</a>) Head(head <a href="#HoleHead">HoleHead</a>) <a href="#BossBore">BossBore</a></pre>
+
+Head returns the bore with a head. A second call replaces the first.
+
+<a name="BossBore.Thread"></a>
+#### func (BossBore) Thread
+
+<pre>func (r <a href="#BossBore">BossBore</a>) Thread(thread <a href="#HoleThread">HoleThread</a>) <a href="#BossBore">BossBore</a></pre>
+
+Thread returns the bore tapped with thread. A second call replaces the first.
+
+<a name="BossCommand"></a>
+### type BossCommand
+
+<pre>type BossCommand struct {
+    // contains filtered or unexported fields
+}</pre>
+
+BossCommand raises a round boss on a face. Build it with [Boss](<#Boss>).
+
+<a name="Boss"></a>
+#### func Boss
+
+<pre>func Boss(b *<a href="#Body">Body</a>, face <a href="#FaceSelector">FaceSelector</a>, at r3.Vec, diameter, height units.Value) *<a href="#BossCommand">BossCommand</a></pre>
+
+Boss returns the command that raises a round boss on a planar or cylindrical
+face of b, and returns the result, retiring b (agent-docs/boss-design.md).
+
+The boss is a cylinder of the given diameter that stands on face, runs height
+out of it and reaches into the body behind the face so that the union crosses
+the face instead of touching it. face must resolve to exactly one face. at is a
+world point in millimetres that lies on that face's plane, or on a cylindrical
+face, where the boss stands on the plane tangent there and takes neither a
+root fillet nor a draft (agent-docs/boss-design.md §8); the boss axis runs
+through it, out of the body. diameter and height are positive lengths, height
+measured from the face. The methods add a pilot hole ([BossCommand.Bore](<#BossCommand.Bore>)), a
+lean of the wall ([BossCommand.Draft](<#BossCommand.Draft>)), a rounded root ([BossCommand.RootFillet](<#BossCommand.RootFillet>)),
+gusset ribs ([BossCommand.Ribs](<#BossCommand.Ribs>)) and a tilt ([BossCommand.Tilt](<#BossCommand.Tilt>)). A boss
+with another section is [BossShaped](<#BossShaped>).
+
+The pilot hole is cut from the boss's top face by the same tools Hole builds,
+in the same atomic commit.
+
+b MUST be a live solid; a nil context or body or a nil selector is
+ErrDegenerate. A selector that does not resolve to one face is the selector's
+own error or ErrDegenerate, and a face that is not an analytic plane or
+cylinder, nor a convex planar face of a faceted solid with exact vertices, is
+ErrUnsupported. A diameter or height that is not positive and finite is
+ErrDegenerate or ErrUnitKind. A bore as wide as the boss, or one deep enough to
+leave the boss's footing through the back of the body, is ErrDegenerate. An at
+more than 1e-6 mm off the face plane is ErrDegenerate. A boolean the evaluator
+cannot decide is the boolean's own error. Every failure leaves b live and the
+document unchanged.
+
+<a name="BossCommand.Bore"></a>
+#### func (\*BossCommand) Bore
+
+<pre>func (c *<a href="#BossCommand">BossCommand</a>) Bore(bore <a href="#BossBore">BossBore</a>) *<a href="#BossCommand">BossCommand</a></pre>
+
+Bore drills a blind pilot hole down from the boss's top face. A bore as wide
+as the boss at its top, or one deep enough to leave the boss's footing through
+the back of the body, is ErrDegenerate, and every refusal of its own values is
+returned by Do naming Bore as the subject. A second call replaces the first.
+
+<a name="BossCommand.Do"></a>
+#### func (\*BossCommand) Do
+
+<pre>func (c *<a href="#BossCommand">BossCommand</a>) Do(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>) (*<a href="#Body">Body</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
+
+Do raises the boss and retires the body, or returns the error of the first
+gate that refuses, leaving the body live and the document unchanged. A nil ctx
+is ErrDegenerate, and a second call returns ErrConsumed.
+
+<a name="BossCommand.Draft"></a>
+#### func (\*BossCommand) Draft
+
+<pre>func (c *<a href="#BossCommand">BossCommand</a>) Draft(angle units.Value) *<a href="#BossCommand">BossCommand</a></pre>
+
+Draft leans the boss's wall: a positive angle makes the boss narrower toward
+its top by that lean, a negative one wider, and a zero angle is a straight wall
+(agent-docs/boss-design.md §5). The diameter is the boss's diameter at the face
+either way. A boss on a cylindrical face, with ribs or with a tilt takes no
+draft. An angle at or past a right angle is ErrDegenerate, returned by Do
+naming Draft as the subject. A second call replaces the first.
+
+<a name="BossCommand.Ribs"></a>
+#### func (\*BossCommand) Ribs
+
+<pre>func (c *<a href="#BossCommand">BossCommand</a>) Ribs(ribs <a href="#BossRibs">BossRibs</a>) *<a href="#BossCommand">BossCommand</a></pre>
+
+Ribs braces the boss's root with gusset ribs (agent-docs/boss-design.md §9). A
+boss on a cylindrical face, with a draft or a root fillet takes none. A second
+call replaces the first.
+
+<a name="BossCommand.RootFillet"></a>
+#### func (\*BossCommand) RootFillet
+
+<pre>func (c *<a href="#BossCommand">BossCommand</a>) RootFillet(radius units.Value) *<a href="#BossCommand">BossCommand</a></pre>
+
+RootFillet rounds the concave edge where the boss meets the face with a fillet
+of the given radius, a positive length (agent-docs/boss-design.md §6). A boss
+on a cylindrical face, with ribs or with a tilt takes none. A radius that is
+not positive is refused by Do naming RootFillet as the subject. A second call
+replaces the first.
+
+<a name="BossCommand.Tilt"></a>
+#### func (\*BossCommand) Tilt
+
+<pre>func (c *<a href="#BossCommand">BossCommand</a>) Tilt(angle, direction units.Value) *<a href="#BossCommand">BossCommand</a></pre>
+
+Tilt leans the boss's axis from the face's normal by angle, toward direction
+(agent-docs/boss-design.md §10). angle is above zero and at most 60 degrees.
+direction is the angle about the face normal from the face frame's U axis to the
+direction the boss leans toward. The height is then measured along the tilted
+axis from the face. A tilted boss stands on a planar face and takes no bore,
+draft, root fillet or ribs. A second call replaces the first.
 
 <a name="BossRibs"></a>
 ### type BossRibs
 
 <pre>type BossRibs struct {
-    Count                     <a href="https://pkg.go.dev/builtin#int">int</a>
-    Thickness, Length, Height units.Value
-    Angle                     units.Value
+    // contains filtered or unexported fields
 }</pre>
 
-BossRibs is the set of triangular gusset ribs that brace a [BossSpec](<#BossSpec>)'s root,
-spaced evenly round the boss's axis (agent-docs/boss-design.md §9). Each rib
-stands Height up the boss's wall and reaches Length out along the face, its
-outer edge sloping from the face up to the wall, and is Thickness thick, centred
-on the plane through the boss's axis. Count is from 1 to 16, Thickness, Length and
-Height are positive lengths with Height at most the boss's Height, and Angle is the
-angle of the first rib from the face frame's U axis about the boss's axis: the zero
-Value is along U. The ribs are not drawn into the boss's pilot hole.
+BossRibs is the set of triangular gusset ribs that brace a boss's root, passed
+to [BossCommand.Ribs](<#BossCommand.Ribs>) or [BossShapedCommand.Ribs](<#BossShapedCommand.Ribs>) and built with [NewBossRibs](<#NewBossRibs>)
+(agent-docs/boss-design.md §9). The ribs are spaced evenly round the boss's
+axis. Each stands height up the boss's wall and reaches length out along the
+face, its outer edge sloping from the face up to the wall, and is thickness
+thick, centred on the plane through the boss's axis. The count is from 1 to 16,
+thickness, length and height are positive lengths with height at most the
+boss's height, and [BossRibs.Angle](<#BossRibs.Angle>) is the angle of the first rib from the face
+frame's U axis about the boss's axis: it is along U unless set. The ribs are not
+drawn into the boss's pilot hole.
 
-<a name="BossSpec"></a>
-### type BossSpec
+<a name="NewBossRibs"></a>
+#### func NewBossRibs
 
-<pre>type BossSpec struct {
-    Face       <a href="#FaceSelector">FaceSelector</a>
-    At         r3.Vec
-    Diameter   units.Value
-    Height     units.Value
-    Bore       *<a href="#BossBore">BossBore</a>
-    Draft      units.Value
-    RootFillet units.Value
-    Shape      <a href="#HoleShape">HoleShape</a>
-    // Ribs, when not nil, braces the boss&#39;s root with gusset ribs (agent-docs/boss-design.md §9).
-    Ribs *<a href="#BossRibs">BossRibs</a>
-    // Tilt, when set, leans the boss&#39;s axis from the face&#39;s normal by this angle, in the
-    // direction TiltDirection names (agent-docs/boss-design.md §10). It is an angle above
-    // zero and at most 60 degrees, and the zero Value is an upright boss. Height is then
-    // measured along the tilted axis from the face. TiltDirection is the angle about the face
-    // normal from the face frame&#39;s U axis to the direction the boss leans toward, and its
-    // zero Value is along U. A tilted boss is round and takes no Bore, Draft, RootFillet or
-    // Ribs, and stands on a planar face.
-    Tilt, TiltDirection units.Value
+<pre>func NewBossRibs(count <a href="https://pkg.go.dev/builtin#int">int</a>, thickness, length, height units.Value) <a href="#BossRibs">BossRibs</a></pre>
+
+NewBossRibs returns count ribs of the given thickness, length and height, the
+first along the face frame's U axis.
+
+<a name="BossRibs.Angle"></a>
+#### func (BossRibs) Angle
+
+<pre>func (r <a href="#BossRibs">BossRibs</a>) Angle(angle units.Value) <a href="#BossRibs">BossRibs</a></pre>
+
+Angle returns the ribs with the first one angle from the face frame's U axis
+about the boss's axis. A second call replaces the first.
+
+<a name="BossShapedCommand"></a>
+### type BossShapedCommand
+
+<pre>type BossShapedCommand struct {
+    // contains filtered or unexported fields
 }</pre>
 
-BossSpec describes one boss standing on a planar or cylindrical face: round by
-default, or the shape Shape names.
+BossShapedCommand raises a boss of a given section on a face. Build it with
+[BossShaped](<#BossShaped>).
 
-[Face](<#Face>) selects the face the boss stands on and must resolve to exactly one face.
-At is a world point in millimetres that lies on that face's plane, or on a
-cylindrical face, where the boss stands on the plane tangent there and takes
-neither a RootFillet nor a Draft (agent-docs/boss-design.md §8); the boss axis
-runs through it, out of the body. Diameter and Height are
-positive lengths, Height measured from [Face](<#Face>). Bore is optional, and nil makes
-a solid boss. Draft is optional: a positive angle makes the boss narrower
-toward its top by that lean of its wall, a negative one wider, and the zero
-Value a straight wall (agent-docs/boss-design.md §5). Diameter is the boss's
-diameter at [Face](<#Face>) either way. RootFillet is optional: a positive length rounds
-the concave edge where the boss meets the face with a fillet of that radius,
-and the zero Value leaves the corner sharp (agent-docs/boss-design.md §6).
-Shape is optional and replaces the round section with a [RectangularHole](<#RectangularHole>),
-[SlotHole](<#SlotHole>) or [PolygonHole](<#PolygonHole>) section, centred on At, as a Hole's shape is: Diameter
-is then zero, the shape's size is the boss's size at [Face](<#Face>), and a Draft leans
-every wall by its angle (agent-docs/boss-design.md §7). A shaped boss takes no
-RootFillet.
+<a name="BossShaped"></a>
+#### func BossShaped
+
+<pre>func BossShaped(b *<a href="#Body">Body</a>, face <a href="#FaceSelector">FaceSelector</a>, at r3.Vec, shape <a href="#HoleShape">HoleShape</a>, height units.Value) *<a href="#BossShapedCommand">BossShapedCommand</a></pre>
+
+BossShaped returns the command that raises a boss whose section is shape, in
+place of the circle of [Boss](<#Boss>), on a face of b, retiring b. shape is a
+[RectangularHole](<#RectangularHole>), [SlotHole](<#SlotHole>) or [PolygonHole](<#PolygonHole>), centred on at, as a hole's
+shape is: its size is the boss's size at the face (agent-docs/boss-design.md
+§7), and [OutlineHole](<#OutlineHole>) is refused. A nil shape is ErrDegenerate. face, at and
+height are Boss's, and so are the refusals. A shaped boss takes a bore, a draft
+and ribs, with Boss's methods, and no root fillet or tilt.
+
+<a name="BossShapedCommand.Bore"></a>
+#### func (\*BossShapedCommand) Bore
+
+<pre>func (c *<a href="#BossShapedCommand">BossShapedCommand</a>) Bore(bore <a href="#BossBore">BossBore</a>) *<a href="#BossShapedCommand">BossShapedCommand</a></pre>
+
+Bore is [BossCommand.Bore](<#BossCommand.Bore>) for a shaped boss.
+
+<a name="BossShapedCommand.Do"></a>
+#### func (\*BossShapedCommand) Do
+
+<pre>func (c *<a href="#BossShapedCommand">BossShapedCommand</a>) Do(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>) (*<a href="#Body">Body</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
+
+Do raises the boss and retires the body, or returns the error of the first
+gate that refuses, leaving the body live and the document unchanged. A nil ctx
+is ErrDegenerate, and a second call returns ErrConsumed.
+
+<a name="BossShapedCommand.Draft"></a>
+#### func (\*BossShapedCommand) Draft
+
+<pre>func (c *<a href="#BossShapedCommand">BossShapedCommand</a>) Draft(angle units.Value) *<a href="#BossShapedCommand">BossShapedCommand</a></pre>
+
+Draft is [BossCommand.Draft](<#BossCommand.Draft>) for a shaped boss: it leans every wall by angle.
+
+<a name="BossShapedCommand.Ribs"></a>
+#### func (\*BossShapedCommand) Ribs
+
+<pre>func (c *<a href="#BossShapedCommand">BossShapedCommand</a>) Ribs(ribs <a href="#BossRibs">BossRibs</a>) *<a href="#BossShapedCommand">BossShapedCommand</a></pre>
+
+Ribs is [BossCommand.Ribs](<#BossCommand.Ribs>) for a shaped boss.
 
 <a name="BoundsReading"></a>
 ### type BoundsReading
@@ -3911,48 +2611,223 @@ Box is an axis-aligned bound with its own exactness and error bound.
 
 CellOutcome states what a [JointCellResult](<#JointCellResult>) proves.
 
-<a name="ChainLoftOption"></a>
-### type ChainLoftOption
+<a name="ChamferAngleCommand"></a>
+### type ChamferAngleCommand
 
-<pre>type ChainLoftOption interface {
-    option.Interface
-    // contains filtered or unexported methods
+<pre>type ChamferAngleCommand struct {
+    // contains filtered or unexported fields
 }</pre>
 
-ChainLoftOption configures LoftChain. It is its own sealed tier rather than
-[LoftOption](<#LoftOption>): WithSurfaceResult() does not implement it, so the compiler
-refuses that option outright rather than accepting it as a no-op — a
-chain-fed loft always returns a sheet, so there is no cap for the option to
-omit (agent-docs/surface-design.md §13.2, agent-docs/loft-design.md §16.3).
-WithLoftAlignment is not a member either: Table P's own P4 row forces a
-chain pair's offset to 0, so the option would name a correspondence that
-does not exist. This placeholder tier has no concrete option yet; it reserves the
-call for a later chain-only option.
+ChamferAngleCommand bevels edges of a body by distance and angle. Build it
+with [ChamferAngle](<#ChamferAngle>). It has no method.
 
-<a name="ChamferOption"></a>
-### type ChamferOption
+<a name="ChamferAngle"></a>
+#### func ChamferAngle
 
-<pre>type ChamferOption interface {
-    // contains filtered or unexported methods
+<pre>func ChamferAngle(b *<a href="#Body">Body</a>, sel <a href="#EdgeSelector">EdgeSelector</a>, d units.Value, reference <a href="#FaceSelector">FaceSelector</a>,
+    angle units.Value) *<a href="#ChamferAngleCommand">ChamferAngleCommand</a></pre>
+
+ChamferAngle bevels the edges sel selects by a distance d along the
+reference face and an angle between the bevel and that face, returning the
+new body and retiring b (agent-docs/modify-design.md Part A).
+
+The bevel leaves the reference face d from each edge and makes angle with it.
+It meets the other face d·sin(angle)/sin(φ + angle) from the edge, where φ is
+the angle between the two faces across the corner the bevel cuts (the interior
+angle of a convex edge, the open wedge of a concave one), which is d·tan(angle) on a right
+angle. ChamferAngle states that second distance and builds the result as
+[Chamfer](<#Chamfer>) with [ChamferCommand.Asymmetric](<#ChamferCommand.Asymmetric>) does, so the receivers, routes and
+refusals of those apply.
+
+Every selected edge MUST lie between two planar faces, or be circular between a plane and a cylinder, cone or sphere, and may be convex or
+concave: a concave edge's bevel adds a wedge of material to the corner. Any
+other edge is ErrUnsupported. All the selected edges MUST give the same second
+distance, within a relative 1e-12, which equal dihedrals do; edges at different
+angles take separate calls, and a selection that mixes them is ErrUnsupported.
+angle MUST be an angle strictly between 0 and a half turn, and an edge whose
+interior angle φ makes φ + angle reach a half turn has a bevel that never
+meets the other face: that is ErrDegenerate, as is an angle at or past those
+bounds. d MUST be a positive length. A negative angle or length is
+ErrNegativeMagnitude and a wrong unit kind is ErrUnitKind. reference follows
+Asymmetric's rule of one adjacent face per edge. A nil context,
+body or selector is ErrDegenerate. Every failure leaves b live and the
+document unchanged.
+
+<a name="ChamferAngleCommand.Do"></a>
+#### func (\*ChamferAngleCommand) Do
+
+<pre>func (c *<a href="#ChamferAngleCommand">ChamferAngleCommand</a>) Do(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>) (*<a href="#Body">Body</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
+
+Do bevels the edges and retires the body, or returns the error of the first
+gate that refuses, leaving the body live. A nil ctx is ErrDegenerate, and a
+second call returns ErrConsumed. Its errors carry [OperationChamfer](<#OperationChamfer>).
+
+<a name="ChamferCommand"></a>
+### type ChamferCommand
+
+<pre>type ChamferCommand struct {
+    // contains filtered or unexported fields
 }</pre>
 
-ChamferOption configures Chamfer: WithTangentChain and
-WithAsymmetricChamfer (agent-docs/modify-design.md Part R §2).
+ChamferCommand bevels edges of a body. Build it with [Chamfer](<#Chamfer>).
 
-<a name="WithAsymmetricChamfer"></a>
-#### func WithAsymmetricChamfer
+<a name="Chamfer"></a>
+#### func Chamfer
 
-<pre>func WithAsymmetricChamfer(reference <a href="#FaceSelector">FaceSelector</a>, otherDistance units.Value) <a href="#ChamferOption">ChamferOption</a></pre>
+<pre>func Chamfer(b *<a href="#Body">Body</a>, sel <a href="#EdgeSelector">EdgeSelector</a>, d units.Value) *<a href="#ChamferCommand">ChamferCommand</a></pre>
 
-WithAsymmetricChamfer sets back the chamfer's positional distance across
-reference and otherDistance across the other face adjacent to each selected
-edge (agent-docs/modify-design.md Part R §6). The option copies reference when it
-is called, so a later change to the caller's query does not reach the
+Chamfer bevels the selected lateral edges of a straight prism with a straight
+chord set back a distance d along each adjacent wall, returning the new body
+and retiring b (agent-docs/modify-design.md §7, core §8). A nil b is ErrDegenerate.
+sel is resolved against the live b; a query matching nothing is loud (ErrNoMatch /
+ErrCardinality, S16). d is a length magnitude, gated like every other (S15); a
+zero d is S13. The rewritten section faces the §5 audit before anything is
+built, so no unproven body is ever made and an over-large setback is refused
+(S6), never clipped.
+
+On a revolve, Chamfer bevels swept meridian junctions instead
+(agent-docs/modify-design.md Part R §7): the meridian corner gets the same chord,
+faces the same audit and the revolve's axis gates, and the revolve is rebuilt
+over the receiver's own axis, sweep and placement. The bevel is a [Cone](<#Cone>), a
+[Cylinder](<#Cylinder>) where the chord runs parallel to the axis, or a [Plane](<#Plane>) where it runs
+perpendicular. One source-authenticated quarter-turn rectangular radial
+cap rim takes the bounded faceted route in agent-docs/modify-design.md Part R §7.2.
+Other cap edges and edges on the axis are SX5 (ErrUnsupported).
+
+A one-sided positive-taper circular extrude also accepts one complete
+far-cap rim at an equal setback on its disk and cone (draft §10.5).
+
+A one-span straight solid Sweep takes selected lateral edges through its
+stored exact prism reduction. One straight cap edge takes that reduction's
+prism face view through route E. Other cap selections and asymmetric
+reference roles remain unsupported; other Sweep kinds are S3 (ErrUnsupported).
+A receiver outside the admitted classes is S3 (ErrUnsupported).
+
+TangentChain expands the edges sel resolves to as Fillet's does
+(agent-docs/modify-design.md Part R §5). Asymmetric sets each edge back
+d across its reference face and the option's other distance across the
+other adjacent face (§6), on a prism's lateral edges and a revolve's
+junctions alike; each setback faces the S6 audit on its own walk. On a
+complete cap loop the reference picks per cap (§8.3.1): the cap face takes d
+across the cap and the other distance down the side walls, and a side wall
+takes d down the side and the other distance across the cap. A reference
+that names no adjacent face of a chamfered edge, or both, or a face beside
+no chamfered edge, is ErrCardinality (SX3). An asymmetric chamfer of an
+independent straight brep edge takes route E, and a complete loop of a
+planar brep face takes route L. Stacked receivers use those same routes
+through their face view; selections outside them remain SX16.
+
+A selection covering one straight prism cap edge uses route E or the
+bounded cutter for an admitted oblique edge. A selection
+covering every geometric edge of one or more complete prism cap loops uses
+agent-docs/modify-design.md Part R §8.3's cap-loop chamfer. It bevels each loop
+with a band of analytic patches, and the result is a cap-blend body whose
+volume, area, bounds, undercut and minimum-radius readings all answer.
+A selection covering the whole outer loop of one or both caps of a straight
+prism whose section holds fit splines and lines, with no corner past 10°,
+bevels it at an equal setback by cutting the prism with a polyhedral cutter
+(agent-docs/modify-design.md Part R §8.5). Decad cannot offset a fit spline
+exactly, so the cutter's offset curves are fit splines through points of the
+exact offset, and the call refuses an offset that departs from it by more than
+0\.002 of the setback. The result is a mesh Boolean's: faceted, with the Cut's
+own bounds, and it matches the ideal chamfer only within that ratio. A
+setback that reaches the outline's radius of curvature is ErrDegenerate.
+
+On a mesh Boolean result, whole loops of a retained planar face that the per-edge routes cannot bevel, such as a
+window of lines and arcs with sharp corners, are cut by a polyhedral cutter (agent-docs/modify-design.md Part M
+§15a): faceted, the Cut's own readings, and the bevel ruled between its two sections. A tangent chain whose edges
+share no one base plane, such as the rim of a bar rounded about z at one end and about y at the other, is cut by
+the bevel's section swept along the chain (§15b), with the same readings.
+
+Without TangentChain a selected edge that ends at a proven tangent junction still takes its continuation, as
+the target CAD's chamfer does (agent-docs/modify-design.md Part R §5.1): the selection grows to the whole chain. An
+expansion the oracle cannot decide leaves the selection as named.
+
+All twelve straight edges of an exact axis-aligned box take
+agent-docs/modify-design.md Part G §4.3b's simultaneous chamfer, with or
+without a cross bore. Other partial cap selections and mixed cap/lateral
+selections are SX4 (ErrUnsupported). A setback across the
+cap that empties the cap contour is SX6 (ErrDegenerate), and bands whose
+setbacks down the side reach the far end of the sweep are SX7
+(ErrUnsupported). A chamfer whose setback is so small beside the geometry it
+displaces that the displacement rounds away is SX13 (ErrUnsupported), rather
+than a band with the taper gone: a circular wall so large beside the setback
+across the cap that the offset's radial change rounds back onto its own
+radius, or a sweep so tall beside the setback down the side that the band's
+side level rounds back onto its cap level. A further modify op on the
+result is SX10 (ErrUnsupported), and a clearance pair its bounding boxes do
+not already decide reads Suspect (Table DX row DX6).
+
+An analytic boolean result (a brep or stacked body) that reads as a prism
+along a reference axis is chamfered as that prism
+(agent-docs/modify-design.md Part B route P): lateral edges and complete cap loops
+alike, so a cross-drilled hole's mouth takes a countersink. Any other
+selection of straight edges along one axis of such a body's face record
+takes route E (§5): a swept straight wall the edge ends on or runs along
+as a rim is first restated as the planar rectangle it sweeps (§5.2), both
+end faces of each edge take the chord at their corner, the two faces beside
+it are trimmed to the chord's feet, and one planar wall carrying a
+chamfer(k) role is added; the result is a brep body whose record pairs
+every edge again before it is built. A curved edge, two selected edges
+sharing a vertex, an edge whose end face is a curved face or an earlier
+blend, a straight wall the route needs as a plane that is oblique, split
+or carries a displaced level, end faces whose chords disagree, and a body
+whose faces carry a section displacement (SB1), outside brep-modify §4.4's
+lateral blend of a class-B crossing prism, are ErrUnsupported (Table SB).
+
+A selection of one or more complete loops of planar faces of such a body
+takes route L (agent-docs/modify-design.md Part G §4): each loop's face takes
+the loop offset dc into its material, every face beside the loop is trimmed
+ds along the face's normal, and a band of [Plane](<#Plane>) and [Cone](<#Cone>) patches joins the
+two, removing a wedge where the walls beside the loop descend into the body
+(a hole mouth, a plate's top loop) and filling the concave corner where
+they rise off it (a boss root). The result is a brep body whose volume,
+area, centroid and box answer, which Verify, placement and a further modify
+op read; it tessellates, exports to STEP (analytic where every patch is a
+plane, faceted where a cone is), and its undercut and concave-radius
+surveys read the patches. It is a boolean operand where each band is a whole
+turn, line-line miters or exact tangent joins; a band with a cone at a
+reflex corner is export-only and ErrUnsupported as an operand. Several convex edges of a faceted solid every face of
+which squares to a world axis, which share corners and so have no route of their own, are the solid less the wedge
+of each edge, or with concave edges the solid plus it (agent-docs/orthogonal-design.md B17, B18), a faceted result
+with a bound. A clearance
+pair its boxes do not decide reads Suspect. A selection that is part of a loop, mixes loops with lone edges or
+holds two loops sharing an edge is SL1, a face beside a loop that is curved,
+oblique, split or on both sides of the loop's face is SL2, and a band
+reaching a far face end is SX7 (each ErrUnsupported); a setback that
+empties a loop's offset is SX6 (ErrDegenerate).
+
+<a name="ChamferCommand.Asymmetric"></a>
+#### func (\*ChamferCommand) Asymmetric
+
+<pre>func (c *<a href="#ChamferCommand">ChamferCommand</a>) Asymmetric(reference <a href="#FaceSelector">FaceSelector</a>, otherDistance units.Value) *<a href="#ChamferCommand">ChamferCommand</a></pre>
+
+Asymmetric sets back the chamfer's positional distance across reference and
+otherDistance across the other face adjacent to each selected edge
+(agent-docs/modify-design.md Part R §6). The method copies reference when
+it is called, so a later change to the caller's query does not reach the
 chamfer. reference resolves against the receiver after tangent expansion,
 and every chamfered edge must have exactly one adjacent face in it, and
 every face it resolves to must touch a chamfered edge; anything else is
 ErrCardinality. otherDistance is a length magnitude gated like the
-positional distance. Passing the option twice is ErrDegenerate.
+positional distance. A second call replaces the first.
+
+<a name="ChamferCommand.Do"></a>
+#### func (\*ChamferCommand) Do
+
+<pre>func (c *<a href="#ChamferCommand">ChamferCommand</a>) Do(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>) (*<a href="#Body">Body</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
+
+Do bevels the edges and retires the body, or returns the error of the first
+gate that refuses, leaving the body live. A nil ctx is ErrDegenerate, and a
+second call returns ErrConsumed.
+
+<a name="ChamferCommand.TangentChain"></a>
+#### func (\*ChamferCommand) TangentChain
+
+<pre>func (c *<a href="#ChamferCommand">ChamferCommand</a>) TangentChain() *<a href="#ChamferCommand">ChamferCommand</a></pre>
+
+TangentChain expands the edges the selector resolves to as
+[FilletCommand.TangentChain](<#FilletCommand.TangentChain>) does (agent-docs/modify-design.md Part R §5).
 
 <a name="Circle3"></a>
 ### type Circle3
@@ -4065,25 +2940,70 @@ False means it walks from [Edge](<#Edge>).End to [Edge](<#Edge>).Start.
 Start returns the vertex where this loop use starts. It returns nil for the
 zero [CoEdge](<#CoEdge>).
 
-<a name="CoilOption"></a>
-### type CoilOption
+<a name="CoilCommand"></a>
+### type CoilCommand
 
-<pre>type CoilOption interface {
-    // contains filtered or unexported methods
+<pre>type CoilCommand struct {
+    // contains filtered or unexported fields
 }</pre>
 
-CoilOption configures Coil. Sealed: WithLeftHand is the one option.
-WithSurfaceResult does not implement it, so a coil is always a solid
-(Table CS row CS11).
+CoilCommand moves a profile along a screw motion. Build it with [Coil](<#Coil>).
 
-<a name="WithLeftHand"></a>
-#### func WithLeftHand
+<a name="Coil"></a>
+#### func Coil
 
-<pre>func WithLeftHand() <a href="#CoilOption">CoilOption</a></pre>
+<pre>func Coil(d *<a href="#Document">Document</a>, s *sketch.Sketch, p *sketch.Profile, axis <a href="#Axis">Axis</a>, pitch, turns units.Value) *<a href="#CoilCommand">CoilCommand</a></pre>
 
-WithLeftHand turns the section left-handed about the axis direction while
-it advances along it. The default is right-handed. Passing it twice is
-ErrDegenerate.
+Coil moves the closed profile p of sketch s along the screw motion about
+axis (agent-docs/helix-design.md): turns full rotations about the axis,
+right-handed about the axis direction, advancing pitch along that
+direction per rotation. The section stays in the axis plane throughout, so
+a thread profile drawn beside the axis cuts the thread it draws. The axis
+is Revolve's own vocabulary — [SketchLine](<#SketchLine>), [ConstructionAxis](<#ConstructionAxis>) or [EdgeAxis](<#EdgeAxis>) —
+and MUST lie in the sketch plane.
+
+pitch MUST be a finite positive length and turns a finite positive
+dimensionless count, whole or fractional (ErrUnitKind for the wrong kind,
+ErrNotFinite for a non-finite value, ErrDegenerate at or below zero). The
+profile MUST lie strictly on one side of the axis: a profile proven to
+touch or cross it is ErrDegenerate, and one whose side the axis's own
+rounding leaves undecided is ErrUnsupported. With one turn or more, the
+profile's extent along the axis MUST stay below the pitch, or two turns
+would meet (ErrUnsupported). Every profile segment MUST be a whole LineSeg,
+ArcSeg or CircleSeg (ErrUnsupported); an arc is held as 16 chords per turn
+of its sweep. A line is held as one chord or, where one chord's wall cells
+would depart from the true wall by more than 0.15% of the line's outer
+radius (a long radial run on a steep screw), as up to 256 chords graded by
+radius, each holding within 0.002 mm where the station step allows
+(agent-docs/helix-design.md §5.3). A coil needing more than
+32768 stations at 256 per turn, or
+more than 1048576 triangles, is ErrUnsupported, as is one whose held shell
+crosses itself where two turns pass closer than the station chords
+resolve, or whose crossing audit passes its triangle or pair ceiling.
+
+The result is a solid: two planar caps, one faceted wall per profile
+segment spanning every turn, read through Table CM's closed forms and, on
+an arc, agent-docs/helix-design.md §11.1's area bracket. A failed call leaves
+the document untouched.
+
+<a name="CoilCommand.Do"></a>
+#### func (\*CoilCommand) Do
+
+<pre>func (c *<a href="#CoilCommand">CoilCommand</a>) Do(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>) (*<a href="#Body">Body</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
+
+Do moves the profile, registers the new body and returns it, or returns the
+error of the first gate that refuses, leaving the document unchanged. A nil
+ctx is ErrDegenerate, and a second call returns ErrConsumed.
+
+<a name="CoilCommand.LeftHand"></a>
+#### func (\*CoilCommand) LeftHand
+
+<pre>func (c *<a href="#CoilCommand">CoilCommand</a>) LeftHand() *<a href="#CoilCommand">CoilCommand</a></pre>
+
+LeftHand turns the section left-handed about the axis direction while it
+advances along it. The default is right-handed. Calling it twice is the same
+as calling it once. A coil is always a solid: it has no SurfaceResult (Table
+CS row CS11).
 
 <a name="Collision"></a>
 ### type Collision
@@ -4118,6 +3038,66 @@ Radius is measured at Origin.
 <pre>func (<a href="#Cone">Cone</a>) Kind() <a href="#SurfaceKind">SurfaceKind</a></pre>
 
 Kind reports KindCone.
+
+<a name="ConeFromFaceCommand"></a>
+### type ConeFromFaceCommand
+
+<pre>type ConeFromFaceCommand struct {
+    // contains filtered or unexported fields
+}</pre>
+
+ConeFromFaceCommand builds the cone that extends a face of a Revolve. Build
+it with [ConeFromFace](<#ConeFromFace>). It has no method.
+
+<a name="ConeFromFace"></a>
+#### func ConeFromFace
+
+<pre>func ConeFromFace(body *<a href="#Body">Body</a>, face <a href="#FaceSelector">FaceSelector</a>, far units.Value) *<a href="#ConeFromFaceCommand">ConeFromFaceCommand</a></pre>
+
+ConeFromFace builds the full cone about body's axis that extends the
+selected face's straight meridian, using the nearest representable strict
+offset from that face's exact line. This need not be one float step: the
+rounded value may already be strictly sided, or the bound may be MaxFloat64.
+The construction guarantees separation only from the selected face line.
+Other blank and tool relations keep their own checks.
+
+body must be a live, unplaced, full Revolve about world X whose recorded
+section is a closed straight-sided walk of 4 to 128 whole segments with
+strictly positive X coordinates, nonnegative radii, no holes and one side of
+the axis. face must resolve under the implicit exactly-one to one conical
+side of that section. The cone is read from the recorded exact section data,
+never from the rounded public [Cone](<#Cone>) tag. The side's meridian is the exact
+line x + k\*r = C with k \> 0, so the radius decreases as x rises. The result
+is the full Revolve of the triangle (far, 0), (far, R), (A, 0), where A and
+R are the float64 values nearest C and (C-far)/k that lie strictly on the
+empty side of the face. The cone wall and the face line share no point, so
+the relation between them is a strict sign that does not depend on how the
+platform rounds a fused multiply-add, and for identical recorded endpoint
+and far bits the strict gap is the same on every build. That establishes
+only the separation from the selected face line. Other blank and tool
+relations keep their own checks. The result is an ordinary Revolve body that
+depends on body and does not retire it.
+
+far is the cone's far plane as an axial coordinate. It must be a finite
+negative length (below X = 0, so the cone spans the origin) and strictly
+below both ends of the face. A nil ctx given to Do, a nil body, a body of no document,
+or a far that is not a finite length is ErrDegenerate. Selector failures are
+those of a [ToFace](<#ToFace>) stop. A retired body is ErrRetiredBody. A body or face
+outside the supported class (a plane or cylinder side, a section edge on the
+axis, a side whose meridian does not slope toward the axis as x rises), a
+far that is not below the face, a far that is not negative, or a cone whose
+float64 generator is not read back as an exact point cone is ErrUnsupported.
+A canceled ctx returns ctx.Err() unchanged. Every failure leaves the
+document and its provenance numbering unchanged.
+
+<a name="ConeFromFaceCommand.Do"></a>
+#### func (\*ConeFromFaceCommand) Do
+
+<pre>func (c *<a href="#ConeFromFaceCommand">ConeFromFaceCommand</a>) Do(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>) (*<a href="#Body">Body</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
+
+Do builds the cone and leaves the body live, or returns the error of the
+first gate that refuses. A nil ctx is ErrDegenerate, and a second call
+returns ErrConsumed.
 
 <a name="ConstructionAxis"></a>
 ### type ConstructionAxis
@@ -4337,31 +3317,65 @@ container by its path.
 Passed reports whether the layout is clean: no body in the root and no empty
 container.
 
-<a name="CopyOption"></a>
-### type CopyOption
+<a name="CopyCommand"></a>
+### type CopyCommand
 
-<pre>type CopyOption interface {
-    option.Interface
-    // contains filtered or unexported methods
+<pre>type CopyCommand struct {
+    // contains filtered or unexported fields
 }</pre>
 
-CopyOption configures Copy. Only WithCopyPlacement, WithCopyRotation and
-WithCopyLiftTranslation change the copy's placement. An option from another package cannot implement
-this sealed tier.
+CopyCommand copies a body. Build it with [Copy](<#Copy>).
 
-<a name="WithCopyLiftTranslation"></a>
-#### func WithCopyLiftTranslation
+<a name="Copy"></a>
+#### func Copy
 
-<pre>func WithCopyLiftTranslation(lift r3.Transform, from, to r3.Vec) <a href="#CopyOption">CopyOption</a></pre>
+<pre>func Copy(source *<a href="#Body">Body</a>) *<a href="#CopyCommand">CopyCommand</a></pre>
 
-WithCopyLiftTranslation places a new copy by moving the point from to the
-point to, both given in lift's local coordinates. The exact world translation
-is the lift's linear part times to minus from, formed in exact rationals: the
+Copy returns the command that copies source. Do returns a new live body
+carrying source's geometry and leaves source live. With no
+[CopyCommand.Place](<#CopyCommand.Place>) call, the copy has source's placement. The copy gets a
+new body identity and reproduces source provenance. source MUST NOT be nil.
+A body this evaluator did not build is ErrUnsupported. A canceled context
+stops the rebuild before the document changes.
+
+<a name="CopyCommand.Do"></a>
+#### func (\*CopyCommand) Do
+
+<pre>func (c *<a href="#CopyCommand">CopyCommand</a>) Do(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>) (*<a href="#Body">Body</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
+
+Do copies the body, or returns the error of the first gate that refuses. A
+nil ctx is ErrDegenerate, and a second call returns ErrConsumed.
+
+<a name="CopyCommand.Place"></a>
+#### func (\*CopyCommand) Place
+
+<pre>func (c *<a href="#CopyCommand">CopyCommand</a>) Place(p <a href="#CopyPlacement">CopyPlacement</a>) *<a href="#CopyCommand">CopyCommand</a></pre>
+
+Place composes a rigid motion onto the copy's placement: p is a
+[CopyTransform](<#CopyTransform>), a [CopyRotation](<#CopyRotation>) or a [CopyLiftTranslation](<#CopyLiftTranslation>). A fault of p is
+returned by Do ahead of the source's own gates, naming Place as its subject:
+a nil p or an invalid rotation or lift translation is ErrDegenerate, a
+non-finite one ErrNotFinite and a wrong unit kind ErrUnitKind. A
+[CopyTransform](<#CopyTransform>) is not checked here: the source's own gate checks it after the
+retired-body check, and the fault names no subject. A second call replaces
+the first.
+
+<a name="CopyLiftTranslation"></a>
+### type CopyLiftTranslation
+
+<pre>type CopyLiftTranslation struct {
+    Lift     r3.Transform
+    From, To r3.Vec
+}</pre>
+
+CopyLiftTranslation places a new copy by moving the point From to the point
+To, both given in Lift's local coordinates. The exact world translation is
+the lift's linear part times To minus From, formed in exact rationals: the
 subtraction and the product round nothing. A faceted copy denotes its
 source's true solid moved by exactly that vector, and its held vertices are
 charged for the rounding of the held placement to the nearest float
 translation. Other payloads are placed by that float translation alone,
-exactly as WithCopyPlacement of it.
+exactly as a [CopyTransform](<#CopyTransform>) of it.
 
 The copy is marked as exactly placed like every exact copy, so VerifyMotion
 and VerifyLinkage refuse to re-place it. Only a copy made directly from its
@@ -4371,31 +3385,37 @@ copy that stays inside a body the lift-local source stayed inside (a pin
 moved from one bore sketched on the lift to another) is decided from the
 recorded history.
 
-An invalid lift is ErrDegenerate and a non-finite from or to is
-ErrNotFinite, both when Copy evaluates the option. A to that equals from is the
-identity.
+An invalid Lift is ErrDegenerate and a non-finite From or To is
+ErrNotFinite, both when Do evaluates the placement. A To that equals From is
+the identity.
 
-<a name="WithCopyPlacement"></a>
-#### func WithCopyPlacement
+<a name="CopyPlacement"></a>
+### type CopyPlacement
 
-<pre>func WithCopyPlacement(t r3.Transform) <a href="#CopyOption">CopyOption</a></pre>
+<pre>type CopyPlacement interface {
+    // contains filtered or unexported methods
+}</pre>
 
-WithCopyPlacement places a new copy under t. A zero or otherwise invalid
-transform is ErrDegenerate when Copy evaluates the option.
+CopyPlacement is how [CopyCommand.Place](<#CopyCommand.Place>) places a copy: a [CopyTransform](<#CopyTransform>), a
+[CopyRotation](<#CopyRotation>) or a [CopyLiftTranslation](<#CopyLiftTranslation>). The set is sealed, so a copy takes
+one placement (agent-docs/command-api-design.md rule M3).
 
-<a name="WithCopyRotation"></a>
-#### func WithCopyRotation
+<a name="CopyRotation"></a>
+### type CopyRotation
 
-<pre>func WithCopyRotation(center, axis r3.Vec, angle units.Value) <a href="#CopyOption">CopyOption</a></pre>
+<pre>type CopyRotation struct {
+    Center, Axis r3.Vec
+    Angle        units.Value
+}</pre>
 
-WithCopyRotation places a new copy by a rotation about the axis through
-center along axis, by angle. The rotation a faceted copy denotes is an
-exactly orthogonal rational rotation about exactly that axis, chosen near
-angle: it agrees with angle to within a few float steps, but it is not in
-general the rotation by exactly that transcendental angle. The held
-placement's rounding is charged against that exact rotation. Other payloads
-are placed by r3.RotationAround(center, axis, angle), exactly as
-WithCopyPlacement of that transform.
+CopyRotation places a new copy by a rotation about the axis through Center
+along [Axis](<#Axis>), by Angle. The rotation a faceted copy denotes is an exactly
+orthogonal rational rotation about exactly that axis, chosen near Angle: it
+agrees with Angle to within a few float steps, but it is not in general the
+rotation by exactly that transcendental angle. The held placement's rounding
+is charged against that exact rotation. Other payloads are placed by
+r3.RotationAround(Center, [Axis](<#Axis>), Angle), exactly as a [CopyTransform](<#CopyTransform>) of that
+transform.
 
 A faceted copy made this way keeps the analytic tag of a face that a mesh
 Boolean retained from its operands (a plane, cylinder, sphere or torus), with
@@ -4403,12 +3423,22 @@ a NormalAt bound that charges the float image of the tag against the exact
 rotation; a retained cone keeps the bound 2. Every other face reads as
 [Faceted](<#Faceted>) with its held bound, so [Face](<#Face>).NormalAt refuses it and [ToFace](<#ToFace>) stops
 refuse it. A rotated plane tag is a float image, so [MirrorFace](<#MirrorFace>) refuses it.
-The copy also stops being a point-loft source. Use WithCopyPlacement for a
+The copy also stops being a point-loft source. Use a [CopyTransform](<#CopyTransform>) for a
 copy that needs those readings.
 
-A zero or non-finite axis is ErrDegenerate, a non-finite center or angle is
-ErrNotFinite, and an angle that is not an angle is ErrUnitKind, all when
-Copy evaluates the option. A zero angle is the identity.
+A zero or non-finite [Axis](<#Axis>) is ErrDegenerate, a non-finite Center or Angle is
+ErrNotFinite, and an Angle that is not an angle is ErrUnitKind, all when Do
+evaluates the placement. A zero Angle is the identity.
+
+<a name="CopyTransform"></a>
+### type CopyTransform
+
+<pre>type CopyTransform struct {
+    Transform r3.Transform
+}</pre>
+
+CopyTransform places a new copy under Transform. A zero or otherwise invalid
+transform is ErrDegenerate when Do evaluates the placement.
 
 <a name="Counterbore"></a>
 ### type Counterbore
@@ -4452,6 +3482,128 @@ Coverage is an undercut survey's face-membership result.
 Curve is the sealed edge-geometry set. A switch on it needs a default
 because later versions may add variants.
 
+<a name="CutCommand"></a>
+### type CutCommand
+
+<pre>type CutCommand struct {
+    // contains filtered or unexported fields
+}</pre>
+
+CutCommand subtracts one body from another. Build it with [Cut](<#Cut>).
+
+<a name="Cut"></a>
+#### func Cut
+
+<pre>func Cut(target, tool *<a href="#Body">Body</a>) *<a href="#CutCommand">CutCommand</a></pre>
+
+Cut returns the command that subtracts tool from target, retiring both
+operands from their document on Do (core §8). The target and tool roles are
+asymmetric. A cut that removes everything is ErrBooleanFailed;
+the other gates match Union's.
+A call refused with ErrUnsupported on a mesh result of earlier Cut and
+Intersect calls is retried from the source bodies of that chain
+(agent-docs/prism-boolean-design.md Part R); only a failure of that retry too
+returns the refusal.
+Do returns ctx.Err() unchanged when ctx is canceled before the document commit.
+
+<a name="CutCommand.Do"></a>
+#### func (\*CutCommand) Do
+
+<pre>func (c *<a href="#CutCommand">CutCommand</a>) Do(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>) (*<a href="#Body">Body</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
+
+Do runs the cut once and returns the result body. A second Do returns
+[ErrConsumed](<#ErrConsumed>).
+
+<a name="CutCommand.MatchingFaces"></a>
+#### func (\*CutCommand) MatchingFaces
+
+<pre>func (c *<a href="#CutCommand">CutCommand</a>) MatchingFaces() *<a href="#CutCommand">CutCommand</a></pre>
+
+MatchingFaces tells the cut that the operands' faces are meant to match
+where they meet; see [IntersectCommand.MatchingFaces](<#IntersectCommand.MatchingFaces>).
+
+<a name="CutExtrudeCommand"></a>
+### type CutExtrudeCommand
+
+<pre>type CutExtrudeCommand struct {
+    // contains filtered or unexported fields
+}</pre>
+
+CutExtrudeCommand removes the volume a profile extrude would fill. Build it
+with [CutExtrude](<#CutExtrude>). It has no SurfaceResult: a cut has no sheet form.
+
+<a name="CutExtrude"></a>
+#### func CutExtrude
+
+<pre>func CutExtrude(target *<a href="#Body">Body</a>, s *sketch.Sketch, profiles []*sketch.Profile, e <a href="#Extent">Extent</a>) *<a href="#CutExtrudeCommand">CutExtrudeCommand</a></pre>
+
+CutExtrude removes from target the volume that sweeping profiles of s along
+the sketch normal per e would fill, and returns the result, retiring target
+(agent-docs/cut-profile-design.md). It is the feature form of Extrude
+followed by Cut: the swept tool exists only inside the call, is never
+registered, and leaves no body in the document.
+
+Every profile obeys Extrude's gates and Taper, and the extent resolves
+exactly as Extrude resolves it, so a [ToFace](<#ToFace>) or [ThroughAll](<#ThroughAll>) stop reads live
+bodies, target among them. Several profiles are one feature: their tools are
+united with one another and target is cut once. Profiles whose tools touch
+or overlap are therefore removed as one volume.
+
+target MUST be a live solid. A nil context, target or sketch, or an empty
+or nil profile list, is ErrDegenerate. A tool that removes everything is
+ErrBooleanFailed, and every other refusal is Extrude's or Cut's own. Every
+failure leaves target live and the document unchanged. The history records
+one OperationCutExtrude whose consumed input is target.
+
+<a name="CutExtrudeCommand.Do"></a>
+#### func (\*CutExtrudeCommand) Do
+
+<pre>func (c *<a href="#CutExtrudeCommand">CutExtrudeCommand</a>) Do(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>) (*<a href="#Body">Body</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
+
+Do cuts the target and retires it, or returns the error of the first gate
+that refuses, leaving the target live and the document unchanged. A nil ctx
+is ErrDegenerate, and a second call returns ErrConsumed.
+
+<a name="CutExtrudeCommand.Taper"></a>
+#### func (\*CutExtrudeCommand) Taper
+
+<pre>func (c *<a href="#CutExtrudeCommand">CutExtrudeCommand</a>) Taper(a units.Value) *<a href="#CutExtrudeCommand">CutExtrudeCommand</a></pre>
+
+Taper leans the tool's walls as [ExtrudeCommand.Taper](<#ExtrudeCommand.Taper>) does for each
+profile. A second call replaces the first.
+
+<a name="CutRevolveCommand"></a>
+### type CutRevolveCommand
+
+<pre>type CutRevolveCommand struct {
+    // contains filtered or unexported fields
+}</pre>
+
+CutRevolveCommand removes the volume a profile revolve would fill. Build it
+with [CutRevolve](<#CutRevolve>). It has no method.
+
+<a name="CutRevolve"></a>
+#### func CutRevolve
+
+<pre>func CutRevolve(target *<a href="#Body">Body</a>, s *sketch.Sketch, profiles []*sketch.Profile, axis <a href="#Axis">Axis</a>,
+    a <a href="#AngularExtent">AngularExtent</a>) *<a href="#CutRevolveCommand">CutRevolveCommand</a></pre>
+
+CutRevolve removes from target the volume that revolving profiles of s about
+axis through a would fill, and returns the result, retiring target
+(agent-docs/cut-profile-design.md). It is the feature form of Revolve
+followed by Cut, with the gates, grouping and failure behaviour of
+[CutExtrude](<#CutExtrude>). The history records one OperationCutRevolve. It has no
+SurfaceResult: a cut has no sheet form.
+
+<a name="CutRevolveCommand.Do"></a>
+#### func (\*CutRevolveCommand) Do
+
+<pre>func (c *<a href="#CutRevolveCommand">CutRevolveCommand</a>) Do(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>) (*<a href="#Body">Body</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
+
+Do cuts the target and retires it, or returns the error of the first gate
+that refuses, leaving the target live and the document unchanged. A nil ctx
+is ErrDegenerate, and a second call returns ErrConsumed.
+
 <a name="Cylinder"></a>
 ### type Cylinder
 
@@ -4491,6 +3643,21 @@ DiagnosticCode is a diagnostic's stable reason code.
 <pre>type DiagnosticPair = report.<a href="report.md#DiagnosticPairOf">DiagnosticPairOf</a>[*<a href="#Body">Body</a>]</pre>
 
 DiagnosticPair names two bodies in a pair finding.
+
+<a name="Digest"></a>
+### type Digest
+
+<pre>type Digest [32]<a href="https://pkg.go.dev/builtin#byte">byte</a></pre>
+
+Digest is a SHA-256 identity of the evaluator state of a body or a pair of
+bodies (agent-docs/body-digest-design.md).
+
+<a name="Digest.String"></a>
+#### func (Digest) String
+
+<pre>func (g <a href="#Digest">Digest</a>) String() <a href="https://pkg.go.dev/builtin#string">string</a></pre>
+
+String returns the digest as 64 lowercase hex digits.
 
 <a name="Direction"></a>
 ### type Direction
@@ -4662,12 +3829,50 @@ it in the base unit of the kind it computes to (millimetre for a length,
 radian for an angle). An expression mixing kinds incompatibly is
 param.ErrIncompatibleKind. The read is recorded in Bindings.
 
+<a name="Document.IntersectionVolume"></a>
+#### func (\*Document) IntersectionVolume
+
+<pre>func (d *<a href="#Document">Document</a>) IntersectionVolume(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, a, b *<a href="#Body">Body</a>) (<a href="#Measurement">Measurement</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
+
+IntersectionVolume runs the evaluation Intersect runs on a and b, in that operand order, and returns the volume
+of the body Intersect would build. It commits nothing: Bodies, the operation history, producer numbering,
+containers, the level, curve and producer counters and every body are unchanged, and both operands stay live.
+
+The answer is Intersect's, bit for bit: the [Measurement](<#Measurement>) equals the Volume of the body Intersect returns for
+the same operands in the same document state, and every error is the error Intersect returns, tagged
+OperationIntersect with the same diagnostics. An empty intersection is the \*[BooleanError](<#BooleanError>) with Code BooleanEmpty, carrying the gap
+shift Intersect reports, if one applied. The one difference is the container rule: a and b may sit in different
+containers (agent-docs/container-design.md §3).
+
+A nil ctx, a nil body and a == b are ErrDegenerate; a body of another document is ErrForeignBody; a retired
+body is ErrRetiredBody. A ctx canceled during the evaluation returns ctx.Err() unchanged. It may run
+concurrently with Bodies, Verify, the body readers and other IntersectionVolume calls on the same document,
+never with an operation.
+
 <a name="Document.OperationHistory"></a>
 #### func (\*Document) OperationHistory
 
 <pre>func (d *<a href="#Document">Document</a>) OperationHistory() *<a href="#OperationHistory">OperationHistory</a></pre>
 
 [OperationHistory](<#OperationHistory>) returns an immutable snapshot of all recorded calls.
+
+<a name="Document.PairDigest"></a>
+#### func (\*Document) PairDigest
+
+<pre>func (d *<a href="#Document">Document</a>) PairDigest(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, a, b *<a href="#Body">Body</a>) (<a href="#Digest">Digest</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
+
+PairDigest returns the identity of the pair (a, b) in that order: both body
+digests and every node and id the two walks share. Equal pair digests mean
+IntersectionVolume(a, b) gives the same answer: the same error code, gap
+shift and volume bits (agent-docs/body-digest-design.md §4). Intersect runs
+the same evaluation, so it gives that answer too when both pairs pass its
+operand gates: both bodies live and in one container. Containers never
+enter the digest. Equal digests of a pair with a retired body promise
+nothing about the ErrRetiredBody gate. The digests do not cover Cut or any
+other two-body evaluation: Cut reads operations and consumers, which the
+digest omits. PairDigest(a, b) and PairDigest(b, a) differ in general. A
+body of another document is [ErrForeignBody](<#ErrForeignBody>); a nil body, a == b or a nil
+ctx is [ErrDegenerate](<#ErrDegenerate>). Retired bodies are digested like live ones.
 
 <a name="Document.Param"></a>
 #### func (\*Document) Param
@@ -4988,16 +4193,73 @@ option, a two-body Union that the chain-depth gate refuses still rebuilds its
 operands' recorded Union history with splitting on; only the body it returns
 holds split facets.
 
-<a name="DraftOption"></a>
-### type DraftOption
+<a name="DraftCommand"></a>
+### type DraftCommand
 
-<pre>type DraftOption interface {
-    option.Interface
-    // contains filtered or unexported methods
+<pre>type DraftCommand struct {
+    // contains filtered or unexported fields
 }</pre>
 
-DraftOption is a placeholder option tier for [Draft](<#Draft>). It carries no
-option today and reserves the signature for a later draft option.
+DraftCommand leans walls of a body about a neutral plane. Build it with
+[Draft](<#Draft>). It has no method.
+
+<a name="Draft"></a>
+#### func Draft
+
+<pre>func Draft(b *<a href="#Body">Body</a>, sel <a href="#FaceSelector">FaceSelector</a>, neutral <a href="#NeutralPlane">NeutralPlane</a>, angle units.Value) *<a href="#DraftCommand">DraftCommand</a></pre>
+
+Draft returns a new body whose walls lean by angle from the sweep axis about
+the neutral plane, retiring b (agent-docs/modify-design.md Part D §10). A
+positive angle narrows the body with distance from the neutral plane and a
+negative one widens it; the angle is a signed [units.Angle](<https://pkg.go.dev/github.com/lestrrat-3d/units#Angle>) outside
+[ErrNegativeMagnitude](<#ErrNegativeMagnitude>) (core §12). sel names the walls to lean, about one
+of b's caps. Faces(Walls(b)) names every wall, and the result is
+the body a tapered [Extrude](<#Extrude>) of the same section and sweep builds.
+A subset leans only the walls it names: each moved wall's far trace is its
+own moved line or circle, a kept wall stays vertical, and a corner between a
+moved and a kept line is the intersection of the two
+(agent-docs/modify-design.md Part D §10.2).
+
+A faceted solid with exact vertices that is a straight prism along a world axis is also drafted, on all its walls,
+about one of its two caps (agent-docs/orthogonal-design.md B21).
+
+b is a live straight prism: an extrude, a filleted or chamfered
+extrude, a tube, or any of these placed, whose recorded section is the
+section it denotes. The gates run in agent-docs/modify-design.md Part D §5's order, and a
+refused call leaves the document unchanged, including on ctx.Err():
+
+- an angle that is not an angle is [ErrUnitKind](<#ErrUnitKind>), one that is not finite
+  [ErrNotFinite](<#ErrNotFinite>), and one at or past a right angle [ErrDegenerate](<#ErrDegenerate>);
+- a retired or foreign b is [ErrRetiredBody](<#ErrRetiredBody>) or [ErrForeignBody](<#ErrForeignBody>),
+  and a sheet is [ErrUnsupported](<#ErrUnsupported>);
+- a zero angle is [ErrDegenerate](<#ErrDegenerate>) (the draft is b);
+- a neutral selector resolving to zero or several faces is [ErrCardinality](<#ErrCardinality>),
+  a curved neutral face [ErrDegenerate](<#ErrDegenerate>);
+- b that is not a prism, a section carrying a displacement, an
+  already drafted body, a [NeutralFrame](<#NeutralFrame>), a neutral face that is not a cap
+  of b, and a selected face that is no wall of b
+  are each [ErrUnsupported](<#ErrUnsupported>);
+- a selected cap is [ErrDegenerate](<#ErrDegenerate>), and an empty selection is the
+  selector's [ErrNoMatch](<#ErrNoMatch>);
+- a subset that moves one of two walls meeting at a circular corner (a
+  G1 join of a line and an arc, or of two arcs) is [ErrUnsupported](<#ErrUnsupported>): the
+  moved wall and the kept one no longer meet tangentially, and their
+  corner moves along a conic. A whole circle is one wall and moves or
+  stays whole.
+
+The far section's own gates (draft SD5 to SD16) are those of a tapered
+extrude. b, sel and neutral MUST NOT be nil; a nil one is [ErrDegenerate](<#ErrDegenerate>), and so is a nil ctx given to Do.
+Every measurement of the result is Approximate: the tangent of the angle is
+only ever enclosed.
+
+<a name="DraftCommand.Do"></a>
+#### func (\*DraftCommand) Do
+
+<pre>func (c *<a href="#DraftCommand">DraftCommand</a>) Do(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>) (*<a href="#Body">Body</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
+
+Do leans the walls and retires the body, or returns the error of the first
+gate that refuses, leaving the body live. A nil ctx is ErrDegenerate, and a
+second call returns ErrConsumed.
 
 <a name="Drive"></a>
 ### type Drive
@@ -5394,6 +4656,77 @@ Ellipse3 is an elliptical arc edge. Major is the unit direction of its
 semi-major axis in the plane normal to [Axis](<#Axis>). An edge whose start and end
 vertex are one vertex is the whole ellipse.
 
+<a name="EmbossCommand"></a>
+### type EmbossCommand
+
+<pre>type EmbossCommand struct {
+    // contains filtered or unexported fields
+}</pre>
+
+EmbossCommand raises or engraves profiles on a face. Build it with [Emboss](<#Emboss>).
+
+<a name="Emboss"></a>
+#### func Emboss
+
+<pre>func Emboss(b *<a href="#Body">Body</a>, s *sketch.Sketch, profiles []*sketch.Profile, face <a href="#FaceSelector">FaceSelector</a>,
+    mode <a href="#EmbossMode">EmbossMode</a>, height units.Value) *<a href="#EmbossCommand">EmbossCommand</a></pre>
+
+Emboss raises or engraves the profiles on a planar or cylindrical face of b and
+returns the result, retiring b.
+
+face selects the face and must resolve to exactly one face. s is a sketch whose
+plane is the plane of that face, or on a cylindrical face a plane tangent to the
+cylinder (agent-docs/emboss-design.md §8), and profiles are closed
+profiles of s, such as the outlines of letters or a logo; a profile with
+holes keeps them. The relief is height tall: a raised relief stands height
+out of the face, and an engraved one is cut height into the body. The tool
+extends one extra millimetre to the other side of the face so that it
+overlaps the body instead of touching it (agent-docs/emboss-design.md). The
+result has the exactness Union or Cut gives for the same bodies.
+
+b MUST be a live solid. A nil context, body, sketch or selector, an empty
+or nil profile list, a non-positive height, a sketch plane that is more than
+1e-6 mm off the face plane or not parallel to it, and a relief that
+certifiably misses b or changes no volume are ErrDegenerate. A face that is
+not an analytic plane or cylinder, nor a convex planar face of a faceted solid with exact
+vertices, is ErrUnsupported. Profiles must not touch each other
+in a shared plane. A boolean the evaluator cannot decide is the boolean's
+own error. Every failure leaves the document unchanged and b live.
+
+<a name="EmbossCommand.Do"></a>
+#### func (\*EmbossCommand) Do
+
+<pre>func (c *<a href="#EmbossCommand">EmbossCommand</a>) Do(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>) (*<a href="#Body">Body</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
+
+Do raises or engraves the relief and retires the body, or returns the error
+of the first gate that refuses, leaving the body live and the document
+unchanged. A nil ctx is ErrDegenerate, and a second call returns ErrConsumed.
+
+<a name="EmbossCommand.Draft"></a>
+#### func (\*EmbossCommand) Draft
+
+<pre>func (c *<a href="#EmbossCommand">EmbossCommand</a>) Draft(angle units.Value) *<a href="#EmbossCommand">EmbossCommand</a></pre>
+
+Draft leans the relief's walls by a draft angle
+(agent-docs/emboss-design.md §6). A positive angle makes a raised relief
+narrower toward its top and an engraving narrower toward its floor, the way a
+moulded or cast part leaves its mould. A negative angle widens them. The angle
+is [ExtrudeCommand.Taper](<#ExtrudeCommand.Taper>)'s: a draft at or past a right angle is ErrDegenerate,
+and the zero value is a straight wall. A second call replaces the first.
+
+<a name="EmbossCommand.RimFillet"></a>
+#### func (\*EmbossCommand) RimFillet
+
+<pre>func (c *<a href="#EmbossCommand">EmbossCommand</a>) RimFillet(radius units.Value) *<a href="#EmbossCommand">EmbossCommand</a></pre>
+
+RimFillet rounds the relief's rim with a fillet of the given radius
+(agent-docs/emboss-design.md §7). The rim of a raised relief is the edges of
+its top face, and the rim of an engraving is the edges where its wall meets the
+face it is cut into. The radius is a positive length. The relief is built and
+filleted on a copy of b first, so a fillet the evaluator refuses leaves b
+live and the document unchanged; the copy leaves history entries. A second
+call replaces the first.
+
 <a name="EmbossMode"></a>
 ### type EmbossMode
 
@@ -5417,46 +4750,40 @@ EmbossMode says whether a relief stands out of a face or is cut into it.
 
 String names the mode.
 
-<a name="EmbossOption"></a>
-### type EmbossOption
-
-<pre>type EmbossOption interface {
-    option.Interface
-    // contains filtered or unexported methods
-}</pre>
-
-EmbossOption configures [Emboss](<#Emboss>).
-
-<a name="WithEmbossDraft"></a>
-#### func WithEmbossDraft
-
-<pre>func WithEmbossDraft(angle units.Value) <a href="#EmbossOption">EmbossOption</a></pre>
-
-WithEmbossDraft leans the relief's walls by a draft angle
-(agent-docs/emboss-design.md §6). A positive angle makes a raised relief
-narrower toward its top and an engraving narrower toward its floor, the way a
-moulded or cast part leaves its mould. A negative angle widens them. The angle
-is [WithTaper](<#WithTaper>)'s: a draft at or past a right angle is ErrDegenerate, and the
-zero value is a straight wall.
-
-<a name="WithEmbossRimFillet"></a>
-#### func WithEmbossRimFillet
-
-<pre>func WithEmbossRimFillet(radius units.Value) <a href="#EmbossOption">EmbossOption</a></pre>
-
-WithEmbossRimFillet rounds the relief's rim with a fillet of the given radius
-(agent-docs/emboss-design.md §7). The rim of a raised relief is the edges of
-its top face, and the rim of an engraving is the edges where its wall meets the
-face it is cut into. The radius is a positive length. The relief is built and
-filleted on a copy of b first, so a fillet the evaluator refuses leaves b
-live and the document unchanged; the copy leaves history entries.
-
 <a name="Exactness"></a>
 ### type Exactness
 
 <pre>type Exactness = report.<a href="report.md#Exactness">Exactness</a></pre>
 
 Exactness reports whether a measured value is exact or bounded.
+
+<a name="ExtendCommand"></a>
+### type ExtendCommand
+
+<pre>type ExtendCommand struct {
+    // contains filtered or unexported fields
+}</pre>
+
+ExtendCommand lengthens a sheet to meet a tool. Build it with [Extend](<#Extend>).
+
+<a name="Extend"></a>
+#### func Extend
+
+<pre>func Extend(b *<a href="#Body">Body</a>, edges *<a href="#EdgeQuery">EdgeQuery</a>, tool *<a href="#Body">Body</a>) *<a href="#ExtendCommand">ExtendCommand</a></pre>
+
+Extend returns the command that lengthens b along the named edges' own carriers until
+they meet tool, and returns the lengthened sheet. It admits a b and
+tool sharing ONE generator, exactly as Trim does — both a straight sweep, or
+both a revolve about one axis — under surface-intersection §2.1's own gate.
+A nil context given to Do or a nil b is ErrDegenerate. The edge query is copied at the call.
+
+<a name="ExtendCommand.Do"></a>
+#### func (\*ExtendCommand) Do
+
+<pre>func (c *<a href="#ExtendCommand">ExtendCommand</a>) Do(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>) (*<a href="#Body">Body</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
+
+Do lengthens the sheet and retires both operands, or returns the error of the first gate that refuses. A second
+call returns [ErrConsumed](<#ErrConsumed>).
 
 <a name="Extent"></a>
 ### type Extent
@@ -5469,30 +4796,118 @@ Extent is what Extrude takes: the sealed linear extent set. No angular
 extent satisfies it — "revolve 90mm" is unrepresentable, not a runtime
 error.
 
-<a name="ExtrudeOption"></a>
-### type ExtrudeOption
+<a name="ExtrudeCommand"></a>
+### type ExtrudeCommand
 
-<pre>type ExtrudeOption interface {
-    option.Interface
-    // contains filtered or unexported methods
+<pre>type ExtrudeCommand struct {
+    // contains filtered or unexported fields
 }</pre>
 
-ExtrudeOption configures Extrude. A chain section accepts none of them: both
-WithTaper and WithSurfaceResult return ErrUnsupported on a chain.
+ExtrudeCommand sweeps a section along a sketch plane's normal. Build it with
+[Extrude](<#Extrude>).
 
-<a name="WithTaper"></a>
-#### func WithTaper
+<a name="Extrude"></a>
+#### func Extrude
 
-<pre>func WithTaper(a units.Value) <a href="#ExtrudeOption">ExtrudeOption</a></pre>
+<pre>func Extrude[S <a href="#Section">Section</a>](d *<a href="#Document">Document</a>, s *sketch.Sketch, sec S, e <a href="#Extent">Extent</a>) *<a href="#ExtrudeCommand">ExtrudeCommand</a></pre>
 
-WithTaper sets the extrude taper: a SIGNED displacement angle — which way
+Extrude sweeps the section sec of sketch s along the sketch plane's normal
+per the linear extent e, registers the new body, and returns it. sec is a
+closed [\*sketch.Profile](<https://pkg.go.dev/github.com/lestrrat-3d/sketch#Profile>), which extrudes to a solid (sheet under
+SurfaceResult), or an open [\*sketch.Chain](<https://pkg.go.dev/github.com/lestrrat-3d/sketch#Chain>), which extrudes to a
+ribbon sheet. Both are recorded from s; the type argument S is inferred.
+
+A profile section MUST be a profile of s (ErrForeignProfile) and a
+current, unaltered snapshot (ErrStaleProfile or ErrInvalidProfile); an
+invalid profile is also ErrInvalidProfile, and a boundary decad cannot
+record exactly is ErrUnrecordableProfile (core §7). This evaluator builds a
+bounded oblique [Body](<#Body>).Section profile only as a solid straight prism with an
+independent [Distance](<#Distance>) extent, carrying its certified source displacement.
+Its private Sketch certificate and marked reference loop must still match.
+Other bounded-section consumers and methods return [ErrUnsupported](<#ErrUnsupported>).
+Otherwise this evaluator builds a
+straight prism from a profile of line, circle, arc and Tier A free-form
+segments (a spline, a closed spline, a fit spline, or a unit-weight NURBS
+curve — agent-docs/spline-design.md Table F); a Tier B or Tier C free-form
+segment (a conic, a whole ellipse, or a NURBS curve with unequal weights) is
+[ErrUnsupported](<#ErrUnsupported>). A Tier A kind is admitted but not thereby built: each
+free-form wall edge must also prove ONE curvature sign across every span and
+joint of its chain (agent-docs/spline-design.md §6.5), and the whole profile's
+free-form work must fit the fixed budget. A chain whose curvature genuinely
+changes sign, or whose certificate the fixed subdivision depth does not
+close, is [ErrUnsupported](<#ErrUnsupported>) (Table R row R19), as is a profile past the
+budget (row R7). A free-form curve must meet its neighbours at shared
+endpoints unless sketch certifies a fit-spline/circle trim
+(agent-docs/spline-design.md §2.1). Other crossing fragments are rejected as
+ErrUnrecordableProfile before this runs. SurfaceResult omits the two
+caps and publishes a sheet body instead of a solid (agent-docs/surface-design.md
+§4).
+
+A nonzero [ExtrudeCommand.Taper](<#ExtrudeCommand.Taper>) on a profile builds a draft body instead
+(agent-docs/modify-design.md Part D): the far cap is the profile offset by h·tan α with
+every straight corner mitered, each straight wall a [Plane](<#Plane>) leaning by the
+taper and each circular wall a [Cone](<#Cone>). Its profile must hold line, arc and
+circle segments only, and a circular wall must meet each neighbour
+tangentially; anything else, and every other row of that design's Table SD,
+is [ErrUnsupported](<#ErrUnsupported>) or [ErrDegenerate](<#ErrDegenerate>) as the row states. Every measurement
+of a draft body is Approximate, since the taper's tangent is only ever
+enclosed.
+
+A chain section MUST be a chain of s and a current, unaltered snapshot,
+with the same sentinels (ErrForeignProfile, ErrStaleProfile,
+ErrInvalidProfile, ErrUnrecordableProfile; an invalid or self-intersecting
+chain is also ErrInvalidProfile; agent-docs/sketch-seam-design.md §2.2). The
+result is always a sheet — Kind() == BodySheet — one wall face per recorded
+segment (agent-docs/surface-design.md §13.4, Table G), with no cap and no closing
+face. A chain of any segment count and kind builds — a line wall Exact, an
+arc or circle fragment wall carrying rθ's own bound, a Tier A free-form
+wall carrying internal/freeform/spline\_length.go's proven bracket
+(agent-docs/spline-design.md); a Tier B or Tier C free-form segment is
+ErrUnsupported, exactly as a profile's own wall refuses it. A chain section
+returns ErrUnsupported for SurfaceResult, which has no solid to
+toggle, and for [ExtrudeCommand.Taper](<#ExtrudeCommand.Taper>) of any angle, zero included, since a chain
+extrude has no draft build. Both refusals follow the chain's seam gate and
+precede extent resolution (agent-docs/surface-design.md §13.2).
+
+A nil context, document, sketch or section returns ErrDegenerate. The
+context is checked at entry, between recording the section, resolving the
+extent and building the body, and inside the evaluators; a canceled context
+returns ctx.Err() unchanged. Every failure and cancellation leaves the
+document unchanged.
+
+<a name="ExtrudeCommand.Do"></a>
+#### func (\*ExtrudeCommand) Do
+
+<pre>func (c *<a href="#ExtrudeCommand">ExtrudeCommand</a>) Do(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>) (*<a href="#Body">Body</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
+
+Do sweeps the section, registers the new body and returns it, or returns the
+error of the first gate that refuses, leaving the document unchanged. A nil
+ctx is ErrDegenerate, and a second call returns ErrConsumed.
+
+<a name="ExtrudeCommand.SurfaceResult"></a>
+#### func (\*ExtrudeCommand) SurfaceResult
+
+<pre>func (c *<a href="#ExtrudeCommand">ExtrudeCommand</a>) SurfaceResult() *<a href="#ExtrudeCommand">ExtrudeCommand</a></pre>
+
+SurfaceResult builds the wall set and omits the two caps, publishing a sheet
+body instead of a solid (agent-docs/surface-design.md §4). A chain section
+returns [ErrUnsupported](<#ErrUnsupported>) for it, since a chain extrude always returns a
+sheet. Calling it twice is the same as calling it once.
+
+<a name="ExtrudeCommand.Taper"></a>
+#### func (\*ExtrudeCommand) Taper
+
+<pre>func (c *<a href="#ExtrudeCommand">ExtrudeCommand</a>) Taper(a units.Value) *<a href="#ExtrudeCommand">ExtrudeCommand</a></pre>
+
+Taper sets the extrude taper: a SIGNED displacement angle — which way
 the wall leans. A positive taper leans every wall into the material as it
 leaves the sketch plane, so the body narrows toward the far end; a negative
 one widens it (agent-docs/modify-design.md Part D §2). An angle at or past a right angle
 is [ErrDegenerate](<#ErrDegenerate>). A nonzero taper builds over [Distance](<#Distance>), [ToFace](<#ToFace>),
-[ThroughAll](<#ThroughAll>), [Symmetric](<#Symmetric>) or [TwoSided](<#TwoSided>). WithSurfaceResult is [ErrUnsupported](<#ErrUnsupported>),
-returned before commit. A zero taper builds the straight prism. A chain
-section returns [ErrUnsupported](<#ErrUnsupported>) for WithTaper at any angle, zero included.
+[ThroughAll](<#ThroughAll>), [Symmetric](<#Symmetric>) or [TwoSided](<#TwoSided>). Taper with [ExtrudeCommand.SurfaceResult](<#ExtrudeCommand.SurfaceResult>)
+is [ErrUnsupported](<#ErrUnsupported>), returned before commit. A zero taper builds the straight
+prism. A chain section returns [ErrUnsupported](<#ErrUnsupported>) for Taper at any angle, zero
+included. A second call replaces the first.
 
 <a name="Face"></a>
 ### type Face
@@ -5884,22 +5299,168 @@ nothing (an ordinary ErrNoMatch at resolve). An ordinary mesh boolean
 preserves only its operands' cap origins, so name those with
 FaceCreatedBy(CapStart(originalBody)).
 
-<a name="FilletChamferOption"></a>
-### type FilletChamferOption
+<a name="FilletChordCommand"></a>
+### type FilletChordCommand
 
-<pre>type FilletChamferOption interface {
-    <a href="#FilletOption">FilletOption</a>
-    <a href="#ChamferOption">ChamferOption</a>
+<pre>type FilletChordCommand struct {
+    // contains filtered or unexported fields
 }</pre>
 
-FilletChamferOption is accepted by both Fillet and Chamfer.
+FilletChordCommand rounds edges of a body by chord length. Build it with
+[FilletChord](<#FilletChord>). It has no method.
 
-<a name="WithTangentChain"></a>
-#### func WithTangentChain
+<a name="FilletChord"></a>
+#### func FilletChord
 
-<pre>func WithTangentChain() <a href="#FilletChamferOption">FilletChamferOption</a></pre>
+<pre>func FilletChord(b *<a href="#Body">Body</a>, sel <a href="#EdgeSelector">EdgeSelector</a>, chord units.Value) *<a href="#FilletChordCommand">FilletChordCommand</a></pre>
 
-WithTangentChain expands each selected seed edge across the edges that
+FilletChord rounds the edges sel selects with an arc whose chord, the
+straight line between its two tangent edges, is chord long, returning the
+new body and retiring b (agent-docs/modify-design.md Part A).
+
+Where the faces meet at the angle φ across the corner (the interior angle of a
+convex edge, the open wedge of a concave one) the arc turns π − φ, so its
+radius is chord/(2·cos(φ/2)), which is chord/√2 on a right angle.
+FilletChord states that radius and builds the result as [Fillet](<#Fillet>) does, so the
+receivers, routes and refusals of Fillet apply.
+
+Every selected edge MUST lie between two planar faces, or be circular between a plane and a cylinder, cone or sphere, and may be convex or
+concave: a concave edge's fillet adds the round's material to the corner. Any
+other edge is ErrUnsupported. All the selected edges MUST give the same radius,
+within a relative 1e-12, which equal dihedrals do; edges at different angles
+take separate calls, and a selection that mixes them is ErrUnsupported. chord
+MUST be a positive length; a zero or negative one is ErrDegenerate or
+ErrNegativeMagnitude, and a wrong unit kind is ErrUnitKind. A nil context,
+body or selector is ErrDegenerate. Every failure leaves b live and the
+document unchanged.
+
+<a name="FilletChordCommand.Do"></a>
+#### func (\*FilletChordCommand) Do
+
+<pre>func (c *<a href="#FilletChordCommand">FilletChordCommand</a>) Do(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>) (*<a href="#Body">Body</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
+
+Do rounds the edges and retires the body, or returns the error of the first
+gate that refuses, leaving the body live. A nil ctx is ErrDegenerate, and a
+second call returns ErrConsumed. Its errors carry [OperationFillet](<#OperationFillet>).
+
+<a name="FilletCommand"></a>
+### type FilletCommand
+
+<pre>type FilletCommand struct {
+    // contains filtered or unexported fields
+}</pre>
+
+FilletCommand rounds edges of a body. Build it with [Fillet](<#Fillet>).
+
+<a name="Fillet"></a>
+#### func Fillet
+
+<pre>func Fillet(b *<a href="#Body">Body</a>, sel <a href="#EdgeSelector">EdgeSelector</a>, r units.Value) *<a href="#FilletCommand">FilletCommand</a></pre>
+
+Fillet rounds selected section corners of a straight prism, its admitted
+one-line Sweep reduction, or an axial loft whose sections match in segment
+kinds with a tangent arc of radius r, returning the new body and retiring b
+(agent-docs/modify-design.md §6, core §8). A nil b is ErrDegenerate. sel is
+resolved against the live b; a query matching nothing is loud (ErrNoMatch / ErrCardinality,
+S16). r is a length magnitude, gated like every other (S15); a zero r is
+S13. One straight cap edge of a prism or one-line solid Sweep takes route E;
+other unsupported cap selections are S1 (ErrUnsupported). A rewritten
+section faces the §5 audit before anything is built.
+
+TangentChain expands the edges sel resolves to across every edge that
+continues them with proven G1 continuity before any receiver gate runs
+(agent-docs/modify-design.md Part R §5); sel's cardinality assertion applies to
+the seeds it names. A continuation that branches or that this evaluator
+cannot decide is ErrUnsupported (SX2), and so is a faceted boolean result
+(SX9), refused before expansion.
+
+On a revolve, Fillet rounds swept meridian junctions instead
+(agent-docs/modify-design.md Part R §7): a latitude [Circle3](<#Circle3>) of a full turn or a
+junction [Arc3](<#Arc3>) of a partial one, each the sweep of one corner of the
+recorded meridian. The meridian gets the same tangent arc, faces the same
+audit, and is re-gated against the axis — a new axis contact is
+ErrDegenerate, an arc centred across the axis ErrUnsupported — before the
+revolve is rebuilt over the receiver's own axis, sweep and placement. The
+blend is a [Torus](<#Torus>), or a [Sphere](<#Sphere>) when its centre lies on the axis. One
+quarter-turn rectangular angular-cap radial rim has a bounded faceted
+route; other cap edges and edges on the axis are SX5 (ErrUnsupported).
+An axial loft whose two hole-free sections have the same segment kinds in
+the same order also accepts line/arc corners. The second section may be the
+first turned about the axis, as for a helical gear. Each section receives
+its own tangent arc at the selected corner and the loft is rebuilt from the
+two rewritten records (agent-docs/loft-design.md §17). Unchanged free-form
+segments retain their recorded curves; a new analytic piece must be proven
+clear of each non-adjacent free-form segment.
+
+An analytic boolean result (a brep or stacked body) that reads as a prism
+along a reference axis is filleted as that prism
+(agent-docs/modify-design.md Part B route P): its lateral edges are the prism's, and
+the result is a prism. Any other selection of straight edges along one axis
+of such a body's face record takes route E (§5): a swept straight wall
+the edge ends on or runs along as a rim is first restated as the planar
+rectangle it sweeps (§5.2), both end faces of each edge take the tangent
+arc at their corner, the two faces beside it are trimmed to the arc's
+feet, and one cylindrical wall carrying a fillet(k) role is added; the
+result is a brep body whose record pairs every edge again before it is
+built. A curved edge, two selected edges sharing a vertex, an edge whose
+end face is a curved face or an earlier blend, a straight wall the route
+needs as a plane that is oblique, split or carries a displaced level, end
+faces whose arcs disagree, and a body whose faces carry a section
+displacement (SB1), outside brep-modify §4.4's lateral blend of a class-B
+crossing prism, are ErrUnsupported (Table SB).
+P8's exact front top edge uses a radius-1 quarter-cylinder cutter before
+route E's SB7 curved-third-face gate (modify-general §4.3c).
+Any other selection of such a body's edges is route L's
+(agent-docs/modify-design.md Part G §4): complete
+loops of planar faces are filleted as a pipe band at radius r
+(agent-docs/modify-design.md Part L) — a quarter cylinder along each line, a torus
+around each arc and at each reflex corner, cylinders meeting along an
+[Ellipse3](<#Ellipse3>) at a line-line miter, and a [FilletMiter3](<#FilletMiter3>) at a regular sharp
+corner involving an arc — the walls beside each loop trimmed to its
+side level and the face holding it to its offset contour; the result is a
+brep body whose patches carry filletLoop(f,l,p). Selected straight edges
+on part of one planar loop form a partial band whose selected walls must
+all descend or all rise, as a block's root flush with a plate's side does;
+a swept common wall can be restated as that planar loop. Loops sharing an edge are SL1; complete loops
+mixed with independent straight edges take route V. A line–arc or arc–arc
+join tangent only to the record's rounding, as a sketch fillet or tangent
+constraint records it (sin²θ ≤ 2⁻⁶⁴), builds as a tangent join and its
+sliver widens the published bounds. A neighbour route L cannot trim SL2,
+and an offset miter that folds or cannot be bounded, or a join read as
+tangent that turns more, is SF1 (both ErrUnsupported).
+A prism's complete cap loops take the same arm through its face view and
+return a brep body (RF3). A single cap edge on a strictly convex straight
+prism uses a bounded faceted cutter when that edge or its terminal walls
+are oblique; the cutter and receiver commit atomically. A faceted Union of
+a rooted oblique circular boss and rectangular plate also accepts its one
+complete root junction (agent-docs/modify-design.md Part A). Any other
+receiver outside those routes, loft §17 and draft §10.4 is S3
+(ErrUnsupported).
+
+A faceted Union of two rectangular prisms also admits one untouched outer
+vertical edge when the other prism is certified clear of the full removed
+radius band (agent-docs/modify-design.md Part R §10.1).
+A loop-filleted body publishes its volume, centroid, area, box and
+through-all extent, and passes Verify; it meshes with an occupied-volume
+proof, exports to STEP, takes part in a mesh boolean, is surveyed for
+undercuts and concave radii, and is placed, mirrored and patterned like any
+brep body (agent-docs/modify-design.md Part L Table DF).
+
+<a name="FilletCommand.Do"></a>
+#### func (\*FilletCommand) Do
+
+<pre>func (c *<a href="#FilletCommand">FilletCommand</a>) Do(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>) (*<a href="#Body">Body</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
+
+Do rounds the edges and retires the body, or returns the error of the
+first gate that refuses, leaving the body live. A nil ctx is ErrDegenerate,
+and a second call returns ErrConsumed.
+
+<a name="FilletCommand.TangentChain"></a>
+#### func (\*FilletCommand) TangentChain
+
+<pre>func (c *<a href="#FilletCommand">FilletCommand</a>) TangentChain() *<a href="#FilletCommand">FilletCommand</a></pre>
+
+TangentChain expands each selected seed edge across the edges that
 continue it with proven G1 continuity (agent-docs/modify-design.md Part R §5): an
 edge leaving the seed's endpoint along the exactly opposite tangent ray,
 whose two adjacent faces have the same outward normals there as the
@@ -5907,7 +5468,7 @@ seed's. The expansion repeats from every edge it adds. The seed query's
 cardinality assertion applies to the seeds, before expansion. A
 continuation with more than one candidate, or one this evaluator cannot
 decide, is ErrUnsupported; the call never picks a branch or stops early.
-Repeating the option is the same as passing it once.
+Calling it again is the same as calling it once.
 
 <a name="FilletMiter3"></a>
 ### type FilletMiter3
@@ -5915,16 +5476,6 @@ Repeating the option is the same as passing it once.
 <pre>type FilletMiter3 struct{}</pre>
 
 FilletMiter3 is the intersection edge of two analytic fillet patches.
-
-<a name="FilletOption"></a>
-### type FilletOption
-
-<pre>type FilletOption interface {
-    // contains filtered or unexported methods
-}</pre>
-
-FilletOption configures Fillet. WithTangentChain is the one option a
-fillet takes (agent-docs/modify-design.md Part R §2).
 
 <a name="FullRevolution"></a>
 ### type FullRevolution
@@ -5956,6 +5507,96 @@ HistoryCoverage reports whether a face correspondence is exhaustive.
     HistoryComplete
 )</pre>
 
+<a name="HoleCommand"></a>
+### type HoleCommand
+
+<pre>type HoleCommand struct {
+    // contains filtered or unexported fields
+}</pre>
+
+HoleCommand cuts a round hole into a body. Build it with [Hole](<#Hole>).
+
+<a name="Hole"></a>
+#### func Hole
+
+<pre>func Hole(b *<a href="#Body">Body</a>, face <a href="#FaceSelector">FaceSelector</a>, at r3.Vec, diameter units.Value, depth <a href="#HoleDepth">HoleDepth</a>) *<a href="#HoleCommand">HoleCommand</a></pre>
+
+Hole returns the command that cuts a round hole into b and returns the
+result, retiring b.
+
+The hole starts at the point \`at\` on the face that \`face\` selects, runs along the face's inward
+normal for depth, and is diameter wide. The result is the same body that
+Extrude, Revolve and Cut would give for the same tool shapes, so its
+measurements are as exact as those booleans make them; a round hole is
+Approximate because pi is never exact.
+
+face must resolve to exactly one face, an analytic plane or cylinder, or a
+convex planar face of a faceted solid with exact vertices. at is a world point
+in millimetres that lies on that face's plane, or on the cylinder; the hole
+axis runs through it, into the body, square to the plane or along the
+cylinder's radius. diameter is a length and depth is [ThroughHole](<#ThroughHole>) or
+[BlindHole](<#BlindHole>); a nil depth is ErrDegenerate. [HoleCommand.Head](<#HoleCommand.Head>) widens the mouth,
+[HoleCommand.Thread](<#HoleCommand.Thread>) taps the bore and [HoleCommand.Draft](<#HoleCommand.Draft>) leans its wall. A
+hole that is not round is [HoleShaped](<#HoleShaped>).
+
+b MUST be a live solid; a nil context or body, a nil selector, a missing
+depth, a non-positive diameter or depth, a head not wider than the hole, a
+counterbore not shallower than the hole and a countersink deeper than the
+hole are ErrDegenerate. A face that is not an analytic plane, nor a convex
+planar face of a faceted solid with exact vertices, is ErrUnsupported. A
+selector that does not resolve to one face is the selector's own error. An at
+more than 1e-6 mm off the face plane, or one that [Body](<#Body>).LocatePoint certifies
+lies outside the body along the hole axis, is ErrDegenerate; an undecided
+location does not refuse. A boolean the evaluator cannot decide is the
+boolean's own error. Every failure leaves the document unchanged and b live.
+
+<a name="HoleCommand.Do"></a>
+#### func (\*HoleCommand) Do
+
+<pre>func (c *<a href="#HoleCommand">HoleCommand</a>) Do(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>) (*<a href="#Body">Body</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
+
+Do cuts the hole and retires the body, or returns the error of the first gate
+that refuses, leaving the body live and the document unchanged. A nil ctx is
+ErrDegenerate, and a second call returns ErrConsumed.
+
+<a name="HoleCommand.Draft"></a>
+#### func (\*HoleCommand) Draft
+
+<pre>func (c *<a href="#HoleCommand">HoleCommand</a>) Draft(angle units.Value) *<a href="#HoleCommand">HoleCommand</a></pre>
+
+Draft leans the round bore's wall (agent-docs/hole-design.md §9): a positive
+angle makes the bore narrower toward its bottom, a negative one wider, and a
+zero angle is a straight bore. The diameter is the bore's diameter at the face
+either way. It needs a hole with no [HoleCommand.Thread](<#HoleCommand.Thread>), ErrDegenerate
+otherwise, and a planar face, ErrUnsupported on a cylinder. An angle whose
+magnitude is at or past a right angle is ErrDegenerate, returned by Do naming
+Draft as the subject, and one that closes the bore before its bottom is the
+drafted extrusion's own refusal. A second call replaces the first.
+
+<a name="HoleCommand.Head"></a>
+#### func (\*HoleCommand) Head
+
+<pre>func (c *<a href="#HoleCommand">HoleCommand</a>) Head(head <a href="#HoleHead">HoleHead</a>) *<a href="#HoleCommand">HoleCommand</a></pre>
+
+Head widens the mouth of the hole with a [Counterbore](<#Counterbore>) or [Countersink](<#Countersink>). A
+head value that is not a positive length, or that is neither variant, is
+refused by Do naming Head as the subject. A head not wider than the hole, a
+counterbore not shallower than the hole and a countersink deeper than the
+hole are ErrDegenerate. On a cylindrical face the head cuts from the
+plane tangent there (agent-docs/hole-design.md §11). A second call replaces
+the first.
+
+<a name="HoleCommand.Thread"></a>
+#### func (\*HoleCommand) Thread
+
+<pre>func (c *<a href="#HoleCommand">HoleCommand</a>) Thread(thread <a href="#HoleThread">HoleThread</a>) *<a href="#HoleCommand">HoleCommand</a></pre>
+
+Thread taps the round bore in the same commit (agent-docs/hole-design.md §8).
+On a cylindrical face the thread starts at the tangent plane at the hole's
+point, and the cut is the evaluator's own ErrUnsupported where it cannot hold
+the pair (agent-docs/hole-design.md §12). A tapped hole takes no [HoleCommand.Draft](<#HoleCommand.Draft>),
+ErrDegenerate. A second call replaces the first.
+
 <a name="HoleDepth"></a>
 ### type HoleDepth
 
@@ -5986,64 +5627,80 @@ HoleHead is the widening at the mouth of a hole. Its variants are
 HoleShape is the cross-section of a hole that is not round. Its variants are
 [RectangularHole](<#RectangularHole>), [SlotHole](<#SlotHole>), [PolygonHole](<#PolygonHole>) and [OutlineHole](<#OutlineHole>).
 
-<a name="HoleSpec"></a>
-### type HoleSpec
+<a name="HoleShapedCommand"></a>
+### type HoleShapedCommand
 
-<pre>type HoleSpec struct {
-    Face     <a href="#FaceSelector">FaceSelector</a>
-    At       r3.Vec
-    Diameter units.Value
-    Depth    <a href="#HoleDepth">HoleDepth</a>
-    Head     <a href="#HoleHead">HoleHead</a>
-    Shape    <a href="#HoleShape">HoleShape</a>
-    Thread   *<a href="#HoleThread">HoleThread</a>
-    Draft    units.Value
+<pre>type HoleShapedCommand struct {
+    // contains filtered or unexported fields
 }</pre>
 
-HoleSpec describes one hole.
+HoleShapedCommand cuts a hole of a given shape into a body. Build it with
+[HoleShaped](<#HoleShaped>).
 
-[Face](<#Face>) selects the face the hole starts in and must resolve to exactly one
-face, an analytic plane or cylinder. At is a world point in millimetres that
-lies on that face's plane, or on the cylinder; the hole axis runs through it,
-into the body, square to the plane or along the cylinder's radius. Diameter is a length. Depth is
-required. Head is optional, and nil makes a plain hole; on a cylindrical face it cuts
-from the plane tangent there (agent-docs/hole-design.md §11).
+<a name="HoleShaped"></a>
+#### func HoleShaped
 
-Shape is optional. A nil Shape makes a round hole of Diameter. A non-nil
-Shape replaces the round bore: Diameter MUST then be the zero units.Value and
-Head MUST be nil, each otherwise ErrDegenerate.
+<pre>func HoleShaped(b *<a href="#Body">Body</a>, face <a href="#FaceSelector">FaceSelector</a>, at r3.Vec, shape <a href="#HoleShape">HoleShape</a>, depth <a href="#HoleDepth">HoleDepth</a>) *<a href="#HoleShapedCommand">HoleShapedCommand</a></pre>
 
-Thread is optional. A non-nil Thread taps the round bore in the same commit
-(agent-docs/hole-design.md §8). It needs a nil Shape, ErrDegenerate otherwise.
-On a cylindrical face the thread starts at the tangent plane at At, and the
-cut is the evaluator's own ErrUnsupported where it cannot hold the pair
-(agent-docs/hole-design.md §12).
+HoleShaped returns the command that cuts a hole whose bore is shape, in
+place of the round bore of [Hole](<#Hole>), into b, retiring b. shape is a
+[RectangularHole](<#RectangularHole>), [SlotHole](<#SlotHole>), [PolygonHole](<#PolygonHole>) or [OutlineHole](<#OutlineHole>), centred on the
+hole axis, and its size is the hole's size, so the command takes no
+diameter, head, thread or draft. A nil shape is ErrDegenerate. face, at and
+depth are Hole's, and so are the refusals. The hole of an [OutlineHole](<#OutlineHole>) takes
+from 3 to 256 corners that enclose an area and whose sides do not cross or
+touch but at a shared corner, otherwise ErrDegenerate.
 
-Draft is optional and leans the round bore's wall (agent-docs/hole-design.md
-§9): a positive angle makes the bore narrower toward its bottom, a negative one
-wider, and the zero Value is a straight bore. Diameter is the bore's diameter
-at the face either way. It needs a nil Shape and a nil Thread, each otherwise
-ErrDegenerate, and a planar face, ErrUnsupported on a cylinder. An angle whose
-magnitude is at or past a right angle is ErrDegenerate, and one that closes the
-bore before its bottom is the drafted extrusion's own refusal.
+<a name="HoleShapedCommand.Do"></a>
+#### func (\*HoleShapedCommand) Do
+
+<pre>func (c *<a href="#HoleShapedCommand">HoleShapedCommand</a>) Do(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>) (*<a href="#Body">Body</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
+
+Do cuts the hole and retires the body, or returns the error of the first gate
+that refuses, leaving the body live and the document unchanged. A nil ctx is
+ErrDegenerate, and a second call returns ErrConsumed.
 
 <a name="HoleThread"></a>
 ### type HoleThread
 
 <pre>type HoleThread struct {
-    Pitch    units.Value
-    LeftHand <a href="https://pkg.go.dev/builtin#bool">bool</a>
-    Length   units.Value
+    // contains filtered or unexported fields
 }</pre>
 
 HoleThread is a thread tapped into a round hole. The hole's Diameter is then
 the thread's minor (tap drill) diameter. Pitch is the axial advance per turn,
-a positive length. The thread is right-handed unless LeftHand is set. Length
-is the length to thread, measured from where the bore proper starts (the face
-of a plain hole, the floor of a counterbore or the bottom of a countersink): the
-zero Value threads the bore's whole length, running out of a through hole's far
-end, and a positive length no longer than the bore stops the thread there with
-the coil's flat end (agent-docs/hole-design.md §8).
+a positive length. Build it with [NewHoleThread](<#NewHoleThread>) and pass it to
+[HoleCommand.Thread](<#HoleCommand.Thread>) or [BossBore.Thread](<#BossBore.Thread>). The thread is right-handed unless
+[HoleThread.LeftHand](<#HoleThread.LeftHand>) is called. It threads the bore's whole length from where
+the bore proper starts (the face of a plain hole, the floor of a counterbore or
+the bottom of a countersink), running out of a through hole's far end, unless
+[HoleThread.Length](<#HoleThread.Length>) is called: a positive length no longer than the bore stops
+the thread there with the coil's flat end (agent-docs/hole-design.md §8).
+
+<a name="NewHoleThread"></a>
+#### func NewHoleThread
+
+<pre>func NewHoleThread(pitch units.Value) <a href="#HoleThread">HoleThread</a></pre>
+
+NewHoleThread returns a right-handed thread of the given pitch that runs the
+bore's whole length. A pitch that is not a positive length is refused where
+the thread is planned.
+
+<a name="HoleThread.LeftHand"></a>
+#### func (HoleThread) LeftHand
+
+<pre>func (t <a href="#HoleThread">HoleThread</a>) LeftHand() <a href="#HoleThread">HoleThread</a></pre>
+
+LeftHand returns t as a left-handed thread.
+
+<a name="HoleThread.Length"></a>
+#### func (HoleThread) Length
+
+<pre>func (t <a href="#HoleThread">HoleThread</a>) Length(length units.Value) <a href="#HoleThread">HoleThread</a></pre>
+
+Length returns t stopping after length, a positive length no longer than the
+bore, measured from where the bore proper starts. A second call replaces the
+first.
 
 <a name="InertiaReading"></a>
 ### type InertiaReading
@@ -6056,21 +5713,73 @@ the coil's flat end (agent-docs/hole-design.md §8).
 InertiaReading is the symmetric inertia tensor about the mass center in
 world axes. Mixed entries include the physical minus sign.
 
-<a name="InfillSpec"></a>
-### type InfillSpec
+<a name="InfillCommand"></a>
+### type InfillCommand
 
-<pre>type InfillSpec struct {
-    Kind        <a href="#LatticeKind">LatticeKind</a>
-    Cell, Level units.Value
-    Resolution  <a href="https://pkg.go.dev/builtin#int">int</a>
-    // Skin is the thickness of a solid skin the infill keeps round the part, a positive length. The zero value
-    // keeps none, and the lattice is the part&#39;s whole interior.
-    Skin units.Value
+<pre>type InfillCommand struct {
+    // contains filtered or unexported fields
 }</pre>
 
-InfillSpec describes the lattice an [Infill](<#Infill>) fills a body with: its kind, the length it repeats at
-(Cell), its dimensionless wall thickness (Level) and its samples to a cell (Resolution), each as in
-[LatticeSpec](<#LatticeSpec>).
+InfillCommand fills a body with a lattice. Build it with [Infill](<#Infill>).
+
+<a name="Infill"></a>
+#### func Infill
+
+<pre>func Infill(b *<a href="#Body">Body</a>, kind <a href="#LatticeKind">LatticeKind</a>, cell, level units.Value) *<a href="#InfillCommand">InfillCommand</a></pre>
+
+Infill returns the command that fills b with a lattice and returns the lattice
+material inside it: the lattice over a box that encloses b by a margin of a
+quarter cell, made a solid by [SolidFromMesh](<#SolidFromMesh>) and intersected with b
+(agent-docs/lattice-design.md §5). b and the lattice are consumed, as by
+[Intersect](<#Intersect>), and the result replaces them in b's document. The lattice is the
+part's whole interior unless [InfillCommand.Skin](<#InfillCommand.Skin>) keeps a solid skin round it.
+
+kind names the lattice, cell is the length it repeats at and level its
+dimensionless wall thickness, each as in [LatticeSpec](<#LatticeSpec>). [InfillCommand.Resolution](<#InfillCommand.Resolution>)
+sets the samples to a cell, which is 16 unless called.
+
+b MUST be a live solid with a proven bounding box. The lattice is cut to b by the
+mesh Boolean, so the result is a faceted body whose volume reads inside the bound
+the Boolean proves. The lattice mesh must be one [SolidFromMesh](<#SolidFromMesh>) takes (a closed
+mesh of at most 65,528 triangles), so a coarser resolution or a larger cell
+admits a bigger part, and a lattice too fine for that is ErrUnsupported. The
+errors of the values are those of the lattice builders, an unknown kind is
+ErrDegenerate and a nil context or body ErrDegenerate. An intersection that
+leaves nothing is the Boolean's own error. An error carries [OperationInfill](<#OperationInfill>),
+including the refusals of the nested [Shell](<#Shell>), except a bare [BooleanError](<#BooleanError>) of the
+nested [Union](<#Union>) or [Intersect](<#Intersect>), which keeps [OperationIntersect](<#OperationIntersect>) or
+[OperationUnion](<#OperationUnion>). A refusal of the nested Union or Intersect that
+names an operand names it \`operand\`.
+
+<a name="InfillCommand.Do"></a>
+#### func (\*InfillCommand) Do
+
+<pre>func (c *<a href="#InfillCommand">InfillCommand</a>) Do(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>) (*<a href="#Body">Body</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
+
+Do fills the body and retires it, or returns the error of the first gate that
+refuses, leaving the body live and the document unchanged. A nil ctx is
+ErrDegenerate, and a second call returns ErrConsumed.
+
+<a name="InfillCommand.Resolution"></a>
+#### func (\*InfillCommand) Resolution
+
+<pre>func (c *<a href="#InfillCommand">InfillCommand</a>) Resolution(samples <a href="https://pkg.go.dev/builtin#int">int</a>) *<a href="#InfillCommand">InfillCommand</a></pre>
+
+Resolution sets the samples to a cell of the lattice along each axis, from 4 up,
+as [LatticeSpec](<#LatticeSpec>).Resolution does. A count of zero takes 16, not the value zero.
+A count below 4 is ErrDegenerate, returned by Do naming Resolution as the
+subject. A second call replaces the first.
+
+<a name="InfillCommand.Skin"></a>
+#### func (\*InfillCommand) Skin
+
+<pre>func (c *<a href="#InfillCommand">InfillCommand</a>) Skin(thickness units.Value) *<a href="#InfillCommand">InfillCommand</a></pre>
+
+Skin keeps a solid skin of the given thickness round the part, a positive
+length, and the lattice fills what is inside it: the part's closed [Shell](<#Shell>) of
+that thickness joined by [Union](<#Union>) to the lattice cut to the part. A thickness the
+shell refuses is returned by Do naming Skin as the subject. A second call
+replaces the first.
 
 <a name="InputUse"></a>
 ### type InputUse
@@ -6092,6 +5801,55 @@ InputUse describes whether a call retired or only read an input body.
 <pre>type Interference = report.<a href="report.md#InterferenceOf">InterferenceOf</a>[*<a href="#Body">Body</a>]</pre>
 
 Interference is a proven overlap between two bodies.
+
+<a name="IntersectCommand"></a>
+### type IntersectCommand
+
+<pre>type IntersectCommand struct {
+    // contains filtered or unexported fields
+}</pre>
+
+IntersectCommand builds the common volume of two bodies. Build it with
+[Intersect](<#Intersect>).
+
+<a name="Intersect"></a>
+#### func Intersect
+
+<pre>func Intersect(a, b *<a href="#Body">Body</a>) *<a href="#IntersectCommand">IntersectCommand</a></pre>
+
+Intersect returns the command that builds the volume common to a and b,
+retiring both operands from their document on Do (core §8). Disjoint
+operands share nothing, so the empty result is ErrBooleanFailed; the other
+gates match Union's.
+A call refused with ErrUnsupported on a mesh result of earlier Cut and
+Intersect calls is retried from the source bodies of that chain
+(agent-docs/prism-boolean-design.md Part R); only a failure of that retry too
+returns the refusal.
+Do returns ctx.Err() unchanged when ctx is canceled before the document commit.
+
+<a name="IntersectCommand.Do"></a>
+#### func (\*IntersectCommand) Do
+
+<pre>func (c *<a href="#IntersectCommand">IntersectCommand</a>) Do(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>) (*<a href="#Body">Body</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
+
+Do runs the intersection once and returns the result body. A second Do
+returns [ErrConsumed](<#ErrConsumed>).
+
+<a name="IntersectCommand.MatchingFaces"></a>
+#### func (\*IntersectCommand) MatchingFaces
+
+<pre>func (c *<a href="#IntersectCommand">IntersectCommand</a>) MatchingFaces() *<a href="#IntersectCommand">IntersectCommand</a></pre>
+
+MatchingFaces tells the intersection that the operands' faces are meant to
+match where they meet: a cap drawn to touch the tool's cone, say, or two
+faces meant to coincide. Faces drawn in floating point seldom match exactly;
+each rounds on its own, so a design that matches on paper can miss by a few
+last-place steps and be refused for it. With this method a miss of that size
+is taken as the match the design intends, and its effect is charged into
+the result's error bounds. A miss larger than rounding disproves the
+declaration, and the operation refuses as it would without it. It never
+admits a shape that would otherwise be refused for another reason, and it has
+no effect on a pair whose faces do not meet.
 
 <a name="IntervalOutcome"></a>
 ### type IntervalOutcome
@@ -6367,24 +6125,202 @@ LinkagePoseResult records one evaluated pose and its pair findings.
 
 LinkageReport is VerifyLinkage's report.
 
-<a name="LoftFacesOption"></a>
-### type LoftFacesOption
+<a name="LoftChainCommand"></a>
+### type LoftChainCommand
 
-<pre>type LoftFacesOption interface {
-    option.Interface
-    // contains filtered or unexported methods
+<pre>type LoftChainCommand struct {
+    // contains filtered or unexported fields
 }</pre>
 
-LoftFacesOption configures LoftFaces. An option from another package cannot
-implement this sealed tier.
+LoftChainCommand builds a sheet ruled between two open chains. Build it with
+[LoftChain](<#LoftChain>). It has no method: a chain loft always returns a sheet, so it has
+no SurfaceResult, and its segment pairing leaves no alignment.
 
-<a name="WithConeTangentEnd"></a>
-#### func WithConeTangentEnd
+<a name="LoftChain"></a>
+#### func LoftChain
 
-<pre>func WithConeTangentEnd(cone *<a href="#Body">Body</a>, radial r3.Vec) <a href="#LoftFacesOption">LoftFacesOption</a></pre>
+<pre>func LoftChain(d *<a href="#Document">Document</a>, s0 *sketch.Sketch, c0 *sketch.Chain, s1 *sketch.Sketch, c1 *sketch.Chain) *<a href="#LoftChainCommand">LoftChainCommand</a></pre>
 
-WithConeTangentEnd ends the loft with a last, constructed section tangent
-to cone along one ruling (agent-docs/loft-face-sections-design.md,
+LoftChain builds a sheet ruled between the open chains c0 (of s0) and c1 (of
+s1), registers it, and returns the new body. c0 is the FROM walk and c1 the
+TO walk, the same argument order Loft uses for its two sections and the
+order §16.2's plane gate reads its positive normal from. Both chains pass
+the identical seam gates chain Extrude runs (RecordChain,
+agent-docs/surface-design.md §13.3), in argument order, and the seam's own
+sentinel wins before any shape gate.
+
+The two walks MUST carry the same recorded segment count (ErrUnsupported),
+and segment j of c0 pairs with segment j of c1 — there is no alignment
+offset for an open walk, since a nonzero one would pair a segment across a
+free end. Every paired segment MUST be a LineSeg pair in this increment: a
+mixed-kind pairing and a same-kind circular pairing are each ErrUnsupported
+(agent-docs/loft-design.md Table SL rows SL4 and SL7). The two recorded planes
+MUST be exactly parallel with the to-plane strictly on the from-plane's
+positive side, which is what states the ribbon's positive side
+(ErrUnsupported, SL5); coplanar sections are ErrDegenerate (S5). A build-time
+audit proves the ruled walls cross nowhere but their own shared edges and
+vertices, and a proven crossing is ErrDegenerate (S7) — which is what
+refuses a pair whose two published walks run opposite ways.
+
+The result is always a sheet — Kind() == BodySheet — two flat triangles per
+chord cell with no cap and no closing face, so SurfaceResult does not
+compile against this call. A failed call leaves the document untouched.
+
+<a name="LoftChainCommand.Do"></a>
+#### func (\*LoftChainCommand) Do
+
+<pre>func (c *<a href="#LoftChainCommand">LoftChainCommand</a>) Do(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>) (*<a href="#Body">Body</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
+
+Do builds the ribbon, registers the new body and returns it, or returns the
+error of the first gate that refuses, leaving the document unchanged. A nil
+ctx is ErrDegenerate, and a second call returns ErrConsumed.
+
+<a name="LoftCommand"></a>
+### type LoftCommand
+
+<pre>type LoftCommand struct {
+    // contains filtered or unexported fields
+}</pre>
+
+LoftCommand builds a solid ruled between two profiles. Build it with [Loft](<#Loft>).
+
+<a name="Loft"></a>
+#### func Loft
+
+<pre>func Loft(d *<a href="#Document">Document</a>, s0 *sketch.Sketch, p0 *sketch.Profile, s1 *sketch.Sketch, p1 *sketch.Profile) *<a href="#LoftCommand">LoftCommand</a></pre>
+
+Loft builds a solid ruled between two profiles recorded on distinct
+geometric planes (agent-docs/loft-design.md), registers it, and returns the new
+body. s0/p0 is the FROM section (capStart); s1/p1 is the TO section
+(capEnd) — the same naming Extrude already uses for its two caps. Both
+profiles pass the unmodified core §7 seam gates independently, in argument
+order (p0 of s0, then p1 of s1): a foreign, stale, invalid, or
+unrecordable profile is the seam's own sentinel.
+
+Every corresponding segment pair must be same-kind, over the recorded
+segment type: both LineSeg, both ArcSeg, both CircleSeg, or both the same
+Tier A free-form type (SplineSeg, ClosedSplineSeg, a NURBSSeg with equal
+weights, or FitSplineSeg). An ArcSeg paired against a CircleSeg, or a
+SplineSeg against a FitSplineSeg, is a mixed-kind pairing like any other,
+and a mixed-kind pairing is [ErrUnsupported](<#ErrUnsupported>) (§1, P5, S3). A free-form pair
+whose two curves convert to different Bézier span counts uses exact common
+subdivision (§5.1). A circular or free-form pair's walls are chorded
+(§5.1), which carries three refusals of its own, each [ErrUnsupported](<#ErrUnsupported>): a
+pair the fixed station cap cannot chord to its chord target (S15), a build
+whose certified sagitta or station displacement has no derivation from the
+two records (S14), and a chord cell that collapses to one point on exactly
+one of the two sections (S16).
+The two profiles must lie on distinct geometric planes;
+coplanar sections are [ErrDegenerate](<#ErrDegenerate>) (§4, S5), since every wall vertex
+would then lie in one plane and the solid has zero volume by construction.
+A hole-count or per-loop segment-count mismatch has no positional or
+one-to-one pairing and is [ErrUnsupported](<#ErrUnsupported>) (S1/S2). A build-time audit
+proves the ruled walls do not cross or self-touch anywhere but their
+recorded shared edges and vertices (§6); a proven crossing is
+[ErrDegenerate](<#ErrDegenerate>) (S7's audit arm). A circular pair whose two sides walk in
+opposite senses is that same crossing — the correspondence walls each side
+against the other's reversed walk — and is the same [ErrDegenerate](<#ErrDegenerate>) (S7's
+structural arm), decided from the two records before any triangle is built.
+Exhausting the audit's fixed pair-test budget is
+[ErrUnsupported](<#ErrUnsupported>) (S8). A section point whose world coordinate runs past the
+representable float64 range is [ErrUnsupported](<#ErrUnsupported>) (S13) — the body exists,
+and this evaluator cannot hold its vertex table. SurfaceResult omits
+both section caps and publishes a sheet body instead of a solid
+(agent-docs/surface-design.md §4).
+
+A failed call leaves the document untouched.
+
+<a name="LoftCommand.Alignment"></a>
+#### func (\*LoftCommand) Alignment
+
+<pre>func (c *<a href="#LoftCommand">LoftCommand</a>) Alignment(offsets ...<a href="https://pkg.go.dev/builtin#int">int</a>) *<a href="#LoftCommand">LoftCommand</a></pre>
+
+Alignment records, per loop, which recorded segment index of the
+SECOND profile pairs with segment index 0 of the FIRST profile's
+corresponding loop. offsets\[0\] is the outer loop; offsets\[1+h\] is
+p1.Holes\[h\]. Omitting the method means every offset is 0 — the natural
+case where both profiles were authored with matching segment order
+(agent-docs/loft-design.md §2/§3 Table P row P4). A second call replaces the
+first.
+
+<a name="LoftCommand.Do"></a>
+#### func (\*LoftCommand) Do
+
+<pre>func (c *<a href="#LoftCommand">LoftCommand</a>) Do(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>) (*<a href="#Body">Body</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
+
+Do builds the loft, registers the new body and returns it, or returns the
+error of the first gate that refuses, leaving the document unchanged. A nil
+ctx is ErrDegenerate, and a second call returns ErrConsumed.
+
+<a name="LoftCommand.Splits"></a>
+#### func (\*LoftCommand) Splits
+
+<pre>func (c *<a href="#LoftCommand">LoftCommand</a>) Splits(first, second []<a href="#LoftSplit">LoftSplit</a>) *<a href="#LoftCommand">LoftCommand</a></pre>
+
+Splits cuts recorded segments of the first and of the second section
+before the loft pairs them, so two sections whose loops hold different numbers
+of segments can be paired one to one. Each piece is the same recorded curve over
+a sub-range of the segment's own parameter range, the way a trimmed fragment is
+recorded, so a split changes no curve. A fraction f resolves to the parameter
+TStart + f·(TEnd − TStart) of the segment, which is proportional to length on a
+line and a parameter of the curve on any other kind. The pieces follow each
+other in the loop's walk order. [LoftCommand.Alignment](<#LoftCommand.Alignment>) then applies to the
+split loops, and a wall's source role names the split segment index.
+
+A second call replaces the first. A split index outside its loop, a fraction
+outside (0, 1) or not increasing, a segment split twice, and a fraction that
+rounds onto its neighbour are [ErrDegenerate](<#ErrDegenerate>). Loops still holding different
+segment counts, or a pair still of different kinds, after the splits are
+[ErrUnsupported](<#ErrUnsupported>) as without the method, and a correspondence that twists is
+refused by the crossing audit.
+
+<a name="LoftCommand.SurfaceResult"></a>
+#### func (\*LoftCommand) SurfaceResult
+
+<pre>func (c *<a href="#LoftCommand">LoftCommand</a>) SurfaceResult() *<a href="#LoftCommand">LoftCommand</a></pre>
+
+SurfaceResult omits both section caps and publishes a sheet body instead of
+a solid (agent-docs/surface-design.md §4). Calling it twice is the same as
+calling it once.
+
+<a name="LoftFacesCommand"></a>
+### type LoftFacesCommand
+
+<pre>type LoftFacesCommand struct {
+    // contains filtered or unexported fields
+}</pre>
+
+LoftFacesCommand builds one solid through ordered cap faces. Build it with
+[LoftFaces](<#LoftFaces>) or [LoftFacesToCone](<#LoftFacesToCone>). It has no method.
+
+<a name="LoftFaces"></a>
+#### func LoftFaces
+
+<pre>func LoftFaces(sections []*<a href="#Face">Face</a>) *<a href="#LoftFacesCommand">LoftFacesCommand</a></pre>
+
+LoftFaces builds one solid through ordered complete caps of the same
+authenticated point-loft Split source (agent-docs/loft-face-sections-design.md).
+
+sections are the least slab's toe cap, then heel caps in source order. There
+are 2 to 32 of them, or 1 to 31 with LoftFacesToCone, which adds a last,
+constructed section. The document is the one owning the first section's
+body, and the result is in the container of that body. A nil context, a
+nil cone, a section count outside the
+bounds, a first section that is not a body face, or a radial that
+LoftFacesToCone cannot use is ErrDegenerate. A cone that is not an
+unplaced exact point cone about world X is ErrUnsupported. A section or cone
+of another document is ErrForeignBody and a retired one ErrRetiredBody.
+Selection failures are those of the section source. A canceled ctx returns
+ctx.Err() before the document changes.
+
+<a name="LoftFacesToCone"></a>
+#### func LoftFacesToCone
+
+<pre>func LoftFacesToCone(sections []*<a href="#Face">Face</a>, cone *<a href="#Body">Body</a>, radial r3.Vec) *<a href="#LoftFacesCommand">LoftFacesCommand</a></pre>
+
+LoftFacesToCone builds one solid through ordered complete caps of the same
+authenticated point-loft Split source and ends it with a last, constructed
+section tangent to cone along one ruling (agent-docs/loft-face-sections-design.md,
 "[Cone](<#Cone>)-tangent end section").
 
 The cone is a live, unplaced, full straight-meridian Revolve cone about
@@ -6395,60 +6331,49 @@ apex and slope, with the source origin at the cone apex, so it fits a
 point-loft source whose plane is that tangent plane. Any other source still
 goes through the ordinary embedding gates, which refuse an inconsistent end.
 The end face carries the cap-end role of the new loft and a rounded [Plane](<#Plane>)
-tag. Cut and Intersect continue from the result as they do without the
-option.
+tag. Cut and Intersect continue from the result as they do for [LoftFaces](<#LoftFaces>).
 
-The option is accepted at most once. With it, LoftFaces takes 1 to 31 cap
-faces. The cone must be live in the document of the first section's body.
+It takes 1 to 31 cap faces, which [LoftFaces](<#LoftFaces>) takes 2 to 32 of. A nil cone
+is [ErrDegenerate](<#ErrDegenerate>). The cone must be live in the document of the first
+section's body.
 
-<a name="LoftOption"></a>
-### type LoftOption
+<a name="LoftFacesCommand.Do"></a>
+#### func (\*LoftFacesCommand) Do
 
-<pre>type LoftOption interface {
-    option.Interface
-    // contains filtered or unexported methods
+<pre>func (c *<a href="#LoftFacesCommand">LoftFacesCommand</a>) Do(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>) (*<a href="#Body">Body</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
+
+Do builds the loft, registers the new body and returns it, or returns the
+error of the first gate that refuses, leaving the document unchanged. A nil
+ctx is ErrDegenerate, and a second call returns ErrConsumed.
+
+<a name="LoftFromPointCommand"></a>
+### type LoftFromPointCommand
+
+<pre>type LoftFromPointCommand struct {
+    // contains filtered or unexported fields
 }</pre>
 
-LoftOption configures Loft.
+LoftFromPointCommand builds a solid from a point to a profile. Build it with
+[LoftFromPoint](<#LoftFromPoint>). It has no method.
 
-<a name="WithLoftAlignment"></a>
-#### func WithLoftAlignment
+<a name="LoftFromPoint"></a>
+#### func LoftFromPoint
 
-<pre>func WithLoftAlignment(offsets ...<a href="https://pkg.go.dev/builtin#int">int</a>) <a href="#LoftOption">LoftOption</a></pre>
+<pre>func LoftFromPoint(d *<a href="#Document">Document</a>, apex r3.Vec, s *sketch.Sketch, p *sketch.Profile) *<a href="#LoftFromPointCommand">LoftFromPointCommand</a></pre>
 
-WithLoftAlignment records, per loop, which recorded segment index of the
-SECOND profile pairs with segment index 0 of the FIRST profile's
-corresponding loop. offsets\[0\] is the outer loop; offsets\[1+h\] is
-p1.Holes\[h\]. Omitting the option means every offset is 0 — the natural
-case where both profiles were authored with matching segment order
-(agent-docs/loft-design.md §2/§3 Table P row P4).
+LoftFromPoint builds a solid from one exact world point to a closed Sketch
+profile. The apex is in millimetres. This operation accepts one outer loop
+and no holes; every fitted flank remains the recorded Sketch curve. The
+boundary is a certified chorded fan and a cap (agent-docs/loft-design.md §20).
 
-The option is accepted at most once: two payloads are two different
-correspondences, so a repeat is [ErrDegenerate](<#ErrDegenerate>) rather than last-wins
-(Table S row S4).
+<a name="LoftFromPointCommand.Do"></a>
+#### func (\*LoftFromPointCommand) Do
 
-<a name="WithLoftSplits"></a>
-#### func WithLoftSplits
+<pre>func (c *<a href="#LoftFromPointCommand">LoftFromPointCommand</a>) Do(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>) (*<a href="#Body">Body</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
 
-<pre>func WithLoftSplits(first, second []<a href="#LoftSplit">LoftSplit</a>) <a href="#LoftOption">LoftOption</a></pre>
-
-WithLoftSplits cuts recorded segments of the first and of the second section
-before the loft pairs them, so two sections whose loops hold different numbers
-of segments can be paired one to one. Each piece is the same recorded curve over
-a sub-range of the segment's own parameter range, the way a trimmed fragment is
-recorded, so a split changes no curve. A fraction f resolves to the parameter
-TStart + f·(TEnd − TStart) of the segment, which is proportional to length on a
-line and a parameter of the curve on any other kind. The pieces follow each
-other in the loop's walk order. WithLoftAlignment then applies to the split
-loops, and a wall's source role names the split segment index.
-
-The option is accepted at most once, like WithLoftAlignment: two payloads are
-two different correspondences, so a repeat is [ErrDegenerate](<#ErrDegenerate>). A split index
-outside its loop, a fraction outside (0, 1) or not increasing, a segment split
-twice, and a fraction that rounds onto its neighbour are [ErrDegenerate](<#ErrDegenerate>) too.
-Loops still holding different segment counts, or a pair still of different
-kinds, after the splits are [ErrUnsupported](<#ErrUnsupported>) as without the option, and a
-correspondence that twists is refused by the crossing audit.
+Do builds the point loft, registers the new body and returns it, or returns
+the error of the first gate that refuses, leaving the document unchanged. A
+nil ctx is ErrDegenerate, and a second call returns ErrConsumed.
 
 <a name="LoftSection"></a>
 ### type LoftSection
@@ -6460,6 +6385,57 @@ correspondence that twists is refused by the crossing audit.
 
 LoftSection names one recorded section of a smooth LoftSections feature.
 
+<a name="LoftSectionsCommand"></a>
+### type LoftSectionsCommand
+
+<pre>type LoftSectionsCommand struct {
+    // contains filtered or unexported fields
+}</pre>
+
+LoftSectionsCommand builds one solid through three or more profiles. Build it
+with [LoftSections](<#LoftSections>).
+
+<a name="LoftSections"></a>
+#### func LoftSections
+
+<pre>func LoftSections(d *<a href="#Document">Document</a>, sections ...<a href="#LoftSection">LoftSection</a>) *<a href="#LoftSectionsCommand">LoftSectionsCommand</a></pre>
+
+LoftSections builds one solid through three or more Sketch profiles.
+The three-section quadratic route admits positive homothetic whole-line loops
+star-shaped about their common origin. A varying four-arc circular section
+can build as a ruled cone; exactly matching curved records build as a
+straight prism. Two varying fitted flanks with unchanged circular arcs
+use the source interpolants' quadratic height wall. Four rounded rectangles
+with a common radius and height use a cubic-width wall. Three to thirty-two
+centered rectangles may vary width and height independently. All of those routes
+require ascending, equally spaced world-XY planes and interpolate every section
+exactly. Three to 1024 sections of one fitted edge and whole lines may turn
+about the plane origin on strictly ascending world-XY planes (agent-docs/loft-sections-design.md).
+A four-quarter-arc circle may also transition to four-edge sections of one
+fitted edge and three lines, with a certified rational wall.
+Other shapes refuse.
+
+<a name="LoftSectionsCommand.CircularCorrespondence"></a>
+#### func (\*LoftSectionsCommand) CircularCorrespondence
+
+<pre>func (c *<a href="#LoftSectionsCommand">LoftSectionsCommand</a>) CircularCorrespondence(correspondence <a href="#CircularLoftCorrespondence">CircularLoftCorrespondence</a>) *<a href="#LoftSectionsCommand">LoftSectionsCommand</a></pre>
+
+CircularCorrespondence builds a circular-to-spline loft using explicit
+cardinal-quarter parameter maps. The maps and the source sections must
+satisfy the exact admission and continuity proofs in
+agent-docs/loft-sections-design.md §14. A map that does not give two to six
+strictly increasing controls from zero to the denominator is
+[ErrUnsupported](<#ErrUnsupported>), returned by Do. A second call replaces the first.
+
+<a name="LoftSectionsCommand.Do"></a>
+#### func (\*LoftSectionsCommand) Do
+
+<pre>func (c *<a href="#LoftSectionsCommand">LoftSectionsCommand</a>) Do(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>) (*<a href="#Body">Body</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
+
+Do builds the loft, registers the new body and returns it, or returns the
+error of the first gate that refuses, leaving the document unchanged. A nil
+ctx is ErrDegenerate, and a second call returns ErrConsumed.
+
 <a name="LoftSplit"></a>
 ### type LoftSplit
 
@@ -6470,7 +6446,7 @@ LoftSection names one recorded section of a smooth LoftSections feature.
 }</pre>
 
 LoftSplit names one recorded segment of one loop and the fractions of its
-parameter range at which WithLoftSplits cuts it. [Loop](<#Loop>) 0 is the outer loop and
+parameter range at which Splits cuts it. [Loop](<#Loop>) 0 is the outer loop and
 loop 1+h is Holes\[h\]; Segment is the recorded segment index within that loop.
 Every fraction is strictly inside (0, 1), and they increase.
 
@@ -7290,7 +7266,7 @@ zero or several faces is ErrCardinality with Expected "exactly 1", and a
 failed assertion of the selector's own is returned unchanged. A curved face
 is ErrDegenerate. A flat face with no analytic [Plane](<#Plane>) surface, such as a
 mesh-boolean [Faceted](<#Faceted>) face, states no exact plane and is ErrUnsupported.
-The mirror plane is the face's own [Plane](<#Plane>).Frame. Under [WithJoin](<#WithJoin>), [Body](<#Body>) must
+The mirror plane is the face's own [Plane](<#Plane>).Frame. Under [MirroredJoin](<#MirroredJoin>), [Body](<#Body>) must
 be the receiver and [Face](<#Face>) may name several walls on one line: zero faces is
 ErrCardinality with Expected "at least 1".
 
@@ -7305,35 +7281,6 @@ MirrorFrame mirrors across the plane through Frame's origin spanned by its
 U and V axes, the plane r3.Reflection takes. The zero Frame names no plane
 and is ErrDegenerate at the call.
 
-<a name="MirrorOption"></a>
-### type MirrorOption
-
-<pre>type MirrorOption interface {
-    // contains filtered or unexported methods
-}</pre>
-
-MirrorOption configures [Mirrored](<#Mirrored>). [WithJoin](<#WithJoin>) is the one option.
-
-<a name="WithJoin"></a>
-#### func WithJoin
-
-<pre>func WithJoin() <a href="#MirrorOption">MirrorOption</a></pre>
-
-WithJoin makes [Mirrored](<#Mirrored>) return the union of the receiver and its
-mirror image as one body: the symmetric-part operation
-(agent-docs/mirror-pattern-design.md §5). The plane must be a [MirrorFace](<#MirrorFace>) of the
-receiver itself naming one or more planar walls on one line of its section;
-the selector then asserts at least one face rather than exactly one.
-
-The join rewrites the receiver's own recorded section and never runs a
-boolean. It admits a straight prism or a stacked prism (a blind-cut plate)
-whose every other boundary segment is a whole line, a whole arc or a whole
-circle lying on the receiver's side of the mirror line, and whose recorded
-section carries no displacement. Every other receiver is refused with the
-sentinel §5.1 states — ErrUnsupported for a shape the join does not build,
-ErrDegenerate for a selection that names no single mirror line — and is
-never handed to Union instead. A repeated WithJoin() is idempotent.
-
 <a name="MirrorPlane"></a>
 ### type MirrorPlane
 
@@ -7344,6 +7291,116 @@ never handed to Union instead. A repeated WithJoin() is idempotent.
 MirrorPlane is what a body may be mirrored across: a [MirrorFrame](<#MirrorFrame>) the
 caller builds, or a [MirrorFace](<#MirrorFace>) naming a planar face of a body. The set is
 sealed (agent-docs/mirror-pattern-design.md §4.1).
+
+<a name="MirroredCommand"></a>
+### type MirroredCommand
+
+<pre>type MirroredCommand struct {
+    // contains filtered or unexported fields
+}</pre>
+
+MirroredCommand mirrors a body across a plane. Build it with [Mirrored](<#Mirrored>).
+
+<a name="Mirrored"></a>
+#### func Mirrored
+
+<pre>func Mirrored(b *<a href="#Body">Body</a>, plane <a href="#MirrorPlane">MirrorPlane</a>) *<a href="#MirroredCommand">MirroredCommand</a></pre>
+
+Mirrored returns the command that mirrors b across plane. Do returns a new
+body carrying b's mirror image across plane, retiring b. It calls
+[Transform](<#Transform>) under r3.Reflection of the resolved plane
+(agent-docs/mirror-pattern-design.md §4.2): the reflection is carried in the
+body's accumulated placement, and every reading — volume, centroid, outward
+normals, tessellation winding, export — follows it.
+
+The gates are Transform's — a nil context is ErrDegenerate, a body this
+evaluator did not build is ErrUnsupported, and a canceled context stops the
+rebuild before the document changes — plus the plane's own resolution (see
+[MirrorFrame](<#MirrorFrame>) and [MirrorFace](<#MirrorFace>)). A nil plane is ErrDegenerate, as is a nil b.
+To mirror and join in one body, see [MirroredJoin](<#MirroredJoin>). A refused call leaves
+the document unchanged. Mirrored copies plane when it is called, so a later
+change to a selector the caller kept does not reach the command.
+
+<a name="MirroredCommand.Do"></a>
+#### func (\*MirroredCommand) Do
+
+<pre>func (c *<a href="#MirroredCommand">MirroredCommand</a>) Do(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>) (*<a href="#Body">Body</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
+
+Do mirrors the body and retires it, or returns the error of the first gate
+that refuses, leaving the body live. A nil ctx is ErrDegenerate, and a
+second call returns ErrConsumed.
+
+<a name="MirroredCopyCommand"></a>
+### type MirroredCopyCommand
+
+<pre>type MirroredCopyCommand struct {
+    // contains filtered or unexported fields
+}</pre>
+
+MirroredCopyCommand copies a body mirrored across a plane. Build it with
+[MirroredCopy](<#MirroredCopy>).
+
+<a name="MirroredCopy"></a>
+#### func MirroredCopy
+
+<pre>func MirroredCopy(b *<a href="#Body">Body</a>, plane <a href="#MirrorPlane">MirrorPlane</a>) *<a href="#MirroredCopyCommand">MirroredCopyCommand</a></pre>
+
+MirroredCopy returns the command that copies b mirrored across plane. Do
+returns a new live body carrying b's mirror image across plane, leaving b
+LIVE. It copies under r3.Reflection of the resolved plane, with the gates
+[Mirrored](<#Mirrored>) states. A nil b is ErrDegenerate.
+
+<a name="MirroredCopyCommand.Do"></a>
+#### func (\*MirroredCopyCommand) Do
+
+<pre>func (c *<a href="#MirroredCopyCommand">MirroredCopyCommand</a>) Do(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>) (*<a href="#Body">Body</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
+
+Do copies the body mirrored and leaves it live, or returns the error of the
+first gate that refuses. A nil ctx is ErrDegenerate, and a second call
+returns ErrConsumed.
+
+<a name="MirroredJoinCommand"></a>
+### type MirroredJoinCommand
+
+<pre>type MirroredJoinCommand struct {
+    // contains filtered or unexported fields
+}</pre>
+
+MirroredJoinCommand mirrors a body and joins the image to it. Build it with
+[MirroredJoin](<#MirroredJoin>).
+
+<a name="MirroredJoin"></a>
+#### func MirroredJoin
+
+<pre>func MirroredJoin(b *<a href="#Body">Body</a>, plane <a href="#MirrorPlane">MirrorPlane</a>) *<a href="#MirroredJoinCommand">MirroredJoinCommand</a></pre>
+
+MirroredJoin returns the command that mirrors b across plane and joins the
+image to it. Do returns the union of the receiver and its mirror image as
+one body: the symmetric-part operation
+(agent-docs/mirror-pattern-design.md §5). The plane must be a [MirrorFace](<#MirrorFace>) of
+the receiver itself naming one or more planar walls on one line of its
+section; the selector then asserts at least one face rather than exactly one.
+A [MirrorFrame](<#MirrorFrame>) names no recorded wall and is ErrUnsupported.
+
+The join rewrites the receiver's own recorded section and never runs a
+boolean. It admits a straight prism or a stacked prism (a blind-cut plate)
+whose every other boundary segment is a whole line, a whole arc or a whole
+circle lying on the receiver's side of the mirror line, and whose recorded
+section carries no displacement. Every other receiver is refused with the
+sentinel §5.1 states — ErrUnsupported for a shape the join does not build,
+ErrDegenerate for a selection that names no single mirror line — and is
+never handed to Union instead. The gates are those of [Mirrored](<#Mirrored>), and a nil
+b is ErrDegenerate. MirroredJoin copies plane when it is called. Its
+history entries carry [OperationMirrored](<#OperationMirrored>).
+
+<a name="MirroredJoinCommand.Do"></a>
+#### func (\*MirroredJoinCommand) Do
+
+<pre>func (c *<a href="#MirroredJoinCommand">MirroredJoinCommand</a>) Do(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>) (*<a href="#Body">Body</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
+
+Do builds the joined body and retires the receiver, or returns the error of
+the first gate that refuses. A nil ctx is ErrDegenerate, and a second call
+returns ErrConsumed.
 
 <a name="Motion"></a>
 ### type Motion
@@ -7408,6 +7465,45 @@ MotionReport is VerifyMotion's path report (agent-docs/linkage-check-design.md P
 
 MotionRequest records the effective settings of a VerifyMotion call.
 
+<a name="MoveFaceCommand"></a>
+### type MoveFaceCommand
+
+<pre>type MoveFaceCommand struct {
+    // contains filtered or unexported fields
+}</pre>
+
+MoveFaceCommand moves one face of a body along its normal. Build it with
+[MoveFace](<#MoveFace>). It has no method.
+
+<a name="MoveFace"></a>
+#### func MoveFace
+
+<pre>func MoveFace(b *<a href="#Body">Body</a>, sel <a href="#FaceSelector">FaceSelector</a>, distance units.Value) *<a href="#MoveFaceCommand">MoveFaceCommand</a></pre>
+
+MoveFace moves one face of b along its normal by distance and returns the new body, retiring b: the
+press-pull of a CAD system (agent-docs/orthogonal-design.md). A positive distance moves the
+face outward, growing the body, and a negative one inward, cutting it, and the walls beside the face
+follow it. The result is the body joined to the prism the face sweeps, or less it, so a notch
+bottom moves as readily as an outer wall.
+
+The route is the grid one of the orthogonal shell (agent-docs/orthogonal-design.md): b
+MUST be a faceted solid, such as one made by [SolidFromMesh](<#SolidFromMesh>), every face of which squares to a
+world axis and whose held vertices carry no bound, otherwise ErrUnsupported. sel MUST resolve to
+exactly one planar face of b, otherwise ErrDegenerate. distance is a signed length: zero is
+ErrDegenerate and a wrong unit kind ErrUnitKind. A face that would move into material, or inward
+out through the opposite wall, or leave no solid, is ErrDegenerate. The new coordinate is the
+float sum of the face's plane and distance. A nil context given to Do, a nil body or a nil selector is ErrDegenerate. The
+result is a mesh solid, so its axis faces keep their exact planes.
+
+<a name="MoveFaceCommand.Do"></a>
+#### func (\*MoveFaceCommand) Do
+
+<pre>func (c *<a href="#MoveFaceCommand">MoveFaceCommand</a>) Do(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>) (*<a href="#Body">Body</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
+
+Do moves the face and retires the body, or returns the error of the first
+gate that refuses, leaving the body live. A nil ctx is ErrDegenerate, and a
+second call returns ErrConsumed.
+
 <a name="NURBSCurve"></a>
 ### type NURBSCurve
 
@@ -7469,21 +7565,58 @@ until the increment that lifts draft SD20.
 NeutralPlane is the plane a draft tilts faces about. The set is sealed
 (agent-docs/modify-design.md Part D §10).
 
-<a name="OffsetOption"></a>
-### type OffsetOption
+<a name="OffsetCommand"></a>
+### type OffsetCommand
 
-<pre>type OffsetOption interface {
-    // contains filtered or unexported methods
+<pre>type OffsetCommand struct {
+    // contains filtered or unexported fields
 }</pre>
 
-OffsetOption configures which side of a sheet the offset is taken on.
+OffsetCommand offsets a sheet or an axis-square solid. Build it with
+[Offset](<#Offset>).
 
-<a name="WithOffsetSide"></a>
-#### func WithOffsetSide
+<a name="Offset"></a>
+#### func Offset
 
-<pre>func WithOffsetSide(side <a href="#OffsetSide">OffsetSide</a>) <a href="#OffsetOption">OffsetOption</a></pre>
+<pre>func Offset(b *<a href="#Body">Body</a>, distance units.Value) *<a href="#OffsetCommand">OffsetCommand</a></pre>
 
-WithOffsetSide selects the side the offset sheet is placed on.
+Offset returns a second sheet whose every face lies at the stated normal
+distance from the source face of b it came from, LEAVING b LIVE.
+
+distance is a strictly positive [units.Value](<https://pkg.go.dev/github.com/lestrrat-3d/units#Value>) of kind Length; its sign never
+chooses a side, and [OffsetCommand.Side](<#OffsetCommand.Side>) does, the last call winning. A
+recorded planar patch offsets by translation along its own frame normal; a
+profile-fed prism sheet offsets by the certified per-feature section offset
+of agent-docs/modify-design.md §8, growing a radius-distance arc at each convex
+corner and mitering each concave one. Every other sheet family is ErrUnsupported (agent-docs/surface-design.md Table R row R37). A solid
+offsets only when it is a faceted solid whose faces all square to a world axis, such as a mesh solid
+(agent-docs/orthogonal-design.md): each face moves along its outward normal, outward for OffsetPositive
+and inward for OffsetNegative, the neighbouring faces extended or trimmed to meet, and the result is a second
+solid; any other solid is ErrUnsupported.
+
+A nil context given to Do, a nil b or a side that is neither value is
+ErrDegenerate, as is a zero distance; a wrong-kind, non-finite or negative distance keeps
+sectionrecord.MagnitudeIn's own sentinel (R40). A retired b is ErrRetiredBody (R41).
+A refusal registers nothing and retires nothing, so b is live
+after a refusal exactly as it is after a success.
+
+<a name="OffsetCommand.Do"></a>
+#### func (\*OffsetCommand) Do
+
+<pre>func (c *<a href="#OffsetCommand">OffsetCommand</a>) Do(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>) (*<a href="#Body">Body</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
+
+Do builds the offset and leaves the body live, or returns the error of the
+first gate that refuses. A nil ctx is ErrDegenerate, and a second call
+returns ErrConsumed.
+
+<a name="OffsetCommand.Side"></a>
+#### func (\*OffsetCommand) Side
+
+<pre>func (c *<a href="#OffsetCommand">OffsetCommand</a>) Side(side <a href="#OffsetSide">OffsetSide</a>) *<a href="#OffsetCommand">OffsetCommand</a></pre>
+
+Side selects the side the offset sheet is placed on. Without it the side is
+[OffsetPositive](<#OffsetPositive>). A value that is neither side is ErrDegenerate, returned by
+Do. A second call replaces the first.
 
 <a name="OffsetSide"></a>
 ### type OffsetSide
@@ -7740,7 +7873,7 @@ OperationInput identifies a body argument and its public role.
 
 OperationKind names a public modeling or selector-resolution call.
 
-<a name="OperationUnknown"></a><a name="OperationExtrude"></a><a name="OperationRevolve"></a><a name="OperationSweep"></a><a name="OperationLoft"></a><a name="OperationLoftChain"></a><a name="OperationLoftSections"></a><a name="OperationLoftFromPoint"></a><a name="OperationPatchProfile"></a><a name="OperationPatchEdges"></a><a name="OperationCut"></a><a name="OperationUnion"></a><a name="OperationIntersect"></a><a name="OperationTransform"></a><a name="OperationCopy"></a><a name="OperationPatternCopies"></a><a name="OperationPatterned"></a><a name="OperationFillet"></a><a name="OperationChamfer"></a><a name="OperationShell"></a><a name="OperationDraft"></a><a name="OperationOffset"></a><a name="OperationThicken"></a><a name="OperationStitch"></a><a name="OperationUnstitch"></a><a name="OperationTrim"></a><a name="OperationExtend"></a><a name="OperationSplit"></a><a name="OperationWeb"></a><a name="OperationConeFromFace"></a><a name="OperationRemove"></a><a name="OperationSelectEdges"></a><a name="OperationSelectFaces"></a><a name="OperationHole"></a><a name="OperationEmboss"></a><a name="OperationCoil"></a><a name="OperationMirrored"></a><a name="OperationMirroredCopy"></a><a name="OperationScaledAt"></a><a name="OperationLoftFaces"></a><a name="OperationThread"></a><a name="OperationBoss"></a><a name="OperationSolidFromMesh"></a><a name="OperationMoveFace"></a><a name="OperationStretch"></a><a name="OperationQuarterTurn"></a><a name="OperationRefine"></a><a name="OperationCutExtrude"></a><a name="OperationCutRevolve"></a>
+<a name="OperationUnknown"></a><a name="OperationExtrude"></a><a name="OperationRevolve"></a><a name="OperationSweep"></a><a name="OperationLoft"></a><a name="OperationLoftChain"></a><a name="OperationLoftSections"></a><a name="OperationLoftFromPoint"></a><a name="OperationPatchProfile"></a><a name="OperationPatchEdges"></a><a name="OperationCut"></a><a name="OperationUnion"></a><a name="OperationIntersect"></a><a name="OperationTransform"></a><a name="OperationCopy"></a><a name="OperationPatternCopies"></a><a name="OperationPatterned"></a><a name="OperationFillet"></a><a name="OperationChamfer"></a><a name="OperationShell"></a><a name="OperationDraft"></a><a name="OperationOffset"></a><a name="OperationThicken"></a><a name="OperationStitch"></a><a name="OperationUnstitch"></a><a name="OperationTrim"></a><a name="OperationExtend"></a><a name="OperationSplit"></a><a name="OperationWeb"></a><a name="OperationConeFromFace"></a><a name="OperationRemove"></a><a name="OperationSelectEdges"></a><a name="OperationSelectFaces"></a><a name="OperationHole"></a><a name="OperationEmboss"></a><a name="OperationCoil"></a><a name="OperationMirrored"></a><a name="OperationMirroredCopy"></a><a name="OperationScaledAt"></a><a name="OperationLoftFaces"></a><a name="OperationThread"></a><a name="OperationBoss"></a><a name="OperationSolidFromMesh"></a><a name="OperationMoveFace"></a><a name="OperationStretch"></a><a name="OperationQuarterTurn"></a><a name="OperationRefine"></a><a name="OperationCutExtrude"></a><a name="OperationCutRevolve"></a><a name="OperationInfill"></a><a name="OperationSheetMetal"></a>
 
 <pre>const (
     OperationUnknown <a href="#OperationKind">OperationKind</a> = iota
@@ -7792,6 +7925,8 @@ OperationKind names a public modeling or selector-resolution call.
     OperationRefine
     OperationCutExtrude
     OperationCutRevolve
+    OperationInfill
+    OperationSheetMetal
 )</pre>
 
 <a name="OperationKind.String"></a>
@@ -7866,6 +8001,87 @@ does not take it.
 
 PairPath names one body's motion during a two-body sweep.
 
+<a name="PatchEdgesCommand"></a>
+### type PatchEdgesCommand
+
+<pre>type PatchEdgesCommand struct {
+    // contains filtered or unexported fields
+}</pre>
+
+PatchEdgesCommand fills the closed free-edge chains a selection names. Build it with [PatchEdges](<#PatchEdges>).
+
+<a name="PatchEdges"></a>
+#### func PatchEdges
+
+<pre>func PatchEdges(b *<a href="#Body">Body</a>, sel <a href="#EdgeSelector">EdgeSelector</a>) *<a href="#PatchEdgesCommand">PatchEdgesCommand</a></pre>
+
+PatchEdges returns the command that resolves sel against b's own live topology, fills every closed
+chain of free edges the selection proves, and returns a new body carrying
+b's own faces plus one new planar face per chain, retiring b
+(agent-docs/surface-design.md §5.2). b's own topology is never mutated: the
+result is built by REBUILDING b from its own faces, so a retired b stays
+readable and unmodified for any caller still holding it.
+
+A nil context or a nil b is [ErrDegenerate](<#ErrDegenerate>). A b this evaluator did not
+build (b.n.Payload == nil) is [ErrUnsupported](<#ErrUnsupported>) (Table R row R19): a body reads
+its readable topology regardless of payload, but PatchEdges's own
+re-evaluation contract — a placed copy replays from the recorded plane
+rather than re-proving it — needs the same payload-carrying contract every
+other rebuilding operation
+(Transform, Copy) already requires. A body owned by a
+different document is [ErrForeignBody](<#ErrForeignBody>), and a retired b is
+[ErrRetiredBody](<#ErrRetiredBody>). sel's own resolution failure ([SelectionError](<#SelectionError>) wrapping
+[ErrNoMatch](<#ErrNoMatch>) or [ErrCardinality](<#ErrCardinality>), Table R row R16) and every one of gates
+1-4's refusals (R4, R5, R6, R18) surface unchanged. A failed call leaves
+the document and b unchanged. A nil ctx given to Do is [ErrDegenerate](<#ErrDegenerate>). A selector that is a decad query is
+copied at the call, so a later change to the caller's query changes nothing.
+
+<a name="PatchEdgesCommand.Do"></a>
+#### func (\*PatchEdgesCommand) Do
+
+<pre>func (c *<a href="#PatchEdgesCommand">PatchEdgesCommand</a>) Do(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>) (*<a href="#Body">Body</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
+
+Do fills the chains and retires the body, or returns the error of the first gate that refuses. A second call
+returns [ErrConsumed](<#ErrConsumed>).
+
+<a name="PatchProfileCommand"></a>
+### type PatchProfileCommand
+
+<pre>type PatchProfileCommand struct {
+    // contains filtered or unexported fields
+}</pre>
+
+PatchProfileCommand builds a one-face sheet from a profile. Build it with
+[PatchProfile](<#PatchProfile>). It has no method.
+
+<a name="PatchProfile"></a>
+#### func PatchProfile
+
+<pre>func PatchProfile(d *<a href="#Document">Document</a>, s *sketch.Sketch, p *sketch.Profile) *<a href="#PatchProfileCommand">PatchProfileCommand</a></pre>
+
+PatchProfile records p through the seam exactly as Extrude does — the same
+authentication, staleness, foreign-entity and TExact admission gates of
+agent-docs/api-design.md §7 and agent-docs/sketch-seam-design.md, with no relaxation —
+and builds a single planar face on s.Plane().Frame(), carrying the
+profile's outer loop and every hole loop (agent-docs/surface-design.md §5.1). The
+result is a one-face sheet body: Kind() == BodySheet, one lump, one open
+shell, and one free edge per coalesced boundary walk. p MUST be a profile
+of s (ErrForeignProfile) and a current, unaltered snapshot (ErrStaleProfile
+or ErrInvalidProfile); an invalid profile is also ErrInvalidProfile, and a
+boundary decad cannot record exactly is ErrUnrecordableProfile. A recorded
+boundary carrying a free-form segment this evaluator cannot integrate is
+ErrUnsupported (Table R row R3). A failed evaluation leaves the document
+untouched. A nil context or a nil d is ErrDegenerate.
+
+<a name="PatchProfileCommand.Do"></a>
+#### func (\*PatchProfileCommand) Do
+
+<pre>func (c *<a href="#PatchProfileCommand">PatchProfileCommand</a>) Do(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>) (*<a href="#Body">Body</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
+
+Do builds the patch, registers the new body and returns it, or returns the
+error of the first gate that refuses, leaving the document unchanged. A nil
+ctx is ErrDegenerate, and a second call returns ErrConsumed.
+
 <a name="Path"></a>
 ### type Path
 
@@ -7905,66 +8121,86 @@ Segments returns a copy of the path's ordered segment values.
 
 Start returns the path's recorded initial point.
 
-<a name="PathPatternOption"></a>
-### type PathPatternOption
+<a name="PathCount"></a>
+### type PathCount
 
-<pre>type PathPatternOption interface {
-    option.Interface
-    // contains filtered or unexported methods
+<pre>type PathCount struct {
+    Count <a href="https://pkg.go.dev/builtin#int">int</a>
 }</pre>
 
-PathPatternOption configures [PathPattern](<#PathPattern>).
+PathCount places Count instances, b and Count-1 copies, at equal arc length
+along the path. The first is at the path's start and the last at its end
+(agent-docs/path-pattern-design.md §1). Count is at least 2, and a smaller
+Count is ErrDegenerate.
 
-<a name="WithPathCount"></a>
-#### func WithPathCount
+<a name="PathPatternCommand"></a>
+### type PathPatternCommand
 
-<pre>func WithPathCount(n <a href="https://pkg.go.dev/builtin#int">int</a>) <a href="#PathPatternOption">PathPatternOption</a></pre>
+<pre>type PathPatternCommand struct {
+    // contains filtered or unexported fields
+}</pre>
 
-WithPathCount makes [PathPattern](<#PathPattern>) place n instances, b and n-1 copies, at
-equal arc length along the path. The first is at the path's start and the
-last at its end (agent-docs/path-pattern-design.md §1). n is at least 2, and
-a smaller n is ErrDegenerate. A call takes exactly one of WithPathCount and
-[WithPathSpacing](<#WithPathSpacing>).
+PathPatternCommand repeats a body along a path. Build it with [PathPattern](<#PathPattern>).
 
-<a name="WithPathFollow"></a>
-#### func WithPathFollow
+<a name="PathPattern"></a>
+#### func PathPattern
 
-<pre>func WithPathFollow() <a href="#PathPatternOption">PathPatternOption</a></pre>
+<pre>func PathPattern(b *<a href="#Body">Body</a>, path *<a href="#Path">Path</a>, stations <a href="#PathStations">PathStations</a>) *<a href="#PathPatternCommand">PathPatternCommand</a></pre>
 
-WithPathFollow turns each copy of [PathPattern](<#PathPattern>) to follow the path.
-Copy i is rotated about the path's start by the shortest turn that takes the
-path's direction of travel there onto its direction at that copy's point,
-then moved to the point. The body is taken to sit at the path's start with
-its own forward along the path. A path that comes back on itself, so that
-the direction at a point is exactly opposite the start's, is ErrDegenerate:
-that turn has no shortest axis.
+PathPattern returns the command that repeats b along path. Do returns the
+extra copies as separate live bodies, leaving b live
+(agent-docs/path-pattern-design.md). Instance 0 is b, taken to sit at the
+path's start. stations is a [PathCount](<#PathCount>) or a [PathSpacing](<#PathSpacing>) and chooses the
+other instances' points; a nil stations is ErrDegenerate. Instance i is a
+[Copy](<#Copy>) of b moved by the vector from the path's start to its point. Copies
+keep the orientation of b unless [PathPatternCommand.Follow](<#PathPatternCommand.Follow>) or
+[PathPatternCommand.FollowAbout](<#PathPatternCommand.FollowAbout>) turns them to follow the path.
 
-<a name="WithPathPivot"></a>
-#### func WithPathPivot
+The path is the sweep [Path](<#Path>) of straight [LineTo](<#LineTo>) and circular
+[ArcThrough](<#ArcThrough>) and [ArcAround](<#ArcAround>) segments. Points are spaced by arc length, not by segment.
+Join the copies with the base through one [Union](<#Union>), as with [PatternCopies](<#PatternCopies>).
 
-<pre>func WithPathPivot(pivot r3.Vec) <a href="#PathPatternOption">PathPatternOption</a></pre>
+b MUST be live; path MUST NOT be nil. A nil context, a nil b or path, and a
+path segment with no length or no circle are ErrDegenerate. A failed or
+canceled call leaves the document as it found it: b live, no copy live, and
+no history entry or producer number added. Each copy is a Copy, so it
+carries Copy's own refusals. Every error carries [OperationCopy](<#OperationCopy>).
 
-WithPathPivot turns each copy about pivot, a point in millimetres, instead of
-about the path's start. It sets the point that [WithPathFollow](<#WithPathFollow>)'s turn
-leaves in place before the copy is moved to its station, so a body that sits
-away from the path's start, or a pivot at the body's own centre, swings
-about that point. The last of several pivots wins. A pivot with no
-[WithPathFollow](<#WithPathFollow>) has no turn to centre and is ErrDegenerate, and a non-finite
-pivot is ErrNotFinite.
+<a name="PathPatternCommand.Do"></a>
+#### func (\*PathPatternCommand) Do
 
-<a name="WithPathSpacing"></a>
-#### func WithPathSpacing
+<pre>func (c *<a href="#PathPatternCommand">PathPatternCommand</a>) Do(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>) ([]*<a href="#Body">Body</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
 
-<pre>func WithPathSpacing(spacing units.Value) <a href="#PathPatternOption">PathPatternOption</a></pre>
+Do places the copies, or returns the error of the first gate that refuses
+with the document unchanged. A nil ctx is ErrDegenerate, and a second call
+returns ErrConsumed.
 
-WithPathSpacing makes [PathPattern](<#PathPattern>) place instances spacing apart by arc
-length. Instance i sits i·spacing along the path, for every i within its
-length, and a spacing that divides the length puts the last instance at the
-path's end (agent-docs/path-pattern-design.md §6). spacing is a positive
-length no longer than the path. A wrong unit kind is ErrUnitKind and a
-negative spacing is ErrNegativeMagnitude. A zero spacing, one that leaves no
-copy, and one that would place over 100000 copies are ErrDegenerate. A call
-takes exactly one of WithPathSpacing and [WithPathCount](<#WithPathCount>).
+<a name="PathPatternCommand.Follow"></a>
+#### func (\*PathPatternCommand) Follow
+
+<pre>func (c *<a href="#PathPatternCommand">PathPatternCommand</a>) Follow() *<a href="#PathPatternCommand">PathPatternCommand</a></pre>
+
+Follow turns each copy to follow the path. Copy i is rotated about the
+path's start by the shortest turn that takes the path's direction of travel
+there onto its direction at that copy's point, then moved to the point. The
+body is taken to sit at the path's start with its own forward along the
+path. A path that comes back on itself, so that the direction at a point is
+exactly opposite the start's, is ErrDegenerate: that turn has no shortest
+axis. Follow and [PathPatternCommand.FollowAbout](<#PathPatternCommand.FollowAbout>) write one slot, and the
+last call wins.
+
+<a name="PathPatternCommand.FollowAbout"></a>
+#### func (\*PathPatternCommand) FollowAbout
+
+<pre>func (c *<a href="#PathPatternCommand">PathPatternCommand</a>) FollowAbout(pivot r3.Vec) *<a href="#PathPatternCommand">PathPatternCommand</a></pre>
+
+FollowAbout is [PathPatternCommand.Follow](<#PathPatternCommand.Follow>) with the turn about pivot, a point
+in millimetres, instead of about the path's start. It sets the point that
+the turn leaves in place before the copy is moved to its station, so a body
+that sits away from the path's start, or a pivot at the body's own centre,
+swings about that point. A non-finite pivot is ErrNotFinite, returned by Do
+naming FollowAbout as its subject. A second call to Follow or FollowAbout
+replaces this one.
 
 <a name="PathSegment"></a>
 ### type PathSegment
@@ -7976,6 +8212,79 @@ takes exactly one of WithPathSpacing and [WithPathCount](<#WithPathCount>).
 PathSegment is one directed segment in a [Path](<#Path>). The set is sealed to the
 segment kinds defined by decad.
 
+<a name="PathSpacing"></a>
+### type PathSpacing
+
+<pre>type PathSpacing struct {
+    Spacing units.Value
+}</pre>
+
+PathSpacing places instances Spacing apart by arc length. Instance i sits
+i·Spacing along the path, for every i within its length, and a Spacing that
+divides the length puts the last instance at the path's end
+(agent-docs/path-pattern-design.md §6). Spacing is a positive length no
+longer than the path. A wrong unit kind is ErrUnitKind and a negative
+Spacing is ErrNegativeMagnitude. A zero Spacing, one that leaves no copy, and
+one that would place over 100000 copies are ErrDegenerate.
+
+<a name="PathStations"></a>
+### type PathStations
+
+<pre>type PathStations interface {
+    // contains filtered or unexported methods
+}</pre>
+
+PathStations is where [PathPattern](<#PathPattern>) puts its instances along the path: a
+[PathCount](<#PathCount>) or a [PathSpacing](<#PathSpacing>). The set is sealed, so a call names exactly
+one of them (agent-docs/command-api-design.md rule M4).
+
+<a name="PatternCopiesCommand"></a>
+### type PatternCopiesCommand
+
+<pre>type PatternCopiesCommand struct {
+    // contains filtered or unexported fields
+}</pre>
+
+PatternCopiesCommand repeats a body as separate live copies. Build it with
+[PatternCopies](<#PatternCopies>).
+
+<a name="PatternCopies"></a>
+#### func PatternCopies
+
+<pre>func PatternCopies(b *<a href="#Body">Body</a>, spec <a href="#PatternSpec">PatternSpec</a>) *<a href="#PatternCopiesCommand">PatternCopiesCommand</a></pre>
+
+PatternCopies returns the command that repeats b by spec. Do returns Count−1
+new live bodies, instances 1..Count−1 of spec in order, and leaves b live
+(agent-docs/mirror-pattern-design.md §4.3).
+
+The gates are Copy's — a nil context or a nil b is ErrDegenerate, a body
+this evaluator did not build is ErrUnsupported, a retired or foreign b is
+refused — plus the spec's own: a nil spec or a Count below 2 is
+ErrDegenerate; a non-finite Dir, [Axis](<#Axis>) or Center is ErrNotFinite and a zero
+Dir or [Axis](<#Axis>) ErrDegenerate; a Step that is not a length is ErrUnitKind, a
+negative one ErrNegativeMagnitude and a zero one ErrDegenerate. Every
+instance is built before any is registered, so a refusal or a canceled
+context leaves the document unchanged.
+
+A straight or stacked prism patterned along a direction exactly
+perpendicular to its sweep, or about an axis bit-identical to its sweep
+normal, keeps one frame: each instance is the receiver's own record moved
+in its plane, so a pattern of integer-millimetre holes stays Exact. Its
+readings carry the motion's rounding as a section displacement.
+
+To join the instances to a base, pass the base, b and the result to one
+[Union](<#Union>): Union(append(\[\]\*[Body](<#Body>){base, b}, copies...)...).Do(ctx). A refused
+Union leaves every operand live, the copies included; [Remove](<#Remove>) them.
+
+<a name="PatternCopiesCommand.Do"></a>
+#### func (\*PatternCopiesCommand) Do
+
+<pre>func (c *<a href="#PatternCopiesCommand">PatternCopiesCommand</a>) Do(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>) ([]*<a href="#Body">Body</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
+
+Do builds the copies and returns them, or returns the error of the first
+gate that refuses, with nothing committed. A nil ctx is ErrDegenerate, and a
+second call returns ErrConsumed.
+
 <a name="PatternSpec"></a>
 ### type PatternSpec
 
@@ -7985,6 +8294,51 @@ segment kinds defined by decad.
 
 PatternSpec is how a pattern lays out its instances: a [LinearPattern](<#LinearPattern>) or
 a [CircularPattern](<#CircularPattern>). The set is sealed.
+
+<a name="PatternedCommand"></a>
+### type PatternedCommand
+
+<pre>type PatternedCommand struct {
+    // contains filtered or unexported fields
+}</pre>
+
+PatternedCommand repeats a body and joins the instances into one body.
+Build it with [Patterned](<#Patterned>).
+
+<a name="Patterned"></a>
+#### func Patterned
+
+<pre>func Patterned(b *<a href="#Body">Body</a>, spec <a href="#PatternSpec">PatternSpec</a>) *<a href="#PatternedCommand">PatternedCommand</a></pre>
+
+Patterned returns the command that joins every instance of spec into one
+body. Do returns ONE body holding every instance of spec, b included, and
+retires b (agent-docs/mirror-pattern-design.md §4.3, §6.1). Its gates are
+PatternCopies'. The instances combine by the first rule that applies:
+
+1. A straight prism or a prism group on the frame-keeping arm whose
+   instances sketch proves pairwise disjoint becomes one prism group: a
+   one-slab stacked prism holding every instance's regions on the
+   receiver's frame and interval. No boolean runs. Instances that touch
+   at one point, such as tangent discs, are not disjoint.
+2. Any other receiver whose instances are proven disjoint is
+   ErrUnsupported: no payload holds disjoint lumps of it. Use
+   PatternCopies and keep the instances as separate bodies.
+3. Otherwise the instances combine by Union in index order,
+   Union(Union(b0, b1), b2) …, each with that boolean's own gates and
+   refusals, and a refusal is returned as that Union's error.
+
+Every instance and every intermediate result is built before anything is
+registered, so a refusal or a canceled context leaves the document
+unchanged and b live.
+
+<a name="PatternedCommand.Do"></a>
+#### func (\*PatternedCommand) Do
+
+<pre>func (c *<a href="#PatternedCommand">PatternedCommand</a>) Do(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>) (*<a href="#Body">Body</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
+
+Do builds the joined body and retires the receiver, or returns the error of
+the first gate that refuses, with nothing committed. A nil ctx is
+ErrDegenerate, and a second call returns ErrConsumed.
 
 <a name="Plane"></a>
 ### type Plane
@@ -8107,6 +8461,41 @@ PrismaticJoint slides its link along a direction.
 
 QuantityVec carries three components of one physical kind.
 
+<a name="QuarterTurnCommand"></a>
+### type QuarterTurnCommand
+
+<pre>type QuarterTurnCommand struct {
+    // contains filtered or unexported fields
+}</pre>
+
+QuarterTurnCommand turns a faceted solid by whole quarter turns. Build it with [QuarterTurn](<#QuarterTurn>).
+
+<a name="QuarterTurn"></a>
+#### func QuarterTurn
+
+<pre>func QuarterTurn(b *<a href="#Body">Body</a>, axis, about r3.Vec, turns <a href="https://pkg.go.dev/builtin#int">int</a>) *<a href="#QuarterTurnCommand">QuarterTurnCommand</a></pre>
+
+QuarterTurn returns the command that turns a faceted solid by a whole number of quarter turns about an axis
+through about, a world axis with the right-hand sense. Do returns the result as a new solid, retiring b
+(agent-docs/orthogonal-design.md B9). A quarter turn only exchanges and negates coordinates, so the
+turned solid is exact where [Transform](<#Transform>) by a 90 degree [r3.Rotation](<https://pkg.go.dev/github.com/lestrrat-3d/r3#Rotation>) is not: its vertices stay unbounded and it
+stays on the exact routes of an axis-square solid.
+
+b MUST be a live faceted solid whose held vertices carry no bound, such as a mesh solid, otherwise
+ErrUnsupported. axis MUST be exactly a world axis, +X, +Y, +Z or its negative, otherwise ErrUnsupported; turns
+turn counter-clockwise looking down the axis toward its origin when positive and the other way when
+negative, and a multiple of four turns changes nothing, which is ErrDegenerate. A turn whose coordinates
+cannot be held exactly (about a point the sums round on) is ErrUnsupported and changes nothing. A nil
+context or body is ErrDegenerate.
+
+<a name="QuarterTurnCommand.Do"></a>
+#### func (\*QuarterTurnCommand) Do
+
+<pre>func (c *<a href="#QuarterTurnCommand">QuarterTurnCommand</a>) Do(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>) (*<a href="#Body">Body</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
+
+Do turns the body and retires it, or returns the error of the first gate that refuses. A nil ctx is
+ErrDegenerate, and a second call returns ErrConsumed.
+
 <a name="ReadingKind"></a>
 ### type ReadingKind
 
@@ -8127,12 +8516,102 @@ on the hole axis, with Width along the face frame's U axis before Angle
 turns it counter-clockwise about the axis. Width and Height are positive
 lengths and Angle is an angle.
 
+<a name="RefineCommand"></a>
+### type RefineCommand
+
+<pre>type RefineCommand struct {
+    // contains filtered or unexported fields
+}</pre>
+
+RefineCommand refines a mesh body's bound. Build it with [Refine](<#Refine>).
+
+<a name="Refine"></a>
+#### func Refine
+
+<pre>func Refine(source *<a href="#Body">Body</a>, maxBound units.Value) *<a href="#RefineCommand">RefineCommand</a></pre>
+
+Refine returns the command that builds a new body holding source's held mesh with a surface bound
+no larger than maxBound, and retires source
+(agent-docs/body-refine-design.md §7). It moves no vertex: the result has
+source's vertices, triangles, topology, Volume, Area and every vertex and
+edge reading, and fresh face identities. What changes is the bound a
+public Tessellate publishes: every point of the held mesh lies within it of
+the true boundary, and every point of the true boundary within it of the
+held mesh, so Tessellate succeeds at any tolerance at or above
+[Mesh](<#Mesh>).Bound().
+
+source MUST be a live solid made by mesh Unions whose every operand traces
+back to a solid of one whole circle (an extruded cylinder, a Revolve clear of
+its axis, a Sweep along lines and arcs, or a Coil, placed or not), each Union taken
+on its own two operands, optionally followed by Cuts whose tools are
+extruded cylinders. Any other body, or a mesh
+whose bound cannot be proven within maxBound inside the fixed work ceiling,
+is ErrUnsupported and changes nothing. A Union result that was placed after
+its last Union is outside the class: placement drops the record Refine
+reads. Placing the refined result instead keeps its bound, grown by the
+rounding the placement charges. A later Boolean on the result reads
+the bounds source published, so refining never loosens what a chain admits.
+
+A straight-bevel sector join (a Union of a revolve blank and copies of one
+point-Loft tooth, still carrying its join record) is the exception to
+"moves no vertex": its cone caps stop refining at a 0.1 mm bound, so Refine
+rebuilds it with finer caps until its bound is at most maxBound. The result
+has new vertices and readings and keeps the bound for later Unions and Cuts.
+
+maxBound is a length: wrong kind is ErrUnitKind, non-finite ErrNotFinite,
+negative ErrNegativeMagnitude and zero ErrDegenerate. A nil context or body
+is ErrDegenerate, returned by Do. A canceled context stops the certificate before the
+document changes.
+
+<a name="RefineCommand.Do"></a>
+#### func (\*RefineCommand) Do
+
+<pre>func (c *<a href="#RefineCommand">RefineCommand</a>) Do(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>) (*<a href="#Body">Body</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
+
+Do runs the refinement once. A second Do returns [ErrConsumed](<#ErrConsumed>).
+
 <a name="RegionReadings"></a>
 ### type RegionReadings
 
 <pre>type RegionReadings = report.<a href="report.md#RegionReadings">RegionReadings</a></pre>
 
 RegionReadings groups a solid body's volume and centroid.
+
+<a name="RemoveCommand"></a>
+### type RemoveCommand
+
+<pre>type RemoveCommand struct {
+    // contains filtered or unexported fields
+}</pre>
+
+RemoveCommand takes a body out of the live model. Build it with [Remove](<#Remove>).
+
+<a name="Remove"></a>
+#### func Remove
+
+<pre>func Remove(b *<a href="#Body">Body</a>) *<a href="#RemoveCommand">RemoveCommand</a></pre>
+
+Remove returns the command that takes b out of the live model by the caller's own hand: after Do, b leaves
+Bodies() and Verify stops reporting on it, exactly as a body a feature consumed (core §6). A removed body IS a
+retired body. It stays readable — its measurements, topology, selectors and Origin still answer — but no
+operation takes it (ErrRetiredBody), and nothing returns it to the model. Remove produces no body, so no
+producer identity advances, and every other body, including one built from b, keeps its geometry and provenance.
+
+b MUST NOT be nil (ErrDegenerate), and a body that belongs to no document is ErrDegenerate. The document is the
+one b names; a body already retired — consumed by a feature or removed before — is ErrRetiredBody. A refused
+call leaves the document unchanged, and so does a Do whose ctx is already canceled, which returns ctx.Err().
+A cleanup that removes bodies after a canceled call needs a ctx that is not canceled, such as
+context.WithoutCancel(ctx).
+Do may run concurrently with Bodies and Verify; a Verify already under way
+reports on the set as it stood when the call began. Every error carries [OperationRemove](<#OperationRemove>).
+
+<a name="RemoveCommand.Do"></a>
+#### func (\*RemoveCommand) Do
+
+<pre>func (c *<a href="#RemoveCommand">RemoveCommand</a>) Do(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>) <a href="https://pkg.go.dev/builtin#error">error</a></pre>
+
+Do removes the body, or returns the error of the first gate that refuses. A nil ctx is ErrDegenerate, and a
+second call returns ErrConsumed.
 
 <a name="Report"></a>
 ### type Report
@@ -8168,56 +8647,84 @@ PoseAt returns the rigid pose at the stated angle.
 
 RevoluteJoint rotates its link about an axis.
 
-<a name="RevolveOption"></a>
-### type RevolveOption
+<a name="RevolveCommand"></a>
+### type RevolveCommand
 
-<pre>type RevolveOption interface {
-    option.Interface
-    // contains filtered or unexported methods
+<pre>type RevolveCommand struct {
+    // contains filtered or unexported fields
 }</pre>
 
-RevolveOption configures Revolve. WithSurfaceResult (agent-docs/surface-design.md
-§4) is the one option today: it omits the two caps a partial sweep would
-otherwise close with and publishes a sheet instead of a solid. A full
-revolution mints no closing face to omit, so there the option changes no
-face and returns a CLOSED sheet with no free edge — §2.1's closed-sheet
-rule, not a refusal (Table W). A repeated WithSurfaceResult() is
-idempotent, never an error. A chain section always revolves to a sheet, so
-Revolve returns ErrUnsupported for WithSurfaceResult() on a chain.
+RevolveCommand spins a section about an axis. Build it with [Revolve](<#Revolve>).
 
-<a name="RibOption"></a>
-### type RibOption
+<a name="Revolve"></a>
+#### func Revolve
 
-<pre>type RibOption interface {
-    // contains filtered or unexported methods
-}</pre>
+<pre>func Revolve[S <a href="#Section">Section</a>](d *<a href="#Document">Document</a>, s *sketch.Sketch, sec S, axis <a href="#Axis">Axis</a>, a <a href="#AngularExtent">AngularExtent</a>) *<a href="#RevolveCommand">RevolveCommand</a></pre>
 
-RibOption configures WebPath. WithRibOverrun and WithRibDraft make one.
+Revolve spins the section sec of sketch s about axis per the angular
+extent a, registers the new body, and returns it. sec is a closed
+[\*sketch.Profile](<https://pkg.go.dev/github.com/lestrrat-3d/sketch#Profile>), which revolves to a solid (sheet under
+SurfaceResult), or an open [\*sketch.Chain](<https://pkg.go.dev/github.com/lestrrat-3d/sketch#Chain>), which revolves to a
+sheet. Both are recorded from s; the type argument S is inferred.
 
-<a name="WithRibDraft"></a>
-#### func WithRibDraft
+A profile section MUST be a profile of s (ErrForeignProfile) and a
+current, unaltered snapshot (ErrStaleProfile or ErrInvalidProfile); an
+invalid profile is also ErrInvalidProfile, and a boundary decad cannot
+record exactly is ErrUnrecordableProfile (core §7). The axis must be
+non-degenerate and coplanar with the profile plane, and it must not pass
+through the region's interior: the region lies in one closed half-plane of
+the axis, and boundary contact is allowed in exactly two forms — a segment
+endpoint on the axis, and a whole line segment lying along it; anything
+else is ErrDegenerate (agent-docs/evaluator-design.md §6). A fitted-spline or
+other Tier A free-form boundary requires proven strict clearance from the
+axis; a free-form contact is ErrUnsupported. SurfaceResult omits the
+two caps a partial sweep closes with and publishes a sheet instead of a
+solid; a full revolution already closes with no cap to omit, so the method
+there yields a closed sheet rather than a refusal (agent-docs/surface-design.md
+§4, Table W).
 
-<pre>func WithRibDraft(angle units.Value) <a href="#RibOption">RibOption</a></pre>
+A chain section MUST be a chain of s and a current, unaltered snapshot,
+with the same sentinels (ErrForeignProfile, ErrStaleProfile,
+ErrInvalidProfile, ErrUnrecordableProfile; agent-docs/sketch-seam-design.md
+§2.2). The axis rules are the profile's, applied to the walk: it lies in
+one closed half-plane of the axis. One free end may lie on the resolved
+axis when its incident wall leaves the axis; it sweeps to a pole rather than
+a rim. Both free ends on the axis, or an on-axis free end whose incident
+walk lies along the axis, are ErrUnsupported (Table R, R22). The result is
+always a sheet — Kind() == BodySheet — one swept wall per off-axis recorded
+segment (agent-docs/surface-design.md §13.4, Table G), with no cap and no closing
+face. A full revolution of the chain is still OPEN: each off-axis free end
+sweeps one free circle, so a chain with one pole has one free rim. A chain
+section therefore returns ErrUnsupported for SurfaceResult, which has
+no solid to toggle. That refusal follows the chain's seam gate and precedes
+the axis, extent and build work (agent-docs/surface-design.md §13.2).
 
-WithRibDraft leans the rib's walls by a draft angle
-(agent-docs/rib-design.md §7). A positive angle makes the rib thinner as it
-rises from the plane of the sketch, the way a moulded or cast rib releases
-from its tool, and a negative one thicker. The angle is [WithTaper](<#WithTaper>)'s, so the
-lean is measured from the sketch plane, the ends lean too, and a draft at or
-past a right angle is ErrDegenerate. The last occurrence wins and the default
-is a straight wall. A rib whose outline has a corner that an arc meets, such
-as an arc rib of [WebPath](<#WebPath>), takes the refusals of the drafted [Extrude](<#Extrude>) it builds.
+A nil context, document, sketch or section returns ErrDegenerate. The
+context is checked at entry, between recording the section, resolving the
+axis and extent and building the body, and inside the evaluators; a
+canceled context returns ctx.Err() unchanged. Every failure and
+cancellation leaves the document unchanged.
 
-<a name="WithRibOverrun"></a>
-#### func WithRibOverrun
+<a name="RevolveCommand.Do"></a>
+#### func (\*RevolveCommand) Do
 
-<pre>func WithRibOverrun(overrun units.Value) <a href="#RibOption">RibOption</a></pre>
+<pre>func (c *<a href="#RevolveCommand">RevolveCommand</a>) Do(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>) (*<a href="#Body">Body</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
 
-WithRibOverrun lengthens every rib by overrun beyond both ends of its line or
-arc, measured along the arc for an arc rib. A rib whose ends only touch a wall of the body is a coplanar contact that
-the union refuses, so a rib that spans a cavity draws its line wall to wall
-and adds an overrun to bury both ends in the walls. overrun is a
-non-negative length, and the last occurrence wins. The default is zero.
+Do spins the section, registers the new body and returns it, or returns the
+error of the first gate that refuses, leaving the document unchanged. A nil
+ctx is ErrDegenerate, and a second call returns ErrConsumed.
+
+<a name="RevolveCommand.SurfaceResult"></a>
+#### func (\*RevolveCommand) SurfaceResult
+
+<pre>func (c *<a href="#RevolveCommand">RevolveCommand</a>) SurfaceResult() *<a href="#RevolveCommand">RevolveCommand</a></pre>
+
+SurfaceResult omits the two caps a partial sweep closes with and publishes a
+sheet instead of a solid (agent-docs/surface-design.md §4). A full
+revolution mints no closing face to omit, so there it changes no face and
+returns a CLOSED sheet with no free edge (Table W). A chain section always
+revolves to a sheet, so it returns [ErrUnsupported](<#ErrUnsupported>) for it. Calling it twice
+is the same as calling it once.
 
 <a name="RigidDriftSegment"></a>
 ### type RigidDriftSegment
@@ -8239,6 +8746,44 @@ ScalarOutcome is a whole-body scalar survey's result.
 <pre>type ScalarReading = report.<a href="report.md#ScalarReading">ScalarReading</a></pre>
 
 ScalarReading combines a scalar measurement and tolerance verdict.
+
+<a name="ScaledAtCommand"></a>
+### type ScaledAtCommand
+
+<pre>type ScaledAtCommand struct {
+    // contains filtered or unexported fields
+}</pre>
+
+ScaledAtCommand scales a body uniformly about a point. Build it with
+[ScaledAt](<#ScaledAt>).
+
+<a name="ScaledAt"></a>
+#### func ScaledAt
+
+<pre>func ScaledAt(b *<a href="#Body">Body</a>, anchor r3.Vec, factor units.Value) *<a href="#ScaledAtCommand">ScaledAtCommand</a></pre>
+
+ScaledAt returns the command that scales b uniformly about anchor. Do
+returns the positive uniform image of an authenticated point-loft
+Split slab, exact line/circular solid prism, line-only stack or stack-backed
+BRep, solid Revolve (complete or partial), audited faceted Boolean result,
+or other faceted solid whose held mesh passes its shell and crossing audit
+about anchor, then retires b. A nil context or a nil b is ErrDegenerate.
+Source roles and certified boundary and occupied-volume bounds follow the
+image. A faceted Boolean result keeps the retained [Plane](<#Plane>), [Cylinder](<#Cylinder>), [Sphere](<#Sphere>)
+and [Torus](<#Torus>) surfaces of its faces, scaled with the body; a retained [Cone](<#Cone>) or
+denoted face reads [Faceted](<#Faceted>). Another faceted solid follows the same rule:
+plane faces and retained [Cylinder](<#Cylinder>), [Sphere](<#Sphere>) and [Torus](<#Torus>) faces keep their scaled
+surfaces, and retained [Cone](<#Cone>), denoted and unretained curved faces read
+[Faceted](<#Faceted>). A refused or canceled call leaves the document unchanged.
+
+<a name="ScaledAtCommand.Do"></a>
+#### func (\*ScaledAtCommand) Do
+
+<pre>func (c *<a href="#ScaledAtCommand">ScaledAtCommand</a>) Do(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>) (*<a href="#Body">Body</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
+
+Do scales the body and retires it, or returns the error of the first gate
+that refuses. A nil ctx is ErrDegenerate, and a second call returns
+ErrConsumed.
 
 <a name="Schedule"></a>
 ### type Schedule
@@ -8437,6 +8982,61 @@ SelectorKind names the entity a selector picks.
 
 String reports the selected entity in singular form.
 
+<a name="SheetMetalCommand"></a>
+### type SheetMetalCommand
+
+<pre>type SheetMetalCommand struct {
+    // contains filtered or unexported fields
+}</pre>
+
+SheetMetalCommand builds a bent strip of sheet metal. Build it with [SheetMetal](<#SheetMetal>).
+
+<a name="SheetMetal"></a>
+#### func SheetMetal
+
+<pre>func SheetMetal(d *<a href="#Document">Document</a>, thickness, innerRadius, width units.Value, legs, bends []units.Value) *<a href="#SheetMetalCommand">SheetMetalCommand</a></pre>
+
+SheetMetal returns the command that builds a bent strip of sheet metal as one solid in d and
+reports its flat pattern (agent-docs/sheet-metal-design.md): flat legs joined by circular bends of one
+inside radius, all of one thickness, a constant width across.
+
+thickness is the thickness of the sheet, innerRadius the radius of every bend on its inside face and
+width the width of the strip across the bends, the length of every bend line, each a positive length.
+legs are the lengths of the flat portions, in order, each a positive length measured from one bend's end
+to the next bend's start (the first leg from the strip's end). bends are the angles the strip turns
+between neighbouring legs, one fewer than legs: a positive angle turns it counter-clockwise in the
+strip's plane and a negative one clockwise, each nonzero and less than a half turn. The command copies
+both slices. [SheetMetalCommand.KFactor](<#SheetMetalCommand.KFactor>) places the neutral axis, and is 0.44 unless called.
+
+The strip lies in the XY plane with its first leg starting at the origin along +X, and is width deep along +Z;
+move it with [Transform](<#Transform>). Each bend is a circular arc about a centre on the side it turns toward, the inside face
+of radius innerRadius and the outside face innerRadius + thickness, so the legs meet their bends tangentially
+and the solid is the extrusion of the thickened centreline.
+
+Every length is positive and every angle nonzero and under a half turn (ErrDegenerate for a zero or
+a missing one, ErrNegativeMagnitude for a negative length, ErrUnitKind for a wrong kind, ErrNotFinite); there is
+one more leg than bends. A strip whose legs and bends cross
+themselves, so that its outline is not one simple loop, is ErrDegenerate. A nil context or document is
+ErrDegenerate.
+
+<a name="SheetMetalCommand.Do"></a>
+#### func (\*SheetMetalCommand) Do
+
+<pre>func (c *<a href="#SheetMetalCommand">SheetMetalCommand</a>) Do(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>) (*<a href="#Body">Body</a>, <a href="#SheetMetalReport">SheetMetalReport</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
+
+Do builds the strip, or returns the error of the first gate that refuses, with the document
+unchanged. A nil ctx is ErrDegenerate, and a second call returns ErrConsumed.
+
+<a name="SheetMetalCommand.KFactor"></a>
+#### func (\*SheetMetalCommand) KFactor
+
+<pre>func (c *<a href="#SheetMetalCommand">SheetMetalCommand</a>) KFactor(k units.Value) *<a href="#SheetMetalCommand">SheetMetalCommand</a></pre>
+
+KFactor places the neutral axis, as a fraction of the thickness from the inside face, in (0, 1\].
+It sets the flat pattern's length and not the part's shape. Without it the K-factor is 0.44. A value
+outside (0, 1\] is ErrDegenerate and one that is not dimensionless ErrUnitKind, returned by Do naming
+KFactor as the subject. A second call replaces the first.
+
 <a name="SheetMetalReport"></a>
 ### type SheetMetalReport
 
@@ -8450,70 +9050,191 @@ String reports the selected entity in singular form.
 
 SheetMetalReport states the flat pattern of a strip [SheetMetal](<#SheetMetal>) built.
 
-<a name="SheetMetalSpec"></a>
-### type SheetMetalSpec
+<a name="ShellClosedCommand"></a>
+### type ShellClosedCommand
 
-<pre>type SheetMetalSpec struct {
-    // Thickness of the sheet, a positive length.
-    Thickness units.Value
-    // InnerRadius is the radius of every bend on its inside face, a positive length.
-    InnerRadius units.Value
-    // Width of the strip across the bends, the length of every bend line, a positive length.
-    Width units.Value
-    // KFactor places the neutral axis, as a fraction of the thickness from the inside face, in (0, 1]. The
-    // zero Value takes 0.44. It sets the flat pattern&#39;s length and not the part&#39;s shape.
-    KFactor units.Value
-    // Legs are the lengths of the flat portions, in order, each a positive length measured from one bend&#39;s end
-    // to the next bend&#39;s start (the first leg from the strip&#39;s end).
-    Legs []units.Value
-    // Bends are the angles the strip turns between neighbouring legs, one fewer than Legs: a positive angle
-    // turns it counter-clockwise in the strip&#39;s plane and a negative one clockwise, each nonzero and less than
-    // a half turn.
-    Bends []units.Value
+<pre>type ShellClosedCommand struct {
+    // contains filtered or unexported fields
 }</pre>
 
-SheetMetalSpec describes a bent strip of sheet metal (agent-docs/sheet-metal-design.md): flat legs joined
-by circular bends of one inside radius, all of one thickness, a constant Width across.
+ShellClosedCommand hollows a body and keeps every face. Build it with
+[ShellClosed](<#ShellClosed>).
 
-<a name="ShellOption"></a>
-### type ShellOption
+<a name="ShellClosed"></a>
+#### func ShellClosed
 
-<pre>type ShellOption interface {
-    // contains filtered or unexported methods
+<pre>func ShellClosed(b *<a href="#Body">Body</a>, t units.Value) *<a href="#ShellClosedCommand">ShellClosedCommand</a></pre>
+
+ShellClosed returns the command that keeps every face of b and builds a
+closed hollow body with a wall of thickness t, retiring b on Do. It takes no
+face selector, because no face is removed (agent-docs/modify-design.md Part
+R §2, SX1). A full-turn revolve
+builds it: the meridian's wall region swept a whole turn, an outer shell
+around one void shell ([FaceShell](<#FaceShell>).IsVoid) that is the cavity. So does a
+straight prism: both caps keep a floor t thick, so an inward wall needs t
+below half the sweep (SX11, ErrDegenerate). A holed section builds too, its
+cavity a ring round each hole's lining; outward the cavity is the section
+itself and each lining grows into its hole, so a hole whose radius or
+half-width is at most t fills in, which is ErrUnsupported (S11a). So does a
+brep result that reads as a prism along some reference axis, such as a
+drilled bar (modify-general §3.2); outward it must read along one axis
+only. A two-slab rectangular boss Union builds the bounded inward cavity of
+modify-general §3.1a. Other receivers return ErrUnsupported after the
+stage-1 gates pass — a partial revolve, and brep or stacked results outside
+those classes (SG2). A convex mesh Boolean result whose faces all keep an
+exact plane tag and whose edges all meet at valence-3 vertices, such as the
+45 degree bevelled plate of a tilted Cut, builds the closed inward shell
+through the trim graph: each face's plane moved in by t and the cavity
+corners found as exact three-plane meets (agent-docs/trim-graph-design.md,
+Component 6). The cavity is one void shell with a plane face per outer face;
+a thickness that drops a face, or a receiver with a concave edge, keeps the
+ErrUnsupported refusal.
+It has the methods Sense and FaceThickness of [ShellCommand](<#ShellCommand>).
+
+<a name="ShellClosedCommand.Do"></a>
+#### func (\*ShellClosedCommand) Do
+
+<pre>func (c *<a href="#ShellClosedCommand">ShellClosedCommand</a>) Do(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>) (*<a href="#Body">Body</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
+
+Do hollows the body and retires it, or returns the error of the first gate
+that refuses, leaving the body live. A nil ctx is ErrDegenerate, and a
+second call returns ErrConsumed. Its errors carry [OperationShell](<#OperationShell>).
+
+<a name="ShellClosedCommand.FaceThickness"></a>
+#### func (\*ShellClosedCommand) FaceThickness
+
+<pre>func (c *<a href="#ShellClosedCommand">ShellClosedCommand</a>) FaceThickness(normal r3.Vec, t units.Value) *<a href="#ShellClosedCommand">ShellClosedCommand</a></pre>
+
+FaceThickness gives the walls facing one world axis direction their own
+thickness as [ShellCommand.FaceThickness](<#ShellCommand.FaceThickness>) does.
+
+<a name="ShellClosedCommand.Sense"></a>
+#### func (\*ShellClosedCommand) Sense
+
+<pre>func (c *<a href="#ShellClosedCommand">ShellClosedCommand</a>) Sense(s <a href="#ShellSense">ShellSense</a>) *<a href="#ShellClosedCommand">ShellClosedCommand</a></pre>
+
+Sense sets the wall sense as [ShellCommand.Sense](<#ShellCommand.Sense>) does.
+
+<a name="ShellCommand"></a>
+### type ShellCommand
+
+<pre>type ShellCommand struct {
+    // contains filtered or unexported fields
 }</pre>
 
-ShellOption configures Shell, including its wall sense.
+ShellCommand hollows a body and removes the faces its selector names. Build
+it with [Shell](<#Shell>).
 
-<a name="WithNoOpenings"></a>
-#### func WithNoOpenings
+<a name="Shell"></a>
+#### func Shell
 
-<pre>func WithNoOpenings() <a href="#ShellOption">ShellOption</a></pre>
+<pre>func Shell(b *<a href="#Body">Body</a>, sel <a href="#FaceSelector">FaceSelector</a>, t units.Value) *<a href="#ShellCommand">ShellCommand</a></pre>
 
-WithNoOpenings asks Shell to keep every face and build a closed hollow body
-(agent-docs/modify-design.md Part R §9.2). It is the only call form in which Shell
-accepts a nil face selector, and a non-nil selector beside it is
-ErrDegenerate. No receiver builds a closed shell yet: Shell returns
-ErrUnsupported for every receiver it accepts the option on.
+Shell returns the command that removes the faces of b that sel selects and lines the rest
+with a wall of thickness t, returning the new body and retiring b on Do
+(agent-docs/modify-design.md §8, core §8). A nil b is ErrDegenerate. sel names the
+faces to REMOVE — the openings — resolved against the live b; a query matching nothing is
+loud (ErrNoMatch / ErrCardinality, S16). t is a length magnitude, gated like
+every other (S15); a zero t is S14 (the wall is the empty region). A
+receiver outside the admitted prism, straight Sweep, revolve, brep and draft routes is S3,
+ErrUnsupported. A straight prism's offset
+section faces the §5 audit before anything is built, so no unproven body is
+ever made. Removing both caps of a section with k holes returns 1 + k
+lumps: the band inside the outer loop, then one band lining each hole
+(agent-docs/modify-design.md Part R BX8).
 
-<a name="WithShellFaceThickness"></a>
-#### func WithShellFaceThickness
+A prism or one-line solid Sweep also takes a side opening
+(agent-docs/modify-design.md Part O): one
+connected run of its outer side faces removed, with or without its caps, on
+a hole-free section whose every walk is a line, along a section axis or
+oblique, or a circular arc. Each end of the kept walks closes on the removed
+face's own plane or cylinder, cut by the kept wall's offset. With both caps
+removed the result is a prism over the wall section; otherwise it is an
+analytic face record with face(k)/wall(k) roles, an axis-aligned removed
+face's plane holding the opening as its hole and an oblique one stated as
+coplanar pieces. A removed hole wall, two runs, every side face, or a holed
+section is ErrUnsupported (SO6); so are a kept arc meeting a removed arc at
+an end corner, an oblique removed end face recorded as several segments,
+and, under a kept cap, a rim cut on a removed arc at a point that is not
+exactly on the arc's circle (SO5). Inward, the kept caps must leave a
+cavity height (SO3, ErrDegenerate).
 
-<pre>func WithShellFaceThickness(normal r3.Vec, t units.Value) <a href="#ShellOption">ShellOption</a></pre>
+A partial revolve is shelled when sel removes both of its angular caps: the
+wall is its meridian's offset swept over the same angle, and a meridian walk
+on the axis grows no wall (agent-docs/modify-design.md Part R §9.3). A revolve
+also takes a side opening — one connected run of its generated side faces,
+on a full turn or beside both removed angular caps — where the kept chain is
+one piece; the rim at each opening end is the removed face's own cut
+through the wall (agent-docs/modify-design.md Part O §8). Any
+other side selection, a kept angular cap, a holed meridian, a meridian
+meeting the axis along more than one walk and an offset reaching the axis
+are ErrUnsupported.
 
-WithShellFaceThickness gives the walls whose outward normal is the world axis direction normal (+X, +Y, +Z or a
+A faceted solid whose every face squares to a world axis and whose held vertices carry no bound,
+such as a part read from STL and made a solid by SolidFromMesh, shells inward on a grid:
+the cavity is the solid eroded by a cube of side twice t, so the walls are mitered at
+every edge, the removed faces open it, and the result is a mesh solid whose axis faces keep
+their planes (agent-docs/orthogonal-design.md). A wall is t thick to the rounding
+of x ± t; walls that meet are ErrDegenerate. An Outward shell of such a solid wraps it
+instead, the solid dilated by a cube less itself, ending flush with a removed face's plane.
+
+A positive-taper one-sided full-circle draft with its far cap removed
+inward builds a conical cup through draft §10.6's bounded meridian.
+
+An analytic boolean result (a brep or stacked body) that reads as a prism
+along a reference axis is shelled as that prism
+(agent-docs/modify-design.md Part B route P) when the removed faces are its caps.
+A brep that reads as a prism along one reference axis cut by through tools
+along others is shelled inward with one or both of that prism's caps, one
+connected run of its straight side walls along section axes, or both
+removed (agent-docs/modify-design.md Part G route S): the cavity is the eroded
+prism — with a wall run, the side opening's cavity section
+(agent-docs/modify-design.md Part O) — cut by each tool dilated by t, and the
+result is a brep holding the receiver's kept faces, the cavity's faces and
+the rim at each removed face. One whole-circle tool wall through a rectangular
+box builds a three-section shell (modify-general §3.1d). On other records,
+an outward shell (SG1), a removed tool or hole wall (SG4), a removed curved
+outer wall or a wall run ending at a reflex corner (SG5), and dilated tools
+that meet, reach a cap of the cavity or the material past the walls they pierce (SG6) are
+ErrUnsupported, and a wall run refuses as a prism side opening does
+(SO1–SO6, with their sentinels). A brep or
+stacked result that reads as neither is ErrUnsupported: SB3, the prism's own
+S2, where it reads as a prism, and SB10 where it does not, each naming the
+first face route S does not take (SG3). One exact exception is a pair of
+nested rectangular slabs: removing the boss top inward builds the plate
+and boss cavity with four cylinder root patches (modify-general §3.1a).
+A coaxial two-level counterbore has a separate inward route (§3.1e).
+
+<a name="ShellCommand.Do"></a>
+#### func (\*ShellCommand) Do
+
+<pre>func (c *<a href="#ShellCommand">ShellCommand</a>) Do(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>) (*<a href="#Body">Body</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
+
+Do hollows the body and retires it, or returns the error of the first gate
+that refuses, leaving the body live. A nil ctx is ErrDegenerate, and a
+second call returns ErrConsumed.
+
+<a name="ShellCommand.FaceThickness"></a>
+#### func (\*ShellCommand) FaceThickness
+
+<pre>func (c *<a href="#ShellCommand">ShellCommand</a>) FaceThickness(normal r3.Vec, t units.Value) *<a href="#ShellCommand">ShellCommand</a></pre>
+
+FaceThickness gives the walls whose outward normal is the world axis direction normal (+X, +Y, +Z or a
 negative one) the thickness t in place of Shell's own, so a part can have a heavy floor and thin sides
 (agent-docs/orthogonal-design.md). It applies to an Inward shell of a faceted solid whose faces all square to a
-world axis; any other body, a sense other than Inward, a normal that is not exactly a world axis direction
-(ErrDegenerate) and a direction named twice (ErrDegenerate) are refused. t is a positive length. Directions the
-option does not name take Shell's thickness, and the walls of two directions meet in a mitred corner.
+world axis; any other body, a sense other than Inward and a normal that is not exactly a world axis direction
+(ErrDegenerate) are refused. t is a positive length. Directions no call names take Shell's thickness, and the
+walls of two directions meet in a mitred corner. Each call names one direction; calling the method again for
+a direction replaces that direction's thickness.
 
-<a name="WithShellSense"></a>
-#### func WithShellSense
+<a name="ShellCommand.Sense"></a>
+#### func (\*ShellCommand) Sense
 
-<pre>func WithShellSense(s <a href="#ShellSense">ShellSense</a>) <a href="#ShellOption">ShellOption</a></pre>
+<pre>func (c *<a href="#ShellCommand">ShellCommand</a>) Sense(s <a href="#ShellSense">ShellSense</a>) *<a href="#ShellCommand">ShellCommand</a></pre>
 
-WithShellSense sets the wall sense (Inward, Outward or Centered). Without it the sense
-is Inward (agent-docs/modify-design.md §8).
+Sense sets the wall sense (Inward, Outward or Centered). Without it the sense
+is Inward (agent-docs/modify-design.md §8). A value that names no sense is
+ErrDegenerate, returned by Do. A second call replaces the first.
 
 <a name="ShellSense"></a>
 ### type ShellSense
@@ -8599,6 +9320,44 @@ greater than Width. Its long axis lies along the face frame's U axis before
 Angle turns it counter-clockwise about the hole axis. The bore is centred on
 the hole axis.
 
+<a name="SolidFromMeshCommand"></a>
+### type SolidFromMeshCommand
+
+<pre>type SolidFromMeshCommand struct {
+    // contains filtered or unexported fields
+}</pre>
+
+SolidFromMeshCommand turns a closed mesh into a solid. Build it with [SolidFromMesh](<#SolidFromMesh>).
+
+<a name="SolidFromMesh"></a>
+#### func SolidFromMesh
+
+<pre>func SolidFromMesh(d *<a href="#Document">Document</a>, m *<a href="#MeshBody">MeshBody</a>) *<a href="#SolidFromMeshCommand">SolidFromMeshCommand</a></pre>
+
+SolidFromMesh returns the command that turns a closed [MeshBody](<#MeshBody>) into a solid [Body](<#Body>) of d, so an imported
+or built mesh takes part in Booleans, mass properties, selection and Verify as a
+body does (agent-docs/mesh-solid-design.md). The mesh is the solid: its vertices
+are held exactly, so the body's boundary bound is zero and its volume is the
+mesh's exact volume, read from the exact signed volume of its triangles. The body is
+[Faceted](<#Faceted>): coplanar triangles that share an exact plane through their vertices, found
+in rational arithmetic, form one face, so a block read from STL has six faces.
+
+m MUST be closed (every edge in two triangles), wound outward, and free of
+self-crossing, which the exact contact audit of the lofted bodies proves: a mesh with
+a crossing the audit finds, or one the audit cannot decide, is refused. A mesh that is
+open, non-manifold or wound inward is ErrNotSolid, one with no positive volume is
+ErrNotSolid, one with a crossing is ErrDegenerate, and one of more than 65,528
+triangles, or whose audit exceeds its work ceiling, is ErrUnsupported. A nil
+context given to Do, a nil document or a nil mesh is ErrDegenerate. A failure leaves d unchanged.
+
+<a name="SolidFromMeshCommand.Do"></a>
+#### func (\*SolidFromMeshCommand) Do
+
+<pre>func (c *<a href="#SolidFromMeshCommand">SolidFromMeshCommand</a>) Do(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>) (*<a href="#Body">Body</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
+
+Do converts the mesh and registers the solid, or returns the error of the first gate that refuses. A second
+call returns [ErrConsumed](<#ErrConsumed>).
+
 <a name="Sphere"></a>
 ### type Sphere
 
@@ -8616,12 +9375,125 @@ Sphere is a spherical face with Center in millimetres.
 
 Kind reports KindSphere.
 
+<a name="SplitCommand"></a>
+### type SplitCommand
+
+<pre>type SplitCommand struct {
+    // contains filtered or unexported fields
+}</pre>
+
+SplitCommand cuts a solid into the cells a sheet separates. Build it with [Split](<#Split>).
+
+<a name="Split"></a>
+#### func Split
+
+<pre>func Split(target, tool *<a href="#Body">Body</a>) *<a href="#SplitCommand">SplitCommand</a></pre>
+
+Split returns the command that cuts target with tool and returns one solid per arranged target cell
+in sketch's cell order. The target is a solid and the tool a sheet sharing
+its generator: both straight sweeps, or both revolves about one axis
+(agent-docs/surface-intersection-design.md §2.1). Any other pair, or a miss on
+that section's gate, is ErrUnsupported. Both operands are consumed only
+after every piece has been built. A tool that separates no target cell is
+ErrDegenerate, as is a nil context given to Do or a nil target. The document is the
+target's own.
+
+<a name="SplitCommand.Do"></a>
+#### func (\*SplitCommand) Do
+
+<pre>func (c *<a href="#SplitCommand">SplitCommand</a>) Do(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>) ([]*<a href="#Body">Body</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
+
+Do splits the target and retires both operands, or returns the error of the first gate that refuses. A second
+call returns [ErrConsumed](<#ErrConsumed>).
+
 <a name="Status"></a>
 ### type Status
 
 <pre>type Status = report.<a href="report.md#Status">Status</a></pre>
 
 Status is a verification verdict. See agent-docs/verification-design.md §6.
+
+<a name="StitchCommand"></a>
+### type StitchCommand
+
+<pre>type StitchCommand struct {
+    // contains filtered or unexported fields
+}</pre>
+
+StitchCommand welds the free edges of sheet bodies. Build it with [Stitch](<#Stitch>).
+
+<a name="Stitch"></a>
+#### func Stitch
+
+<pre>func Stitch(bodies ...*<a href="#Body">Body</a>) *<a href="#StitchCommand">StitchCommand</a></pre>
+
+Stitch returns the command that welds every free-edge pair it can prove coincident
+(agent-docs/surface-design.md §6.2's Table J) across bodies, assembles the
+result, and returns one new body, retiring every operand. One operand is
+meaningful: it re-audits that body's own boundary, which is how a closed
+sheet becomes a solid (§2.1, §4.1).
+
+Every operand must carry an evaluator payload and be a live [BodySheet](<#BodySheet>) of
+this call's document: a nil or payload-less operand is [ErrDegenerate](<#ErrDegenerate>)
+(Table R row R12), an operand owned by a different document is
+[ErrForeignBody](<#ErrForeignBody>) (R13), a retired operand is [ErrRetiredBody](<#ErrRetiredBody>) (R14), and a
+[BodySolid](<#BodySolid>) operand is [ErrUnsupported](<#ErrUnsupported>) (R17) — it has no free edge, so
+stitching cannot change it, and a caller combining two solids means
+[Union](<#Union>). Before Table C decides anything, every vertex's own link across
+the welded set must be a manifold — one connected fan (interior) or path
+(rim) — open or closed, all-planar or curved alike; a pinch there is
+[ErrDegenerate](<#ErrDegenerate>) (R7), the identical sentinel a non-orientable assembly
+gets, even when free edges also remain. Table C then decides the rest: a
+residual free edge is a [BodySheet](<#BodySheet>) and never an error; a fully welded,
+all-planar, non-crossing boundary is a [BodySolid](<#BodySolid>); a fully welded
+boundary holding a curved face is [ErrUnsupported](<#ErrUnsupported>) (R8); a welded set
+with no consistent orientation is [ErrDegenerate](<#ErrDegenerate>) (R7); and a proven
+self-contact or an exhausted audit budget surfaces the crossing audit's
+own [ErrDegenerate](<#ErrDegenerate>)/[ErrUnsupported](<#ErrUnsupported>) (R9/R10) unchanged. A failed call
+leaves the document and every operand unchanged. The bodies are copied at
+the call, and a nil ctx given to Do is [ErrDegenerate](<#ErrDegenerate>).
+
+<a name="StitchCommand.Do"></a>
+#### func (\*StitchCommand) Do
+
+<pre>func (c *<a href="#StitchCommand">StitchCommand</a>) Do(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>) (*<a href="#Body">Body</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
+
+Do welds the operands and retires them, or returns the error of the first gate that refuses. A second call
+returns [ErrConsumed](<#ErrConsumed>).
+
+<a name="StretchCommand"></a>
+### type StretchCommand
+
+<pre>type StretchCommand struct {
+    // contains filtered or unexported fields
+}</pre>
+
+StretchCommand scales a faceted solid by a factor per world axis. Build it with [Stretch](<#Stretch>).
+
+<a name="Stretch"></a>
+#### func Stretch
+
+<pre>func Stretch(b *<a href="#Body">Body</a>, anchor r3.Vec, x, y, z units.Value) *<a href="#StretchCommand">StretchCommand</a></pre>
+
+Stretch returns the command that scales a faceted solid by a separate factor along each world axis about
+anchor. Do returns the result as a new solid, retiring b (agent-docs/mesh-solid-design.md §3). It is the non-uniform scale
+[ScaledAt](<#ScaledAt>) does not offer: a box becomes a longer box, and a part with planar faces keeps every face
+planar while a slanted one tilts.
+
+b MUST be a live faceted solid whose held vertices carry no bound, such as one made by
+[SolidFromMesh](<#SolidFromMesh>) or by [MoveFace](<#MoveFace>); any other body is ErrUnsupported, because a stretched curved or
+bounded body is not a solid this route can prove. The result is built as [ScaleMesh](<#ScaleMesh>) builds a mesh and
+read back as [SolidFromMesh](<#SolidFromMesh>) reads one, so its planes are exact over the stretched coordinates. Each
+factor is dimensionless, finite and not zero (ErrUnitKind, ErrNotFinite, ErrDegenerate); a negative
+factor mirrors across the plane through anchor. A nil context or body is ErrDegenerate.
+
+<a name="StretchCommand.Do"></a>
+#### func (\*StretchCommand) Do
+
+<pre>func (c *<a href="#StretchCommand">StretchCommand</a>) Do(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>) (*<a href="#Body">Body</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
+
+Do stretches the body and retires it, or returns the error of the first gate that refuses. A nil ctx is
+ErrDegenerate, and a second call returns ErrConsumed.
 
 <a name="SubDCage"></a>
 ### type SubDCage
@@ -8665,31 +9537,6 @@ SurfaceKind identifies a surface variant.
     KindFaceted
 )</pre>
 
-<a name="SurfaceResultOption"></a>
-### type SurfaceResultOption
-
-<pre>type SurfaceResultOption interface {
-    <a href="#ExtrudeOption">ExtrudeOption</a>
-    <a href="#RevolveOption">RevolveOption</a>
-    <a href="#SweepOption">SweepOption</a>
-    <a href="#LoftOption">LoftOption</a>
-}</pre>
-
-SurfaceResultOption configures every feature WithSurfaceResult reaches
-(agent-docs/surface-design.md §3). A feature this evaluator cannot yet build as a
-surface refuses it with [ErrUnsupported](<#ErrUnsupported>) (Table R row R1).
-
-<a name="WithSurfaceResult"></a>
-#### func WithSurfaceResult
-
-<pre>func WithSurfaceResult() <a href="#SurfaceResultOption">SurfaceResultOption</a></pre>
-
-WithSurfaceResult builds the feature's wall set and omits every face that
-exists only to close the solid, publishing a sheet body — Kind() ==
-BodySheet — instead (agent-docs/surface-design.md §4.1). The option carries no
-payload of its own; its identity is the whole of the signal, and a repeated
-WithSurfaceResult() is idempotent, never an error.
-
 <a name="SurveyKind"></a>
 ### type SurveyKind
 
@@ -8703,6 +9550,103 @@ SurveyKind names the optional body survey a diagnostic concerns.
 <pre>type SweepCause = report.<a href="report.md#SweepCause">SweepCause</a></pre>
 
 SweepCause explains why a continuous claim was not proved.
+
+<a name="SweepCommand"></a>
+### type SweepCommand
+
+<pre>type SweepCommand struct {
+    // contains filtered or unexported fields
+}</pre>
+
+SweepCommand moves a section along a path. Build it with [Sweep](<#Sweep>).
+
+<a name="Sweep"></a>
+#### func Sweep
+
+<pre>func Sweep[S <a href="#Section">Section</a>](d *<a href="#Document">Document</a>, s *sketch.Sketch, sec S, path *<a href="#Path">Path</a>) *<a href="#SweepCommand">SweepCommand</a></pre>
+
+Sweep moves the section sec along path, registers the resulting body, and
+returns it. sec is a closed [\*sketch.Profile](<https://pkg.go.dev/github.com/lestrrat-3d/sketch#Profile>), which sweeps to a solid
+(sheet under SurfaceResult), or an open [\*sketch.Chain](<https://pkg.go.dev/github.com/lestrrat-3d/sketch#Chain>), which sweeps
+to a sheet. Both are recorded from s; the type argument S is inferred.
+
+A profile section's path must start in the profile plane and its initial
+tangent must be exactly codirectional with the plane's positive normal.
+Composite paths also require tangent joins, exactly representable transported
+frames, and a certified absence of unintended span contact. [Section](<#Section>) 17 of
+the Sweep design states the bounded nonzero-twist reach. Sections 3.3–3.5
+admit bounded closed-path classes.
+
+A chain section is gated exactly as a chain [Extrude](<#Extrude>) gates it
+(agent-docs/surface-design.md §13.3); the seam's own sentinel wins before any path
+geometry is read. The path must start in the sketch plane with its initial
+tangent codirectional with that plane's positive normal (ErrDegenerate). The
+evaluator sweeps one straight span, one arc, or §15.8's cardinal line/arc pair;
+other composite paths are ErrUnsupported (Table SC). The result
+is always a sheet, one wall per recorded segment per span with no cap or
+closing face. A chain section therefore returns ErrUnsupported for
+SurfaceResult (there is no solid to toggle), \[Twist\],
+\[MitredJoins\] and \[SectionScale\]. That refusal follows the chain's
+seam gate and precedes every path-geometry gate (agent-docs/sweep-design.md §15.3).
+
+A nil context, document, sketch, section or path returns ErrDegenerate.
+Every failure and cancellation
+leaves the document unchanged.
+
+<a name="SweepCommand.Do"></a>
+#### func (\*SweepCommand) Do
+
+<pre>func (c *<a href="#SweepCommand">SweepCommand</a>) Do(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>) (*<a href="#Body">Body</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
+
+Do sweeps the section, registers the new body and returns it, or returns the
+error of the first gate that refuses, leaving the document unchanged. A nil
+ctx is ErrDegenerate, and a second call returns ErrConsumed.
+
+<a name="SweepCommand.MitredJoins"></a>
+#### func (\*SweepCommand) MitredJoins
+
+<pre>func (c *<a href="#SweepCommand">SweepCommand</a>) MitredJoins() *<a href="#SweepCommand">SweepCommand</a></pre>
+
+MitredJoins admits a [LineTo](<#LineTo>)-only path whose internal joins are corners:
+the two spans meeting at a join are each cut on one join plane and share the
+section polygon on it (agent-docs/sweep-design.md §16). The profile must be made
+of straight lines only. Calling it twice is the same as calling it once.
+
+<a name="SweepCommand.SectionScale"></a>
+#### func (\*SweepCommand) SectionScale
+
+<pre>func (c *<a href="#SweepCommand">SweepCommand</a>) SectionScale(factors ...units.Value) *<a href="#SweepCommand">SweepCommand</a></pre>
+
+SectionScale states one dimensionless factor per path segment, in path
+order: factors\[k\] is the ratio of the section at the END of span k to the
+authored profile, so a branch whose radius is r\_k at path point k passes
+r\_k / r\_0. Each factor must be a positive, finite Dimensionless value, and
+the count must equal the path's segment count. On a path of two or more
+spans it requires [SweepCommand.MitredJoins](<#SweepCommand.MitredJoins>) (agent-docs/sweep-design.md §16.2).
+A second call replaces the first.
+
+<a name="SweepCommand.SurfaceResult"></a>
+#### func (\*SweepCommand) SurfaceResult
+
+<pre>func (c *<a href="#SweepCommand">SweepCommand</a>) SurfaceResult() *<a href="#SweepCommand">SweepCommand</a></pre>
+
+SurfaceResult builds the wall set and omits the two section caps,
+publishing a sheet body instead of a solid (agent-docs/surface-design.md §4).
+A chain section returns [ErrUnsupported](<#ErrUnsupported>) for it, and so does a mitred or
+scaled sweep, which builds a solid only. Calling it twice is the same as
+calling it once.
+
+<a name="SweepCommand.Twist"></a>
+#### func (\*SweepCommand) Twist
+
+<pre>func (c *<a href="#SweepCommand">SweepCommand</a>) Twist(angle units.Value) *<a href="#SweepCommand">SweepCommand</a></pre>
+
+Twist rotates the profile about the path tangent as it travels.
+A nonzero angle requires an origin XY sketch and a strictly convex whole-line
+profile centred on the axis. [Section](<#Section>) 17 admits a positive-Z straight path
+and a bounded line followed by a cardinal XZ quarter arc. Other cases
+return ErrUnsupported without changing the document. A second call replaces
+the first.
 
 <a name="SweepContactTrack"></a>
 ### type SweepContactTrack
@@ -8739,49 +9683,6 @@ SweepInstant identifies a dyadic fraction of the requested duration.
 <pre>type SweepInterval = report.<a href="report.md#SweepInterval">SweepInterval</a></pre>
 
 SweepInterval identifies an interval of the requested duration.
-
-<a name="SweepOption"></a>
-### type SweepOption
-
-<pre>type SweepOption interface {
-    option.Interface
-    // contains filtered or unexported methods
-}</pre>
-
-SweepOption configures Sweep.
-
-<a name="WithMitredJoins"></a>
-#### func WithMitredJoins
-
-<pre>func WithMitredJoins() <a href="#SweepOption">SweepOption</a></pre>
-
-WithMitredJoins admits a [LineTo](<#LineTo>)-only path whose internal joins are corners:
-the two spans meeting at a join are each cut on one join plane and share the
-section polygon on it (agent-docs/sweep-design.md §16). The profile must be made
-of straight lines only. Passing it twice is ErrDegenerate.
-
-<a name="WithSectionScale"></a>
-#### func WithSectionScale
-
-<pre>func WithSectionScale(factors ...units.Value) <a href="#SweepOption">SweepOption</a></pre>
-
-WithSectionScale states one dimensionless factor per path segment, in path
-order: factors\[k\] is the ratio of the section at the END of span k to the
-authored profile, so a branch whose radius is r\_k at path point k passes
-r\_k / r\_0. Each factor must be a positive, finite Dimensionless value, and
-the count must equal the path's segment count. On a path of two or more
-spans it requires [WithMitredJoins](<#WithMitredJoins>) (agent-docs/sweep-design.md §16.2).
-
-<a name="WithSweepTwist"></a>
-#### func WithSweepTwist
-
-<pre>func WithSweepTwist(angle units.Value) <a href="#SweepOption">SweepOption</a></pre>
-
-WithSweepTwist rotates the profile about the path tangent as it travels.
-A nonzero angle requires an origin XY sketch and a strictly convex whole-line
-profile centred on the axis. [Section](<#Section>) 17 admits a positive-Z straight path
-and a bounded line followed by a cardinal XZ quarter arc. Other cases
-return ErrUnsupported without changing the document.
 
 <a name="SweepOutcome"></a>
 ### type SweepOutcome
@@ -8955,21 +9856,51 @@ is optional: it is how far a flattened curve may lie from its polygon, a
 positive length, and the zero units.Value means a thousandth of Height. Font is
 optional TrueType font data, and nil sets the text in Go Regular.
 
-<a name="ThickenOption"></a>
-### type ThickenOption
+<a name="ThickenCommand"></a>
+### type ThickenCommand
 
-<pre>type ThickenOption interface {
-    // contains filtered or unexported methods
+<pre>type ThickenCommand struct {
+    // contains filtered or unexported fields
 }</pre>
 
-ThickenOption configures which side of a sheet receives material.
+ThickenCommand builds a solid from a sheet. Build it with [Thicken](<#Thicken>).
 
-<a name="WithThickenSide"></a>
-#### func WithThickenSide
+<a name="Thicken"></a>
+#### func Thicken
 
-<pre>func WithThickenSide(side <a href="#ThickenSide">ThickenSide</a>) <a href="#ThickenOption">ThickenOption</a></pre>
+<pre>func Thicken(b *<a href="#Body">Body</a>, thickness units.Value) *<a href="#ThickenCommand">ThickenCommand</a></pre>
 
-WithThickenSide selects the side that receives the material.
+Thicken builds a solid from the admitted sheet b and retires b.
+A nil context given to Do or a nil b is ErrDegenerate.
+It extrudes a recorded planar patch through the signed thickness interval,
+builds a certified annular wall around a profile-fed prism sheet, spins a
+certified meridian annulus through a profile-fed revolve sheet's own
+interval, or sweeps a ribbon's own assembled section through the ribbon's
+interval and spins a chain shell's own through the shell's. A one-span
+sweep sheet uses its prism or revolve reduction and restores sweep roles.
+A hole-free multi-span sweep sheet re-sweeps one generated annulus along its
+path, after a radial gate on each arc span.
+A one-arc chain sweep uses its chain Revolve reduction; a cardinal composite
+chain sweep assembles one section and sweeps both spans.
+Other sheet families are staged under agent-docs/surface-design.md §16.8.
+
+<a name="ThickenCommand.Do"></a>
+#### func (\*ThickenCommand) Do
+
+<pre>func (c *<a href="#ThickenCommand">ThickenCommand</a>) Do(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>) (*<a href="#Body">Body</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
+
+Do builds the solid and retires the sheet, or returns the error of the
+first gate that refuses, leaving the sheet live. A nil ctx is ErrDegenerate,
+and a second call returns ErrConsumed.
+
+<a name="ThickenCommand.Side"></a>
+#### func (\*ThickenCommand) Side
+
+<pre>func (c *<a href="#ThickenCommand">ThickenCommand</a>) Side(side <a href="#ThickenSide">ThickenSide</a>) *<a href="#ThickenCommand">ThickenCommand</a></pre>
+
+Side selects the side that receives the material. Without it the side is
+[ThickenPositive](<#ThickenPositive>). A value that is no side is ErrDegenerate, returned by Do.
+A second call replaces the first.
 
 <a name="ThickenSide"></a>
 ### type ThickenSide
@@ -8989,26 +9920,147 @@ ThickenSide names the side of the source sheet that receives material.
     ThickenCentered
 )</pre>
 
+<a name="ThreadCommand"></a>
+### type ThreadCommand
+
+<pre>type ThreadCommand struct {
+    // contains filtered or unexported fields
+}</pre>
+
+ThreadCommand cuts a thread into a cylindrical face. Build it with [Thread](<#Thread>).
+
+<a name="Thread"></a>
+#### func Thread
+
+<pre>func Thread(b *<a href="#Body">Body</a>, face <a href="#FaceSelector">FaceSelector</a>, pitch units.Value) *<a href="#ThreadCommand">ThreadCommand</a></pre>
+
+Thread returns the command that cuts a 60 degree ISO metric thread of the given
+pitch into a cylindrical face of b and returns the threaded body, retiring b
+(agent-docs/thread-design.md). face must resolve to exactly one face. pitch is
+the axial advance per turn, a positive length. The thread is right-handed and
+runs the whole face unless [ThreadCommand.LeftHand](<#ThreadCommand.LeftHand>) or [ThreadCommand.Length](<#ThreadCommand.Length>)
+is called; [ThreadCommand.Form](<#ThreadCommand.Form>) changes the groove and [ThreadCommand.LeadIn](<#ThreadCommand.LeadIn>)
+chamfers the face's ends.
+
+A face whose outward normal points away from the axis is a rod: it is the
+thread's major diameter and a groove is cut into it. A face whose outward
+normal points toward the axis is a bore: it is the thread's minor (drilled)
+diameter and the groove is cut out of the wall around it. The groove follows
+the ISO basic profile, with an external root flat of an eighth of the pitch
+and an internal one of a quarter, and runs the whole length of the face, or
+the [ThreadCommand.Length](<#ThreadCommand.Length>) of it. A groove over the whole face runs out past
+both of its ends, so a larger face or a shoulder beside the threaded one is cut
+as well: thread a rod that ends at the thread, or give a length.
+
+The thread is a Coil of the groove profile cut from b, so the result is a
+mesh Boolean's: faceted, with the Cut's own bounds (agent-docs/helix-design.md
+§9). Its volume reading encloses the closed form in the thread design, and
+Verify reads it as the faceted verdict allows.
+
+b MUST be a live solid; a nil context, body or selector is ErrDegenerate. A
+selector that resolves to other than one face is ErrDegenerate, and a face
+that is not an analytic cylinder is ErrUnsupported. A pitch that is not a
+positive finite length is ErrDegenerate or ErrUnitKind, and one too coarse
+for the radius, so that the groove would reach the axis, is ErrDegenerate. A
+Coil or Cut the evaluator cannot decide is that call's own error. Every
+failure leaves b live and the document unchanged.
+
+<a name="ThreadCommand.Do"></a>
+#### func (\*ThreadCommand) Do
+
+<pre>func (c *<a href="#ThreadCommand">ThreadCommand</a>) Do(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>) (*<a href="#Body">Body</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
+
+Do cuts the thread and retires the body, or returns the error of the first gate
+that refuses, leaving the body live and the document unchanged. A nil ctx is
+ErrDegenerate, and a second call returns ErrConsumed.
+
+<a name="ThreadCommand.Form"></a>
+#### func (\*ThreadCommand) Form
+
+<pre>func (c *<a href="#ThreadCommand">ThreadCommand</a>) Form(form <a href="#ThreadForm">ThreadForm</a>) *<a href="#ThreadCommand">ThreadCommand</a></pre>
+
+Form sets the groove's cross-section (agent-docs/thread-design.md §6). A form
+with a missing or out-of-range value is ErrDegenerate, ErrUnitKind or
+ErrNegativeMagnitude, returned by Do naming Form as the subject. A second call
+replaces the first.
+
+<a name="ThreadCommand.LeadIn"></a>
+#### func (\*ThreadCommand) LeadIn
+
+<pre>func (c *<a href="#ThreadCommand">ThreadCommand</a>) LeadIn(distance units.Value) *<a href="#ThreadCommand">ThreadCommand</a></pre>
+
+LeadIn cuts a 45 degree chamfer of the given distance on each convex end of the
+threaded face before the thread, so a screw or a nut starts without a burr
+(agent-docs/thread-design.md §7). distance is a positive length. A face with no
+convex circular end is ErrDegenerate. A second call to LeadIn or
+[ThreadCommand.LeadInAngle](<#ThreadCommand.LeadInAngle>) replaces the first.
+
+<a name="ThreadCommand.LeadInAngle"></a>
+#### func (\*ThreadCommand) LeadInAngle
+
+<pre>func (c *<a href="#ThreadCommand">ThreadCommand</a>) LeadInAngle(distance, angle units.Value) *<a href="#ThreadCommand">ThreadCommand</a></pre>
+
+LeadInAngle is [ThreadCommand.LeadIn](<#ThreadCommand.LeadIn>) with the bevel at angle to the threaded
+face's end face, in place of 45 degrees: distance stays the bevel's distance
+along the end face and the bevel runs distance·tan(angle) along the threaded
+face. angle is above zero and below 90 degrees, ErrDegenerate otherwise,
+returned by Do naming LeadInAngle as the subject (agent-docs/thread-design.md
+§10). A second call to LeadIn or LeadInAngle replaces the first.
+
+<a name="ThreadCommand.LeftHand"></a>
+#### func (\*ThreadCommand) LeftHand
+
+<pre>func (c *<a href="#ThreadCommand">ThreadCommand</a>) LeftHand() *<a href="#ThreadCommand">ThreadCommand</a></pre>
+
+LeftHand makes the thread left-handed. It is right-handed otherwise.
+
+<a name="ThreadCommand.Length"></a>
+#### func (\*ThreadCommand) Length
+
+<pre>func (c *<a href="#ThreadCommand">ThreadCommand</a>) Length(length units.Value) *<a href="#ThreadCommand">ThreadCommand</a></pre>
+
+Length threads only length of the face, a positive length measured from the end
+of the face with the least position along the axis. A length no longer than the
+face stops the thread there, with the coil's flat end and no runout
+(agent-docs/thread-design.md §5); a longer one is ErrDegenerate, returned by Do
+naming Length as the subject. Without it the thread runs the whole face. A
+second call replaces the first.
+
 <a name="ThreadForm"></a>
 ### type ThreadForm
 
 <pre>type ThreadForm struct {
-    Angle, Depth, Flat units.Value
-    // FlankLead and FlankTrail, set in place of Angle, give an asymmetric groove,
-    // a buttress thread&#39;s: each is the lean of a flank from the radial direction,
-    // FlankLead of the flank toward the start of the face (its least position
-    // along the axis) and FlankTrail of the one toward its far end. Each is an
-    // angle above zero and below 90 degrees, and both must be set.
-    FlankLead, FlankTrail units.Value
+    // contains filtered or unexported fields
 }</pre>
 
-ThreadForm is a symmetric trapezoidal groove for [ThreadSpec.Form](<#ThreadSpec>). Angle is
-the included angle between the two flanks, Depth how far the groove reaches
-from the face to its root, and Flat the width of the root. The groove mouth
-opens a twentieth of the pitch past the face, as the ISO groove's does. Set
-all of Angle, Depth and Flat or none: the zero ThreadForm is the ISO profile.
-Angle is an angle above zero and up to 120 degrees, and Depth and Flat are
-positive lengths. FlankLead and FlankTrail take the place of Angle.
+ThreadForm is the groove's cross-section, passed to [ThreadCommand.Form](<#ThreadCommand.Form>). The
+zero ThreadForm is the 60 degree ISO basic profile. [TrapezoidThreadForm](<#TrapezoidThreadForm>) makes a
+symmetric trapezoidal groove, such as an Acme or trapezoidal thread, and
+[ButtressThreadForm](<#ButtressThreadForm>) an asymmetric one (agent-docs/thread-design.md §6). The
+groove mouth opens a twentieth of the pitch past the face, as the ISO groove's
+does. A form that a constructor built with a zero value is ErrDegenerate, never
+the ISO profile.
+
+<a name="ButtressThreadForm"></a>
+#### func ButtressThreadForm
+
+<pre>func ButtressThreadForm(lead, trail, depth, flat units.Value) <a href="#ThreadForm">ThreadForm</a></pre>
+
+ButtressThreadForm returns an asymmetric groove, a buttress thread's. lead and
+trail are the lean of each flank from the radial direction, lead of the flank
+toward the start of the face (its least position along the axis) and trail of
+the one toward its far end. Each is an angle above zero and below 90 degrees.
+depth and flat are as in [TrapezoidThreadForm](<#TrapezoidThreadForm>).
+
+<a name="TrapezoidThreadForm"></a>
+#### func TrapezoidThreadForm
+
+<pre>func TrapezoidThreadForm(angle, depth, flat units.Value) <a href="#ThreadForm">ThreadForm</a></pre>
+
+TrapezoidThreadForm returns a symmetric trapezoidal groove. angle is the
+included angle between the two flanks, above zero and up to 120 degrees, depth
+is how far the groove reaches from the face to its root and flat the width of
+the root, both positive lengths.
 
 <a name="ThreadSize"></a>
 ### type ThreadSize
@@ -9048,40 +10100,6 @@ The designation is case-insensitive in its M and x and takes no spaces. The
 pitch is the thread's own and the major diameter is its nominal one: tolerance
 classes, allowances and a thread's minor diameter are not read. A designation
 that is none of these, or whose size is not in the tables, is ErrDegenerate.
-
-<a name="ThreadSpec"></a>
-### type ThreadSpec
-
-<pre>type ThreadSpec struct {
-    Face     <a href="#FaceSelector">FaceSelector</a>
-    Pitch    units.Value
-    LeftHand <a href="https://pkg.go.dev/builtin#bool">bool</a>
-    Length   units.Value
-    // Form is the groove&#39;s cross-section. The zero Form is the 60 degree ISO
-    // basic profile; any other makes a symmetric trapezoidal groove, such as an
-    // Acme or trapezoidal thread (agent-docs/thread-design.md §6).
-    Form <a href="#ThreadForm">ThreadForm</a>
-    // LeadIn, when set, is the distance of a 45 degree chamfer cut on each
-    // convex end of the threaded face before the thread, so a screw or a nut
-    // starts without a burr: a positive length (agent-docs/thread-design.md §7).
-    LeadIn units.Value
-    // LeadInAngle, set with LeadIn, is the angle between the lead-in&#39;s bevel and
-    // the threaded face&#39;s end face, in place of 45 degrees: LeadIn stays the
-    // bevel&#39;s distance along the end face and the bevel runs LeadIn·tan(angle)
-    // along the threaded face. It is an angle above zero and below 90 degrees
-    // (agent-docs/thread-design.md §10).
-    LeadInAngle units.Value
-}</pre>
-
-ThreadSpec describes one ISO metric thread. [Face](<#Face>) selects the cylindrical face
-to thread and must resolve to exactly one face. Pitch is the axial advance
-per turn, a positive length.
-
-The thread is right-handed unless LeftHand is set. Length is the axial length
-to thread, measured from the end of the face with the least position along
-the axis: the zero Value threads the whole face, and a positive length no
-longer than the face stops the thread there, with the coil's flat end and no
-runout (agent-docs/thread-design.md §5).
 
 <a name="ThroughAll"></a>
 ### type ThroughAll
@@ -9184,6 +10202,77 @@ Minor is the tube radius. A spindle torus may have Major below Minor.
 
 Kind reports KindTorus.
 
+<a name="TransformCommand"></a>
+### type TransformCommand
+
+<pre>type TransformCommand struct {
+    // contains filtered or unexported fields
+}</pre>
+
+TransformCommand places a body under a rigid motion. Build it with
+[Transform](<#Transform>).
+
+<a name="Transform"></a>
+#### func Transform
+
+<pre>func Transform(body *<a href="#Body">Body</a>, t r3.Transform) *<a href="#TransformCommand">TransformCommand</a></pre>
+
+Transform returns the command that places body under the rigid motion t.
+Do returns a new body carrying body's geometry under t and retires body
+(core §8). body MUST NOT be nil. The zero transform is invalid and is
+ErrDegenerate. A canceled context stops the rebuild before the document
+changes. The motion composes onto the placement body already carries, and it
+is that ACCUMULATED placement, never t alone, that the analytic booleans and
+interference reading compare against a coplanar partner's: where the two
+differ, the partner's coordinates are re-expressed and every crossing they
+cut is charged that rounding over the crossing angle
+(agent-docs/prism-boolean-design.md §3.4), while motions composing back to the
+partner's own placement leave the re-expression the identity.
+
+<a name="TransformCommand.Do"></a>
+#### func (\*TransformCommand) Do
+
+<pre>func (c *<a href="#TransformCommand">TransformCommand</a>) Do(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>) (*<a href="#Body">Body</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
+
+Do places the body and retires it, or returns the error of the first gate
+that refuses, leaving the body live. A nil ctx is ErrDegenerate, and a
+second call returns ErrConsumed.
+
+<a name="TrimCommand"></a>
+### type TrimCommand
+
+<pre>type TrimCommand struct {
+    // contains filtered or unexported fields
+}</pre>
+
+TrimCommand cuts a sheet where it meets a tool. Build it with [Trim](<#Trim>).
+
+<a name="Trim"></a>
+#### func Trim
+
+<pre>func Trim(b *<a href="#Body">Body</a>, tool *<a href="#Body">Body</a>, side <a href="#TrimSide">TrimSide</a>) *<a href="#TrimCommand">TrimCommand</a></pre>
+
+Trim returns the command that cuts b where it meets tool and returns the kept pieces as
+one sheet body (agent-docs/surface-intersection-design.md §8). b and
+tool are consumed on the document's uniform terms (core §6); a refusal
+consumes neither. It admits a pair whose two sweeps share ONE generator —
+both the prism family (a straight Extrude/chain Extrude sweep) or both the
+revolve family (a Revolve/chain Revolve spin about one axis,
+agent-docs/api-design.md's evaluator §5). A mixed pair, or any condition §2.1's
+S1-S7 states, is [ErrUnsupported](<#ErrUnsupported>) at the call, never a fallback: a sheet's
+mesh proves no occupied volume (booloperand.RequireVolumeProof),
+so there is no mesh path for a miss to reroute to. A tool that separates no
+fragment of b, or every fragment, is [ErrDegenerate](<#ErrDegenerate>) (R30): no
+trimmed body exists either way. A nil context given to Do or a nil b is ErrDegenerate.
+
+<a name="TrimCommand.Do"></a>
+#### func (\*TrimCommand) Do
+
+<pre>func (c *<a href="#TrimCommand">TrimCommand</a>) Do(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>) (*<a href="#Body">Body</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
+
+Do trims the sheet and retires both operands, or returns the error of the first gate that refuses. A second call
+returns [ErrConsumed](<#ErrConsumed>).
+
 <a name="TrimSide"></a>
 ### type TrimSide
 
@@ -9245,6 +10334,201 @@ UndercutRequest records the effective pull direction.
 <pre>type UndercutResult = report.<a href="report.md#UndercutResultOf">UndercutResultOf</a>[*<a href="#Body">Body</a>, *<a href="#Face">Face</a>, <a href="#JointCell">JointCell</a>]</pre>
 
 UndercutResult records one body's undercut survey.
+
+<a name="UnionCommand"></a>
+### type UnionCommand
+
+<pre>type UnionCommand struct {
+    // contains filtered or unexported fields
+}</pre>
+
+UnionCommand joins bodies. Build it with [Union](<#Union>).
+
+<a name="Union"></a>
+#### func Union
+
+<pre>func Union(bodies ...*<a href="#Body">Body</a>) *<a href="#UnionCommand">UnionCommand</a></pre>
+
+Union returns the command that builds the body enclosing the volume of two
+or more operands, retiring them together from their document on Do (core §8).
+A nil operand or a repeated body is ErrDegenerate; fewer than two bodies is
+ErrDegenerate, returned by Do.
+Three or more bodies admit a one-scene exact union of equal-interval,
+same-placement, hole-free whole-line prisms with distinct source line
+carriers, plus certified straight bevel tooth patterns. Other
+prism inputs use the two-body evaluator in order, with one final commit.
+A three-source chain whose second pair refuses on its first operand's held
+bound can try the other grouping (prism-boolean §4.7). A two-body Union
+refused because a facet it touches holds an earlier rim's bound is rebuilt
+from its operands' recorded Union history with rim splitting on, as under
+WithRimSplit, and then joined (prism-boolean Part R, "Rim-split rebuild").
+Each pair must pass its own proof. Failure or cancellation leaves every
+input live. A two-body result from the mesh path is a [Faceted](<#Faceted>) body:
+its faces are grouped by the operands' source faces, with adjacent exactly
+coplanar same-facing faces of the two operands merged into one face
+(agent-docs/union-face-merge-design.md), so provenance
+(FaceCreatedBy) survives, and its measurements are Approximate with proven
+bounds (agent-docs/evaluator-design.md §9) — except that an all-planar pair whose
+contact points round exactly keeps an Exact VOLUME (the volume integral is
+computed in exact arithmetic); the surface area always carries at least an
+ulp-scale float-summation bound, so it reads Approximate with a bound tiny
+against any real tolerance. An admitted co-directional, coplanar analytic
+prism pair instead returns an analytic prism. Its faces have fresh roles under
+the Union step, including CapStart and CapEnd, and do not retain the operands'
+origins. A pair of full Revolves about one authenticated axis can instead
+return an analytic Revolve with the source-face origins of its kept walls.
+Two exact rectangular prisms with perpendicular sweeps can also join across
+a positive-area planar face patch as one analytic body. Operands from
+different documents are ErrForeignBody; retired operands ErrRetiredBody. A boolean
+that fails on the geometry returns a typed [BooleanError](<#BooleanError>) wrapping the §12
+sentinel: a valid but unclassifiable contact — a curved-surface tangency or
+near-contact whose chord facets never provably interpenetrate, an exact
+coplanar / face-on-face overlap, a grazing edge, an isolated-point pinch, or
+an analytic prism-arrangement refusal wrapping ErrUnsupported —
+is BooleanUnsupportedContact, never ErrDegenerate;
+a result with no volume is BooleanEmpty (wrapping ErrBooleanFailed); an
+internal invariant break is BooleanEvaluatorFailure (wrapping
+ErrBooleanFailed). errors.As(err, \&be) reads the Code.
+Every pair outside those analytic paths tessellates both operands at a chord
+tolerance derived from the pair's diameter, so an operand no boolean may
+consume — a cap-loop chamfer body whose band has a corner this evaluator
+cannot prove a line-line miter or an exactly tangent join, or a reflex
+corner, so its mesh carries no proof of the volume it and the body it stands
+for differ by (agent-docs/tessellation-reach-design.md §7) — surfaces a plain
+ErrUnsupported before any contact is examined: a capability limit, not a
+[BooleanError](<#BooleanError>). So does an operand restating a held mesh (a [Faceted](<#Faceted>) boolean
+result or a mitred sweep) whose facets where the pair meets carry bounds
+coarser than that pair tolerance, refused after the contacts are classified
+and before any facet is cut. A cap-loop chamfer whose
+every band is a whole turn or joins only line-line miters and exactly tangent
+corners — a filleted plate with drilled holes among them — is an ordinary
+operand, as is a tapered extrude whose line–arc and arc–arc joins turn by
+an angle whose sine is at most 2⁻³² (agent-docs/modify-design.md Part D §9.1.1). The
+matching axial loft's held-polygon cap band also has its own
+occupied-volume proof for reflex corners (loft §18). A valid operand whose
+boolean OUTPUT
+cannot be chorded finely enough to tessellate surfaces the retryable
+coarse-chording ErrDegenerate on that operand — a finer chord tolerance may
+clear it — not a [BooleanError](<#BooleanError>).
+
+The held-mesh half of that limit is what bounds how far booleans CHAIN, and
+it binds LOCALLY (agent-docs/api-design.md §8 "The chain depth"): a result's bound
+is composed per vertex from the operation that made it, and feeding that
+result back in as an operand refuses exactly when a facet the new pair
+meets, or comes within the tangency gate's slack of, carries a bound above
+the chord tolerance that pair derives from its own diameter. Geometry the
+pair does not touch never causes the refusal, so a result whose Bound
+exceeds that tolerance in untouched regions is an ordinary operand and
+chains. There is no caller-side tolerance to raise — §9 keeps the booleans
+free of a tolerance parameter on purpose — so where the comparison does
+refuse, it is geometry rather than an argument the caller got wrong. The
+bounds are readable, not only printed in that refusal: each [Vertex](<#Vertex>), edge
+and face of a [Faceted](<#Faceted>) body reports its own, and [Body.Tessellate](<#Body.Tessellate>) at any
+tolerance the faceted body already meets returns a [Mesh](<#Mesh>) whose Bound is the
+largest of them.
+
+A two-body call refused with ErrUnsupported on a mesh result of earlier Union
+calls is retried from the source bodies of that chain
+(agent-docs/prism-boolean-design.md Part R); only a failure of that retry too
+returns the refusal.
+
+A Union of three or more bodies that no certified route takes as a set joins
+the bodies two at a time, left to right, after trying the whole chain on copies
+(agent-docs/prism-boolean-design.md Part U): a chain whose step refuses returns the
+many-body refusal and leaves every body live.
+
+Do returns ctx.Err() unchanged when ctx is canceled before the document
+commit.
+
+<a name="UnionCommand.Do"></a>
+#### func (\*UnionCommand) Do
+
+<pre>func (c *<a href="#UnionCommand">UnionCommand</a>) Do(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>) (*<a href="#Body">Body</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
+
+Do runs the union once and returns the joined body. A second Do returns
+[ErrConsumed](<#ErrConsumed>).
+
+<a name="UnionCommand.RefineTo"></a>
+#### func (\*UnionCommand) RefineTo
+
+<pre>func (c *<a href="#UnionCommand">UnionCommand</a>) RefineTo(maxBound units.Value) *<a href="#UnionCommand">UnionCommand</a></pre>
+
+RefineTo builds the union directly at the refinement bound maxBound, in one
+build (agent-docs/body-refine-design.md §7.1). It returns the join that
+[Union](<#Union>) followed by [Refine](<#Refine>) returns.
+
+The bodies MUST hold a revolved blank and two or more copies of one
+point-Loft tooth — a straight-bevel sector join, as [Union](<#Union>) takes a bevel
+gear join. The join is built once at the bound min(maxBound, 0.1 mm). Union
+builds and audits the join at 0.1 mm, and Refine then discards that join and
+builds it again from the same sources at maxBound, so the single build saves
+the first. The result has the vertices, triangles, topology, bounds, Volume
+and Area that the pair returns, bit for bit. It differs from the pair's
+result in these ways. Its faces keep the producer and face identities the
+Union gives, where Refine makes fresh ones. The document's operation history
+holds one Union entry and no Refine entry, so the producer identities of
+later operations are one lower than after the pair. LocatePoint, a two-body
+[Section](<#Section>) and the regroup of a later Cut or Union read the result as a Union of
+its operands through that history, where they read the pair's refined body
+as a leaf. A join that cannot meet maxBound is refused and commits nothing,
+where the pair keeps the 0.1 mm join of its Union.
+
+Do returns the joined body, or an error with nothing committed: the document
+is unchanged and every operand stays live. A set that is not a sector join
+the direct build takes is ErrUnsupported, refused before anything is built,
+and its message says to call Union, then Refine. That covers a pair of
+bodies, a union of any other kind, and a join that Union folds two bodies at
+a time. A join that cannot meet maxBound is ErrUnsupported too, with the same
+advice. Union's own gates on the operands apply. Every error carries
+[OperationUnion](<#OperationUnion>).
+
+maxBound is a length: wrong kind is ErrUnitKind, non-finite ErrNotFinite,
+negative ErrNegativeMagnitude and zero ErrDegenerate, each returned by Do
+before anything is built and naming RefineTo as its subject. A second call
+replaces the first.
+
+<a name="UnstitchCommand"></a>
+### type UnstitchCommand
+
+<pre>type UnstitchCommand struct {
+    // contains filtered or unexported fields
+}</pre>
+
+UnstitchCommand splits a body into one sheet per face. Build it with [Unstitch](<#Unstitch>).
+
+<a name="Unstitch"></a>
+#### func Unstitch
+
+<pre>func Unstitch(b *<a href="#Body">Body</a>) *<a href="#UnstitchCommand">UnstitchCommand</a></pre>
+
+Unstitch returns the command that builds one single-face sheet body per face of
+b, in [Body.Faces](<#Body.Faces>) order, retiring b
+(agent-docs/surface-design.md §6.5). Each result carries that face's own
+surface, loops and readings, and every edge of every result is free: a
+fresh [Face](<#Face>), [Edge](<#Edge>) and [Vertex](<#Vertex>) set is minted for each result rather than
+reusing b's own topology, so the retired b stays
+readable and unmodified for any caller still holding it.
+
+It admits an analytic body, solid or sheet — the asymmetry with [Stitch](<#Stitch>),
+which takes sheets only (Table R row R17), is deliberate: Unstitch is how
+a caller gets sheets to work with in the first place. A [Faceted](<#Faceted>) body — a
+mesh boolean's result — is [ErrUnsupported](<#ErrUnsupported>) (R11): its faces are chord
+polygons with no analytic identity, and returning thousands of facet
+sheets would be a shape nobody asked for. A nil b or a b with no
+evaluator payload is [ErrDegenerate](<#ErrDegenerate>) (R12); a b owned by a
+different document is [ErrForeignBody](<#ErrForeignBody>) (R13); a retired b is
+[ErrRetiredBody](<#ErrRetiredBody>) (R14). A failed call leaves the document and
+b unchanged: every result is built before any is registered, and
+[Document](<#Document>).commitOperationManyFacesIn registers them and retires b in one atomic step.
+A nil ctx given to Do is [ErrDegenerate](<#ErrDegenerate>).
+
+<a name="UnstitchCommand.Do"></a>
+#### func (\*UnstitchCommand) Do
+
+<pre>func (c *<a href="#UnstitchCommand">UnstitchCommand</a>) Do(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>) ([]*<a href="#Body">Body</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
+
+Do splits the body and retires it, or returns the error of the first gate that refuses. A second call returns
+[ErrConsumed](<#ErrConsumed>).
 
 <a name="ValidityOutcome"></a>
 ### type ValidityOutcome
@@ -9471,3 +10755,83 @@ WallRequest records the effective wall-thickness settings.
 <pre>type WallResult = report.<a href="report.md#WallResultOf">WallResultOf</a>[*<a href="#Body">Body</a>, <a href="#JointCell">JointCell</a>]</pre>
 
 WallResult records one body's wall survey.
+
+<a name="WebPathCommand"></a>
+### type WebPathCommand
+
+<pre>type WebPathCommand struct {
+    // contains filtered or unexported fields
+}</pre>
+
+WebPathCommand adds a rib along each entity of a path. Build it with
+[WebPath](<#WebPath>).
+
+<a name="WebPath"></a>
+#### func WebPath
+
+<pre>func WebPath(b *<a href="#Body">Body</a>, s *sketch.Sketch, path []sketch.Entity, thickness units.Value, e <a href="#Extent">Extent</a>) *<a href="#WebPathCommand">WebPathCommand</a></pre>
+
+WebPath adds one rib along each entity of path, a run of lines and arcs of s in
+the order given, and returns the result, retiring b (agent-docs/rib-design.md).
+A path of one entity is one rib.
+
+A \*sketch.Line rib is the line thickened across its width by thickness,
+centred on the line. A \*sketch.Arc rib is the arc, which sweeps
+counter-clockwise from its Start to its End, thickened the same way into an
+annular band. The arc's end points MUST lie on one circle about its centre.
+Each outline is extruded by e from the plane of s, where e is any [Extent](<#Extent>) that
+Extrude accepts, resolved against that plane exactly as for an Extrude of the
+outline. The ribs share one thickness, extent and overrun, and may cross or
+meet. They are united with one another in path order and joined to b with
+Union in one commit, which records one OperationWeb entry. The result has the
+exactness Union gives for the same bodies.
+
+Ribs that meet end to end, as the legs of a polyline or an arc and the lines
+either side of it do, need an overrun to overlap at the joint: with the
+default of zero, two ribs that only touch end faces meet in coplanar contact,
+which Union refuses.
+
+b MUST be a live solid. A nil context, sketch or body, an empty path, an
+entity that is nil, neither a line nor an arc, not an entity of s or stale, a
+line with no length, a zero thickness, an arc rib so thick that its inner edge
+reaches the arc's centre, and an overrun that would wrap an arc rib a full
+turn are ErrDegenerate. A negative thickness or overrun is
+ErrNegativeMagnitude, and either of the wrong unit kind is ErrUnitKind. A rib
+whose bounding box is disjoint from b's, and ribs that Union certifies add no
+volume to b, are ErrDegenerate. A union the evaluator cannot decide is the
+union's own error. Every failure leaves the document unchanged and b live.
+
+<a name="WebPathCommand.Do"></a>
+#### func (\*WebPathCommand) Do
+
+<pre>func (c *<a href="#WebPathCommand">WebPathCommand</a>) Do(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>) (*<a href="#Body">Body</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
+
+Do adds the ribs and retires the body, or returns the error of the first
+gate that refuses, leaving the body live and the document unchanged. A nil
+ctx is ErrDegenerate, and a second call returns ErrConsumed.
+
+<a name="WebPathCommand.Draft"></a>
+#### func (\*WebPathCommand) Draft
+
+<pre>func (c *<a href="#WebPathCommand">WebPathCommand</a>) Draft(angle units.Value) *<a href="#WebPathCommand">WebPathCommand</a></pre>
+
+Draft leans the rib's walls by a draft angle
+(agent-docs/rib-design.md §7). A positive angle makes the rib thinner as it
+rises from the plane of the sketch, the way a moulded or cast rib releases
+from its tool, and a negative one thicker. The angle is
+[ExtrudeCommand.Taper](<#ExtrudeCommand.Taper>)'s, so the lean is measured from the sketch plane, the
+ends lean too, and a draft at or past a right angle is ErrDegenerate. The
+last call wins and the default is a straight wall. A rib whose outline has a
+corner that an arc meets, such as an arc rib of [WebPath](<#WebPath>), takes the
+refusals of the drafted [Extrude](<#Extrude>) it builds.
+
+<a name="WebPathCommand.Overrun"></a>
+#### func (\*WebPathCommand) Overrun
+
+<pre>func (c *<a href="#WebPathCommand">WebPathCommand</a>) Overrun(overrun units.Value) *<a href="#WebPathCommand">WebPathCommand</a></pre>
+
+Overrun lengthens every rib by overrun beyond both ends of its line or
+arc, measured along the arc for an arc rib. A rib whose ends only touch a wall of the body is a coplanar contact that
+the union refuses, so a rib that spans a cavity draws its line wall to wall
+and adds an overrun to bury both ends in the walls. overrun is a
+non-negative length, and the last call wins. The default is zero.
