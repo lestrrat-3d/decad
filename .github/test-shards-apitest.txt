@@ -3215,10 +3215,10 @@
 12	0.03	TestVoidRevolveModifyOps
 12	0.01	TestWallDraftAllowanceBoundary
 12	0.09	TestWallSplitSolidBallReadsDiameter
-12	0.50	TestIntersectionVolumeAcrossContainers
-12	0.50	TestIntersectionVolumeCommitsNothing
-12	3.70	TestIntersectionVolumeConcurrent
-12	0.01	TestIntersectionVolumeGates
-12	8.00	TestIntersectionVolumeLaterOperations
-12	0.50	TestIntersectionVolumeMatchesIntersect
-12	3.00	TestIntersectionVolumeSharedOperandsConcurrent
+2	1.60	TestIntersectionVolumeAcrossContainers
+1	41.55	TestIntersectionVolumeCommitsNothing
+2	1.97	TestIntersectionVolumeConcurrent
+2	0.01	TestIntersectionVolumeGates
+2	5.68	TestIntersectionVolumeLaterOperations
+2	23.75	TestIntersectionVolumeMatchesIntersect
+2	1.83	TestIntersectionVolumeSharedOperandsConcurrent

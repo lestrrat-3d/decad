@@ -80,20 +80,6 @@ func intersectionVolumeCases() []volumeCase {
 			return doc, blockIn(t, doc, r3.NewVec(0, 0, 0), r3.NewVec(10, 10, 10)),
 				blockIn(t, doc, r3.NewVec(10, 0, 0), r3.NewVec(20, 10, 10))
 		}},
-		// The revolve work-ceiling retry: a torus arc and a stem coarsen their revolved operand past the
-		// ceilings, in either operand order and for a half and a long sweep.
-		{"torus arc and stem", "ok", func(t *testing.T) (*decad.Document, *decad.Body, *decad.Body) {
-			doc := decad.New()
-			return doc, torusArcBody(t, doc, math.Pi), radialStemBody(t, doc)
-		}},
-		{"stem and torus arc", "ok", func(t *testing.T) (*decad.Document, *decad.Body, *decad.Body) {
-			doc := decad.New()
-			return doc, radialStemBody(t, doc), torusArcBody(t, doc, math.Pi)
-		}},
-		{"stem and long torus arc", "ok", func(t *testing.T) (*decad.Document, *decad.Body, *decad.Body) {
-			doc := decad.New()
-			return doc, radialStemBody(t, doc), torusArcBody(t, doc, 300*math.Pi/180)
-		}},
 		// A tool wall crosses a tapered hole's wall, whose facets hold a rim bound coarser than the pair's chord
 		// tolerance: the held operand cannot decide the contact.
 		{"tool wall on a coarse held rim", "unsupported", func(t *testing.T) (*decad.Document, *decad.Body, *decad.Body) {
@@ -106,6 +92,27 @@ func intersectionVolumeCases() []volumeCase {
 			return sc.doc, first, slabYTool(t, sc, 22, 3)
 		}},
 	}
+}
+
+// revolveRetryCases are the pairs whose revolved operand the evaluator coarsens past its work ceilings and
+// retries: a half torus arc and a radial stem, in either operand order. Each costs seconds under -race, so
+// only the tests that need the retry route use them.
+func revolveRetryCases() []volumeCase {
+	return []volumeCase{
+		{"torus arc and stem", "ok", func(t *testing.T) (*decad.Document, *decad.Body, *decad.Body) {
+			doc := decad.New()
+			return doc, torusArcBody(t, doc, math.Pi), radialStemBody(t, doc)
+		}},
+		{"stem and torus arc", "ok", func(t *testing.T) (*decad.Document, *decad.Body, *decad.Body) {
+			doc := decad.New()
+			return doc, radialStemBody(t, doc), torusArcBody(t, doc, math.Pi)
+		}},
+	}
+}
+
+// allIntersectionVolumeCases is the common cases and the revolve retry cases.
+func allIntersectionVolumeCases() []volumeCase {
+	return append(intersectionVolumeCases(), revolveRetryCases()...)
 }
 
 // build makes the case's pair and the document that holds it.

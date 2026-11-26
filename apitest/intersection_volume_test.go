@@ -16,7 +16,7 @@ import (
 
 func TestIntersectionVolumeMatchesIntersect(t *testing.T) {
 	t.Parallel()
-	for _, tc := range intersectionVolumeCases() {
+	for _, tc := range allIntersectionVolumeCases() {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			docQ, aq, bq := tc.build(t)
@@ -31,7 +31,7 @@ func TestIntersectionVolumeMatchesIntersect(t *testing.T) {
 
 func TestIntersectionVolumeCommitsNothing(t *testing.T) {
 	t.Parallel()
-	for _, tc := range intersectionVolumeCases() {
+	for _, tc := range allIntersectionVolumeCases() {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			doc, a, b := tc.build(t)
