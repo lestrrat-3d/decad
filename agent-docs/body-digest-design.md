@@ -13,7 +13,10 @@ root adapter.
   producer id, which the digest relabels, so it is not covered. The first call walks the body and polls `ctx`. Later calls
   return the stored digest.
 - `(*Document).PairDigest(ctx, a, b)` is the identity of the ordered pair. `PairDigest(a, b)` and `PairDigest(b, a)`
-  differ in general. Equal pair digests cover `Intersect` only, and only for two live bodies in one container.
+  differ in general. Equal pair digests cover `IntersectionVolume` (same error code, gap shift and volume bits). `Intersect` runs the same
+  evaluation and answers alike when both pairs pass its operand gates, both bodies live and in one container.
+  Containers never enter the digest. Equal digests of a pair with a retired body promise nothing about the
+  `ErrRetiredBody` gate.
 - A nil body or nil `ctx` is `ErrDegenerate`. In `PairDigest`, `a == b` is `ErrDegenerate` and a body of another
   document is `ErrForeignBody`. A retired body has a digest like a live one. A value the encoder cannot state is
   `ErrUnsupported` naming its field path (§5).
@@ -67,8 +70,10 @@ computed, the chance of any collision is at most q²/2^257. The inputs are the c
 
 ## 4. Soundness: equal pair digests give equal answers
 
-If `PairDigest(a, b) == PairDigest(a', b')`, then `Intersect(a, b)` and `Intersect(a', b')` return the same error
-code, gap shift and volume bits. Equal canonical forms give a bijection between the values reachable in the two
+If `PairDigest(a, b) == PairDigest(a', b')`, then `IntersectionVolume(a, b)` and `IntersectionVolume(a', b')` return the
+same error code, gap shift and volume bits. `Intersect` returns them too when both pairs pass its gates (both bodies live,
+one container), because `performBoolean` and `IntersectionVolume` share `buildBoolean`, which never reads containers.
+Equal canonical forms give a bijection between the values reachable in the two
 pairs that keeps every type, scalar, pointer sharing, side-table entry, document setting and id equality, and maps
 `a` to `a'` and `b` to `b'`. The claim then follows by induction over the evaluation's reads, given five conditions:
 
