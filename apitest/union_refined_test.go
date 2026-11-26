@@ -63,11 +63,8 @@ func TestUnionRefinedKeepsLaterOperationsAtTheRefinedBound(t *testing.T) {
 }
 
 func TestUnionRefinedRefusesABoundTheJoinCannotMeetAndChangesNothing(t *testing.T) {
+	// Refine of the Union at this bound refuses the same way; see TestRefineSectorJoinRefusals.
 	bound := units.Millimeters(0.001)
-	_, pairBody, pairErr := unionThenRefine(t, false, bound)
-	require.ErrorIs(t, pairErr, decad.ErrUnsupported)
-	require.True(t, pairBody == nil)
-
 	doc, hub, lugs := unionRefinedOperands(t)
 	operands := doc.Bodies()
 	history := len(doc.OperationHistory().Operations())
@@ -87,29 +84,6 @@ func TestUnionRefinedRefusesABoundTheJoinCannotMeetAndChangesNothing(t *testing.
 	require.NoError(t, err)
 	require.Equal(t, fingerprintUnionRefined(t, want), fingerprintUnionRefined(t, fallback))
 	require.True(t, len(wantDoc.Bodies()) == 1 && wantDoc.Bodies()[0] == want)
-}
-
-func TestUnionRefinedRefusesAPairAtABoundTheJoinCannotMeet(t *testing.T) {
-	// A hub and one lug join as a pair at 0.1 mm, and Refine refuses 0.006 mm.
-	// UnionRefined refuses the pair up front, and changes nothing, rather than
-	// return that 0.1 mm join as if it met the bound.
-	bound := units.Millimeters(0.006)
-	pairDoc, pairHub, pairLugs := unionRefinedOperands(t)
-	joined, err := decad.Union(t.Context(), pairHub, pairLugs[0])
-	require.NoError(t, err)
-	refined, pairErr := decad.Refine(t.Context(), joined, bound)
-	require.ErrorIs(t, pairErr, decad.ErrUnsupported)
-	require.True(t, refined == nil)
-	require.Contains(t, pairDoc.Bodies(), joined)
-
-	doc, hub, lugs := unionRefinedOperands(t)
-	operands := doc.Bodies()
-	history := len(doc.OperationHistory().Operations())
-	got, err := decad.UnionRefined(t.Context(), []*decad.Body{hub, lugs[0]}, bound)
-	require.ErrorIs(t, err, decad.ErrUnsupported)
-	require.Contains(t, err.Error(), "call Union, then Refine")
-	require.True(t, got == nil)
-	requireUnionRefinedUnchanged(t, doc, operands, history)
 }
 
 func TestUnionRefinedRefusesAJoinFoldedTwoBodiesAtATime(t *testing.T) {
@@ -144,8 +118,38 @@ func TestUnionRefinedRefusesASetThatIsNoSectorJoinAndChangesNothing(t *testing.T
 	requireUnionRefinedUnchanged(t, doc, operands, history)
 }
 
-func TestUnionRefinedRejectsABadBoundBeforeBuilding(t *testing.T) {
-	cases := []struct {
+// TestUnionRefinedRefusesBeforeBuilding runs every refusal UnionRefined makes before it builds anything on one
+// operand set. A refusal changes nothing, so each case checks the document is as it was, and the set serves the next.
+func TestUnionRefinedRefusesBeforeBuilding(t *testing.T) {
+	doc, hub, lugs := unionRefinedOperands(t)
+	operands := doc.Bodies()
+	history := len(doc.OperationHistory().Operations())
+	all := append([]*decad.Body{hub}, lugs...)
+
+	t.Run("a nil context and too few bodies", func(t *testing.T) {
+		//nolint:staticcheck // a nil context is the case under test
+		_, err := decad.UnionRefined(nil, all, units.Millimeters(0.05))
+		require.ErrorIs(t, err, decad.ErrDegenerate)
+		_, err = decad.UnionRefined(t.Context(), []*decad.Body{hub}, units.Millimeters(0.05))
+		require.ErrorIs(t, err, decad.ErrDegenerate)
+		_, err = decad.UnionRefined(t.Context(), nil, units.Millimeters(0.05))
+		require.ErrorIs(t, err, decad.ErrDegenerate)
+		requireUnionRefinedUnchanged(t, doc, operands, history)
+	})
+	t.Run("repeated operands", func(t *testing.T) {
+		_, err := decad.UnionRefined(t.Context(), append([]*decad.Body{hub, lugs[0]}, lugs...), units.Millimeters(0.05))
+		require.ErrorIs(t, err, decad.ErrDegenerate)
+		requireUnionRefinedUnchanged(t, doc, operands, history)
+	})
+	t.Run("a canceled context", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(t.Context())
+		cancel()
+		got, err := decad.UnionRefined(ctx, all, units.Millimeters(0.03))
+		require.ErrorIs(t, err, context.Canceled)
+		require.True(t, got == nil)
+		requireUnionRefinedUnchanged(t, doc, operands, history)
+	})
+	badBounds := []struct {
 		name  string
 		bound units.Value
 		want  error
@@ -155,50 +159,31 @@ func TestUnionRefinedRejectsABadBoundBeforeBuilding(t *testing.T) {
 		{"below zero", units.Millimeters(-0.05), decad.ErrNegativeMagnitude},
 		{"exactly zero", units.Millimeters(0), decad.ErrDegenerate},
 	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			doc, hub, lugs := unionRefinedOperands(t)
-			operands := doc.Bodies()
-			history := len(doc.OperationHistory().Operations())
-			got, err := decad.UnionRefined(t.Context(), append([]*decad.Body{hub}, lugs...), tc.bound)
+	for _, tc := range badBounds {
+		t.Run("a bad bound: "+tc.name, func(t *testing.T) {
+			got, err := decad.UnionRefined(t.Context(), all, tc.bound)
 			require.ErrorIs(t, err, tc.want)
 			require.True(t, got == nil)
 			requireUnionRefinedUnchanged(t, doc, operands, history)
 		})
 	}
-}
+	// A hub and one lug join as a pair at 0.1 mm, and Refine refuses 0.006 mm.
+	// UnionRefined refuses the pair up front, and changes nothing, rather than
+	// return that 0.1 mm join as if it met the bound.
+	t.Run("a pair at a bound the join cannot meet", func(t *testing.T) {
+		bound := units.Millimeters(0.006)
+		got, err := decad.UnionRefined(t.Context(), []*decad.Body{hub, lugs[0]}, bound)
+		require.ErrorIs(t, err, decad.ErrUnsupported)
+		require.Contains(t, err.Error(), "call Union, then Refine")
+		require.True(t, got == nil)
+		requireUnionRefinedUnchanged(t, doc, operands, history)
 
-func TestUnionRefinedRejectsNilContextAndTooFewBodies(t *testing.T) {
-	doc, hub, lugs := unionRefinedOperands(t)
-	operands := doc.Bodies()
-	history := len(doc.OperationHistory().Operations())
-	//nolint:staticcheck // a nil context is the case under test
-	_, err := decad.UnionRefined(nil, append([]*decad.Body{hub}, lugs...), units.Millimeters(0.05))
-	require.ErrorIs(t, err, decad.ErrDegenerate)
-	_, err = decad.UnionRefined(t.Context(), []*decad.Body{hub}, units.Millimeters(0.05))
-	require.ErrorIs(t, err, decad.ErrDegenerate)
-	_, err = decad.UnionRefined(t.Context(), nil, units.Millimeters(0.05))
-	require.ErrorIs(t, err, decad.ErrDegenerate)
-	requireUnionRefinedUnchanged(t, doc, operands, history)
-}
-
-func TestUnionRefinedRefusesRepeatedOperands(t *testing.T) {
-	doc, hub, lugs := unionRefinedOperands(t)
-	operands := doc.Bodies()
-	history := len(doc.OperationHistory().Operations())
-	_, err := decad.UnionRefined(t.Context(), append([]*decad.Body{hub, lugs[0]}, lugs...), units.Millimeters(0.05))
-	require.ErrorIs(t, err, decad.ErrDegenerate)
-	requireUnionRefinedUnchanged(t, doc, operands, history)
-}
-
-func TestUnionRefinedStopsOnACanceledContext(t *testing.T) {
-	doc, hub, lugs := unionRefinedOperands(t)
-	operands := doc.Bodies()
-	history := len(doc.OperationHistory().Operations())
-	ctx, cancel := context.WithCancel(t.Context())
-	cancel()
-	got, err := decad.UnionRefined(ctx, append([]*decad.Body{hub}, lugs...), units.Millimeters(0.03))
-	require.ErrorIs(t, err, context.Canceled)
-	require.True(t, got == nil)
-	requireUnionRefinedUnchanged(t, doc, operands, history)
+		// The pair's own Union and Refine run last, as the Union consumes the set.
+		joined, err := decad.Union(t.Context(), hub, lugs[0])
+		require.NoError(t, err)
+		refined, pairErr := decad.Refine(t.Context(), joined, bound)
+		require.ErrorIs(t, pairErr, decad.ErrUnsupported)
+		require.True(t, refined == nil)
+		require.Contains(t, doc.Bodies(), joined)
+	})
 }

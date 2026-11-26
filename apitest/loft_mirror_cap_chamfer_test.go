@@ -24,7 +24,7 @@ func TestLoftMirrorJoinCapChamfer(t *testing.T) {
 		name string
 		half float64
 	}{{"half 1.5", 1.5}, {"half 0.5", 0.5}} {
-		joined := roundedMirrorJoin(t, 5, tc.half, twist)
+		joined := roundedMirrorJoin(t, tc.half, twist)
 		held := heldVolume(t, joined)
 		capsBefore, _ := capAreaTotal(t, joined)
 		chamfered, err := decad.Chamfer(t.Context(), joined, outerCapLoops(joined), units.Millimeters(d))
@@ -59,7 +59,7 @@ func TestLoftMirrorJoinCapChamfer(t *testing.T) {
 // it, and the shell keeps its one hole.
 func TestLoftMirrorJoinCapChamferKeepsTheBore(t *testing.T) {
 	const half, r, d = 1.5, 0.5, 0.1
-	joined := roundedMirrorJoin(t, 5, half, -10*math.Pi/180)
+	joined := roundedMirrorJoin(t, half, -10*math.Pi/180)
 	bored, err := decad.Cut(t.Context(), joined, circleBodyAtZ(t, joined.Document(), 0, r, -1, 2*half+2))
 	require.NoError(t, err)
 	held := heldVolume(t, bored)

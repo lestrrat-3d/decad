@@ -191,10 +191,12 @@ func TestBossRootFilletSpokedHub(t *testing.T) {
 		out, err := bossOnTop(t, disc, 14, 0.5)
 		require.NoError(t, err)
 		require.True(t, out.IsSolid())
-		_, bead, quadErr := spokedHubBead(0.5)
+		alpha0, bead, quadErr := spokedHubBead(0.5)
 		rv, rb := volumeAndBound(t, out)
 		t.Logf("V(S) %v (bound %v), bead %v, V(result) %v (bound %v)", sv, sb, bead, rv, rb)
+		require.Less(t, quadErr, 1e-9, "the quadrature resolves the bead far below the bound")
 		require.InDelta(t, sv+bead, rv, rb+sb+quadErr)
+		requireSpokedHubTangentEnds(t, out, alpha0)
 	})
 	t.Run("15 builds four capped tori", func(t *testing.T) {
 		t.Parallel()
