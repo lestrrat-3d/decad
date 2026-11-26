@@ -375,3 +375,6 @@
 12	17.81	TestRevolvePlaneSlab
 12	0.01	TestSweepPairRealFacetedUnionTouchContinuations
 12	0.35	TestChamferCapRunShallowConcaveEnd
+12	10.52	TestIdentityArithmeticAllowList
+12	5.26	TestDigestTypeCoverage
+12	0.01	TestDigestSideTables

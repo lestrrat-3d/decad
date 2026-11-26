@@ -3215,3 +3215,10 @@
 12	0.03	TestVoidRevolveModifyOps
 12	0.01	TestWallDraftAllowanceBoundary
 12	0.09	TestWallSplitSolidBallReadsDiameter
+12	0.02	TestBodyDigestIncludesHistory
+12	0.01	TestBodyDigestGates
+12	0.05	TestPairDigestSharedSource
+12	0.18	TestBodyDigestStableAfterCaches
+12	0.22	TestPairDigestRenumberedIDs
+12	0.38	TestBodyDigestMatchesMeshFingerprint
+12	0.10	TestBodyDigestConcurrent

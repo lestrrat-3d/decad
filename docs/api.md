@@ -522,6 +522,9 @@ A `decad.Diagnostic` states each reason a report is not sound, with its `decad.D
 - `Document.ContactPair` classifies how two posed bodies touch, and `Document.SweepPair` finds first contact along
   two paths. `Document.ProvePairSeparated` returns whether an exact planar proof certifies a strict gap between two
   posed bodies; false means the caller must use its existing contact check.
+- `Body.Digest` and `Document.PairDigest` return a `decad.Digest`, an identity of everything the evaluator reads from
+  a body or an ordered pair of bodies. Equal pair digests mean `Intersect` gives the same answer, so a caller can
+  prove one pair once. A body that keeps live sketch entities has no digest and returns `ErrUnsupported`.
 - The `dynamics` package builds a `dynamics.World` from a document, steps it, and records a `dynamics.Timeline`.
 
 ## Parts, exploded views and diagrams
