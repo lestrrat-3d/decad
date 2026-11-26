@@ -4,6 +4,7 @@ package apitest_test
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"testing"
 
@@ -57,7 +58,9 @@ func TestIntersectionVolumeCommitsNothing(t *testing.T) {
 			require.Equal(t, inA, ca.Bodies())
 			require.Equal(t, inB, cb.Bodies())
 
-			// The next operation numbers and builds as it does in a document that ran no query.
+			// Intersect on the queried document succeeds or is refused as it is on the twin that ran no query,
+			// answers the same volume, and adds one operation to the history. TestIntersectionVolumeLaterOperations
+			// compares the numbering and the later results in full.
 			got, err := decad.Intersect(t.Context(), a, b)
 			want, werr := decad.Intersect(t.Context(), ta, tb)
 			require.Equal(t, werr == nil, err == nil)
@@ -185,5 +188,98 @@ func TestIntersectionVolumeConcurrent(t *testing.T) {
 	}
 	for i := range pairs {
 		requireSameMeasurement(t, want[i], got[i])
+	}
+}
+
+// TestIntersectionVolumeSharedOperandsConcurrent runs queries that share operands, and repeats one pair, beside
+// Verify, Tessellate and the body readers, and requires every answer to equal the serial one.
+func TestIntersectionVolumeSharedOperandsConcurrent(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	base := circlePrismAtZ(t, doc, 10, 10, 6, 0, 10)
+	mesh := roundTrip(t, boxBodyAtZ(t, doc, 0, 0, 10, 10, 1, 10))
+	tools := []*decad.Body{
+		boxBodyAtZ(t, doc, 5, 5, 15, 15, 2, 10),
+		circlePrismAtZ(t, doc, 14, 10, 3, -1, 12),
+		roundTrip(t, boxBodyAtZ(t, doc, 4, 4, 14, 14, 3, 10)),
+		boxBody(t, doc, 100, 100, 110, 110, 10),
+		mesh,
+	}
+	var pairs [][2]*decad.Body
+	for _, tool := range tools {
+		pairs = append(pairs, [2]*decad.Body{base, tool}, [2]*decad.Body{tool, base})
+	}
+	pairs = append(pairs, [2]*decad.Body{mesh, tools[0]}, [2]*decad.Body{tools[2], mesh})
+	want := make([]string, len(pairs))
+	for i, p := range pairs {
+		want[i] = outcomeKey(doc.IntersectionVolume(t.Context(), p[0], p[1]))
+	}
+
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	var bad []string
+	check := func(label string, p [2]*decad.Body, want string) {
+		if got := outcomeKey(doc.IntersectionVolume(t.Context(), p[0], p[1])); got != want {
+			mu.Lock()
+			bad = append(bad, label)
+			mu.Unlock()
+		}
+	}
+	for round := range 3 {
+		for i, p := range pairs {
+			wg.Go(func() { check(fmt.Sprintf("round %d pair %d", round, i), p, want[i]) })
+		}
+		// The same pair four more times at once.
+		for range 4 {
+			wg.Go(func() { check("repeated pair", pairs[0], want[0]) })
+		}
+	}
+	errs := make(chan error, 4)
+	wg.Go(func() {
+		for range 2 {
+			if _, err := doc.Verify(t.Context()); err != nil {
+				errs <- err
+				return
+			}
+		}
+	})
+	wg.Go(func() {
+		for range 4 {
+			for _, b := range doc.Bodies() {
+				if _, err := b.Tessellate(t.Context(), units.Millimeters(0.5)); err != nil {
+					errs <- err
+					return
+				}
+				_, _ = b.Volume()
+				_, _ = b.Bounds()
+			}
+		}
+	})
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		require.NoError(t, err)
+	}
+	require.Empty(t, bad, "each concurrent query answers as the serial one did")
+}
+
+// TestIntersectionVolumeLaterOperations runs two queries per operand order, then Intersect, Union and Cut, and
+// requires each later result to match the twin document that ran no query: outcome, volume bits, bounds, face
+// count, tessellation bits and the operation history's length.
+func TestIntersectionVolumeLaterOperations(t *testing.T) {
+	t.Parallel()
+	for _, tc := range intersectionVolumeCases() {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			doc, a, b := tc.build(t)
+			twin, ta, tb := tc.build(t)
+			for range 2 {
+				_, _ = doc.IntersectionVolume(t.Context(), a, b)
+				_, _ = doc.IntersectionVolume(t.Context(), b, a)
+			}
+			got := laterOperations(t, doc, a, b)
+			want := laterOperations(t, twin, ta, tb)
+			require.Equal(t, want, got)
+		})
 	}
 }

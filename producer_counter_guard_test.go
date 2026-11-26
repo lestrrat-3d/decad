@@ -22,7 +22,7 @@ import (
 // writes a document's identity counters (the NextProducer, NextLevel and
 // NextCurve fields) through a selector, or names nextProducerID. Only the
 // functions producerAt and advanceProducer of root document.go and ProducerAt,
-// SeedsAt, MintLevel and MintCurve of internal/topo/document.go may touch the
+// SeedsAt, StartFrom, MintLevel and MintCurve of internal/topo/document.go may touch the
 // counters, so a later change that routes them through the calling context
 // edits those functions alone. Any other function, including one added to an
 // allowed file, fails. A composite literal that seeds a transient document
@@ -35,6 +35,7 @@ func TestProducerCounterAccess(t *testing.T) {
 		"document.go:advanceProducer":          {},
 		"internal/topo/document.go:ProducerAt": {},
 		"internal/topo/document.go:SeedsAt":    {},
+		"internal/topo/document.go:StartFrom":  {},
 		"internal/topo/document.go:MintLevel":  {},
 		"internal/topo/document.go:MintCurve":  {},
 	}

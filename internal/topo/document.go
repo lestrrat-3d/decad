@@ -66,6 +66,14 @@ func (d *Document) SeedsAt(ctx context.Context) Seeds {
 	}
 }
 
+// StartFrom sets the level and curve counters of a transient document to the
+// identities in seeds. It is called before the document is shared, so the
+// stores are not racing a mint.
+func (d *Document) StartFrom(seeds Seeds) {
+	d.NextLevel.Store(int64(seeds.Level))
+	d.NextCurve.Store(int64(seeds.Curve))
+}
+
 // MintLevel advances the level counter (atomically) and returns a token for the new level
 // at origin with normal. Identities only increase, so none is reused, even by
 // a build that later fails. ctx names the caller, like ProducerAt's.

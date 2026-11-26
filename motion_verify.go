@@ -103,8 +103,7 @@ func motionHooks() motionengine.Hooks {
 				NextProducer: seeds.Producer,
 				LiveSet:      live,
 			}})
-			born.n.NextLevel.Store(int64(seeds.Level))
-			born.n.NextCurve.Store(int64(seeds.Curve))
+			born.n.StartFrom(seeds)
 			return &born.n
 		},
 	}

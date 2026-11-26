@@ -1162,7 +1162,8 @@ runs on the same operands in the same order (both take `buildBoolean` in `boolea
 body `Intersect` would build, as a `Measurement` equal to it bit for bit. It commits nothing, so `Bodies`, the
 operation history, producer numbering and containers are unchanged and both operands stay live; it may advance the
 document's private level and curve counters, which are atomic so that queries and `Verify` may run together on one
-document. Its errors are `Intersect`'s without the operation tag, and an empty result is the `*BooleanError` with
+document. Every error is `Intersect`'s, wrapped with `operationError(OperationIntersect, err)` so its diagnostics carry the
+`OperationIntersect` tag, and an empty result is the `*BooleanError` with
 `BooleanEmpty` that carries the gap shift, if one applied. It differs from `Intersect` in two gates: the operands may
 sit in different containers, since nothing lands in either, and it is a method on the document, as §6.3 makes a query.
 A retired operand is `ErrRetiredBody`, because `Intersect` has no answer for one. It takes no options in v1.
@@ -2349,9 +2350,10 @@ the resulting bodies, measurements, and verification reports directly.
   all and resolves to zero entities.
 - `Body` is immutable → safe to read from many goroutines.
 - `Document` owns mutable state and is NOT safe for concurrent mutation. `Verify`
-  is non-mutating and safe. The live body set alone is guarded, so `Bodies`,
+  is non-mutating and safe, as is `IntersectionVolume`. The live body set alone is guarded, so `Bodies`,
   `Remove` and `Verify` may run concurrently with one another; a `Verify`
-  reports on the set as it stood when the call began.
+  reports on the set as it stood when the call began. `IntersectionVolume` may run beside `Bodies`,
+  `Verify` and other `IntersectionVolume` calls, never beside `Remove` or another operation.
 
 ## 13. Non-goals for v1
 

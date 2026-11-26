@@ -13,8 +13,8 @@ import (
 // curve identity counters, as a refused Intersect does.
 //
 // The answer is Intersect's, bit for bit: the Measurement equals the Volume of the body Intersect returns for
-// the same operands in the same document state, and every error is the error Intersect returns, without the
-// OperationIntersect tag. An empty intersection is the *BooleanError with Code BooleanEmpty, carrying the gap
+// the same operands in the same document state, and every error is the error Intersect returns, tagged
+// OperationIntersect with the same diagnostics. An empty intersection is the *BooleanError with Code BooleanEmpty, carrying the gap
 // shift Intersect reports, if one applied. The one difference is the container rule: a and b may sit in different
 // containers (agent-docs/container-design.md §3).
 //
@@ -23,6 +23,11 @@ import (
 // concurrently with Bodies, Verify, the body readers and other IntersectionVolume calls on the same document,
 // never with an operation.
 func (d *Document) IntersectionVolume(ctx context.Context, a, b *Body) (Measurement, error) {
+	m, err := d.intersectionVolume(ctx, a, b)
+	return m, operationError(OperationIntersect, err)
+}
+
+func (d *Document) intersectionVolume(ctx context.Context, a, b *Body) (Measurement, error) {
 	if ctx == nil {
 		return Measurement{}, fmt.Errorf(`%w: a nil context cannot control a boolean`, ErrDegenerate)
 	}

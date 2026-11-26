@@ -298,7 +298,9 @@ const (
 )
 
 // booleanBuild is the uncommitted result of buildBoolean. Nothing in it is
-// registered in the document, and dropping it leaves no trace there.
+// registered in the document, so dropping it leaves the live set, the history,
+// the tables and the producer counter as they were. Building it may have
+// advanced the document's level and curve counters, which stay advanced.
 type booleanBuild struct {
 	// ctx is the build's context, as buildBoolean narrowed it for the commit.
 	// It lives for one synchronous performBoolean call.
