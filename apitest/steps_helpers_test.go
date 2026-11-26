@@ -140,6 +140,39 @@ func rsFixture(t *testing.T) (*decad.Document, *decad.Body, []decad.Step) {
 			}
 			return nil
 		}},
+		{Name: "cut-extrude", Build: func(ctx context.Context) error {
+			b, err := rsBlock(ctx, doc, 700, 0, 740, 40, 0, rsHeight(5))
+			if err != nil {
+				return err
+			}
+			w := sketch.NewWorld()
+			sk, err := w.CreateSketch(w.XY())
+			if err != nil {
+				return err
+			}
+			r := sk.CreateRectangle(710, 10, 720, 20)
+			sk.Fix(r.A)
+			sk.Fix(r.C)
+			if _, err := sk.Solve(ctx); err != nil {
+				return err
+			}
+			_, err = decad.CutExtrude(b, sk, sk.Profiles(), rsHeight(3)).Do(ctx)
+			return err
+		}},
+		{Name: "hole-boss", Build: func(ctx context.Context) error {
+			b, err := rsBlock(ctx, doc, 800, 0, 840, 40, 0, rsHeight(10))
+			if err != nil {
+				return err
+			}
+			top := decad.Faces(decad.FaceCreatedBy(decad.CapEnd(b)))
+			if b, err = decad.Hole(b, top, r3.Vec{X: 810, Y: 10, Z: 10}, units.Millimeters(4),
+				decad.BlindHole{Depth: units.Millimeters(5)}).Do(ctx); err != nil {
+				return err
+			}
+			top = decad.Faces(decad.FaceCreatedBy(decad.CapEnd(b)))
+			_, err = decad.Boss(b, top, r3.Vec{X: 825, Y: 25, Z: 10}, units.Millimeters(6), units.Millimeters(4)).Do(ctx)
+			return err
+		}},
 		{Name: "low-block", Build: func(ctx context.Context) error {
 			// Step 0's partner in the ThroughAll test: it reaches down to z = -5 where the plate stops at 0.
 			_, err := rsBlock(ctx, doc, 0, 0, 10, 10, -5, rsHeight(15))

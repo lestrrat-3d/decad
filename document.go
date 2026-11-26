@@ -504,8 +504,9 @@ func (d *Document) restore(s *documentSnapshot) {
 		return
 	}
 	if r := d.n.ActiveRun(); r != nil {
-		// A snapshot of the whole document, restored while steps run, wipes their work.
+		// A snapshot of the whole document, restored while steps run, would wipe their work: refuse and leave it.
 		r.Fail("a full document snapshot was restored while steps run")
+		return
 	}
 	for i := len(d.operations) - 1; i >= s.operations; i-- {
 		d.unpublishOperationLocked(d.operations[i])

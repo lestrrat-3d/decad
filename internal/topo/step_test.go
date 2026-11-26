@@ -3,6 +3,8 @@ package topo_test
 // CI: isolated-tests
 
 import (
+	"runtime"
+	"sync"
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
@@ -49,4 +51,59 @@ func TestBeginRunRefusals(t *testing.T) {
 	doc.EndRun(run, nil)
 	_, err = doc.BeginRun(1, 4)
 	require.NoError(t, err, "a run can start once the last ended")
+}
+
+// TestStepAdvanceProducerOverlapFailsRun checks that several goroutines advancing one step's cursor at once,
+// which would hand two commits the same identity, mark the run failed.
+func TestStepAdvanceProducerOverlapFailsRun(t *testing.T) {
+	doc := &topo.Document{}
+	run, err := doc.BeginRun(1, 1<<30)
+	require.NoError(t, err)
+	s := run.Step(0)
+	require.Greater(t, runtime.GOMAXPROCS(0), 1, "overlap needs goroutines running in parallel")
+	start := make(chan struct{})
+	var wg sync.WaitGroup
+	for range 8 {
+		wg.Go(func() {
+			<-start
+			for range 100000 {
+				_ = s.AdvanceProducer(1)
+				if run.Fault() != "" {
+					return
+				}
+			}
+		})
+	}
+	close(start)
+	wg.Wait()
+	require.NotEmpty(t, run.Fault(), "overlapping advances in one step must fail the run")
+	doc.EndRun(run, nil)
+}
+
+// TestStepAdvanceProducerSerialStaysQuiet checks that one goroutine advancing the cursor never fails the run.
+func TestStepAdvanceProducerSerialStaysQuiet(t *testing.T) {
+	doc := &topo.Document{}
+	run, err := doc.BeginRun(1, 1<<30)
+	require.NoError(t, err)
+	s := run.Step(0)
+	for range 20000 {
+		require.NoError(t, s.AdvanceProducer(1))
+	}
+	require.EqualValues(t, 20000, s.ProducerNext())
+	require.Empty(t, run.Fault())
+	doc.EndRun(run, nil)
+}
+
+// TestStepExhaustionFailsRun checks that running past the producer block marks the run failed, so a route that
+// swallows ErrStepIdentities cannot yield a result that differs from a serial build.
+func TestStepExhaustionFailsRun(t *testing.T) {
+	doc := &topo.Document{}
+	run, err := doc.BeginRun(1, 2)
+	require.NoError(t, err)
+	s := run.Step(0)
+	require.NoError(t, s.AdvanceProducer(2))
+	require.Empty(t, run.Fault())
+	require.ErrorIs(t, s.AdvanceProducer(1), decaderr.ErrStepIdentities)
+	require.NotEmpty(t, run.Fault())
+	doc.EndRun(run, nil)
 }

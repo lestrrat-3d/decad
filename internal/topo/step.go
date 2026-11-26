@@ -115,7 +115,12 @@ func (s *Step) RewindProducer(p provenance.Producer) { s.producer.Store(int64(p)
 // AdvanceProducer moves the step's producer cursor past the n identities an
 // operation has just occupied. It returns ErrStepIdentities, and moves
 // nothing, when the block cannot hold them or an earlier level or curve mint
-// ran past its block, and ErrStepScope when the step has finished.
+// ran past its block, and ErrStepScope when the step has finished. Running
+// past the block also marks the run failed, so a route that swallows the error
+// cannot yield a result a serial build would not. The cursor moves by
+// compare-and-swap from the value read at the start of the call: a second
+// goroutine of the same step that moved it meanwhile would hand two commits one
+// identity, so that fails the run with ErrStepScope.
 func (s *Step) AdvanceProducer(n provenance.Producer) error {
 	if s.done.Load() || s.run.doc.Run.Load() != s.run {
 		s.run.Fail("a step's context was used after its step finished")
@@ -126,11 +131,21 @@ func (s *Step) AdvanceProducer(n provenance.Producer) error {
 	}
 	next := s.producer.Load()
 	if n < 0 || int64(n) > s.producerEnd-next {
-		s.exhausted.Store(true)
+		s.markExhausted()
 		return fmt.Errorf("%w: the step's producer block is used up", decaderr.ErrStepIdentities)
 	}
-	s.producer.Store(next + int64(n))
+	if !s.producer.CompareAndSwap(next, next+int64(n)) {
+		s.run.Fail("two goroutines of one step advanced its producer cursor at once")
+		return fmt.Errorf("%w: two goroutines of one step advanced its producer cursor at once", decaderr.ErrStepScope)
+	}
 	return nil
+}
+
+// markExhausted sets the sticky flag and fails the run: a step that ran out of identities cannot match a serial
+// build, even when the caller swallows ErrStepIdentities.
+func (s *Step) markExhausted() {
+	s.exhausted.Store(true)
+	s.run.Fail("a step used up its identity block")
 }
 
 func (s *Step) mintLevel() (int64, bool) {
@@ -139,7 +154,7 @@ func (s *Step) mintLevel() (int64, bool) {
 	}
 	id := s.level.Add(1)
 	if id > s.levelEnd {
-		s.exhausted.Store(true)
+		s.markExhausted()
 	}
 	return id, true
 }
@@ -150,7 +165,7 @@ func (s *Step) mintCurve() (int64, bool) {
 	}
 	id := s.curve.Add(1)
 	if id > s.curveEnd {
-		s.exhausted.Store(true)
+		s.markExhausted()
 	}
 	return id, true
 }

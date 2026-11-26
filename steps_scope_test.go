@@ -278,3 +278,79 @@ func TestRunStepsFullSnapshotRestoreFailsRun(t *testing.T) {
 	}}}
 	require.ErrorIs(t, RunSteps(t.Context(), doc, steps), ErrStepScope)
 }
+
+// TestRunStepsPrivateToolRemovalNeedsNoGate checks that retiring a private tool body, which never enters the
+// live set and carries no step tag, is no scope fault inside a step.
+func TestRunStepsPrivateToolRemovalNeedsNoGate(t *testing.T) {
+	doc := New()
+	steps := []Step{{Name: "tools", Build: func(ctx context.Context) error {
+		toolCtx, _ := privateConstructionContext(ctx)
+		tool, err := stepsBox(toolCtx, doc, 0, 0, 10, 10)
+		if err != nil {
+			return err
+		}
+		removeTools(ctx, []*Body{tool})
+		return nil
+	}}}
+	require.NoError(t, RunSteps(t.Context(), doc, steps))
+	require.Empty(t, doc.Bodies())
+}
+
+// TestRunStepsFullSnapshotRestoreKeepsStepWork checks that a full snapshot restored while steps run fails the run
+// and leaves what the steps built in place.
+func TestRunStepsFullSnapshotRestoreKeepsStepWork(t *testing.T) {
+	doc := New()
+	snap := doc.snapshot(t.Context())
+	var built *Body
+	steps := []Step{{Name: "restore", Build: func(ctx context.Context) error {
+		var err error
+		if built, err = stepsBox(ctx, doc, 0, 0, 10, 10); err != nil {
+			return err
+		}
+		doc.restore(snap)
+		return nil
+	}}}
+	require.ErrorIs(t, RunSteps(t.Context(), doc, steps), ErrStepScope)
+	require.Equal(t, []*Body{built}, doc.Bodies())
+	require.Len(t, doc.OperationHistory().Operations(), 1)
+}
+
+// TestRunStepsSnapshotRestoreAfterRunIsNoop checks that a step snapshot restored after its run ended, as a
+// goroutine that outlives its step would, changes nothing.
+func TestRunStepsSnapshotRestoreAfterRunIsNoop(t *testing.T) {
+	doc := New()
+	var snap *documentSnapshot
+	steps := []Step{{Name: "snap", Build: func(ctx context.Context) error {
+		if _, err := stepsBox(ctx, doc, 0, 0, 10, 10); err != nil {
+			return err
+		}
+		snap = doc.snapshot(ctx)
+		return nil
+	}}}
+	require.NoError(t, RunSteps(t.Context(), doc, steps))
+	before := slices.Clone(doc.Bodies())
+	ops := len(doc.OperationHistory().Operations())
+	doc.restore(snap)
+	require.Equal(t, before, doc.Bodies())
+	require.Len(t, doc.OperationHistory().Operations(), ops)
+}
+
+// TestRunStepsStaleRunContextMessage checks that a step ctx kept from an earlier run, used while a later run is
+// active, is refused with a message that names the previous run.
+func TestRunStepsStaleRunContextMessage(t *testing.T) {
+	doc := New()
+	var kept context.Context
+	require.NoError(t, RunSteps(t.Context(), doc, []Step{{Name: "keep", Build: func(ctx context.Context) error {
+		kept = ctx //nolint:fatcontext // the test keeps the step ctx to use it in a later run
+		return nil
+	}}}))
+	var refusal error
+	err := RunSteps(t.Context(), doc, []Step{{Name: "late", Build: func(context.Context) error {
+		_, refusal = stepsBox(kept, doc, 0, 0, 10, 10)
+		return nil
+	}}})
+	require.ErrorIs(t, refusal, ErrStepScope)
+	require.ErrorIs(t, err, ErrStepScope)
+	require.Contains(t, refusal.Error(), "previous run")
+	require.NotContains(t, refusal.Error(), "without its step's context")
+}

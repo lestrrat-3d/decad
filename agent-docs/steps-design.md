@@ -135,10 +135,11 @@ can commit. `WithStepIdentities` exists for tests and for a caller that wants a 
 | Container mutation, `Param`, `Expr`, `ParamInt` during a run | `requireRunIdle` | `ErrStepScope`; the run is marked failed |
 | Step ctx after its run | `stepGate`, `AdvanceProducer` | `ErrStepScope` |
 | Nested `RunSteps` | `BeginRun` compare-and-swap on `Run` | `ErrStepScope` |
-| Block used up | `AdvanceProducer`, the sticky flag | `ErrStepIdentities` |
-| Two goroutines in one step; steps sharing Go variables | the race detector | CI runs every test under `-race` |
+| Block used up | `AdvanceProducer`, the sticky flag | `ErrStepIdentities`; the run is marked failed, so a swallowed error still fails it |
+| Two goroutines in one step advancing the producer cursor at once | `AdvanceProducer` compare-and-swap | `ErrStepScope`; the run is marked failed. Goroutines that take turns are not seen, so the determinism tests stay the check. |
+| Steps sharing Go variables | the race detector | CI runs every test under `-race` |
 | An id minted off the step goroutine in a way that reaches a committed body | nothing | No detector remains. The determinism test (`TestRunStepsDispatchOrderDoesNotChangeResults`) is the check. |
-| A full snapshot restored during a run | nothing at the restore | It wipes the steps' work, so it is misuse. Do not restore a snapshot while steps run; the run is marked failed. |
+| A full snapshot restored during a run | nothing at the restore | The restore returns at once and changes nothing, and the run is marked failed. A step snapshot restored after its run ended is a no-op. |
 
 ## Failure and cancellation
 

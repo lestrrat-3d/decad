@@ -166,6 +166,13 @@ func removeConsumed(ctx context.Context, b *Body) error {
 		return nil
 	}
 	d := documentHandle(b.n.Doc)
+	// A private tool never enters the live set and carries no step tag, so only a live body goes through the gate.
+	d.n.LiveMu.RLock()
+	live := slices.Contains(d.n.LiveSet, bodyNode(b))
+	d.n.LiveMu.RUnlock()
+	if !live {
+		return nil
+	}
 	if _, err := d.stepGate(ctx, nil, []*Body{b}); err != nil {
 		return err
 	}

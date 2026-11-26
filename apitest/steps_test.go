@@ -104,8 +104,8 @@ func TestRunStepsView(t *testing.T) {
 // call changed nothing.
 func TestRunStepsMisuse(t *testing.T) {
 	// refused runs one step that makes the call and requires ErrStepScope from the call. A call that cannot name
-	// its step also fails the run, even when the step ignores the refusal; a refusal returned through the step's
-	// own ctx is the step's to handle.
+	// its step, consumes a body live before the run or reads or consumes another step's body also fails the run,
+	// even when the step ignores the refusal. Only a refused nested RunSteps is the step's to handle.
 	refused := func(t *testing.T, failsRun bool, call func(ctx context.Context, doc *decad.Document, plate *decad.Body) error) {
 		t.Helper()
 		doc := decad.New()
@@ -132,7 +132,7 @@ func TestRunStepsMisuse(t *testing.T) {
 		})
 	})
 	t.Run("consume a pre-run body", func(t *testing.T) {
-		refused(t, false, func(ctx context.Context, _ *decad.Document, plate *decad.Body) error {
+		refused(t, true, func(ctx context.Context, _ *decad.Document, plate *decad.Body) error {
 			move, err := rsShift(1, 1, 1)
 			if err != nil {
 				return err
@@ -142,7 +142,7 @@ func TestRunStepsMisuse(t *testing.T) {
 		})
 	})
 	t.Run("remove a pre-run body", func(t *testing.T) {
-		refused(t, false, func(ctx context.Context, _ *decad.Document, plate *decad.Body) error {
+		refused(t, true, func(ctx context.Context, _ *decad.Document, plate *decad.Body) error {
 			return decad.Remove(plate).Do(ctx)
 		})
 	})
@@ -188,7 +188,7 @@ func TestRunStepsMisuse(t *testing.T) {
 			}},
 		}, decad.WithStepWorkers(2))
 		require.ErrorIs(t, inner, decad.ErrStepScope)
-		require.NoError(t, err, "a step that handles the refusal does not fail the run")
+		require.ErrorIs(t, err, decad.ErrStepScope, "a refusal the step ignores still fails the run")
 		require.Len(t, doc.Bodies(), 2, "the plate and the builder's block")
 		require.Same(t, plate, doc.Bodies()[0])
 	})

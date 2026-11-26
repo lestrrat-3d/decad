@@ -419,3 +419,7 @@
 12	0.00	TestRunStepsDispatchOrderDoesNotChangeResults
 12	0.05	TestStepCommitPathsGate
 12	0.05	TestLiveSetReadsGoThroughViews
+12	0.05	TestRunStepsPrivateToolRemovalNeedsNoGate
+12	0.05	TestRunStepsFullSnapshotRestoreKeepsStepWork
+12	0.05	TestRunStepsSnapshotRestoreAfterRunIsNoop
+12	0.05	TestRunStepsStaleRunContextMessage

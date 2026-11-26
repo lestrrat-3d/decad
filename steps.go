@@ -251,7 +251,11 @@ func (d *Document) stepGate(ctx context.Context, inputs []OperationInput, consum
 		}
 		return nil, nil //nolint:nilnil // a nil step is the outside-a-run case, which no caller treats as an error
 	}
-	if s == nil || s.Run() != run {
+	if s != nil && s.Run() != run {
+		run.Fail("a step's context from a previous run was used")
+		return nil, errStepScope("an operation changed the document with a step's context from a previous run")
+	}
+	if s == nil {
 		run.Fail("an operation changed the document without its step's context")
 		return nil, errStepScope("an operation changed the document while steps run, without its step's context")
 	}
@@ -468,6 +472,9 @@ func (d *Document) stepSnapshotLocked(s *topo.Step) *stepSnapshot {
 // restoreStepLocked puts the step's own publications back as ss saved them and leaves every other step's alone.
 // The caller holds LiveMu.
 func (d *Document) restoreStepLocked(ss *stepSnapshot) {
+	if ss.step.Done() || d.n.ActiveRun() != ss.step.Run() {
+		return // the step's run ended: a goroutine that outlived its step has nothing left to roll back
+	}
 	idx := ss.step.Index()
 	own := func(b *topo.Body) bool { i, ok := d.n.StepTag[b]; return ok && i == idx }
 	var drop []*Operation
