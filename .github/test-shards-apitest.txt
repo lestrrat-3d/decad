@@ -938,7 +938,6 @@
 3	0.31	TestSweepClosedRacetrackBuildsVerifiedTubeAndReplaysPlacement
 3	0.16	TestSweepCompositeCircularHoleTessellates
 3	0.02	TestSweepCompositeCopyPlacementKeepsSourceReplay
-3	0.00	TestSweepContextCancellationLeavesDocumentUnchanged
 3	0.01	TestSweepLineFilletSingleTopCapEdgeVerified
 3	0.18	TestSweepMitredRefusals
 3	0.19	TestSweepMitredZigzagRestatesAndPlaces
@@ -1582,7 +1581,6 @@
 6	0.01	TestOffsetPrismNarrowNeckAdmitted
 6	0.00	TestOffsetPrismNeckRefusal
 6	0.01	TestPartialRevolveScaledAtPreservesSectorVolumeAndFaceRoles
-6	0.00	TestPatchContextCancellationLeavesDocumentUnchanged
 6	0.00	TestPathPatternFollowOnAStraightPathKeepsTheOrientation
 6	0.00	TestPathRecordsOwnedSegments
 6	0.56	TestPatternUnionJoinsCopiesThatShareWholeSides
@@ -1617,7 +1615,6 @@
 6	0.01	TestRevolveRejectsOverflowedVolume
 6	0.35	TestRevolveTessellateFullSphere
 6	0.01	TestRevolveToFaceAngularSides
-6	0.00	TestRevolveTypedNilSectionIsDegenerate
 6	0.03	TestRibDraftOfAWebAndLastWins
 6	0.01	TestRibDraftRefusals
 6	0.00	TestScaleMeshMirrorsWithANegativeFactor
@@ -2305,7 +2302,6 @@
 9	26.96	TestInfillKeepsASkinRoundThePart
 9	0.00	TestLineRationalRoundingIsBounded
 9	0.01	TestLoftCapChamferTurnedSquare
-9	0.00	TestLoftContextCancellation
 9	0.10	TestLoftDirectBoreExactLiftRefusals
 9	18.14	TestLoftFilletTwistedGearMirrorJoin
 9	0.00	TestLoftLineAgainstArcStaysRefused
@@ -2540,7 +2536,6 @@
 10	0.01	TestExtrudeFreeformTierBCRefusesWithTierACounterpart
 10	0.00	TestExtrudeThroughAllCupStop
 10	0.01	TestExtrudeToFaceInheritsPlacedLoftBound
-10	0.00	TestExtrudeTypedNilSectionIsDegenerate
 10	0.02	TestFacetedBooleanScaledAtAfterPlacementAndRepeat
 10	1.18	TestFacetedPlaneSlab
 10	0.01	TestFacetedPrismUnionChamferReversedSources
@@ -3223,7 +3218,6 @@
 12	0.50	TestDraftCopiesItsNeutralFaceSelector
 12	0.50	TestModifyCommandsRefuseMethodFaultsAtTheirGate
 12	0.50	TestChamferAngleNamesTheArgumentOfAComputedFault
-12	0.10	TestExtrudeTaperLastCallWins
 12	0.10	TestFeatureCommandsCopySelectorsInSealedArguments
 12	0.10	TestFeatureCommandsCopyTheirSlices
 12	0.10	TestFeatureCommandsRefuseMethodFaultsAtTheirGate
@@ -3235,9 +3229,7 @@
 12	0.10	TestFeatureConstructorsRecordNilOperands
 12	0.10	TestFeatureMethodsLastCallWins
 12	0.10	TestImplicitExactlyOneStopAssertions
-12	0.10	TestLoftAlignmentLastCallWins
 12	0.10	TestSurfaceLoftSurfaceResultIsIdempotent
-12	0.10	TestSweepTwistLastCallWins
 12	0.10	TestPlacementCommandsRunOnceAndConsume
 12	0.10	TestPlacementCommandsRefuseNilContext
 12	0.10	TestPlacementCommandsReturnCancellationByIdentity

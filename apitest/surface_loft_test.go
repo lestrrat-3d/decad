@@ -476,8 +476,8 @@ func TestSurfaceLoftShellOpenAgreesWithFreeEdgeDerivation(t *testing.T) {
 }
 
 // TestSurfaceLoftSurfaceResultIsIdempotent is loft.go's own repeat rule: a
-// repeated SurfaceResult is accepted, deliberately unlike
-// Alignment's repeat-is-ErrDegenerate rule.
+// repeated SurfaceResult is accepted, and a repeated Alignment replaces the
+// earlier one (the last call wins).
 func TestSurfaceLoftSurfaceResultIsIdempotent(t *testing.T) {
 	t.Parallel()
 	s0, p0, s1, p1 := loftSquares(t, 20, 20)

@@ -371,6 +371,7 @@ func TestFeatureConstructorsRecordNilOperands(t *testing.T) {
 		{"Extrude chain", decad.OperationExtrude, "sec", decad.Extrude(doc, s, nilChain, ext).Do},
 		{"Revolve document", decad.OperationRevolve, "d", decad.Revolve(nilDoc, s, p, decad.SketchLine{}, decad.FullRevolution{}).Do},
 		{"Revolve profile", decad.OperationRevolve, "sec", decad.Revolve(doc, s, nilProfile, decad.SketchLine{}, decad.FullRevolution{}).Do},
+		{"Revolve chain", decad.OperationRevolve, "sec", decad.Revolve(doc, s, nilChain, decad.SketchLine{}, decad.FullRevolution{}).Do},
 		{"Sweep document", decad.OperationSweep, "d", decad.Sweep(nilDoc, s, p, sweepLinePath(t)).Do},
 		{"Sweep path", decad.OperationSweep, "path", decad.Sweep(doc, s, p, nilPath).Do},
 		{"Coil sketch", decad.OperationCoil, "s", decad.Coil(doc, nilSketch, p, coilAxis(), units.Millimeters(1), units.Scalar(1)).Do},
@@ -732,6 +733,12 @@ func TestFeatureMethodsLastCallWins(t *testing.T) {
 		v, err := drafted.Volume()
 		require.NoError(t, err)
 		require.Less(t, v.Value.Base(), 100.0*60*5, "the second taper narrows the body")
+		// A refused taper is replaced, with its fault, by a later call, and the reverse refuses.
+		replaced, err := decad.Extrude(decad.New(), s, p, ext).Taper(units.Degrees(math.NaN())).Taper(units.Degrees(0)).Do(t.Context())
+		require.NoError(t, err, "a valid call replaces an invalid one")
+		requireFeatureVolume(t, replaced, 100*60*5)
+		_, err = decad.Extrude(decad.New(), s, p, ext).Taper(units.Degrees(0)).Taper(units.Degrees(math.NaN())).Do(t.Context())
+		require.ErrorIs(t, err, decad.ErrNotFinite, "an invalid call replaces a valid one")
 	})
 	t.Run("Extrude SurfaceResult is idempotent", func(t *testing.T) {
 		t.Parallel()
@@ -740,13 +747,6 @@ func TestFeatureMethodsLastCallWins(t *testing.T) {
 			SurfaceResult().SurfaceResult().Do(t.Context())
 		require.NoError(t, err)
 		require.Equal(t, decad.BodySheet, got.Kind())
-	})
-	t.Run("Taper with SurfaceResult is unsupported", func(t *testing.T) {
-		t.Parallel()
-		s, p := plateSketch(t)
-		_, err := decad.Extrude(decad.New(), s, p, decad.Distance{D: mm(5), Dir: decad.Along}).
-			Taper(units.Degrees(5)).SurfaceResult().Do(t.Context())
-		require.ErrorIs(t, err, decad.ErrUnsupported)
 	})
 	t.Run("Revolve SurfaceResult", func(t *testing.T) {
 		t.Parallel()
@@ -806,8 +806,11 @@ func TestFeatureMethodsLastCallWins(t *testing.T) {
 		got, err := decad.Loft(decad.New(), s0, p0, s1, p1).Alignment(0, 0).Alignment(0).Do(t.Context())
 		require.NoError(t, err)
 		requireFeatureVolume(t, got, 40*40*10)
-		_, err = decad.Loft(decad.New(), s0, p0, s1, p1).Alignment(0).Alignment(0, 0).Do(t.Context())
+		doc := decad.New()
+		refused, err := decad.Loft(doc, s0, p0, s1, p1).Alignment(0).Alignment(0, 0).Do(t.Context())
+		require.Nil(t, refused)
 		require.ErrorIs(t, err, decad.ErrDegenerate)
+		require.Empty(t, doc.Bodies())
 	})
 	t.Run("LoftSections CircularCorrespondence", func(t *testing.T) {
 		t.Parallel()

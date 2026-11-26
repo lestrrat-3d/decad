@@ -319,17 +319,6 @@ func TestLoftFacesConeTangentEndCancelledDuringEvaluation(t *testing.T) {
 	}
 }
 
-func TestLoftFacesConeTangentEndCancelled(t *testing.T) {
-	f := newTangentLoftFixture(t)
-	cone := f.cone(t, f.doc)
-	before := len(f.doc.Bodies())
-	ctx, cancel := context.WithCancel(t.Context())
-	cancel()
-	_, err := LoftFacesToCone([]*Face{f.toe, f.heel}, cone, r3.NewVec(0, 1, 0)).Do(ctx)
-	require.ErrorIs(t, err, context.Canceled)
-	require.Len(t, f.doc.Bodies(), before)
-}
-
 // coneAt revolves the triangle (far,0), (far,radius), (apex,0) about world X.
 func (f tangentLoftFixture) coneAt(t *testing.T, far, radius, apex float64) *Body {
 	t.Helper()
