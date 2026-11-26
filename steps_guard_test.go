@@ -3,10 +3,12 @@ package decad_test
 // CI: isolated-tests
 
 import (
+	"bytes"
 	"go/ast"
 	"go/parser"
 	"go/token"
 	"io/fs"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -106,8 +108,16 @@ func TestLiveSetReadsGoThroughViews(t *testing.T) {
 		if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
 			return nil
 		}
+		src, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		// A call of Live() is spelled out in the source, so a file without the name has nothing to report.
+		if !bytes.Contains(src, []byte("Live()")) {
+			return nil
+		}
 		fset := token.NewFileSet()
-		f, err := parser.ParseFile(fset, path, nil, parser.SkipObjectResolution)
+		f, err := parser.ParseFile(fset, path, src, parser.SkipObjectResolution)
 		if err != nil {
 			return err
 		}
