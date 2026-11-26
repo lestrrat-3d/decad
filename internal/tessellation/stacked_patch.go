@@ -186,8 +186,11 @@ func ProveStacked[F comparable](in StackedProofInput[F]) StackedProof {
 			proofbound.ProductUpper(height,
 				proofbound.SectionDisplacementArea(in.SectionDelta, walks, perimeter)))
 	}
-	for face, axial := range in.FaceAxial {
-		if in.IsPlanar(face) {
+	// Read the faces in their slice order: ranging over FaceAxial would add the terms in Go's random map order, and
+	// the upward-rounded sum then changes in its last bit from run to run.
+	for _, face := range in.Faces {
+		axial, found := in.FaceAxial[face]
+		if found && in.IsPlanar(face) {
 			out.Terms = append(out.Terms, proofbound.ProductUpper(axial, areaUpper[face]))
 		}
 	}

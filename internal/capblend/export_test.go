@@ -7,11 +7,11 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
 
-// DisableTransfer switches transfer checks ("T1", "T2", "T3", "ContourDelta") off
-// and returns the function that restores them.
-func DisableTransfer(checks ...string) func() {
-	disabledTransfer.Store(&checks)
-	return func() { disabledTransfer.Store(nil) }
+// DisableTransfer returns a context under which the named transfer checks
+// ("T1", "T2", "T3", "ContourDelta") are switched off. Only builds run with
+// that context see the switch.
+func DisableTransfer(ctx context.Context, checks ...string) context.Context {
+	return context.WithValue(ctx, disabledTransferKey{}, checks)
 }
 
 // RequireTransfer runs agent-docs/prism-boolean-design.md Part K §8.3's transfer

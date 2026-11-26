@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math"
 	"slices"
-	"sync/atomic"
 
 	"github.com/lestrrat-3d/decad/internal/capband"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
@@ -115,14 +114,16 @@ func (dp DisplacedPayload) ExtentBoundedAlong(ctx context.Context, g r3.Vec, wor
 	return dp.Base.extentBoundedAlong(ctx, g, work, nil, nil, dp.LoopDelta)
 }
 
-// disabledTransfer names the transfer checks a test switched off to show each
-// one matters ("T1", "T2", "T3" and "ContourDelta", the contour displacement of a
-// selected loop's segments); nothing in production sets it.
-var disabledTransfer atomic.Pointer[[]string]
+// disabledTransferKey is the context key under which a test names the transfer
+// checks it switched off to show each one matters ("T1", "T2", "T3" and
+// "ContourDelta", the contour displacement of a selected loop's segments);
+// nothing in production sets it. It rides on the context, not a package
+// variable, so one test's switch never reaches a build running in parallel.
+type disabledTransferKey struct{}
 
-func transferOn(check string) bool {
-	off := disabledTransfer.Load()
-	return off == nil || !slices.Contains(*off, check)
+func transferOn(ctx context.Context, check string) bool {
+	off, _ := ctx.Value(disabledTransferKey{}).([]string)
+	return !slices.Contains(off, check)
 }
 
 // requireTransfer is §8.3's transfer condition on a mixed profile, run right
@@ -147,7 +148,7 @@ func requireTransfer(ctx context.Context, budget *proofbound.WorkBudget, cbp Pay
 		if !cbp.StartLoops[li] && !cbp.EndLoops[li] {
 			continue
 		}
-		if !transferOn("ContourDelta") {
+		if !transferOn(ctx, "ContourDelta") {
 			continue
 		}
 		setback := cbp.LoopSetback(li)
@@ -160,7 +161,7 @@ func requireTransfer(ctx context.Context, budget *proofbound.WorkBudget, cbp Pay
 	if err := requireSameWalks(budget, cbp); err != nil {
 		return err
 	}
-	if transferOn("T1") {
+	if transferOn(ctx, "T1") {
 		floor, err := prismcells.ContactFloorOf(budget, loops)
 		if err != nil {
 			return err
@@ -170,7 +171,7 @@ func requireTransfer(ctx context.Context, budget *proofbound.WorkBudget, cbp Pay
 				decaderr.ErrUnsupported, maxOf(loopDelta), floor)
 		}
 	}
-	if transferOn("T2") {
+	if transferOn(ctx, "T2") {
 		apart, why, err := prismcells.CertifiedGapsLoops(budget, loops, loopDelta, extra)
 		if err != nil {
 			return err
@@ -181,7 +182,7 @@ func requireTransfer(ctx context.Context, budget *proofbound.WorkBudget, cbp Pay
 		}
 	}
 	for li, loop := range loops {
-		if loopDelta[li] == 0 || !transferOn("T3") {
+		if loopDelta[li] == 0 || !transferOn(ctx, "T3") {
 			continue
 		}
 		enc, ok, err := prismcells.LoopAreaEnclosure(budget, loop, loopDelta[li])

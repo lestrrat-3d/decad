@@ -64,6 +64,8 @@ type flushOperand struct {
 	planes map[*topo.Face]*exactPlane
 	// srcByFace maps a source face to its source id, filled on first use (srcOf).
 	srcByFace map[*topo.Face]int
+	// keptOutline holds the faces whose outline vertices read as an analytic operand's (CapSide.KeptOutline).
+	keptOutline map[*topo.Face]struct{}
 }
 
 // flushFace is one source face's reading. head fills src, facets, first and planar; the carrier and outline reads
@@ -393,12 +395,13 @@ func (op *flushOperand) readOutline(budget *proofbound.WorkBudget, f *flushFace)
 		incident[oe.a] = append(incident[oe.a], e)
 		incident[oe.b] = append(incident[oe.b], e)
 	}
+	_, kept := op.keptOutline[f.source]
 	rho := make(map[int]float64, len(incident))
 	for v, at := range incident {
 		if err := budget.Step(); err != nil {
 			return err
 		}
-		rho[v] = op.radius(v, at, edges, axis)
+		rho[v] = op.radius(f, v, at, edges, axis, kept)
 	}
 	out := flushface.Outline{Axis: axis, Edges: make([]flushface.Edge, len(edges))}
 	for e, oe := range edges {
@@ -457,14 +460,16 @@ func tagLeavesPlane(g *topo.Face, n r3.Vec) bool {
 	return m.Sub(n).Len() > pad && m.Add(n).Len() > pad
 }
 
-// radius is outline vertex v's ρ (§4.3). at lists the outline edges that meet v.
-func (op *flushOperand) radius(v int, at []int, edges []outlineEdge, axis int) float64 {
+// radius is outline vertex v of face f's ρ (§4.3). at lists the outline edges that meet v. kept marks a face whose
+// outline vertices read as an analytic operand's (CapSide.KeptOutline, agent-docs/coplanar-contact-design.md §20.1).
+// A corner takes the smaller of §4.3's radius and seamRadius.
+func (op *flushOperand) radius(f *flushFace, v int, at []int, edges []outlineEdge, axis int, kept bool) float64 {
 	bm := op.bm
 	beta := bm.VertexBound[v]
 	if beta == 0 {
 		return 0
 	}
-	if op.analytic {
+	if op.analytic || kept {
 		return beta
 	}
 	if len(at) != 2 {
@@ -481,14 +486,81 @@ func (op *flushOperand) radius(v int, at []int, edges []outlineEdge, axis int) f
 		return max(bm.VertexBound[e.a], bm.VertexBound[e.b])
 	}
 	w := proofbound.AbsSumUpper(width(e1), width(e2))
-	sinLo := projectedSinLower(bm, e1, e2, axis)
-	if !(sinLo > 0) || math.IsInf(sinLo, 0) {
-		return math.Inf(1)
-	}
 	if w == 0 {
 		return 0
 	}
-	return proofbound.ProductUpper(proofbound.DivUpper(w, sinLo), sqrt3Up)
+	weak := math.Inf(1)
+	if sinLo := projectedSinLower(bm, e1, e2, axis); sinLo > 0 && !math.IsInf(sinLo, 0) {
+		weak = proofbound.ProductUpper(proofbound.DivUpper(w, sinLo), sqrt3Up)
+	}
+	return min(weak, op.seamRadius(f, v, e1.g, e2.g))
+}
+
+// seamRadius bounds how far corner v of face f's outline lies from its true point, the true corner, from the seam
+// between the two neighbour faces g1 and g2 that meet f at v (agent-docs/flush-contact-design.md §4.3): the held
+// facet edges with a facet of g1 on one side and one of g2 on the other. The true seam lies within w, the largest
+// bound of those edges' vertices, of the held seam, and ends at the true corner, which lies in f's plane. Every seam
+// vertex but v lies farther than w from the plane, so the true corner lies within w of a point of a seam segment from
+// v whose own distance from the plane is at most w: within w·(1 + |m − v|/h_m) of v, where m is that segment's other
+// end and h_m its distance from the plane. It is +Inf when the seam does not give that reading.
+func (op *flushOperand) seamRadius(f *flushFace, v, g1, g2 int) float64 {
+	bm := op.bm
+	tri := bm.Tris[f.first]
+	o := ratVec(bm.Verts[tri[0]])
+	n := ratCross(ratSub(ratVec(bm.Verts[tri[1]]), o), ratSub(ratVec(bm.Verts[tri[2]]), o))
+	if ratIsZero(n) {
+		return math.Inf(1)
+	}
+	at := func(p int) *big.Rat { return ratDot(n, ratSub(ratVec(bm.Verts[p]), o)) }
+	if at(v).Sign() != 0 {
+		return math.Inf(1)
+	}
+	var segs [][2]int
+	w := 0.0
+	for _, t := range op.facetsOf[g1] {
+		for k := range 3 {
+			twin, ok := bm.TwinFacet(t, k)
+			if !ok || bm.Src[twin] != g2 {
+				continue
+			}
+			a, b := bm.Tris[t][k], bm.Tris[t][(k+1)%3]
+			segs = append(segs, [2]int{a, b})
+			w = max(w, bm.VertexBound[a], bm.VertexBound[b])
+		}
+	}
+	wUp := proofbound.AbsSumUpper(w, proofbound.ProductUpper(w, 1e-9))
+	if len(segs) == 0 || proofbound.IsNonFinite(wUp) {
+		return math.Inf(1)
+	}
+	norm := ratDot(n, n)
+	wr := new(big.Rat).SetFloat64(wUp)
+	beyond := new(big.Rat).Mul(new(big.Rat).Mul(wr, wr), norm)
+	ratio, touches := 0.0, false
+	for _, seg := range segs {
+		for k, p := range seg {
+			if p != v {
+				s := at(p)
+				if new(big.Rat).Mul(s, s).Cmp(beyond) <= 0 {
+					return math.Inf(1)
+				}
+				continue
+			}
+			touches = true
+			m := seg[1-k]
+			h := at(m)
+			if h.Sign() == 0 {
+				return math.Inf(1)
+			}
+			d := ratSub(ratVec(bm.Verts[m]), ratVec(bm.Verts[v]))
+			r2 := new(big.Rat).Quo(new(big.Rat).Mul(ratDot(d, d), norm), new(big.Rat).Mul(h, h))
+			up, _ := r2.Float64()
+			ratio = max(ratio, math.Nextafter(math.Sqrt(math.Nextafter(up, math.Inf(1))), math.Inf(1)))
+		}
+	}
+	if !touches || proofbound.IsNonFinite(ratio) {
+		return math.Inf(1)
+	}
+	return proofbound.ProductUpper(wUp, proofbound.AbsSumUpper(1, ratio))
 }
 
 // projectedSinLower is a lower bound of the sine of the angle between the two edges projected to the plane that drops
