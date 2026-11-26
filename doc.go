@@ -35,8 +35,8 @@
 //	}
 //
 //	doc := decad.New()
-//	body, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
-//		decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+//	body, err := decad.Extrude(doc, s, s.Profiles()[0],
+//		decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(context.Background())
 //	if err != nil {
 //		// Every failure wraps a sentinel from errors.go — branch with
 //		// errors.Is(err, decad.ErrUnsupported), decad.ErrCardinality, etc.

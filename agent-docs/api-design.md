@@ -349,7 +349,12 @@ operation takes it, so there is no way back into the model. Remove produces
 nothing, so no producer identity advances, and a body already built from the
 removed one keeps its geometry and its provenance. A nil body, or a
 body that belongs to no document, is `ErrDegenerate`, and a body
-already retired — consumed or removed — is `ErrRetiredBody` (§12).
+already retired — consumed or removed — is `ErrRetiredBody` (§12). Every
+error carries `OperationRemove`. `Remove(b).Do(ctx)` with a canceled `ctx`
+returns `ctx.Err()` and removes nothing, so a cleanup `Remove` that runs after
+a canceled call, or inside `t.Cleanup` where `t.Context()` is already canceled,
+needs a `ctx` that is not canceled, such as
+`context.WithoutCancel(ctx)`.
 
 **A retired body is no longer part of the model, so no operation takes one.** It is
 readable — its measurements still answer — but handing it to a boolean, to a modify
@@ -857,6 +862,14 @@ value it reads, so a retired body still answers it (§6). The query set is:
   `SweptBox`, each of which returns a result and leaves the document unchanged;
 - the accessors and report methods on result types (`Report`, `MotionReport`,
   `SweepReport`, `Path`, `Mesh` and the like).
+
+**Container placement calls are neither operations nor queries.**
+`Container.AddBody`, `Container.ChildNamed` and `Container.NewUniqueChild`
+change which container holds a member and build, retire and register no body
+in the document's model. They are document mutations outside the operation set,
+so they keep the method form and take no `ctx`. The scan
+`TestNoExportedFunctionBuildsRetiresOrRegistersABody` allows `AddBody` for
+this reason.
 
 **The topology type is `FaceShell`.** The package-level name `Shell` belongs to
 the shell operation, so the connected set of faces between a `Lump` and its

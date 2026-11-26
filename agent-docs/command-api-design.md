@@ -363,7 +363,7 @@ name its methods and special rules.
   `PatchEdges`, `Unstitch`, `Trim`, `Extend` and `Remove` record a nil body (`body`), `Split` a nil target
   (`target`). `Stitch` records nothing, because its gate polls `ctx` before it reads any operand, and it copies its
   variadic slot. `PatchEdges` and `Extend` copy their selector and edge query (A3). A mid-build cancel returns
-  `ctx.Err()` itself from every member, because the wrapper of `solidFromMeshBody` guards the call (§3). The
+  `ctx.Err()` itself from every member, because no member maps the error of a ctx-taking call to a sentinel. The
   implementations are `patchEdges`, `stitch`, `unstitch`, `trim`, `extend`, `split`, `solidFromMesh` and `remove`.
 - `PatternSpec` and every `Extent`, `AngularExtent`, `Axis` and `MirrorPlane` stay sealed constructor arguments.
 
@@ -375,13 +375,13 @@ its option tier and its `With...` constructors in the same PR, and no wrapper su
 | PR | Content |
 |---|---|
 | 0 (base) | This document, `internal/opcommand/`, `operation_command.go`, `ErrConsumed`, and the command-form rules in api-design §3, §4, §6.3, §8 and §12 and in `docs/api.md`. It converts no family. |
-| 1 | Booleans. It also adds the `unusedresult` setting and its root test (§10) and the rewrite tool (§14). |
+| 1 | Booleans. It also adds the `unusedresult` setting and its root test (§10) and the rewrite tool (§14), which is deleted at stack landing. |
 | 2 | Modify ops. It proves §3 against Table S and the two-command `TangentChain` method. |
 | 3 | Sketch-fed features. It proves N8 and the four-command `SurfaceResult` method. |
 | 4 | Atomic `PathPattern` and `Arrange` (§9). It changes behaviour only on failure and cancellation and converts nothing. |
 | 5 | Placement and patterns. |
 | 6 | Spec composites. They follow PRs 2–5 because they call those operations' implementations (§11). |
-| 7 | Surface, mesh-to-solid ops and `Remove`. It moves the calls of `SolidFromMesh` in `infill.go` and `extrude_tilted_face.go` onto `solidFromMeshBody` (§11) and deletes the rewrite tool. |
+| 7 | Surface, mesh-to-solid ops and `Remove`. It moves the calls of `SolidFromMesh` in `infill.go` and `extrude_tilted_face.go` onto `solidFromMesh` (§11). |
 
 ## 14. What each family PR carries
 
@@ -426,7 +426,9 @@ its option tier and its `With...` constructors in the same PR, and no wrapper su
   is `_cmdrewrite/`, its own nested module recorded in `agent-docs/modules.md`, because `gofmt -r` cannot match a
   variadic option list. The rules match the pre-migration names, such as `WithTangentChain` and
   `WithNoOpenings`. A spec field whose zero value meant unset in the old call (`Draft`, `Tilt`, `Length`, `Skin`, `KFactor` and the like) and holds a variable is reported, not rewritten, because the new method refuses a zero value. The tool's tests feed old-API code and assert the rewritten output, because the tool must
-  migrate calls that land on `main` while the stack is open. A new-name call is not input.
+  migrate calls that land on `main` while the stack is open. A new-name call is not input. The tool is deleted at
+  stack landing; that change also removes this bullet, §11's rewrite-tool sentence, the `_cmdrewrite/` layout row and
+  the `CLAUDE.md` tooling entry.
 - The Module boundary gate evidence (`agent-docs/module-boundary.md`) in the PR body.
 
 ## 15. Shared infrastructure

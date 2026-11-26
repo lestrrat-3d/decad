@@ -251,43 +251,161 @@ func TestSurfaceConstructorsAreCommandConstructors(t *testing.T) {
 	}
 }
 
-// TestNoExportedFunctionBuildsRetiresOrRegistersABody fails when an exported root
-// function that returns a *Body or a []*Body is no command constructor, so an
-// operation written as a function cannot return after the command-API migration
-// (agent-docs/command-api-design.md §1). The one exception is a selector
-// builder, which returns no body but a feature reference or a predicate and is
-// not in this scan.
+// mentionsBody reports whether the type expression holds a *Body anywhere:
+// as itself, an element of a slice or array, a map key or value, a type
+// argument (iter.Seq[*Body]) or a struct field.
+func mentionsBody(e ast.Expr) bool {
+	found := false
+	ast.Inspect(e, func(n ast.Node) bool {
+		if star, ok := n.(*ast.StarExpr); ok {
+			if id, ok := star.X.(*ast.Ident); ok && id.Name == "Body" {
+				found = true
+			}
+		}
+		return !found
+	})
+	return found
+}
+
+// buildsOrRetiresABody is the predicate of the scan below. It returns the
+// reason fn looks like an operation, or "" when it does not. An operation
+// either returns a body (or anything that holds one), or takes a *Body and
+// returns only error, which is the shape the function-form Remove had.
+func buildsOrRetiresABody(fn *ast.FuncDecl) string {
+	if fn.Type.Results != nil {
+		for _, r := range fn.Type.Results.List {
+			if mentionsBody(r.Type) {
+				return "returns a body"
+			}
+		}
+	}
+	results := fn.Type.Results
+	if results == nil || len(results.List) != 1 || len(results.List[0].Names) > 1 {
+		return ""
+	}
+	if id, ok := results.List[0].Type.(*ast.Ident); !ok || id.Name != "error" {
+		return ""
+	}
+	for _, p := range fn.Type.Params.List {
+		if mentionsBody(p.Type) {
+			return "takes a body and returns only error"
+		}
+	}
+	return ""
+}
+
+// receiverName returns the receiver's type name, or "" for a function.
+func receiverName(fn *ast.FuncDecl) string {
+	if fn.Recv == nil || len(fn.Recv.List) == 0 {
+		return ""
+	}
+	e := fn.Recv.List[0].Type
+	if star, ok := e.(*ast.StarExpr); ok {
+		e = star.X
+	}
+	if id, ok := e.(*ast.Ident); ok {
+		return id.Name
+	}
+	return ""
+}
+
+// TestBuildsOrRetiresABodyPredicate pins the scan's predicate on parsed
+// snippets, so the scan below cannot go blind when a type is renamed: each
+// operation shape must be matched, each non-operation shape must not.
+func TestBuildsOrRetiresABodyPredicate(t *testing.T) {
+	t.Parallel()
+	const src = `package p
+func Build() *Body { return nil }
+func BuildMany() ([]*Body, error) { return nil, nil }
+func Retire(b *Body) error { return nil }
+func RetireMany(bs ...*Body) error { return nil }
+func (d *Document) Import() (*Body, error) { return nil, nil }
+func Lookup() map[string]*Body { return nil }
+func Walk() iter.Seq[*Body] { return nil }
+func Wrapped() struct{ B *Body } { return struct{ B *Body }{} }
+func Name() string { return "" }
+func Measure(b *Body) (float64, error) { return 0, nil }
+func Cmd(b *Body) *RemoveCommand { return nil }
+`
+	f, err := parser.ParseFile(token.NewFileSet(), "snippet.go", src, 0)
+	require.NoError(t, err)
+	want := map[string]bool{
+		"Build": true, "BuildMany": true, "Retire": true, "RetireMany": true, "Import": true,
+		"Lookup": true, "Walk": true, "Wrapped": true,
+		"Name": false, "Measure": false, "Cmd": false,
+	}
+	seen := 0
+	for _, decl := range f.Decls {
+		fn := decl.(*ast.FuncDecl)
+		seen++
+		require.Equal(t, want[fn.Name.Name], buildsOrRetiresABody(fn) != "", "predicate on %s", fn.Name.Name)
+	}
+	require.Equal(t, len(want), seen)
+}
+
+// TestNoExportedFunctionBuildsRetiresOrRegistersABody fails when an exported
+// root function or method builds, retires or registers a body without being a
+// command, so an operation written as a function cannot return after the
+// command-API migration (agent-docs/command-api-design.md §1). The scan flags
+// an exported function or method that returns a *Body or a value holding one,
+// and one that takes a *Body and returns only error. Methods on a
+// *<X>Command are the commands themselves and are exempt.
+//
+// Three exceptions are neither operations nor queries and keep the function
+// form (agent-docs/api-design.md §6.3): Container.AddBody registers an
+// existing body in a container, and Container.ChildNamed and
+// Container.NewUniqueChild return a container. They change container
+// placement, which is a document mutation outside the operation set. The last
+// two return no body, so the scan never matches them.
+//
+// The readers Document.Bodies, Container.Bodies and Operation.Outputs return
+// existing bodies and build nothing. decadtest.NewPrism and decadtest.NewBlock
+// build and register bodies but live in another package that this scan does
+// not read; agent-docs/command-api-design.md §1 keeps decadtest as it is.
 func TestNoExportedFunctionBuildsRetiresOrRegistersABody(t *testing.T) {
 	t.Parallel()
+	allowed := map[string]string{
+		"Document.Bodies":   "reads the live bodies",
+		"Container.Bodies":  "reads the container's bodies",
+		"Operation.Outputs": "reads the bodies a recorded operation produced",
+		"Container.AddBody": "container placement, neither an operation nor a query",
+	}
 	fset := token.NewFileSet()
 	pkgs, err := parser.ParseDir(fset, ".", func(fi os.FileInfo) bool {
 		return !strings.HasSuffix(fi.Name(), "_test.go")
 	}, 0)
 	require.NoError(t, err)
-	isBody := func(e ast.Expr) bool {
-		if arr, ok := e.(*ast.ArrayType); ok {
-			e = arr.Elt
-		}
-		star, ok := e.(*ast.StarExpr)
-		if !ok {
-			return false
-		}
-		id, ok := star.X.(*ast.Ident)
-		return ok && id.Name == "Body"
-	}
 	var offenders []string
+	commandDoMatches := 0
 	for _, f := range pkgs["decad"].Files {
 		for _, decl := range f.Decls {
 			fn, ok := decl.(*ast.FuncDecl)
-			if !ok || fn.Recv != nil || !fn.Name.IsExported() || fn.Type.Results == nil {
+			if !ok || !fn.Name.IsExported() {
 				continue
 			}
-			for _, r := range fn.Type.Results.List {
-				if isBody(r.Type) {
-					offenders = append(offenders, fn.Name.Name)
-				}
+			reason := buildsOrRetiresABody(fn)
+			if reason == "" {
+				continue
 			}
+			recv := receiverName(fn)
+			if strings.HasSuffix(recv, "Command") {
+				if fn.Name.Name == "Do" {
+					commandDoMatches++
+				}
+				continue
+			}
+			name := fn.Name.Name
+			if recv != "" {
+				name = recv + "." + name
+			}
+			if _, ok := allowed[name]; ok {
+				delete(allowed, name)
+				continue
+			}
+			offenders = append(offenders, name+" "+reason)
 		}
 	}
-	require.Empty(t, offenders, "an exported function returns a body: make it a command")
+	require.NotZero(t, commandDoMatches, "the scan must match the Do methods of the commands, or it reads nothing")
+	require.Empty(t, allowed, "an allowlisted function no longer matches the scan: remove it")
+	require.Empty(t, offenders, "an exported function builds, retires or registers a body: make it a command")
 }

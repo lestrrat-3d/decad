@@ -120,7 +120,7 @@ once and the other call returns `decad.ErrConsumed`.
 | `Document.ContainerOf`, `Document.ContainerOfSketch` | Read the container of a body or a sketch. |
 | `Container.AddBody` | Places a live body in the container, taking it out of the container it was in, and changes nothing else. |
 | `Document.VerifyContainers`, `decad.ContainerReport`, `decad.ErrContainerLayout` | Report live bodies left directly in the root and non-root containers holding no bodies beneath them. `Passed` and `Err` summarise the report. |
-| `decad.Remove(b)` | Retires a body from its document. `Do` returns only an error, refuses a nil body or a body with no document with `decad.ErrDegenerate`, and returns `decad.ErrRetiredBody` for a retired one. A canceled context returns `ctx.Err()` and removes nothing. |
+| `decad.Remove(b)` | Retires a body from its document. `Do` returns only an error, refuses a nil body or a body with no document with `decad.ErrDegenerate`, and returns `decad.ErrRetiredBody` for a retired one. A canceled context returns `ctx.Err()` and removes nothing, so a cleanup `Remove` after a canceled call needs `context.WithoutCancel(ctx)`. |
 | `decad.Body` | An immutable solid or sheet. |
 | `decad.BodyKind` | `decad.BodySolid` or `decad.BodySheet`. `Body.Kind` and `Body.IsSolid` read it. |
 

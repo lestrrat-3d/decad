@@ -492,26 +492,58 @@ func ruleLoftFaces(c *callSite) (string, string) {
 // of a ctx parameter or a ctx the enclosing function declares, else
 // <t>.Context() for a testing parameter. The innermost function that offers
 // one wins, so a closure inside a test uses the test's t. It returns "" when
-// none is evident.
+// none is evident, which makes the caller report the call.
+//
+// It also returns "" in three cases where a name that looks right is wrong.
+// A call inside a function literal passed to a Cleanup method reports,
+// because t.Context() is already canceled when cleanup functions run. A
+// declared ctx counts only when it is visible at the call (declared in an
+// enclosing block, before the call), so a ctx in a sibling block does not.
+// A visible ctx counts only when its initializer is <t>.Context() or
+// context.Background(); any other initializer (a WithCancel, a counting
+// wrapper) may be canceled by the time the call runs.
 func enclosingContext(file *ast.File, call *ast.CallExpr) string {
-	var funcs []ast.Node
+	var path []ast.Node
 	ast.Inspect(file, func(n ast.Node) bool {
-		switch n.(type) {
-		case *ast.FuncDecl, *ast.FuncLit:
-			if n.Pos() <= call.Pos() && call.End() <= n.End() {
-				funcs = append(funcs, n)
-			}
+		if n == nil {
+			return false
 		}
-		return true
+		if n.Pos() <= call.Pos() && call.End() <= n.End() {
+			path = append(path, n)
+			return true
+		}
+		return false
 	})
-	for _, fn := range slices.Backward(funcs) {
+	for i, n := range path {
+		lit, ok := n.(*ast.FuncLit)
+		if !ok || i == 0 {
+			continue
+		}
+		if parent, ok := path[i-1].(*ast.CallExpr); ok && isCleanupCall(parent, lit) {
+			return ""
+		}
+	}
+	// blocks collects the statement lists visible to the call, innermost
+	// first, since the previous function boundary.
+	var blocks [][]ast.Stmt
+	for i := len(path) - 1; i >= 0; i-- {
 		var typ *ast.FuncType
-		var body *ast.BlockStmt
-		switch f := fn.(type) {
+		switch n := path[i].(type) {
+		case *ast.BlockStmt:
+			blocks = append(blocks, n.List)
+			continue
+		case *ast.CaseClause:
+			blocks = append(blocks, n.Body)
+			continue
+		case *ast.CommClause:
+			blocks = append(blocks, n.Body)
+			continue
 		case *ast.FuncDecl:
-			typ, body = f.Type, f.Body
+			typ = n.Type
 		case *ast.FuncLit:
-			typ, body = f.Type, f.Body
+			typ = n.Type
+		default:
+			continue
 		}
 		testing := ""
 		for _, field := range typ.Params.List {
@@ -529,27 +561,90 @@ func enclosingContext(file *ast.File, call *ast.CallExpr) string {
 				}
 			}
 		}
-		declared := false
-		if body != nil {
-			ast.Inspect(body, func(n ast.Node) bool {
-				if a, ok := n.(*ast.AssignStmt); ok && a.Tok == token.DEFINE && a.Pos() < call.Pos() {
-					for _, lhs := range a.Lhs {
-						if id, ok := lhs.(*ast.Ident); ok && id.Name == "ctx" {
-							declared = true
-						}
-					}
-				}
-				return true
-			})
-		}
-		if declared {
-			return "ctx"
+		if init, found := visibleCtx(blocks, call.Pos()); found {
+			if safeContextInit(init) {
+				return "ctx"
+			}
+			return ""
 		}
 		if testing != "" {
 			return testing
 		}
+		blocks = nil
 	}
 	return ""
+}
+
+// isCleanupCall reports whether call is x.Cleanup(..., lit, ...).
+func isCleanupCall(call *ast.CallExpr, lit *ast.FuncLit) bool {
+	sel, ok := call.Fun.(*ast.SelectorExpr)
+	if !ok || sel.Sel.Name != "Cleanup" {
+		return false
+	}
+	return slices.Contains(call.Args, ast.Expr(lit))
+}
+
+// visibleCtx finds the innermost declaration of ctx among the statement
+// lists, innermost list first, that ends before pos. It returns the
+// initializer expression, which is nil when the declaration has none that
+// can be matched to the name.
+func visibleCtx(blocks [][]ast.Stmt, pos token.Pos) (ast.Expr, bool) {
+	for _, list := range blocks {
+		for _, st := range slices.Backward(list) {
+			if st.End() > pos {
+				continue
+			}
+			switch s := st.(type) {
+			case *ast.AssignStmt:
+				if s.Tok != token.DEFINE {
+					continue
+				}
+				for i, lhs := range s.Lhs {
+					if id, ok := lhs.(*ast.Ident); ok && id.Name == "ctx" {
+						if len(s.Lhs) == len(s.Rhs) {
+							return s.Rhs[i], true
+						}
+						return nil, true
+					}
+				}
+			case *ast.DeclStmt:
+				gd, ok := s.Decl.(*ast.GenDecl)
+				if !ok || gd.Tok != token.VAR {
+					continue
+				}
+				for _, spec := range gd.Specs {
+					vs := spec.(*ast.ValueSpec)
+					for i, id := range vs.Names {
+						if id.Name == "ctx" {
+							if len(vs.Names) == len(vs.Values) {
+								return vs.Values[i], true
+							}
+							return nil, true
+						}
+					}
+				}
+			}
+		}
+	}
+	return nil, false
+}
+
+// safeContextInit reports whether init is <x>.Context() or
+// context.Background(), the two initializers that are never canceled early.
+func safeContextInit(init ast.Expr) bool {
+	call, ok := init.(*ast.CallExpr)
+	if !ok || len(call.Args) != 0 {
+		return false
+	}
+	sel, ok := call.Fun.(*ast.SelectorExpr)
+	if !ok {
+		return false
+	}
+	if sel.Sel.Name == "Context" {
+		return true
+	}
+	id, ok := sel.X.(*ast.Ident)
+	return ok && id.Name == "context" && sel.Sel.Name == "Background"
 }
 
 // paramTypeText renders the simple type forms enclosingContext matches.

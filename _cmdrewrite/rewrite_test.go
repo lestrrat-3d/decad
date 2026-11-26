@@ -555,10 +555,37 @@ func TestSurfacesRemoveTakesTheContextInScope(t *testing.T) {
 			}
 		})
 	}
-	t.Run("no context in scope reported", func(t *testing.T) {
-		in := imp + "func f() error {\n\treturn decad.Remove(b)\n}\n"
+	reported := []struct{ name, in string }{
+		{"no context in scope", "func f() error {\n\treturn decad.Remove(b)\n}\n"},
+		{"cleanup closure", "func TestF(t *testing.T) {\n\tt.Cleanup(func() {\n\t\t_ = decad.Remove(b)\n\t})\n}\n"},
+		{"cleanup closure in a subtest", "func TestF(t *testing.T) {\n\tt.Run(\"x\", func(t *testing.T) {\n" +
+			"\t\tt.Cleanup(func() { _ = decad.Remove(b) })\n\t})\n}\n"},
+		{"canceled ctx declared earlier", "func TestF(t *testing.T) {\n\tctx, cancel := context.WithCancel(t.Context())\n" +
+			"\tcancel()\n\t_ = decad.Remove(b)\n\t_ = ctx\n}\n"},
+		{"ctx from a counting wrapper", "func TestF(t *testing.T) {\n\tctx := wrap(t.Context())\n\t_ = decad.Remove(b)\n\t_ = ctx\n}\n"},
+		{"ctx declared after the call", "func f() {\n\t_ = decad.Remove(b)\n\tctx := context.Background()\n\t_ = ctx\n}\n"},
+	}
+	for _, tc := range reported {
+		t.Run("reported "+tc.name, func(t *testing.T) {
+			in := imp + tc.in
+			out, reports, err := rewriteFile("x.go", []byte(in), families["surfaces"], false)
+			if err != nil || len(reports) != 1 || string(out) != in {
+				t.Fatalf("out %q reports %v err %v", out, reports, err)
+			}
+		})
+	}
+	t.Run("ctx in a sibling block is not in scope", func(t *testing.T) {
+		in := imp + "func f() {\n\t{\n\t\tctx := context.Background()\n\t\t_ = ctx\n\t}\n\t_ = decad.Remove(b)\n}\n"
 		out, reports, err := rewriteFile("x.go", []byte(in), families["surfaces"], false)
 		if err != nil || len(reports) != 1 || string(out) != in {
+			t.Fatalf("out %q reports %v err %v", out, reports, err)
+		}
+	})
+	t.Run("sibling ctx does not shadow the outer t", func(t *testing.T) {
+		in := imp + "func TestF(t *testing.T) {\n\t{\n\t\tctx := wrap(t.Context())\n\t\t_ = ctx\n\t}\n\t_ = decad.Remove(b)\n}\n"
+		want := imp + "func TestF(t *testing.T) {\n\t{\n\t\tctx := wrap(t.Context())\n\t\t_ = ctx\n\t}\n\t_ = decad.Remove(b).Do(t.Context())\n}\n"
+		out, reports, err := rewriteFile("x.go", []byte(in), families["surfaces"], false)
+		if err != nil || len(reports) != 0 || string(out) != want {
 			t.Fatalf("out %q reports %v err %v", out, reports, err)
 		}
 	})

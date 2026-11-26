@@ -102,6 +102,8 @@ func (d *Document) liveBodies() []*Body {
 // b MUST NOT be nil (ErrDegenerate), and a body that belongs to no document is ErrDegenerate. The document is the
 // one b names; a body already retired — consumed by a feature or removed before — is ErrRetiredBody. A refused
 // call leaves the document unchanged, and so does a Do whose ctx is already canceled, which returns ctx.Err().
+// A cleanup that removes bodies after a canceled call needs a ctx that is not canceled, such as
+// context.WithoutCancel(ctx).
 // Do may run concurrently with Bodies and Verify; a Verify already under way
 // reports on the set as it stood when the call began. Every error carries [OperationRemove].
 func Remove(b *Body) *RemoveCommand {

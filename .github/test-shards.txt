@@ -396,3 +396,4 @@
 12	0.00	TestCompositeConstructorsAreCommandConstructors
 12	0.00	TestSurfaceConstructorsAreCommandConstructors
 12	0.00	TestNoExportedFunctionBuildsRetiresOrRegistersABody
+12	0.00	TestBuildsOrRetiresABodyPredicate

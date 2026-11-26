@@ -1,6 +1,7 @@
 package apitest_test
 
 import (
+	"context"
 	"fmt"
 	"slices"
 	"testing"
@@ -165,7 +166,7 @@ func TestVerifyHistoryCopyLiftTranslation(t *testing.T) {
 					t.Cleanup(func() {
 						for _, body := range sc.doc.Bodies() {
 							if !slices.Contains(before, body) {
-								require.NoError(t, decad.Remove(body).Do(t.Context()))
+								require.NoError(t, decad.Remove(body).Do(context.WithoutCancel(t.Context())))
 							}
 						}
 						live := sc.doc.Bodies()

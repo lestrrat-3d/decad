@@ -137,7 +137,7 @@ func TestPointLocationRejectsInvalidRequests(t *testing.T) {
 	cancel()
 	_, err = plate.LocatePoint(ctx, point, units.Millimeters(0.1))
 	require.ErrorIs(t, err, context.Canceled)
-	require.NoError(t, decad.Remove(plate).Do(ctx))
+	require.NoError(t, decad.Remove(plate).Do(t.Context()))
 	got, err := plate.LocatePoint(t.Context(), point, units.Millimeters(0.1))
 	require.NoError(t, err)
 	require.Equal(t, decad.PointInside, got)
