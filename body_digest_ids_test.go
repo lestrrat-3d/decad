@@ -225,18 +225,16 @@ const (
 )
 
 var identityArithmeticAllowList = map[string]string{
-	// Fresh result ids: a base taken from the document counter (nextProducerID, MintLevel, MintCurve), offset by a
+	// Fresh result ids: a base taken from the document counter (nextProducer, MintLevel, MintCurve), offset by a
 	// loop index. No input identity enters the sum.
 	"boolean.go performBoolean":                                       "base of a paired Cut's span, from the result's own fresh producer",
-	"boolean_group_blind.go commitBlindGroupCut":                      advancesCounter,
-	"boolean_regroup.go commitPairedCut":                              advancesCounter,
 	"boolean_regroup.go pairedCutContinuation":                        "mints step ids from the counter; the < and > test only that the counter has room for the span",
 	"brep_modify.go commitResult":                                     "span of the result",
-	"document.go commitIn":                                            advancesCounter,
+	"document.go advanceProducer":                                     advancesCounter,
 	"document.go commitOperationManyFacesIn":                          advancesCounter,
 	"document.go commitOperationSpanPrefixIn":                         advancesCounter,
 	"operation_history.go advanceProducerSpan":                        advancesCounter,
-	"operation_history.go nextProducerID":                             "reads the document counter, which names only the uncommitted result",
+	"operation_history.go nextProducer":                               "reads the document counter, which names only the uncommitted result",
 	"internal/topo/document.go MintCurve":                             "advances the curve counter",
 	"internal/topo/document.go MintLevel":                             "advances the level counter",
 	"pattern.go Patterned":                                            "offsets from the counter by instance index",
@@ -292,10 +290,14 @@ func TestIdentityArithmeticAllowList(t *testing.T) {
 	sort.Strings(unlisted)
 	require.Empty(t, unlisted,
 		"these functions do arithmetic on, or convert, a producer, level or curve id: read each and list it in identityArithmeticAllowList")
+	var stale []string
 	for k := range identityArithmeticAllowList {
-		_, ok := found[k]
-		require.True(t, ok, "%s is listed but no longer does arithmetic on an id", k)
+		if _, ok := found[k]; !ok {
+			stale = append(stale, k)
+		}
 	}
+	sort.Strings(stale)
+	require.Empty(t, stale, "these functions are listed but no longer do arithmetic on an id")
 
 	// Every int field that carries a producer is listed in digestIDFields.
 	for typ, fields := range digestIDFields {
