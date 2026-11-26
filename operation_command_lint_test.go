@@ -184,70 +184,39 @@ func TestCommandConstructorCallsEndInDo(t *testing.T) {
 	require.Empty(t, offenders, "a command constructor call used as a statement, or chained without Do")
 }
 
-// TestModifyConstructorsAreCommandConstructors fails when a modify-family
-// constructor stops returning a *<X>Command, which would drop it from both
-// lint checks above (agent-docs/command-api-design.md §12).
-func TestModifyConstructorsAreCommandConstructors(t *testing.T) {
+// TestFamilyConstructorsAreCommandConstructors fails when a constructor of any
+// command family stops returning a *<X>Command, which would drop it from both
+// lint checks above (agent-docs/command-api-design.md §12). It parses the root
+// package once and checks every family's list against that scan.
+func TestFamilyConstructorsAreCommandConstructors(t *testing.T) {
 	t.Parallel()
 	constructors := commandConstructorNames(t)
-	for _, name := range []string{
-		"Fillet", "Chamfer", "FilletChord", "ChamferAngle", "Shell", "ShellClosed",
-		"Draft", "Offset", "Thicken", "MoveFace", "ConeFromFace",
-	} {
-		require.Contains(t, constructors, name)
+	families := []struct {
+		name  string
+		names []string
+	}{
+		{"boolean", []string{"Union", "Cut", "Intersect", "Refine"}},
+		{"modify", []string{
+			"Fillet", "Chamfer", "FilletChord", "ChamferAngle", "Shell", "ShellClosed",
+			"Draft", "Offset", "Thicken", "MoveFace", "ConeFromFace",
+		}},
+		{"feature", []string{
+			"Extrude", "Revolve", "Sweep", "Coil", "Loft", "LoftChain", "LoftFromPoint", "LoftSections",
+			"LoftFaces", "LoftFacesToCone", "PatchProfile", "Emboss", "WebPath", "CutExtrude", "CutRevolve",
+		}},
+		{"placement", []string{
+			"Transform", "Copy", "Mirrored", "MirroredJoin", "MirroredCopy", "ScaledAt", "QuarterTurn", "Stretch",
+			"PatternCopies", "Patterned", "PathPattern", "Arrange",
+		}},
+		{"composite", []string{"Hole", "HoleShaped", "Boss", "BossShaped", "Thread", "Infill", "SheetMetal"}},
+		{"surface", []string{
+			"PatchEdges", "Stitch", "Unstitch", "Trim", "Extend", "Split", "SolidFromMesh", "Remove",
+		}},
 	}
-}
-
-// TestFeatureConstructorsAreCommandConstructors fails when a sketch-fed feature
-// constructor stops returning a *<X>Command, which would drop it from both lint
-// checks above (agent-docs/command-api-design.md §12).
-func TestFeatureConstructorsAreCommandConstructors(t *testing.T) {
-	t.Parallel()
-	constructors := commandConstructorNames(t)
-	for _, name := range []string{
-		"Extrude", "Revolve", "Sweep", "Coil", "Loft", "LoftChain", "LoftFromPoint", "LoftSections",
-		"LoftFaces", "LoftFacesToCone", "PatchProfile", "Emboss", "WebPath", "CutExtrude", "CutRevolve",
-	} {
-		require.Contains(t, constructors, name)
-	}
-}
-
-// TestPlacementConstructorsAreCommandConstructors fails when a placement or
-// pattern constructor stops returning a *<X>Command, which would drop it from
-// both lint checks above (agent-docs/command-api-design.md §12).
-func TestPlacementConstructorsAreCommandConstructors(t *testing.T) {
-	t.Parallel()
-	constructors := commandConstructorNames(t)
-	for _, name := range []string{
-		"Transform", "Copy", "Mirrored", "MirroredJoin", "MirroredCopy", "ScaledAt", "QuarterTurn", "Stretch",
-		"PatternCopies", "Patterned", "PathPattern", "Arrange",
-	} {
-		require.Contains(t, constructors, name)
-	}
-}
-
-// TestCompositeConstructorsAreCommandConstructors fails when a spec-composite
-// constructor stops returning a *<X>Command, which would drop it from both lint
-// checks above (agent-docs/command-api-design.md §12).
-func TestCompositeConstructorsAreCommandConstructors(t *testing.T) {
-	t.Parallel()
-	constructors := commandConstructorNames(t)
-	for _, name := range []string{"Hole", "HoleShaped", "Boss", "BossShaped", "Thread", "Infill", "SheetMetal"} {
-		require.Contains(t, constructors, name)
-	}
-}
-
-// TestSurfaceConstructorsAreCommandConstructors fails when a surface,
-// mesh-to-solid or retirement constructor stops returning a *<X>Command, which
-// would drop it from both lint checks above
-// (agent-docs/command-api-design.md §12).
-func TestSurfaceConstructorsAreCommandConstructors(t *testing.T) {
-	t.Parallel()
-	constructors := commandConstructorNames(t)
-	for _, name := range []string{
-		"PatchEdges", "Stitch", "Unstitch", "Trim", "Extend", "Split", "SolidFromMesh", "Remove",
-	} {
-		require.Contains(t, constructors, name)
+	for _, family := range families {
+		for _, name := range family.names {
+			require.Contains(t, constructors, name, "the %s family constructor", family.name)
+		}
 	}
 }
 

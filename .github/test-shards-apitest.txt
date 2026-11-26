@@ -510,7 +510,6 @@
 2	0.00	TestBetweenPoseAt
 2	0.06	TestBlindBoreThenCircularThroughHoles
 2	0.00	TestBodyPatchCurvedRimMeshRefusesWithoutSharedChording
-2	0.01	TestBooleanContextCancellationLeavesDocumentUnchanged
 2	0.03	TestBossBoreRefusals
 2	0.13	TestBossDraftNegativeWidensIt
 2	1.28	TestBossPilotWithACountersink
@@ -1001,7 +1000,6 @@
 4	1.20	TestBooleanAlgebraicIdentities
 4	0.15	TestBooleanAreaBoundsCoverShallowCrossing
 4	1.21	TestBooleanCutWasherThroughDiscKeepsStandingPost
-4	0.01	TestBooleanNilContextIsDegenerate
 4	0.09	TestBossOnTheUnderside
 4	0.03	TestBossRootFilletRoundsTheCornerWhereTheBossMeetsTheFace
 4	0.00	TestBox
