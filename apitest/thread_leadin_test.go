@@ -66,6 +66,19 @@ func TestThreadLeadInChamfersBothEndsBeforeTheThread(t *testing.T) {
 	volume, err := out.Volume()
 	require.NoError(t, err)
 	requireThreadVolume(t, volume, leadInRod(0.8))
+	// The default 45 degree slope puts the crest's first and last point at 0.8 and 19.2 on the rod's side. A default
+	// slope of 1.2 would put them at 0.96 and 19.04, which the volume's bound cannot tell apart.
+	mesh, err := out.Tessellate(t.Context(), units.Millimeters(0.05))
+	require.NoError(t, err)
+	tol := mesh.Bound().Base() + 1e-9
+	lo, hi := math.Inf(1), math.Inf(-1)
+	for _, v := range mesh.Vertices() {
+		if math.Abs(math.Hypot(v.X, v.Y)-5) <= tol {
+			lo, hi = math.Min(lo, v.Z), math.Max(hi, v.Z)
+		}
+	}
+	require.InDelta(t, 0.8, lo, tol, "the lead-in's lowest point on the rod's side")
+	require.InDelta(t, 19.2, hi, tol, "the lead-in's highest point on the rod's side")
 	// The chamfer takes more than the thread alone leaves.
 	plain := circleBodyAtZ(t, decad.New(), 0, 5, 0, 20)
 	threaded, err := decad.Thread(plain, decad.Faces(decad.Cylindrical()), units.Millimeters(threadPitch)).Do(t.Context())

@@ -521,7 +521,8 @@ func (c *cancelAfter) Err() error {
 // (section 14), until the command finishes. Every canceled run leaves the
 // document unchanged, so the fixture is built once and each run makes a fresh
 // command over it. A strided sweep still runs the first few check points one
-// at a time.
+// at a time, and after its first success it builds the fixture again and steps one
+// check at a time from the last canceled one, so the final polls are canceled too.
 func TestModifyCommandsReturnMidBuildCancellationByIdentity(t *testing.T) {
 	t.Parallel()
 	const maxChecks = 4000
@@ -566,17 +567,30 @@ func TestModifyCommandsReturnMidBuildCancellationByIdentity(t *testing.T) {
 			t.Parallel()
 			next, doc := tc.build(t)
 			before := doc.Bodies()
+			// tail is set once a strided run has succeeded: that success retired the block, so the fixture is
+			// built again and n steps one check at a time from the last canceled n, to reach the final polls
+			// (the build's commit poll among them) that the stride jumped over.
+			tail := false
+			var last int64
 			for n := int64(0); n < maxChecks; {
 				got, err := next()(newCancelAfter(t.Context(), n))
 				if err == nil {
 					require.NotNil(t, got)
 					require.Greater(t, n, int64(1), "the cancel never reached the build")
-					return
+					if tail || tc.stride < 2 {
+						return
+					}
+					tail = true
+					next, doc = tc.build(t)
+					before = doc.Bodies()
+					n = last + 1
+					continue
 				}
 				require.Equal(t, context.Canceled, err, "cancel after %d checks", n)
 				require.Nil(t, got)
 				require.True(t, slicesEqualBodies(before, doc.Bodies()), "cancel after %d checks leaves the document unchanged", n)
-				if n+1 < denseHead || tc.stride < 2 {
+				last = n
+				if tail || n+1 < denseHead || tc.stride < 2 {
 					n++
 					continue
 				}
