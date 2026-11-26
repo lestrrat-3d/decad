@@ -329,11 +329,11 @@ var identityArithmeticAllowList = map[string]string{
 	"internal/topo/document.go MintCurve":                             "advances the curve counter",
 	"internal/topo/document.go MintLevel":                             "advances the level counter",
 	"internal/topo/document.go WithTransientIDs":                      "seeds a private transient counter from the document counters",
-	"pattern.go Patterned":                                            "offsets from the counter by instance index",
+	"pattern.go patterned":                                            "offsets from the counter by instance index",
 	"pattern.go buildInstances":                                       "offsets from the counter by instance index",
 	"tool_combine.go combineTools":                                    "offsets from the counter by step",
 	"tool_combine.go combineToolSteps":                                "offsets from the counter by step",
-	"unstitch.go Unstitch":                                            "offsets from the counter by face index",
+	"unstitch.go unstitch":                                            "offsets from the counter by face index",
 	"internal/booleandispatch/regroup.go regroup":                     "offsets the env ref by the steps already built",
 	"internal/booleandispatch/rim_split_rebuild.go RebuildUnionSplit": "offsets the env ref by the steps already built",
 	"internal/brepmodify/cap_edge_cutter.go obliqueCapEdgeCut":        "env ref plus one",
@@ -355,7 +355,7 @@ var identityArithmeticAllowList = map[string]string{
 	"document.go commitIn":                       "advanceProducer(ctx, 1) passes a span of one",
 	"document.go commitOperationIn":              "passes a span of 1 to commitOperationSpanIn",
 	"internal/unionmany/routes.go Routes":        "returns a span of 1 for a single-route result",
-	"union_refined.go UnionRefined":              "passes a span of 1 to commitUnionMany",
+	"union_refined.go unionRefined":              "passes a span of 1 to commitUnionMany",
 
 	// A fixture constant: the producer id every kit body carries. Only the tests of internal/trimgraph,
 	// internal/trimrebuild and internal/trimshell import the package, so no Intersect path reaches it.
