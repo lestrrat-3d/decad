@@ -372,3 +372,5 @@
 12	0.02	TestUnionSharedCapBossOnPlate
 12	0.01	TestRevolveCapSidesNeedTheCapAloneOnItsPlane
 12	0.01	TestProducerCounterAccess
+12	0.10	TestPrivateConstructionFilletTakesDistinctProducer
+12	0.10	TestPrivateConstructionChamferTakesDistinctProducer
