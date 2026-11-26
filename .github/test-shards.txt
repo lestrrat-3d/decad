@@ -403,3 +403,4 @@
 7	10.52	TestIdentityArithmeticAllowList
 9	5.26	TestDigestTypeCoverage
 8	0.01	TestDigestSideTables
+12	0.00	TestPairDigestIgnoresContainers
