@@ -117,12 +117,12 @@ type ParityMesh struct {
 	// sets it.
 	Unfiltered bool
 	// index[axis] is that axis's parity index, built by MeshParityAllContext
-	// after the first completed finite, box-filtered query on that axis;
-	// indexBuilt marks the attempt, since a mesh the grid would not help keeps a
-	// nil index. indexDeferred records that completed plain query.
-	index         [3]*ParityIndex
-	indexBuilt    [3]bool
-	indexDeferred [3]bool
+	// after ParityIndexDeferScans completed finite, box-filtered plain queries
+	// on that axis; indexBuilt marks the attempt, since a mesh the grid would
+	// not help keeps a nil index. plainScans counts those completed queries.
+	index      [3]*ParityIndex
+	indexBuilt [3]bool
+	plainScans [3]int
 	// maxMemberships overrides ParityIndexMaxMemberships when positive; only
 	// tests set it.
 	maxMemberships int
@@ -133,6 +133,13 @@ type ParityMesh struct {
 	// on one axis once per ray, never often enough to repay the slice.
 	singleUse bool
 }
+
+// ParityIndexDeferScans is the number of completed finite, box-filtered plain
+// scans on one axis after which MeshParityAllContext builds that axis's parity
+// index. Which path answers a query never changes the answer. A boolean cut of a
+// large blank by a small tool asks a handful of queries, so building the index
+// on the second sweep cost more than the scans it saved.
+const ParityIndexDeferScans = 16
 
 // ParityAreaErrCoef and ParityAreaFloor bound projectedFacetBox's own float
 // evaluation of the projected area. The true forward error of a 2x2
@@ -504,9 +511,11 @@ func (prepared *ParityMesh) classifyFacet(p proof.Xpt, pa Xp2, axis, u, v, dir, 
 // prepared mesh in index order, answered through the axis's parity index when
 // one applies. The result, including the error text, is identical to
 // MeshParityPreparedContext over the subset 0..n-1. The index is built once
-// per ParityMesh after the first completed finite, box-filtered query on an
-// axis (the mesh is single-goroutine). That first sweep uses the plain facet
-// scan; a later sweep may use the index. The index lists, per grid cell, only
+// per ParityMesh and axis, on the first query after ParityIndexDeferScans
+// completed finite, box-filtered plain scans on that axis (the mesh is
+// single-goroutine). Those scans, and every query before them, use the plain
+// facet scan; a later sweep may use the index. The deferral pays off because a
+// mesh that answers only a few queries on an axis never repays the grid. The index lists, per grid cell, only
 // the facets that can do more than continue; it
 // is skipped for meshes under ParityIndexMinFacets and for any projection the
 // grid cannot place. A listed facet runs the unchanged box filter and
@@ -543,7 +552,7 @@ func MeshParityAllContext(ctx context.Context, p proof.Xpt, prepared *ParityMesh
 		indexed := false
 		if boxFilter {
 			boxes = prepared.FacetBoxes(ray.Axis)
-			if prepared.indexDeferred[ray.Axis] || prepared.indexBuilt[ray.Axis] {
+			if prepared.plainScans[ray.Axis] >= ParityIndexDeferScans || prepared.indexBuilt[ray.Axis] {
 				if idx := prepared.parityIndex(ray.Axis, ray.U, ray.V); idx != nil {
 					cands, indexed = idx.candidates(pa.Fu, pa.Fv), true
 				}
@@ -590,8 +599,8 @@ func MeshParityAllContext(ctx context.Context, p proof.Xpt, prepared *ParityMesh
 				break
 			}
 		}
-		if boxFilter && !prepared.indexDeferred[ray.Axis] && !prepared.indexBuilt[ray.Axis] {
-			prepared.indexDeferred[ray.Axis] = true
+		if boxFilter && prepared.plainScans[ray.Axis] < ParityIndexDeferScans && !prepared.indexBuilt[ray.Axis] {
+			prepared.plainScans[ray.Axis]++
 		}
 		if onBoundary {
 			return false, true, nil
