@@ -335,6 +335,37 @@ func TestRunStepsSnapshotRestoreAfterRunIsNoop(t *testing.T) {
 	require.Len(t, doc.OperationHistory().Operations(), ops)
 }
 
+// TestRunStepsSnapshotRestoreAfterStepFailsRun checks that a step snapshot restored after its step finished, while
+// the run is still active, fails the run and changes nothing: a composite call's goroutine that outlives its step
+// must not leave a partial composite behind and let RunSteps return nil.
+func TestRunStepsSnapshotRestoreAfterStepFailsRun(t *testing.T) {
+	doc := New()
+	var snap *documentSnapshot
+	snapped := make(chan struct{})
+	var built *Body
+	steps := []Step{
+		{Name: "snap", Build: func(ctx context.Context) error {
+			var err error
+			if built, err = stepsBox(ctx, doc, 0, 0, 10, 10); err != nil {
+				return err
+			}
+			snap = doc.snapshot(ctx)
+			close(snapped)
+			return nil
+		}},
+		{Name: "late", Build: func(ctx context.Context) error {
+			<-snapped
+			for !doc.n.ActiveRun().Step(0).Done() {
+				runtime.Gosched()
+			}
+			doc.restore(snap)
+			return nil
+		}},
+	}
+	require.ErrorIs(t, RunSteps(t.Context(), doc, steps, WithStepWorkers(2)), ErrStepScope)
+	require.Equal(t, []*Body{built}, doc.Bodies())
+}
+
 // TestRunStepsStaleRunContextMessage checks that a step ctx kept from an earlier run, used while a later run is
 // active, is refused with a message that names the previous run.
 func TestRunStepsStaleRunContextMessage(t *testing.T) {

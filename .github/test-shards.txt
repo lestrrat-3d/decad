@@ -423,3 +423,4 @@
 12	0.05	TestRunStepsFullSnapshotRestoreKeepsStepWork
 12	0.05	TestRunStepsSnapshotRestoreAfterRunIsNoop
 12	0.05	TestRunStepsStaleRunContextMessage
+7	0.05	TestRunStepsSnapshotRestoreAfterStepFailsRun

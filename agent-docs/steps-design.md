@@ -48,7 +48,8 @@ size differently from that build (step views below).
   block, or the document counter when no run is active. During a run a mint with none of the three marks the run
   failed and returns the zero token, which always declines admission.
 - A producer read or mint during a run without a step ctx and without a transient source marks the run failed.
-  `RunSteps` returns that fault as `ErrStepScope` even when every step succeeded.
+  `RunSteps` returns that fault as `ErrStepScope` even when every step succeeded. A run fault carries its own
+  sentinel: scope faults `ErrStepScope`, a used-up identity block `ErrStepIdentities`.
 - `CounterMu` guards the three counters. Readers (`SeedsAt`, `ProducerAt` outside a step) take it for reading and the
   writers (`advanceProducer`, `MintLevel`, `MintCurve` outside a run, `EndRun`, `restore`) for writing. It is a leaf
   lock taken after `LiveMu`, so a non-step `Verify` or `IntersectionVolume` never races `EndRun`'s counter write.
@@ -135,11 +136,12 @@ can commit. `WithStepIdentities` exists for tests and for a caller that wants a 
 | Container mutation, `Param`, `Expr`, `ParamInt` during a run | `requireRunIdle` | `ErrStepScope`; the run is marked failed |
 | Step ctx after its run | `stepGate`, `AdvanceProducer` | `ErrStepScope` |
 | Nested `RunSteps` | `BeginRun` compare-and-swap on `Run` | `ErrStepScope` |
-| Block used up | `AdvanceProducer`, the sticky flag | `ErrStepIdentities`; the run is marked failed, so a swallowed error still fails it |
+| Block used up | `AdvanceProducer`, the sticky flag | `ErrStepIdentities`; the run is marked failed with `ErrStepIdentities` (never `ErrStepScope`), so a swallowed error still fails the run |
 | Two goroutines in one step advancing the producer cursor at once | `AdvanceProducer` compare-and-swap | `ErrStepScope`; the run is marked failed. Goroutines that take turns are not seen, so the determinism tests stay the check. |
 | Steps sharing Go variables | the race detector | CI runs every test under `-race` |
 | An id minted off the step goroutine in a way that reaches a committed body | nothing | No detector remains. The determinism test (`TestRunStepsDispatchOrderDoesNotChangeResults`) is the check. |
-| A full snapshot restored during a run | nothing at the restore | The restore returns at once and changes nothing, and the run is marked failed. A step snapshot restored after its run ended is a no-op. |
+| A full snapshot restored during a run | `restore` | The restore returns at once and changes nothing, and the run is marked failed with `ErrStepScope`. |
+| A step snapshot restored after its step finished while the run is active | `restoreStepLocked` | The restore changes nothing and the run is marked failed with `ErrStepScope`, because a partial composite may remain. After the run ended it is a silent no-op. |
 
 ## Failure and cancellation
 

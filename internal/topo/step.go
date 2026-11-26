@@ -18,7 +18,7 @@ import (
 type Run struct {
 	doc   *Document
 	steps []*Step
-	fault atomic.Pointer[string]
+	fault atomic.Pointer[error]
 	// base counters at the start of the run, and the block size.
 	producer0, level0, curve0 int64
 	block                     int64
@@ -69,18 +69,24 @@ func (d *Document) StepOf(ctx context.Context) *Step { return stepOf(ctx, d) }
 // ActiveRun is the run in progress on d, or nil.
 func (d *Document) ActiveRun() *Run { return d.Run.Load() }
 
-// Fail records the first scope fault of the run. RunSteps returns it as
-// ErrStepScope when the run ends.
+// Fail records the first fault of the run as a scope fault (decaderr.ErrStepScope). RunSteps returns it when the
+// run ends.
 func (r *Run) Fail(reason string) {
-	r.fault.CompareAndSwap(nil, &reason)
+	r.FailWith(fmt.Errorf("%w: %s", decaderr.ErrStepScope, reason))
 }
 
-// Fault is the first scope fault recorded, or "".
-func (r *Run) Fault() string {
+// FailWith records err as the first fault of the run unless one is recorded already. RunSteps returns it when the
+// run ends, so err carries the sentinel the caller can match.
+func (r *Run) FailWith(err error) {
+	r.fault.CompareAndSwap(nil, &err)
+}
+
+// Fault is the first fault recorded, or nil.
+func (r *Run) Fault() error {
 	if p := r.fault.Load(); p != nil {
 		return *p
 	}
-	return ""
+	return nil
 }
 
 // Step returns step i of the run.
@@ -145,7 +151,7 @@ func (s *Step) AdvanceProducer(n provenance.Producer) error {
 // build, even when the caller swallows ErrStepIdentities.
 func (s *Step) markExhausted() {
 	s.exhausted.Store(true)
-	s.run.Fail("a step used up its identity block")
+	s.run.FailWith(fmt.Errorf("%w: a step used up its identity block", decaderr.ErrStepIdentities))
 }
 
 func (s *Step) mintLevel() (int64, bool) {

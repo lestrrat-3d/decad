@@ -231,6 +231,7 @@ func TestRunStepsIdentities(t *testing.T) {
 		return small
 	}}}, decad.WithStepIdentities(4))
 	require.ErrorIs(t, err, decad.ErrStepIdentities)
+	require.NotErrorIs(t, err, decad.ErrStepScope)
 	require.ErrorIs(t, small, decad.ErrStepIdentities)
 	require.Empty(t, doc.Bodies(), "the operation that ran out leaves the document unchanged")
 	err = decad.RunSteps(t.Context(), doc, []decad.Step{{Name: "large", Build: func(ctx context.Context) error {
@@ -239,6 +240,17 @@ func TestRunStepsIdentities(t *testing.T) {
 	}}}, decad.WithStepIdentities(1<<20))
 	require.NoError(t, err)
 	require.Len(t, doc.Bodies(), 1)
+	// A step that swallows the exhaustion still fails the run, and the failure is ErrStepIdentities only.
+	swallow := decad.New()
+	err = decad.RunSteps(t.Context(), swallow, []decad.Step{{Name: "swallow", Build: func(ctx context.Context) error {
+		_, _ = rsBlock(ctx, swallow, 0, 0, 10, 10, 0, rsHeight(4))
+		return nil
+	}}}, decad.WithStepIdentities(4))
+	require.ErrorIs(t, err, decad.ErrStepIdentities)
+	require.NotErrorIs(t, err, decad.ErrStepScope)
+	require.Empty(t, swallow.Bodies())
+	require.ErrorIs(t, small, decad.ErrStepIdentities)
+	require.NotErrorIs(t, small, decad.ErrStepScope)
 }
 
 // TestRunStepsOptions checks the option errors.

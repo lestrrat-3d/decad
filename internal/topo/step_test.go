@@ -60,7 +60,9 @@ func TestStepAdvanceProducerOverlapFailsRun(t *testing.T) {
 	run, err := doc.BeginRun(1, 1<<30)
 	require.NoError(t, err)
 	s := run.Step(0)
-	require.Greater(t, runtime.GOMAXPROCS(0), 1, "overlap needs goroutines running in parallel")
+	if runtime.GOMAXPROCS(0) < 2 {
+		t.Skip("overlap needs goroutines running in parallel")
+	}
 	start := make(chan struct{})
 	var wg sync.WaitGroup
 	for range 8 {
@@ -68,7 +70,7 @@ func TestStepAdvanceProducerOverlapFailsRun(t *testing.T) {
 			<-start
 			for range 100000 {
 				_ = s.AdvanceProducer(1)
-				if run.Fault() != "" {
+				if run.Fault() != nil {
 					return
 				}
 			}
@@ -76,7 +78,7 @@ func TestStepAdvanceProducerOverlapFailsRun(t *testing.T) {
 	}
 	close(start)
 	wg.Wait()
-	require.NotEmpty(t, run.Fault(), "overlapping advances in one step must fail the run")
+	require.Error(t, run.Fault(), "overlapping advances in one step must fail the run")
 	doc.EndRun(run, nil)
 }
 
@@ -90,7 +92,7 @@ func TestStepAdvanceProducerSerialStaysQuiet(t *testing.T) {
 		require.NoError(t, s.AdvanceProducer(1))
 	}
 	require.EqualValues(t, 20000, s.ProducerNext())
-	require.Empty(t, run.Fault())
+	require.NoError(t, run.Fault())
 	doc.EndRun(run, nil)
 }
 
@@ -102,8 +104,9 @@ func TestStepExhaustionFailsRun(t *testing.T) {
 	require.NoError(t, err)
 	s := run.Step(0)
 	require.NoError(t, s.AdvanceProducer(2))
-	require.Empty(t, run.Fault())
+	require.NoError(t, run.Fault())
 	require.ErrorIs(t, s.AdvanceProducer(1), decaderr.ErrStepIdentities)
-	require.NotEmpty(t, run.Fault())
+	require.ErrorIs(t, run.Fault(), decaderr.ErrStepIdentities)
+	require.NotErrorIs(t, run.Fault(), decaderr.ErrStepScope)
 	doc.EndRun(run, nil)
 }

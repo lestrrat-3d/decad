@@ -155,8 +155,8 @@ func RunSteps(ctx context.Context, doc *Document, steps []Step, opts ...RunSteps
 			failed = append(failed, fmt.Errorf("decad: step %s: %w", stepLabel(i, steps[i]), e))
 		}
 	}
-	if fault := run.Fault(); fault != "" {
-		failed = append(failed, fmt.Errorf("%w: %s", ErrStepScope, fault))
+	if fault := run.Fault(); fault != nil {
+		failed = append(failed, fault)
 	}
 	return errors.Join(failed...)
 }
@@ -472,8 +472,15 @@ func (d *Document) stepSnapshotLocked(s *topo.Step) *stepSnapshot {
 // restoreStepLocked puts the step's own publications back as ss saved them and leaves every other step's alone.
 // The caller holds LiveMu.
 func (d *Document) restoreStepLocked(ss *stepSnapshot) {
-	if ss.step.Done() || d.n.ActiveRun() != ss.step.Run() {
+	if d.n.ActiveRun() != ss.step.Run() {
 		return // the step's run ended: a goroutine that outlived its step has nothing left to roll back
+	}
+	if ss.step.Done() {
+		// The run goes on, so a goroutine that outlived its step may have published part of a composite and now
+		// cannot undo it: the step's publications are final. Fail the run instead of returning a result with a
+		// partial composite.
+		ss.step.Run().Fail("a step's snapshot was restored after its step finished")
+		return
 	}
 	idx := ss.step.Index()
 	own := func(b *topo.Body) bool { i, ok := d.n.StepTag[b]; return ok && i == idx }
