@@ -91,7 +91,7 @@ func extrudeToTiltedFace(ctx context.Context, d *Document, s *sketch.Sketch, p *
 	var made []*Body
 	defer func() {
 		if !handled {
-			removeTools(made)
+			removeTools(ctx, made)
 		}
 	}()
 	base, err := extrudeTool(ctx, d, s, p, Distance{D: units.Millimeters(length), Dir: way}, extrudeSettings{})
@@ -117,7 +117,7 @@ func extrudeToTiltedFace(ctx context.Context, d *Document, s *sketch.Sketch, p *
 	if err != nil {
 		return nil, false, nil
 	}
-	removeTools([]*Body{tool})
+	removeTools(ctx, []*Body{tool})
 	return out, true, nil
 }
 

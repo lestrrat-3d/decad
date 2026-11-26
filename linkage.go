@@ -7,6 +7,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/motionbound"
 	"github.com/lestrrat-3d/decad/internal/motionoption"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/linkage"
 	"github.com/lestrrat-3d/decad/report"
 	"github.com/lestrrat-3d/units"
@@ -95,9 +96,9 @@ func WithJointLimits(minimum, maximum units.Value) JointOption {
 }
 
 // linkageHooks are the services a linkage check takes from d.
-func (d *Document) linkageHooks() linkage.Hooks[*Body] {
+func (d *Document) linkageHooks(live []*topo.Body) linkage.Hooks[*Body] {
 	return linkage.Hooks[*Body]{
-		Engine: motionHooks(), Doc: &d.n, Live: d.n.Live(), Node: bodyNode, Handle: bodyHandle,
+		Engine: motionHooks(), Doc: &d.n, Live: live, Node: bodyNode, Handle: bodyHandle,
 	}
 }
 
@@ -138,11 +139,14 @@ func (d *Document) VerifyLinkage(ctx context.Context, l *Linkage, drive Drive, o
 	if d == nil {
 		return nil, fmt.Errorf(`%w: a nil document owns no model`, ErrDegenerate)
 	}
+	// The live set is read before the query's transient ids are seeded (queryContext), so the seeds exceed
+	// every id of a body the set holds even when a RunSteps call ends between the two reads.
+	live := d.n.LiveIn(ctx)
 	ctx = d.queryContext(ctx)
 	if err := d.requireLinkage(l); err != nil {
 		return nil, err
 	}
-	return linkage.Verify(ctx, d.linkageHooks(), l, drive, func(dom motionbound.Domain) (motionoption.Config, error) {
+	return linkage.Verify(ctx, d.linkageHooks(live), l, drive, func(dom motionbound.Domain) (motionoption.Config, error) {
 		encodedOpts, err := decodeMotionOptions(opts)
 		if err != nil {
 			return motionoption.Config{}, err
@@ -194,11 +198,14 @@ func (d *Document) VerifyJointBox(ctx context.Context, l *Linkage, box JointBox,
 	if d == nil {
 		return nil, fmt.Errorf(`%w: a nil document owns no model`, ErrDegenerate)
 	}
+	// The live set is read before the query's transient ids are seeded (queryContext), so the seeds exceed
+	// every id of a body the set holds even when a RunSteps call ends between the two reads.
+	live := d.n.LiveIn(ctx)
 	ctx = d.queryContext(ctx)
 	if err := d.requireLinkage(l); err != nil {
 		return nil, err
 	}
-	return linkage.VerifyBox(ctx, d.linkageHooks(), l, box, func() (motionoption.Config, int, error) {
+	return linkage.VerifyBox(ctx, d.linkageHooks(live), l, box, func() (motionoption.Config, int, error) {
 		return resolveJointBoxOptions(opts)
 	})
 }

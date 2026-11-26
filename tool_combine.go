@@ -150,17 +150,36 @@ func combineToolSteps(ctx context.Context, d *Document, kind OperationKind, b *B
 
 // removeTools retires the tool bodies a feature registered. A tool is
 // live until the feature returns, so a removal cannot fail except on a body
-// already gone.
-func removeTools(tools []*Body) {
+// already gone. A body a step may not retire (one live before the run, or
+// built by another step) stays live and fails the run; see removeConsumed.
+func removeTools(ctx context.Context, tools []*Body) {
 	for _, t := range tools {
-		if t == nil || t.n.Doc == nil {
-			continue
-		}
-		d := documentHandle(t.n.Doc)
-		d.n.LiveMu.Lock()
-		if slices.Contains(d.n.LiveSet, bodyNode(t)) {
-			d.retire(t)
-		}
-		d.n.LiveMu.Unlock()
+		_ = removeConsumed(ctx, t) // a refusal already marked the run failed
 	}
+}
+
+// removeConsumed retires b, a body a feature consumes, after stepGate has checked that the caller may retire it:
+// inside a step only a body the step built. A refusal is ErrStepScope, marks the run failed and leaves b live.
+// A nil or document-less b, or one that is not live, is skipped.
+func removeConsumed(ctx context.Context, b *Body) error {
+	if b == nil || b.n.Doc == nil {
+		return nil
+	}
+	d := documentHandle(b.n.Doc)
+	// A private tool never enters the live set and carries no step tag, so only a live body goes through the gate.
+	d.n.LiveMu.RLock()
+	live := slices.Contains(d.n.LiveSet, bodyNode(b))
+	d.n.LiveMu.RUnlock()
+	if !live {
+		return nil
+	}
+	if _, err := d.stepGate(ctx, nil, []*Body{b}); err != nil {
+		return err
+	}
+	d.n.LiveMu.Lock()
+	defer d.n.LiveMu.Unlock()
+	if slices.Contains(d.n.LiveSet, bodyNode(b)) {
+		d.retire(b)
+	}
+	return nil
 }

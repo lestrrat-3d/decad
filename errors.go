@@ -149,6 +149,17 @@ var ErrUnsupported = decaderr.ErrUnsupported
 // OperationKind at stage OperationStageInput.
 var ErrConsumed = decaderr.ErrConsumed
 
+// ErrStepScope is returned when a document is running build steps ([RunSteps]) and a call breaks the step rules:
+// an operation on the document made without its step's context, a step using a body another step built, a step
+// consuming a body that was live before the steps began, a call that cannot name its step (a Container mutation,
+// Param, Expr or ParamInt) while steps run, a step context used after its step finished, or RunSteps on a
+// document already running steps. A refused call leaves the document unchanged.
+var ErrStepScope = decaderr.ErrStepScope
+
+// ErrStepIdentities is returned when a step used up its identity block ([WithStepIdentities]). The operation
+// that ran out leaves the document unchanged.
+var ErrStepIdentities = decaderr.ErrStepIdentities
+
 // BooleanErrorCode is the branchable fine reason a public boolean operation
 // failed, read from a [BooleanError] with errors.As. It draws the line the
 // wrapped sentinel is too coarse to draw: the three codes separate a caller's

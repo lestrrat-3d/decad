@@ -74,7 +74,7 @@ func chamferByWedges(ctx context.Context, d *Document, b *Body, edges []*Edge, d
 	slices.SortStableFunc(wedges, func(x, y wedge) int { return x.flushEnds() - y.flushEnds() })
 	toolCtx, capture := privateConstructionContext(ctx)
 	var tools []*Body
-	defer func() { removeTools(tools) }()
+	defer func() { removeTools(ctx, tools) }()
 	for _, w := range wedges {
 		tool, err := buildWedgeTool(toolCtx, d, w, dmm)
 		if err != nil {

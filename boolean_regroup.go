@@ -31,7 +31,7 @@ func pairedCutSources(ctx context.Context, d *Document, target, tool *Body) (pai
 	if d.requireLive(target) != nil || d.requireLive(tool) != nil || target == tool {
 		return pairedCutAncestry{}, false
 	}
-	return pairedCutSnapshot(d.OperationHistory(), target, tool)
+	return pairedCutSnapshot(d.historyAt(ctx), target, tool)
 }
 
 func pairedCutSnapshot(h *OperationHistory, target, tool *Body) (pairedCutAncestry, bool) {
@@ -81,6 +81,10 @@ func commitPairedCut(ctx context.Context, d *Document, target, tool, body *Body,
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+	st, err := d.stepGate(ctx, inputs, []*Body{target, tool})
+	if err != nil {
+		return err
+	}
 	d.n.LiveMu.Lock()
 	defer d.n.LiveMu.Unlock()
 	if err := ctx.Err(); err != nil {
@@ -95,7 +99,11 @@ func commitPairedCut(ctx context.Context, d *Document, target, tool, body *Body,
 	if !ok || current != ancestry {
 		return original
 	}
-	d.advanceProducer(ctx, span)
+	if err := d.advanceProducer(ctx, span); err != nil {
+		return err
+	}
+	operation.step = stepIndex(st)
+	d.n.TagLocked(st, &body.n)
 	dest := d.destinationLocked(ctx, nil, []*Body{target, tool})
 	d.retire(target)
 	d.retire(tool)

@@ -133,7 +133,7 @@ func isManyUnionRefusal(err error) bool {
 // completes on the copies is run on the bodies themselves.
 func unionFold(ctx context.Context, bodies []*Body) (*Body, error) {
 	copies := make([]*Body, 0, len(bodies))
-	defer func() { removeTools(copies) }()
+	defer func() { removeTools(ctx, copies) }()
 	for _, b := range bodies {
 		c, err := copyAsIs(ctx, b)
 		if err != nil {
@@ -142,7 +142,7 @@ func unionFold(ctx context.Context, bodies []*Body) (*Body, error) {
 		copies = append(copies, c)
 	}
 	trial, err := foldPairs(ctx, copies)
-	removeTools([]*Body{trial})
+	removeTools(ctx, []*Body{trial})
 	if err != nil {
 		return nil, err
 	}

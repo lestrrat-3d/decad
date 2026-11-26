@@ -147,7 +147,7 @@ func (c *InfillCommand) run(ctx context.Context) (result *Body, retErr error) {
 	// which sit in infillInterior behind the skin route's copies, so a refusal
 	// costs one snapshot.
 	d := documentHandle(c.b.n.Doc)
-	snap := d.snapshot()
+	snap := d.snapshot(ctx)
 	defer func() {
 		if retErr != nil {
 			d.restore(snap)
@@ -166,10 +166,14 @@ func infillWithSkin(ctx context.Context, b *Body, spec infillSpec) (result *Body
 	if b == nil || b.n.Doc == nil {
 		return nil, fmt.Errorf(`%w: the body belongs to no document`, ErrDegenerate)
 	}
+	// A step may retire only a body it built, so a refusal comes before any copy is made.
+	if _, err := documentHandle(b.n.Doc).stepGate(ctx, nil, []*Body{b}); err != nil {
+		return nil, err
+	}
 	var temporaries []*Body
 	defer func() {
 		if retErr != nil {
-			removeTools(temporaries)
+			removeTools(ctx, temporaries)
 		}
 	}()
 	skinSource, err := copyAsIs(ctx, b)
@@ -198,7 +202,9 @@ func infillWithSkin(ctx context.Context, b *Body, spec infillSpec) (result *Body
 	if err != nil {
 		return nil, err
 	}
-	removeTools([]*Body{b})
+	if err := removeConsumed(ctx, b); err != nil {
+		return nil, err
+	}
 	return joined, nil
 }
 

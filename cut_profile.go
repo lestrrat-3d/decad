@@ -135,7 +135,7 @@ func cutProfiles(ctx context.Context, kind OperationKind, target *Body, s *sketc
 	}
 	toolCtx, capture := privateConstructionContext(ctx)
 	var tools []*Body
-	defer func() { removeTools(tools) }()
+	defer func() { removeTools(ctx, tools) }()
 	for _, p := range profiles {
 		if p == nil {
 			return nil, fmt.Errorf(`%w: a profile cut was given a nil profile`, ErrDegenerate)

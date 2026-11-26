@@ -57,3 +57,9 @@ var ErrUnsupported = errors.New("decad: not supported by the current evaluator")
 
 // ErrConsumed is the value behind decad.ErrConsumed.
 var ErrConsumed = errors.New("decad: command has already run")
+
+// ErrStepScope is the value behind decad.ErrStepScope.
+var ErrStepScope = errors.New("decad: build step scope violated")
+
+// ErrStepIdentities is the value behind decad.ErrStepIdentities.
+var ErrStepIdentities = errors.New("decad: build step identity block exhausted")

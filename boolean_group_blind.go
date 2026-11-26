@@ -186,6 +186,10 @@ func commitBlindGroupCut(ctx context.Context, d *Document, target, tool, result 
 	if err := budget.SpendWork(ctx, 128); err != nil {
 		return err
 	}
+	st, err := d.stepGate(ctx, operationInputsForBoolean(meshbool.OpCut, target, tool), []*Body{target, tool})
+	if err != nil {
+		return err
+	}
 	d.n.LiveMu.Lock()
 	defer d.n.LiveMu.Unlock()
 	if target.n.Doc != &d.n || tool.n.Doc != &d.n || result.n.Doc != &d.n ||
@@ -195,8 +199,11 @@ func commitBlindGroupCut(ctx context.Context, d *Document, target, tool, result 
 	// Each input count is capped before arithmetic. The quadratic map-work
 	// allowance covers worst-case probing while rebuilding the two history
 	// indexes and the live container index; storage is reserved before makes.
-	counts := [...]int{len(d.n.LiveSet), len(d.operations), len(d.producers), len(d.consumers),
-		len(d.groups.ofBody), len(d.consumers[target]), len(d.consumers[tool])}
+	// During a run the sizes are those of the calling step's view, so the meter's decision does not depend on how
+	// far another step has got.
+	view := d.viewSizesLocked(ctx)
+	counts := [...]int{view.live, view.operations, view.producers, view.consumers,
+		view.groups, len(d.consumers[target]), len(d.consumers[tool])}
 	var sum uint64
 	for _, n := range counts {
 		if n > 1<<20 {
@@ -278,8 +285,12 @@ func commitBlindGroupCut(ctx context.Context, d *Document, target, tool, result 
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+	if err := d.advanceProducer(ctx, 1); err != nil {
+		return err
+	}
+	operation.step = stepIndex(st)
+	d.n.TagLocked(st, &result.n)
 	result.blindProof.cut = operation
-	d.advanceProducer(ctx, 1)
 	d.n.LiveSet, d.operations, d.producers, d.consumers = live, operations, producers, consumers
 	d.groups.root, d.groups.ofBody = root, containers
 	stampOperationWarningKind(result, OperationCut)

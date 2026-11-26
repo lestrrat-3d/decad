@@ -193,6 +193,7 @@ func TestDigestTypeCoverage(t *testing.T) {
 		"refuse github.com/lestrrat-3d/sketch.Sketch",
 		"skip github.com/lestrrat-3d/decad.Body.digest",
 		"skip github.com/lestrrat-3d/decad.Body.pairReports",
+		"skip github.com/lestrrat-3d/decad.Operation.step",
 		"skip github.com/lestrrat-3d/decad.blindGroupProof.cache",
 		"skip github.com/lestrrat-3d/decad/internal/occupancy.Record.grid",
 		"skip github.com/lestrrat-3d/decad/internal/topo.Body.PlanarConvexity",

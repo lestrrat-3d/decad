@@ -349,7 +349,7 @@ func hole(ctx context.Context, b *Body, spec holeSpec) (*Body, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer func() { removeTools(tools) }()
+	defer func() { removeTools(ctx, tools) }()
 	if tap != nil {
 		coil, err := buildThreadCoil(toolCtx, d, tap.frame, tap.plan, tap.pitch, tap.leftHand, in.Margin == 0)
 		if err != nil {
@@ -651,7 +651,7 @@ func holeAxisInsideBody(ctx context.Context, b *Body, in holeplan.Input, plan ho
 func buildHoleTools(ctx context.Context, d *Document, plan holeplan.Plan) ([]*Body, error) {
 	var tools []*Body
 	fail := func(err error) ([]*Body, error) {
-		removeTools(tools)
+		removeTools(ctx, tools)
 		return nil, err
 	}
 	if plan.Sink != nil && plan.Sink.IncludesBore {

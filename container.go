@@ -75,6 +75,9 @@ func (c *Container) NewChild(name string) (*Container, error) {
 		return nil, fmt.Errorf(`%w: a container needs a non-empty name`, ErrDegenerate)
 	}
 	d := c.doc
+	if err := d.requireRunIdle("Container.NewChild"); err != nil {
+		return nil, err
+	}
 	d.n.LiveMu.Lock()
 	defer d.n.LiveMu.Unlock()
 	if c.childLocked(name) != nil {
@@ -96,6 +99,9 @@ func (c *Container) ChildNamed(name string) (*Container, error) {
 		return nil, fmt.Errorf(`%w: a container needs a non-empty name`, ErrDegenerate)
 	}
 	d := c.doc
+	if err := d.requireRunIdle("Container.ChildNamed"); err != nil {
+		return nil, err
+	}
 	d.n.LiveMu.Lock()
 	defer d.n.LiveMu.Unlock()
 	if child := c.childLocked(name); child != nil {
@@ -117,6 +123,9 @@ func (c *Container) NewUniqueChild(name string) (*Container, error) {
 		return nil, fmt.Errorf(`%w: a container needs a non-empty name`, ErrDegenerate)
 	}
 	d := c.doc
+	if err := d.requireRunIdle("Container.NewUniqueChild"); err != nil {
+		return nil, err
+	}
 	d.n.LiveMu.Lock()
 	defer d.n.LiveMu.Unlock()
 	unique := name
@@ -162,6 +171,9 @@ func (c *Container) AddSketch(s *sketch.Sketch) error {
 		return fmt.Errorf(`%w: a nil container or sketch names nothing to place`, ErrDegenerate)
 	}
 	d := c.doc
+	if err := d.requireRunIdle("Container.AddSketch"); err != nil {
+		return err
+	}
 	d.n.LiveMu.Lock()
 	defer d.n.LiveMu.Unlock()
 	if from := d.sketchContainerLocked(s); from != c {
@@ -182,6 +194,9 @@ func (c *Container) AddPlane(p *sketch.Plane) error {
 		return fmt.Errorf(`%w: a nil container or plane names nothing to place`, ErrDegenerate)
 	}
 	d := c.doc
+	if err := d.requireRunIdle("Container.AddPlane"); err != nil {
+		return err
+	}
 	d.n.LiveMu.Lock()
 	defer d.n.LiveMu.Unlock()
 	from := d.rootLocked()
@@ -221,7 +236,8 @@ func (c *Container) Bodies() []*Body {
 	defer d.n.LiveMu.RUnlock()
 	var out []*topo.Body
 	for _, b := range d.n.LiveSet {
-		if d.bodyContainerLocked(b) == c {
+		// During a run a caller outside the steps sees the bodies live before it began.
+		if d.n.VisibleOutsideLocked(b) && d.bodyContainerLocked(b) == c {
 			out = append(out, b)
 		}
 	}
@@ -257,6 +273,9 @@ func (c *Container) AddBody(b *Body) error {
 		return fmt.Errorf(`%w: a nil container holds no body`, ErrDegenerate)
 	}
 	d := c.doc
+	if err := d.requireRunIdle("Container.AddBody"); err != nil {
+		return err
+	}
 	if err := d.requireLive(b); err != nil {
 		return err
 	}
@@ -451,11 +470,16 @@ func (d *Document) VerifyContainers() *ContainerReport {
 	root := d.rootLocked()
 	rep := &ContainerReport{}
 	held := map[*Container]struct{}{}
-	for i, b := range d.n.LiveSet {
+	position := 0
+	for _, b := range d.n.LiveSet {
+		if !d.n.VisibleOutsideLocked(b) {
+			continue
+		}
+		position++
 		c := d.bodyContainerLocked(b)
 		if c == root {
 			rep.RootBodies = append(rep.RootBodies, bodyHandle(b))
-			rep.rootIndex = append(rep.rootIndex, i+1)
+			rep.rootIndex = append(rep.rootIndex, position)
 			continue
 		}
 		for at := c; at != nil; at = at.parent {

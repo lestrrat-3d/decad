@@ -62,6 +62,9 @@ func (d *Document) VerifyMotion(ctx context.Context, moving []*Body, m Motion, o
 	if d == nil {
 		return nil, fmt.Errorf(`%w: a nil document owns no model`, ErrDegenerate)
 	}
+	// The live set is read before the query's transient ids are seeded (queryContext), so the seeds exceed
+	// every id of a body the set holds even when a RunSteps call ends between the two reads.
+	live := d.n.LiveIn(ctx)
 	ctx = d.queryContext(ctx)
 	if err := d.resolveMovers(moving); err != nil {
 		return nil, err
@@ -81,7 +84,7 @@ func (d *Document) VerifyMotion(ctx context.Context, moving []*Body, m Motion, o
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	run := motionengine.NewRun(ctx, motionHooks(), &d.n, d.n.Live(), cfg)
+	run := motionengine.NewRun(ctx, motionHooks(), &d.n, live, cfg)
 	run.Spec = spec
 	run.Setup(bodyNodes(moving))
 	poses, spans, err := run.Refine()

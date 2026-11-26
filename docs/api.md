@@ -14,6 +14,7 @@ Root-package identifiers carry the `decad.` prefix. `apitest/api_reference_test.
 - [The modeling loop](#the-modeling-loop)
 - [Conventions](#conventions)
 - [Documents and bodies](#documents-and-bodies)
+- [Concurrent build steps](#concurrent-build-steps)
 - [Operation history and diagnostics](#operation-history-and-diagnostics)
 - [Building bodies](#building-bodies)
 - [Modifying bodies](#modifying-bodies)
@@ -105,6 +106,8 @@ A `decad.Document` is not safe for concurrent mutation. Bodies are immutable and
 A feature command is not safe for concurrent use. When two goroutines call `Do` on one command, the feature runs
 once and the other call returns `decad.ErrConsumed`.
 
+`decad.RunSteps` builds independent parts of one model at the same time. See [Concurrent build steps](#concurrent-build-steps).
+
 ## Documents and bodies
 
 | Identifier | Meaning |
@@ -123,6 +126,29 @@ once and the other call returns `decad.ErrConsumed`.
 | `decad.Remove(b)` | Retires a body from its document. `Do` returns only an error, refuses a nil body or a body with no document with `decad.ErrDegenerate`, and returns `decad.ErrRetiredBody` for a retired one. A canceled context returns `ctx.Err()` and removes nothing, so a cleanup `Remove` after a canceled call needs `context.WithoutCancel(ctx)`. |
 | `decad.Body` | An immutable solid or sheet. |
 | `decad.BodyKind` | `decad.BodySolid` or `decad.BodySheet`. `Body.Kind` and `Body.IsSolid` read it. |
+
+## Concurrent build steps
+
+`decad.RunSteps(ctx, doc, steps, opts...)` runs `[]decad.Step` on one document and returns when every step has
+finished. Each step makes every decad call on the document through the `ctx` its `Build` receives.
+
+- A step sees the bodies that were live when `RunSteps` began and the bodies it built. It never sees another step's.
+- A step may read a body from before the run (copy it, stop an extent at it, `Verify` it) but may only consume bodies
+  it built. Using a body another step built, or an outer ctx, is `decad.ErrStepScope`.
+- `Remove`, a `Container` mutation, `Param`, `Expr` and `ParamInt` cannot name their step, so they are refused while
+  steps run. `Remove` of a body the step built passes through its ctx.
+- Each step draws its identities from its own block, so ids, `Bodies()` order and mesh bits are the same for every
+  worker count. When `RunSteps` returns, `Bodies()`, `OperationHistory()` and every `Container` list the earlier
+  bodies first, then step 0's, then step 1's.
+- While steps run, `Bodies`, `OperationHistory`, `VerifyContainers` and a `Verify` made without a step's ctx see only
+  the bodies live before the run.
+- Every step runs, also after one fails. `RunSteps` returns the failures joined in step order.
+
+| Identifier | Meaning |
+|---|---|
+| `decad.RunSteps`, `decad.Step` | Run the steps of a build. `Step.Name` labels errors and `Step.Build` makes the bodies. |
+| `decad.WithStepWorkers(n)` | Runs at most `n` steps at a time. The default is `runtime.GOMAXPROCS(0)`. The count never changes a result. |
+| `decad.WithStepIdentities(n)` | Gives each step `n` identities of each kind. The default is `1 << 32`. A step that uses them up gets `decad.ErrStepIdentities`. |
 
 ## Operation history and diagnostics
 
@@ -680,6 +706,8 @@ Branch on a sentinel with `errors.Is`.
 | `decad.ErrContainerLayout` | `ContainerReport.Err` found a body in the root or an empty container. |
 | `decad.ErrRetiredBody` | A body was already consumed by a feature. |
 | `decad.ErrConsumed` | `Do` was called on a feature command that already ran. |
+| `decad.ErrStepScope` | A call broke the rules of `decad.RunSteps`: no step ctx, another step's body, a pre-run body consumed, a call that cannot name its step, or a step ctx used after its run. |
+| `decad.ErrStepIdentities` | A step used up its identity block. |
 | `decad.ErrMalformedMesh`, `decad.ErrMeshTooLarge` | An STL or OBJ file was malformed, or held more than the import limits allow. |
 | `decad.ErrForeignProfile`, `decad.ErrStaleProfile`, `decad.ErrInvalidProfile`, `decad.ErrUnrecordableProfile` | A sketch profile was rejected. |
 

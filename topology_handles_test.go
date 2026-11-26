@@ -249,7 +249,7 @@ var documentWriteFields = map[string]struct{}{
 }
 
 // TestTopoDocumentWriteGuard parses every non-test .go file under internal/
-// except internal/topo/document.go and fails on a write to a document node's
+// except internal/topo/document.go and internal/topo/step.go (the run machinery) and fails on a write to a document node's
 // live set or counters, or on a write lock of its LiveMu: an assignment, op=
 // assignment, ++ or -- whose left side ends in one of documentWriteFields; a
 // composite literal that sets one of them; a call of X.LiveMu.Lock or
@@ -264,7 +264,7 @@ func TestTopoDocumentWriteGuard(t *testing.T) {
 			return err
 		}
 		if de.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") ||
-			filepath.ToSlash(path) == "internal/topo/document.go" {
+			filepath.ToSlash(path) == "internal/topo/document.go" || filepath.ToSlash(path) == "internal/topo/step.go" {
 			return nil
 		}
 		src, err := os.ReadFile(path)
