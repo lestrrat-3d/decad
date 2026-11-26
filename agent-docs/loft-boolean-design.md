@@ -85,10 +85,10 @@ record: each loop lifts its start stations, then its end stations. Every loop's
 end stations are the shared middle ring, and its reflected start stations bound
 the top cap, so a bored source joins with its hole loops like its outer loop,
 and the banded crossing audit receives every loop of each cap.
-`apitest.TestLoftMirrorJoinThroughBore` bores rounded twisted gear joins of five
-and seven teeth: each removes `πr²·2h` within the two volume bounds, passes the
-verified tessellation with one hole, and keeps every vertex near the axis on
-the bore. `TestLoftMirrorJoinShortToolKeepsTheTop` checks that a tool short of
+`apitest.TestLoftMirrorJoinThroughBore` bores a rounded twisted gear join of five
+teeth: it removes `πr²·2h` within the two volume bounds, passes the verified
+tessellation with one hole, and keeps every vertex near the axis on the bore.
+No gate on this route depends on the tooth count. `TestLoftMirrorJoinShortToolKeepsTheTop` checks that a tool short of
 the top cap never removes the full cylinder.
 
 ### Scope
