@@ -40,13 +40,15 @@ import (
 //     the bevel's footprint past the end (shortNextEdge).
 //   - A concave end turned by up to 90 degrees beside a line stops the bevel on the next face's plane, carried back over
 //     the run's band: the cutter loses a local sector about the corner, so the bevel tapers toward the corner's
-//     vertical edge and the next face grows by a coplanar triangle. There is no square end. On a prism whose
-//     document's gap tolerance reaches partialCornerRelief the cutter also loses a polygon within that radius of the
-//     corner, so it never lies flush with the next wall along the corner's edge. The result's true solid is then the
-//     relieved chamfer, which keeps material within partialCornerRelief of the corner's edge. The material continues
-//     past a concave corner, so a cutter that reaches past the end would carve it. A chain that comes back within the
-//     sector's reach is refused. Beside an arc that curves toward the material the sector stops at the foot of the
-//     next wall's line, and a plane that misses the bevel's top edge cannot cap it and is refused.
+//     vertical edge and the next face grows by a coplanar triangle. There is no square end. Beside a line the sector
+//     keeps to the band within the cutter's reach of the line, or wider where the taper's smooth stretch bends deeper
+//     (clipWidth), so a small turn's wide sector does not reach the run's other walls. When the document's gap
+//     tolerance reaches partialCornerRelief the cutter also loses a polygon within that radius of the corner, so it
+//     never lies flush with the next wall along the corner's edge. The result's true solid is then the relieved
+//     chamfer, which keeps material within partialCornerRelief of the corner's edge. The material continues past a
+//     concave corner, so a cutter that reaches past the end would carve it. A chain that comes back into the clip is
+//     refused. Beside an arc that curves toward the material the sector stops at the foot of the next wall's line,
+//     and a plane that misses the bevel's top edge cannot cap it and is refused.
 //
 // Any other end is refused rather than guessed: a convex end turned by less than those angles, a concave end turned by
 // more than 90 degrees, or a concave end beside an arc whose next wall's plane misses the bevel. So is a chain whose cutter would reach material of the loop's
@@ -87,8 +89,8 @@ func PartialLoopChamfer(ctx context.Context, env topo.Env, hooks Hooks, body *to
 			return Result{}, true, err
 		}
 	}
-	// A prism's concave ends take the corner relief when the document's gap tolerance reaches it.
-	if isPrism && hooks.GapReach != nil && hooks.GapReach(env) >= partialCornerRelief {
+	// Concave ends take the corner relief when the document's gap tolerance reaches it.
+	if hooks.GapReach != nil && hooks.GapReach(env) >= partialCornerRelief {
 		for _, r := range runs {
 			r.loop.relief = partialCornerRelief
 		}
@@ -112,7 +114,7 @@ func PartialLoopChamfer(ctx context.Context, env topo.Env, hooks Hooks, body *to
 const partialSagitta = 0.0002
 
 // partialCornerRelief is the radius, in millimetres, of the circle about a concave end's corner within which the end
-// clip also takes a polygon from a prism's cutter (endClipMesh) when the document's gap tolerance reaches it. The bevel
+// clip also takes a polygon from the cutter (endClipMesh) when the document's gap tolerance reaches it. The bevel
 // then stops short of the corner's vertical edge and keeps material within that radius of it. That relieved chamfer is
 // the result's true solid, a use of the gap tolerance like the shifted Boolean retry's
 // (agent-docs/gap-tolerance-design.md §5.4). Without it the clipped cutter lies flush with the next wall's plane along
@@ -120,8 +122,10 @@ const partialSagitta = 0.0002
 // the moved clip face crosses the run's wall at the corner's turn. Beside an arc the rim there divides the wall's chord
 // bound by the sine of the turn: a turn of 10 degrees multiplies it by almost six. The relief keeps the cutter at least
 // partialCornerRelief times the smaller of cos(turn/2) and the cosine of half a chord's angle from the next wall,
-// several times the bound of the clipped cutter's faces, so the Boolean decides the pair without a shift. The result's
-// bounds describe the relieved chamfer and do not cover the chamfer without the relief.
+// several times the bound of the clipped cutter's faces, so the Boolean decides the pair without a shift. A faceted
+// receiver takes it too: its next wall and the clipped cutter carry facet bounds, which a flush touch never clears, and
+// beside a small turn the shifted retry is refused as well. The result's bounds describe the relieved chamfer and do
+// not cover the chamfer without the relief.
 const partialCornerRelief = 0.004
 
 // partialOvershoots are how far, in setbacks, a cutter reaches above the cap and outside the wall, tried in turn
@@ -328,6 +332,9 @@ type runEnd struct {
 	// the next wall's line carried back over the run, to the foot of the perpendicular from the arc's centre. Past the
 	// foot that line turns back toward the arc, so the end clip stops there.
 	foot float64
+	// band is set at a concave end whose run segment is a line: the unit normal of that line into the material. The end
+	// clip then holds only what lies within a width of the line on the material side (chamferRun.clipWidth).
+	band pt2
 }
 
 const (
@@ -372,6 +379,9 @@ func (r chamferRun) ends() ([2]runEnd, bool) {
 				e.foot = cu
 			}
 		}
+		if e.concave && !runSeg.arc {
+			e.band = l.materialNormal(runSeg, v)
+		}
 		if e.concave {
 			return e, e.turn <= maxConcaveTurn+1e-9 && !other.arc
 		}
@@ -408,9 +418,9 @@ func (e runEnd) clipSector() (from, sweep float64) {
 }
 
 // inClip reports whether p lies in the end clip of the concave end e: within clip of the corner inside the sector's
-// angles, and otherwise within the circle the relief polygon of radius relief holds (endClipMesh), which a zero relief
-// leaves empty.
-func (e runEnd) inClip(p pt2, clip, relief float64) bool {
+// angles and no farther than width into the material from the run's line (clipWidth), and otherwise within the circle
+// the relief polygon of radius relief holds (endClipMesh), which a zero relief leaves empty.
+func (e runEnd) inClip(p pt2, clip, width, relief float64) bool {
 	from, sweep := e.clipSector()
 	a := math.Atan2(p.y-e.v.y, p.x-e.v.x) - from
 	for a < 0 {
@@ -420,7 +430,7 @@ func (e runEnd) inClip(p pt2, clip, relief float64) bool {
 		a -= 2 * math.Pi
 	}
 	if a <= sweep {
-		return p.dist(e.v) <= clip
+		return p.dist(e.v) <= clip && (e.band == pt2{} || p.sub(e.v).dot(e.band) <= width)
 	}
 	if relief <= 0 {
 		return false
@@ -432,6 +442,45 @@ func (e runEnd) inClip(p pt2, clip, relief float64) bool {
 // reliefCells is how many chords the relief polygon takes over rest radians, the angles the end clip's sector leaves
 // out: one per sixteenth of a turn or part of one.
 func reliefCells(rest float64) int { return max(1, int(math.Ceil(rest/(math.Pi/8)))) }
+
+// nearLen is how far along the run from the concave end e its smooth stretch holds the bevel's taper: the cutter's
+// reach over the sine of the turn, where the next wall's plane carried back leaves the cutter's band.
+func (e runEnd) nearLen(d, over float64) float64 {
+	return partialReach(d, over) / math.Sin(math.Min(e.turn, math.Pi/2))
+}
+
+// clipWidth is how far into the material, measured from the line beside the concave end e (the run's start when
+// atStart), the end clip reaches; beside an arc it has no limit. The width is the cutter's reach (partialReach), or
+// more where the smooth stretch leaving the corner (runEnd.nearLen) bends deeper into the clip's sector: the clip then
+// holds that stretch's band, d + over wide, plus over. So the clip still takes all of the cutter that the next wall's
+// plane cuts off beside the corner, and nothing of the run that comes back farther from the line. A disc sector alone
+// would reach 1.5 reach/sin(turn) from the corner in every direction it spans: at a turn of 5.6 degrees, a chord of a
+// faceted round, that is 16 reaches, across the run's other walls.
+func (r chamferRun) clipWidth(e runEnd, atStart bool, d, over float64) float64 {
+	if e.band == (pt2{}) {
+		return math.Inf(1)
+	}
+	width := partialReach(d, over)
+	clip := e.clipRadius(d, over)
+	r.walkFromCorner(atStart, e.nearLen(d, over), func(p, in pt2, near bool) bool {
+		if !near {
+			// A segment walked toward the corner reaches its near points last.
+			return true
+		}
+		for _, off := range clipOffsets(d, over) {
+			if q := p.add(in.scale(off)); e.inClip(q, clip, math.Inf(1), 0) {
+				width = max(width, q.sub(e.v).dot(e.band)+over)
+			}
+		}
+		return true
+	})
+	return width
+}
+
+// clipOffsets are the setbacks from the wall, into the material, at which the clip checks sample the cutter's band.
+func clipOffsets(d, over float64) []float64 {
+	return []float64{-over, 0, d / 2, d, d + over/2, d + over}
+}
 
 // clipRadius is the radius of the sector the end clip removes about the corner of a concave end.
 func (e runEnd) clipRadius(d, over float64) float64 {
@@ -939,10 +988,11 @@ func cutRuns(ctx context.Context, env topo.Env, hooks Hooks, body *topo.Body, ru
 			if !e.concave {
 				continue
 			}
-			if err := r.checkClipLocal(e, i == 0, d, over); err != nil {
+			width := r.clipWidth(e, i == 0, d, over)
+			if err := r.checkClipLocal(e, i == 0, width, d, over); err != nil {
 				return nil, used, err
 			}
-			clip, err := r.loop.endClipMesh(ctx, e, d, over)
+			clip, err := r.loop.endClipMesh(ctx, e, width, d, over)
 			if err != nil {
 				return nil, used, err
 			}
@@ -970,29 +1020,27 @@ func cutRuns(ctx context.Context, env topo.Env, hooks Hooks, body *topo.Body, ru
 	return out, used, ctx.Err()
 }
 
-// checkClipLocal refuses a run that comes back into the end clip of the concave end e (the run's start when atStart).
-// The clip removes whatever the cutter holds inside its sector about the corner, which is meant to be the bevel's taper
-// beside the corner alone. The cutter lies within pad of the run, so a point of the run whose band of that width meets
-// the sector is refused unless it lies in the smooth stretch leaving the corner, within pad/sin(turn) of it along the
-// run, where the taper is. That covers a stretch past the first sharp corner, a smooth stretch that doubles back, and
-// an arc leaving the corner that curls onto the next wall's plane carried back. For an arc at the corner the plane's
-// plane must meet the bevel's circle at the cap at all, or it cannot cap the chamfer and the run is refused. Its second
-// crossing, lambda2, must lie beyond the sector and the cutter's width, unless the clip stops at the foot of the plane's
-// line (runEnd.foot): past the foot the line turns back toward the arc, and the clip does not reach it.
-func (r chamferRun) checkClipLocal(e runEnd, atStart bool, d, over float64) error {
+// checkClipLocal refuses a run that comes back into the end clip of the concave end e (the run's start when atStart),
+// width wide beside a line (clipWidth). The clip removes whatever the cutter holds inside its sector about the corner,
+// which is meant to be the bevel's taper beside the corner alone. The cutter lies within pad of the run, so a point of
+// the run whose band of that width meets the clip is refused unless it lies in the smooth stretch leaving the corner,
+// within pad/sin(turn) of it along the run, where the taper is. That covers a stretch past the first sharp corner, a
+// smooth stretch that doubles back, and an arc leaving the corner that curls onto the next wall's plane carried back.
+// For an arc at the corner the plane's plane must meet the bevel's circle at the cap at all, or it cannot cap the
+// chamfer and the run is refused. Its second crossing, lambda2, must lie beyond the sector and the cutter's width,
+// unless the clip stops at the foot of the plane's line (runEnd.foot): past the foot the line turns back toward the
+// arc, and the clip does not reach it.
+func (r chamferRun) checkClipLocal(e runEnd, atStart bool, width, d, over float64) error {
 	refuse := fmt.Errorf(`%w: a chamfered run comes back into the clip at its concave end`, decaderr.ErrUnsupported)
 	clip := e.clipRadius(d, over)
 	pad := partialReach(d, over)
-	n := r.count
-	at := func(i int) loopSeg { // the i-th segment from the corner
-		if atStart {
-			return r.seg(i)
-		}
-		return r.seg(n - 1 - i)
-	}
 	l := r.loop
-	offsets := []float64{-over, 0, d / 2, d, d + over/2, d + over}
-	if end := at(0); end.arc && l.toward(end) {
+	offsets := clipOffsets(d, over)
+	end := r.seg(0)
+	if !atStart {
+		end = r.seg(r.count - 1)
+	}
+	if end.arc && l.toward(end) {
 		// The bevel's inner circle at the cap, met by the next wall's plane carried back from the corner.
 		u := e.e2away.scale(-1)
 		cv := end.c.sub(e.v)
@@ -1012,7 +1060,41 @@ func (r chamferRun) checkClipLocal(e runEnd, atStart bool, d, over float64) erro
 			offsets = []float64{0, d / 2, d}
 		}
 	}
-	nearLen := pad / math.Sin(math.Min(e.turn, math.Pi/2))
+	back := false
+	smooth, along := r.walkFromCorner(atStart, e.nearLen(d, over), func(p, in pt2, near bool) bool {
+		if near {
+			return true
+		}
+		for _, off := range offsets {
+			if e.inClip(p.add(in.scale(off)), clip, width, l.relief) {
+				back = true
+				return false
+			}
+		}
+		return true
+	})
+	if back {
+		return refuse
+	}
+	if smooth && along < clip+pad {
+		return fmt.Errorf(`%w: a chamfered run is shorter than the clip at its concave end`, decaderr.ErrUnsupported)
+	}
+	return nil
+}
+
+// walkFromCorner walks the run from its start when atStart, else from its end, and calls visit at points every 0.2 mm
+// or less of each segment with the unit normal into the material there. near is set for a point of the smooth stretch
+// leaving the corner within nearLen of it along the run. The walk stops when visit returns false. It returns whether
+// every junction walked is smooth and the length walked.
+func (r chamferRun) walkFromCorner(atStart bool, nearLen float64,
+	visit func(p, in pt2, near bool) bool) (bool, float64) {
+	n := r.count
+	at := func(i int) loopSeg { // the i-th segment from the corner
+		if atStart {
+			return r.seg(i)
+		}
+		return r.seg(n - 1 - i)
+	}
 	const step = 0.2
 	smooth, along := true, 0.0
 	for i := range n {
@@ -1036,22 +1118,13 @@ func (r chamferRun) checkClipLocal(e runEnd, atStart bool, d, over float64) erro
 			if !atStart {
 				from = 1 - frac
 			}
-			if smooth && along+from*length <= nearLen {
-				continue
-			}
-			in := l.materialNormal(sg, p)
-			for _, off := range offsets {
-				if e.inClip(p.add(in.scale(off)), clip, l.relief) {
-					return refuse
-				}
+			if !visit(p, r.loop.materialNormal(sg, p), smooth && along+from*length <= nearLen) {
+				return smooth, along
 			}
 		}
 		along += length
 	}
-	if smooth && along < clip+pad {
-		return fmt.Errorf(`%w: a chamfered run is shorter than the clip at its concave end`, decaderr.ErrUnsupported)
-	}
-	return nil
+	return smooth, along
 }
 
 // segPoint is the point of s a fraction f of the way from its start to its end.
@@ -1074,6 +1147,7 @@ func segPoint(s loopSeg, f float64) pt2 {
 func (r chamferRun) checkMargin(ends [2]runEnd, d, over float64) error {
 	l := r.loop
 	poly := l.polygon()
+	widths := [2]float64{r.clipWidth(ends[0], true, d, over), r.clipWidth(ends[1], false, d, over)}
 	const step = 0.2
 	for j := range r.count {
 		sg := r.seg(j)
@@ -1091,8 +1165,8 @@ func (r chamferRun) checkMargin(ends [2]runEnd, d, over float64) error {
 			out := l.materialNormal(sg, p).scale(-1)
 			for _, u := range []float64{0.5, 0.75, 1} {
 				q := p.add(out.scale(u * over))
-				if (ends[0].concave && ends[0].inClip(q, ends[0].clipRadius(d, over), l.relief)) ||
-					(ends[1].concave && ends[1].inClip(q, ends[1].clipRadius(d, over), l.relief)) {
+				if (ends[0].concave && ends[0].inClip(q, ends[0].clipRadius(d, over), widths[0], l.relief)) ||
+					(ends[1].concave && ends[1].inClip(q, ends[1].clipRadius(d, over), widths[1], l.relief)) {
 					continue
 				}
 				if contains(poly, q) == l.outer {
@@ -1106,11 +1180,12 @@ func (r chamferRun) checkMargin(ends [2]runEnd, d, over float64) error {
 }
 
 // endClipMesh is the region a run's cutter loses at a concave end: a sector of a disc about the corner v, outside the
-// wedge between the next wall's plane carried back over the run and the bisector of the corner's empty wedge. What it
-// leaves ends the bevel on the next wall's plane, the way a CAD chamfer extends the unselected neighbour. With a relief
-// the region also holds a polygon inscribed in the circle of that radius about v, so the bevel stops short of the
-// corner's vertical edge.
-func (l *chamferLoop) endClipMesh(ctx context.Context, e runEnd, d, over float64) (cutterMesh, error) {
+// wedge between the next wall's plane carried back over the run and the bisector of the corner's empty wedge. Beside a
+// line run the sector is also cut off width into the material from the run's line (chamferRun.clipWidth), a straight
+// side the ring holds exactly. What it leaves ends the bevel on the next wall's plane, the way a CAD chamfer extends
+// the unselected neighbour. With a relief the region also holds a polygon inscribed in the circle of that radius about
+// v, so the bevel stops short of the corner's vertical edge.
+func (l *chamferLoop) endClipMesh(ctx context.Context, e runEnd, width, d, over float64) (cutterMesh, error) {
 	from, sweep := e.clipSector()
 	s := e.clipRadius(d, over)
 	ring := []pt2{e.v}
@@ -1126,9 +1201,30 @@ func (l *chamferLoop) endClipMesh(ctx context.Context, e runEnd, d, over float64
 		}
 	}
 	const cells = 24
+	angles := make([]float64, 0, cells+3)
 	for k := 0; k <= cells; k++ {
-		phi := from + sweep*float64(k)/cells
-		ring = append(ring, e.v.add(pt2{math.Cos(phi), math.Sin(phi)}.scale(s)))
+		angles = append(angles, from+sweep*float64(k)/cells)
+	}
+	if width < s {
+		// The ring turns from the arc onto the band's side where that side meets the circle, so a vertex lies there.
+		psi, half := math.Atan2(e.band.y, e.band.x), math.Acos(width/s)
+		for _, c := range []float64{psi - half, psi + half} {
+			rel := math.Mod(math.Mod(c-from, 2*math.Pi)+2*math.Pi, 2*math.Pi)
+			if rel < sweep {
+				angles = append(angles, from+rel)
+			}
+		}
+		slices.Sort(angles)
+		// A crossing at a sampled angle adds no vertex.
+		angles = slices.CompactFunc(angles, func(a, b float64) bool { return math.Abs(a-b) < 1e-9 })
+	}
+	for _, phi := range angles {
+		u := pt2{math.Cos(phi), math.Sin(phi)}
+		rho := s
+		if c := u.dot(e.band); c*s > width {
+			rho = width / c
+		}
+		ring = append(ring, e.v.add(u.scale(rho)))
 	}
 	if ringArea(ring) < 0 {
 		slices.Reverse(ring)
