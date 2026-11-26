@@ -65,7 +65,8 @@ An operation that commits many bodies puts every one of them in the same contain
 An operation that reads more than one body or sketch, or a body and a sketch, refuses when they sit in
 different containers (a boolean's operands, a loft's sections, a pattern join's target and feature,
 an extent that names a body, `SweepPair`'s two bodies): the error is `ErrCrossContainer` (match with `errors.Is`), naming both
-container paths. The check runs with the other operand checks, before any geometry work, and a
+container paths. (`Document.IntersectionVolume` reads two bodies across containers, since it commits nothing.)
+The check runs with the other operand checks, before any geometry work, and a
 refused call leaves the document unchanged.
 
 `c.AddBody(b)` is how a body crosses to another container. It places the live body `b` in `c` and
