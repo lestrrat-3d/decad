@@ -306,6 +306,8 @@ func (fp Payload) placedWithReplay(ctx context.Context, env topo.Env, composed r
 	// The occupancy record describes the unplaced leaves; Refine reads it only
 	// before placement, so a placed copy drops it.
 	next.Occupancy = nil
+	// The cap sides describe the unplaced solid (agent-docs/coplanar-contact-design.md §20.1).
+	next.CapSides, next.CapSideMesh = nil, occupancy.Binding{}
 	next.AreaSlack = placed.AreaSlack
 	if replay != nil {
 		next.DPair, err = replaySourceDiameterUpper(ctx, next.Verts, next.MeshBound, replay)
