@@ -165,7 +165,7 @@ func (d *Document) commitOperationSpanPrefixIn(ctx context.Context, c *Container
 	if produced.blindProof != nil && !produced.blindProof.acceptsOperation(operation, produced) {
 		return fmt.Errorf("%w: blind Cut history does not match its witness", ErrUnsupported)
 	}
-	d.n.NextProducer += prefix + span
+	d.advanceProducer(ctx, prefix+span)
 	d.n.LiveMu.Lock()
 	defer d.n.LiveMu.Unlock()
 	if produced.blindProof != nil {
@@ -216,7 +216,7 @@ func (d *Document) commitOperationManyFacesIn(ctx context.Context, c *Container,
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	d.n.NextProducer += producerID(len(produced))
+	d.advanceProducer(ctx, producerID(len(produced)))
 	d.n.LiveMu.Lock()
 	defer d.n.LiveMu.Unlock()
 	dest := d.destinationLocked(ctx, c, consumed)
@@ -366,7 +366,7 @@ func (d *Document) commit(ctx context.Context, produced *Body, consumed ...*Body
 // of the first consumed body, and the root when nothing is consumed
 // (agent-docs/container-design.md §2).
 func (d *Document) commitIn(ctx context.Context, c *Container, produced *Body, consumed ...*Body) {
-	d.n.NextProducer++
+	d.advanceProducer(ctx, 1)
 	d.n.LiveMu.Lock()
 	defer d.n.LiveMu.Unlock()
 	dest := d.destinationLocked(ctx, c, consumed)
@@ -407,14 +407,25 @@ func (d *Document) retire(b *Body) {
 	}
 }
 
-// nextProducerID is the identity the next successful operation will occupy.
-func (d *Document) nextProducerID() producerID { return d.n.NextProducer }
+// producerAt is the identity the next successful operation called with ctx
+// will occupy. Every read of the producer counter goes through it, so the
+// counter's source is one place (see TestProducerCounterAccess).
+func (d *Document) producerAt(ctx context.Context) producerID {
+	return d.n.ProducerAt(ctx)
+}
+
+// advanceProducer moves the producer counter past the n identities that an
+// operation called with ctx has just occupied. It is the only writer of the
+// counter and takes no lock itself.
+func (d *Document) advanceProducer(_ context.Context, n producerID) {
+	d.n.NextProducer += n
+}
 
 func (d *Document) producerID(ctx context.Context) producerID {
 	if capture, ok := ctx.Value(operationHistorySuppressedKey{}).(*operationHistoryCapture); ok {
-		return capture.nextProducerID(d)
+		return capture.nextProducer(ctx, d)
 	}
-	return d.nextProducerID()
+	return d.producerAt(ctx)
 }
 
 // requireLive gates a body-consuming operation: the body must belong to this
@@ -473,7 +484,7 @@ func transform(ctx context.Context, body *Body, t r3.Transform, kind OperationKi
 	if err != nil {
 		return nil, fmt.Errorf(`decad: composing the placement failed: %w`, err)
 	}
-	ref := d.nextProducerID()
+	ref := d.producerAt(ctx)
 	placed, err := placePayload(ctx, body.n.Payload, d, ref, composed)
 	if err != nil {
 		return nil, err
@@ -681,7 +692,7 @@ func (b *Body) copyUnder(ctx context.Context, motion r3.Transform, exact *exactr
 	if err != nil {
 		return nil, fmt.Errorf(`decad: composing the placement failed: %w`, err)
 	}
-	ref := d.nextProducerID()
+	ref := d.producerAt(ctx)
 	var copied *Body
 	faceted, isFaceted := b.n.Payload.(facetedPayload)
 	if isFaceted && exact != nil {

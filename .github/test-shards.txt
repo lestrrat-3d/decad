@@ -371,3 +371,4 @@
 12	0.55	TestUnionSharedCapTangentCapsRefused
 12	0.02	TestUnionSharedCapBossOnPlate
 12	0.01	TestRevolveCapSidesNeedTheCapAloneOnItsPlane
+12	0.01	TestProducerCounterAccess

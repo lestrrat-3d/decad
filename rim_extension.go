@@ -50,7 +50,7 @@ func extendStraightRim(ctx context.Context, d *Document, b *Body, e *topo.Edge, 
 	if !ok || err != nil {
 		return none, false, err
 	}
-	env := envOf(b.n.Doc, b.n.Doc.NextProducer)
+	env := envOf(b.n.Doc, documentHandle(b.n.Doc).producerAt(ctx))
 	result, ok, err := rimextension.Prepare(ctx, env, a, c, w, m)
 	if !ok || err != nil {
 		return none, false, err
@@ -111,7 +111,7 @@ func extendTransverseRim(ctx context.Context, d *Document, b *Body, e *topo.Edge
 		}
 		a.Stop = append(a.Stop, v)
 	}
-	env := envOf(b.n.Doc, b.n.Doc.NextProducer)
+	env := envOf(b.n.Doc, documentHandle(b.n.Doc).producerAt(ctx))
 	p, ok, err := rimextension.PrepareTransverse(ctx, env, a, c, m)
 	if !ok || err != nil {
 		return none, false, err

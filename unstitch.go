@@ -54,7 +54,7 @@ func Unstitch(ctx context.Context, b *Body) (results []*Body, retErr error) {
 	}
 
 	faces := b.Faces()
-	base := d.nextProducerID()
+	base := d.producerAt(ctx)
 	results = make([]*Body, len(faces))
 	for i, f := range faces {
 		if err := ctx.Err(); err != nil {

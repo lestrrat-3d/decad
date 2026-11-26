@@ -87,7 +87,7 @@ func commitPairedCut(ctx context.Context, d *Document, target, tool, body *Body,
 		return err
 	}
 	if !slices.Contains(d.n.LiveSet, &target.n) || !slices.Contains(d.n.LiveSet, &tool.n) ||
-		d.n.NextProducer != base {
+		d.producerAt(ctx) != base {
 		return original
 	}
 	h := &OperationHistory{doc: &d.n, operations: d.operations, producers: d.producers, consumers: d.consumers}
@@ -95,7 +95,7 @@ func commitPairedCut(ctx context.Context, d *Document, target, tool, body *Body,
 	if !ok || current != ancestry {
 		return original
 	}
-	d.n.NextProducer += span
+	d.advanceProducer(ctx, span)
 	dest := d.destinationLocked(ctx, nil, []*Body{target, tool})
 	d.retire(target)
 	d.retire(tool)
@@ -173,7 +173,7 @@ func pairedCutContinuation(ctx context.Context, d *Document, target, tool *Body,
 	if ancestry.firstTool != nil {
 		span, firstTool = 5, ancestry.firstTool
 	}
-	base := d.nextProducerID()
+	base := d.producerAt(ctx)
 	if base < 0 || base > producerID(math.MaxInt)-span {
 		return nil, 0, empty, false, nil
 	}
@@ -261,7 +261,7 @@ func regroupBoolean(ctx context.Context, d *Document, op meshbool.OperationKind,
 	if err != nil {
 		return nil, 0, false, err
 	}
-	n, span, ok, err := booleandispatch.Regroup(ectx, chain, envOf(documentNode(d), d.nextProducerID()),
+	n, span, ok, err := booleandispatch.Regroup(ectx, chain, envOf(documentNode(d), d.producerAt(ctx)),
 		booleanHooks(cfg), regroupSurfaces)
 	if err != nil || !ok {
 		return nil, 0, false, err
@@ -299,7 +299,7 @@ func rimSplitRebuild(ctx context.Context, d *Document, op meshbool.OperationKind
 		return nil, 0, false, err
 	}
 	n, span, ok, err := booleandispatch.RebuildUnionSplit(ectx, &a.n, &b.n, src,
-		envOf(documentNode(d), d.nextProducerID()), booleanHooks(cfg), regroupSurfaces)
+		envOf(documentNode(d), d.producerAt(ctx)), booleanHooks(cfg), regroupSurfaces)
 	if err != nil || !ok {
 		return nil, 0, false, err
 	}

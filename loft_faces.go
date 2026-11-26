@@ -186,7 +186,7 @@ func LoftFaces(ctx context.Context, sections []*Face, opts ...LoftFacesOption) (
 func buildLoftFaces(ctx context.Context, d *Document, inputs []OperationInput,
 	sections []revolveloftfaces.LoftFacesSection,
 	source *pointSectionRecord, tangent *loftface.TangentEnd) (*Body, error) {
-	ref := d.nextProducerID()
+	ref := d.producerAt(ctx)
 	body, err := bodyResult(revolveloftfaces.BuildLoftFaces(ctx, envOf(documentNode(d), ref), sections, source, tangent))
 	if err != nil {
 		return nil, err

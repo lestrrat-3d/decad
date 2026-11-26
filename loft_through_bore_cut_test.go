@@ -66,7 +66,7 @@ func throughBoreFixture(t *testing.T) (*Document, *Body, loftPayload, prismPaylo
 func TestLoftThroughBoreCutGates(t *testing.T) {
 	doc, blank, loft, tool := throughBoreFixture(t)
 	cut := func(ctx context.Context, a loftPayload, b prismPayload) (bool, error) {
-		node, ok, err := loftrecord.ThroughBoreCut(ctx, envOf(documentNode(doc), doc.nextProducerID()), a, b)
+		node, ok, err := loftrecord.ThroughBoreCut(ctx, envOf(documentNode(doc), doc.producerAt(ctx)), a, b)
 		if ok {
 			require.NotNil(t, node)
 			p, isLoft := node.Payload.(loftPayload)
@@ -109,7 +109,7 @@ func TestLoftThroughBoreCutGates(t *testing.T) {
 	circle := tool.Profile.Outer.Segments[0].(sectionrecord.CircleSeg)
 
 	t.Run("a later circular tool must clear every prior bore", func(t *testing.T) {
-		env := envOf(documentNode(doc), doc.nextProducerID())
+		env := envOf(documentNode(doc), doc.producerAt(t.Context()))
 		first, admitted, err := loftrecord.ThroughBoreCut(t.Context(), env, loft, tool)
 		require.NoError(t, err)
 		require.True(t, admitted)
@@ -219,13 +219,13 @@ func TestLoftThroughBoreCutGates(t *testing.T) {
 	}
 
 	t.Run("not a loft", func(t *testing.T) {
-		node, ok, err := loftrecord.ThroughBoreCut(t.Context(), envOf(documentNode(doc), doc.nextProducerID()), tool, tool)
+		node, ok, err := loftrecord.ThroughBoreCut(t.Context(), envOf(documentNode(doc), doc.producerAt(t.Context())), tool, tool)
 		require.NoError(t, err)
 		require.False(t, ok)
 		require.Nil(t, node)
 	})
 	t.Run("not a prism tool", func(t *testing.T) {
-		node, ok, err := loftrecord.ThroughBoreCut(t.Context(), envOf(documentNode(doc), doc.nextProducerID()), loft, loft)
+		node, ok, err := loftrecord.ThroughBoreCut(t.Context(), envOf(documentNode(doc), doc.producerAt(t.Context())), loft, loft)
 		require.NoError(t, err)
 		require.False(t, ok)
 		require.Nil(t, node)
@@ -241,7 +241,7 @@ func TestLoftThroughBoreCutGates(t *testing.T) {
 		dTool := throughDToolFixture(t, doc)
 		dToolPayload := dTool.n.Payload.(prismPayload)
 		require.Len(t, dToolPayload.Profile.Outer.Segments, 2)
-		node, admitted, err := loftrecord.ThroughBoreCut(t.Context(), envOf(documentNode(doc), doc.nextProducerID()), loft, dToolPayload)
+		node, admitted, err := loftrecord.ThroughBoreCut(t.Context(), envOf(documentNode(doc), doc.producerAt(t.Context())), loft, dToolPayload)
 		require.NoError(t, err)
 		require.True(t, admitted)
 		require.NotNil(t, node)
@@ -312,7 +312,7 @@ func throughDToolFixture(t *testing.T, doc *Document) *Body {
 // the departure the rotation leaves on its tag; the unplaced one has none.
 func TestPlacedLoftBoreChargesPlacement(t *testing.T) {
 	doc, _, loft, tool := throughBoreFixture(t)
-	env := envOf(documentNode(doc), doc.nextProducerID())
+	env := envOf(documentNode(doc), doc.producerAt(t.Context()))
 	node, ok, err := loftrecord.ThroughBoreCut(t.Context(), env, loft, tool)
 	require.NoError(t, err)
 	require.True(t, ok)
@@ -330,7 +330,7 @@ func TestPlacedLoftBoreChargesPlacement(t *testing.T) {
 	require.Zero(t, cylinderBound(node))
 	rotation, err := r3.Rotation(r3.NewVec(1, 2, 3), units.Radians(0.7))
 	require.NoError(t, err)
-	placed, err := node.Payload.(loftPayload).Placed(t.Context(), envOf(documentNode(doc), doc.nextProducerID()), rotation)
+	placed, err := node.Payload.(loftPayload).Placed(t.Context(), envOf(documentNode(doc), doc.producerAt(t.Context())), rotation)
 	require.NoError(t, err)
 	want, ok := loftrecord.BoreCylinderNormalBound(loft.Frame0, rotation, 1, 0.5, 2, 1)
 	require.True(t, ok)

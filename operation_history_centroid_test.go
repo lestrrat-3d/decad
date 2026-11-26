@@ -117,7 +117,7 @@ func TestContainedCutCentroidEvidenceFailureKeepsDocumentUnchanged(t *testing.T)
 
 	bodiesBefore := doc.Bodies()
 	operationsBefore := doc.OperationHistory().Operations()
-	producerBefore := doc.nextProducerID()
+	producerBefore := doc.producerAt(t.Context())
 	_, err := Cut(t.Context(), target, tool)
 	require.ErrorContains(t, err, "contained-cut centroid evidence is invalid")
 	var booleanErr *BooleanError
@@ -125,7 +125,7 @@ func TestContainedCutCentroidEvidenceFailureKeepsDocumentUnchanged(t *testing.T)
 	require.Equal(t, BooleanEvaluatorFailure, booleanErr.Code)
 
 	require.Equal(t, bodiesBefore, doc.Bodies())
-	require.Equal(t, producerBefore, doc.nextProducerID())
+	require.Equal(t, producerBefore, doc.producerAt(t.Context()))
 	operationsAfter := doc.OperationHistory().Operations()
 	require.Len(t, operationsAfter, len(operationsBefore))
 	for i := range operationsBefore {

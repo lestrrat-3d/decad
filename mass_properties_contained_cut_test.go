@@ -78,7 +78,7 @@ func TestContainedCutMomentEvidenceRollback(t *testing.T) {
 	target.n.Volume.Value = units.CubicMillimeters(target.n.Volume.Value.Base() + 1e-6)
 	bodiesBefore := doc.Bodies()
 	operationsBefore := doc.OperationHistory().Operations()
-	producerBefore := doc.nextProducerID()
+	producerBefore := doc.producerAt(t.Context())
 	_, err := Cut(t.Context(), target, tool)
 	require.ErrorContains(t, err, "contained-cut moment evidence is invalid")
 	require.ErrorContains(t, err, "target source volume")
@@ -88,7 +88,7 @@ func TestContainedCutMomentEvidenceRollback(t *testing.T) {
 	for i := range bodiesBefore {
 		require.Same(t, bodiesBefore[i], doc.Bodies()[i])
 	}
-	require.Equal(t, producerBefore, doc.nextProducerID())
+	require.Equal(t, producerBefore, doc.producerAt(t.Context()))
 	after := doc.OperationHistory().Operations()
 	require.Len(t, after, len(operationsBefore))
 	for i := range operationsBefore {

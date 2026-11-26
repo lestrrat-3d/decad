@@ -75,7 +75,7 @@ func loftFromPoint(ctx context.Context, d *Document, apex r3.Vec,
 		source.Entities[i] = edge.Entity
 	}
 	record := pointSectionRecord{Apex: apex, Profile: profile, Plane: plane, Source: source}
-	ref := d.nextProducerID()
+	ref := d.producerAt(ctx)
 	payload, err := pointloft.Build(ctx, record, frame, area, work0, work1, ref)
 	if err != nil {
 		return nil, err

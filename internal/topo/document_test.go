@@ -20,8 +20,8 @@ func TestDocumentNodeMintsAndReadsLiveness(t *testing.T) {
 	require.Nil(t, d.Live())
 
 	origin, normal := r3.Vec{X: 1, Y: 2, Z: 3}, r3.Vec{X: 0, Y: 0, Z: 1}
-	l1 := d.MintLevel(origin, normal)
-	l2 := d.MintLevel(origin, normal)
+	l1 := d.MintLevel(t.Context(), origin, normal)
+	l2 := d.MintLevel(t.Context(), origin, normal)
 	require.Equal(t, denotation.LevelID(1), l1.ID)
 	require.Equal(t, denotation.LevelID(2), l2.ID)
 	require.Equal(t, denotation.LevelID(2), d.NextLevel)
@@ -29,8 +29,8 @@ func TestDocumentNodeMintsAndReadsLiveness(t *testing.T) {
 	require.Equal(t, normal, l1.Normal)
 	require.False(t, denotation.SameLevel(l1, l2), "two mints never denote one level")
 
-	c1 := d.MintCurve()
-	c2 := d.MintCurve()
+	c1 := d.MintCurve(t.Context())
+	c2 := d.MintCurve(t.Context())
 	require.Equal(t, denotation.CurveID(1), c1.ID)
 	require.Equal(t, denotation.CurveID(2), c2.ID)
 	require.Equal(t, denotation.CurveID(2), d.NextCurve)

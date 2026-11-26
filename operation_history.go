@@ -48,21 +48,21 @@ func operationHistoryInputs(ctx context.Context, inputs []OperationInput) bool {
 	return false
 }
 
-func (capture *operationHistoryCapture) nextProducerID(d *Document) producerID {
+func (capture *operationHistoryCapture) nextProducer(ctx context.Context, d *Document) producerID {
 	capture.mu.Lock()
 	defer capture.mu.Unlock()
 	if !capture.initialized {
-		capture.base = d.n.NextProducer
+		capture.base = d.producerAt(ctx)
 		capture.initialized = true
 	}
 	return capture.base + capture.span
 }
 
-func (capture *operationHistoryCapture) producerSpan(d *Document) producerID {
+func (capture *operationHistoryCapture) producerSpan(ctx context.Context, d *Document) producerID {
 	capture.mu.Lock()
 	defer capture.mu.Unlock()
 	if !capture.initialized {
-		capture.base = d.n.NextProducer
+		capture.base = d.producerAt(ctx)
 		capture.initialized = true
 	}
 	return capture.span

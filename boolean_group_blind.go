@@ -189,7 +189,7 @@ func commitBlindGroupCut(ctx context.Context, d *Document, target, tool, result 
 	d.n.LiveMu.Lock()
 	defer d.n.LiveMu.Unlock()
 	if target.n.Doc != &d.n || tool.n.Doc != &d.n || result.n.Doc != &d.n ||
-		result.n.Origin.Producer != d.n.NextProducer || result.blindProof.cut != nil {
+		result.n.Origin.Producer != d.producerAt(ctx) || result.blindProof.cut != nil {
 		return decaderr.ErrUnsupported
 	}
 	// Each input count is capped before arithmetic. The quadratic map-work
@@ -279,7 +279,7 @@ func commitBlindGroupCut(ctx context.Context, d *Document, target, tool, result 
 		return err
 	}
 	result.blindProof.cut = operation
-	d.n.NextProducer++
+	d.advanceProducer(ctx, 1)
 	d.n.LiveSet, d.operations, d.producers, d.consumers = live, operations, producers, consumers
 	d.groups.root, d.groups.ofBody = root, containers
 	stampOperationWarningKind(result, OperationCut)

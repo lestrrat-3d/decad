@@ -539,13 +539,13 @@ func TestSectionAboutAxisRefusals(t *testing.T) {
 		// X it would be a valid cone side, so only the frame check refuses.
 		doc := New()
 		blank := coneGapHub(t, doc, [][2]float64{{5, 0}, {15, 0}, {15, 10}, {12, 6}, {7, 1}})
-		before, producer := doc.Bodies(), doc.nextProducerID()
+		before, producer := doc.Bodies(), doc.producerAt(t.Context())
 		_, err := ConeFromFace(t.Context(), blank, coneFromFaceSelector(t, blank, planePoint{U: 1, V: 3},
 			planePoint{V: 6}), units.Millimeters(-1))
 		require.ErrorIs(t, err, ErrUnsupported)
 		require.ErrorContains(t, err, "about X")
 		require.Equal(t, before, doc.Bodies())
-		require.Equal(t, producer, doc.nextProducerID())
+		require.Equal(t, producer, doc.producerAt(t.Context()))
 	})
 }
 
