@@ -175,6 +175,7 @@ func (d *Document) Verify(ctx context.Context, opts ...VerifyOption) (*Report, e
 	if err != nil {
 		return nil, err
 	}
+	ctx = d.queryContext(ctx)
 	ctx, err = d.evalContext(ctx)
 	if err != nil {
 		return nil, err

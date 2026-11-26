@@ -27,9 +27,12 @@ type Rings struct {
 	RingV    [][]int
 	Dev      [][]float64
 	PatchEps map[*topo.Face]float64
-	SeamGap  []float64
-	Cells    []tessellation.FilletCell
-	Patches  int
+	// PatchFaces lists PatchEps's faces in the order their patches finished, so a sum over the patches reads them in
+	// one fixed order. Ranging over the map would sum in Go's random map order.
+	PatchFaces []*topo.Face
+	SeamGap    []float64
+	Cells      []tessellation.FilletCell
+	Patches    int
 }
 
 // Input is the recorded band and the rings already shared with adjacent faces.
@@ -277,6 +280,7 @@ func (fr *Rings) Emit(in Input, mesh *topo.Mesh,
 	}
 
 	fr.PatchEps = map[*topo.Face]float64{}
+	fr.PatchFaces = nil
 	n := len(lm.Walks)
 	p := 0
 	for i := range n {
@@ -318,6 +322,9 @@ func cellOffsetUpper(floor float64, vLo, vHi, wLo, wHi r3.Vec) float64 {
 // FinishPatch records one patch's face displacement and area slack.
 func (fr *Rings) FinishPatch(mesh *topo.Mesh, face *topo.Face,
 	eps, delta, levelDelta, axial float64, first, last int, bump func(*topo.Face, float64)) {
+	if _, seen := fr.PatchEps[face]; !seen {
+		fr.PatchFaces = append(fr.PatchFaces, face)
+	}
 	fr.PatchEps[face] = eps
 	bump(face, proofbound.AbsSumUpper(eps, delta, levelDelta, axial))
 	if first < 0 {

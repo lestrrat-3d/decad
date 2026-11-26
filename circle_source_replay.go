@@ -107,7 +107,7 @@ func captureCircleSource(ctx context.Context, d *Document, root *Body, budget *p
 			if len(op.inputs) != 0 {
 				return nil, errCirclePlacementReplay
 			}
-			faces, err := prismrecord.CaptureCircleBuildFaces(ctx, &current.n, d.circleBuilds[current], budget)
+			faces, err := prismrecord.CaptureCircleBuildFaces(ctx, &current.n, d.circleBuildOf(current), budget)
 			if err != nil {
 				return nil, err
 			}

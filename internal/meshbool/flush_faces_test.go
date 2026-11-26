@@ -2,6 +2,7 @@ package meshbool
 
 import (
 	"math"
+	"slices"
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/flushface"
@@ -143,7 +144,7 @@ func TestFlushOutline(t *testing.T) {
 	// The top reads as carrier-exact; the side faces beside vertex 7 carry its bound and do not, so the top's rims to
 	// them are straight by the side tags but no line edges.
 	sides := map[int]bool{flushBoxTop: true}
-	t.Run("a faceted corner's radius is the strip bound", func(t *testing.T) {
+	t.Run("a faceted corner over a seam takes the seam radius", func(t *testing.T) {
 		t.Parallel()
 		o := flushOutline(t, flushBox(t, raised, sides, false, true))
 		for k := range top {
@@ -152,6 +153,21 @@ func TestFlushOutline(t *testing.T) {
 		}
 		require.False(t, flushEdge(t, o, top[1], top[2]).Line)
 		require.False(t, flushEdge(t, o, top[2], top[3]).Line)
+		// The side faces meet along the vertical edge from the corner to vertex 3, a seam as wide as b whose far end
+		// lies 1 below the top: ρ = b·(1 + 1/1), under §4.3's √3·(b + b).
+		rho := flushRadius(o, top[2])
+		want := 2 * b
+		require.GreaterOrEqual(t, rho, want)
+		require.LessOrEqual(t, rho, want*(1+1e-8))
+		require.Zero(t, flushRadius(o, top[0]))
+		require.Equal(t, rho, o.Reach())
+	})
+	t.Run("a faceted corner's radius is the strip bound", func(t *testing.T) {
+		t.Parallel()
+		// Vertex 3, the seam's far end, carries a bound past the box's height, so the seam gives no reading.
+		wide := slices.Clone(raised)
+		wide[3] = 2
+		o := flushOutline(t, flushBox(t, wide, sides, false, true))
 		// The corner's two rims are at right angles, each as wide as b: ρ = √3·(b + b)/sin φ_lo with sin φ_lo a few
 		// ulps under 1.
 		rho := flushRadius(o, top[2])

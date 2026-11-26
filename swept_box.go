@@ -37,6 +37,7 @@ func (d *Document) SweptBox(ctx context.Context, b *Body, path PairPath) (SweptB
 	if d == nil || ctx == nil {
 		return SweptBox{}, fmt.Errorf("%w: nil document or context", ErrDegenerate)
 	}
+	ctx = d.queryContext(ctx)
 	if err := d.requireLive(b); err != nil {
 		return SweptBox{}, err
 	}

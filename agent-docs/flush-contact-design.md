@@ -212,7 +212,15 @@ Each outline vertex `v` gets a radius `ρ(v)`:
 - otherwise (a corner of a faceted face) `ρ(v) = √3·(w₁ + w₂)/sin φ_lo`, where `w_i` is `0` for a line edge and the
   larger endpoint `β` of edge `i` otherwise, and `sin φ_lo` is the projected exact cross product of the two edges'
   directions over their rounded-up projected lengths, rounded down; two line edges on different lines give `0`; a
-  zero or non-finite `sin φ_lo` gives `+Inf`, which refuses every pair the face is in.
+  zero or non-finite `sin φ_lo` gives `+Inf`, which refuses every pair the face is in;
+- at such a corner, the smaller of that and the **seam radius** when the two neighbour faces `G₁`, `G₂` that meet `F`
+  at `v` give one (`seamRadius`). The seam is every held facet edge with a facet of `G₁` on one side and one of `G₂`
+  on the other; `w` is the largest `β` of its vertices. When `v` is a seam vertex and every other seam vertex lies
+  farther than `w` from `P` (exact), `ρ(v) = w·(1 + max |m − v|/h_m)` over the seam segments `(v, m)`, `h_m` being
+  `m`'s distance from `P`. The true seam lies within `w` of the held one (§4.2) and ends at the true corner, which
+  lies in `P`. Only a point of a segment from `v` can then lie within `w` of it, and such a point lies within
+  `w·|m − v|/h_m` of `v`. A prism wall's vertical seam reads `2w`, where two tangent rims would give a radius many
+  times larger.
 
 By §4.2, a line edge's true counterpart lies on its held line between `a*` and `b*`; a straight edge's is the segment
 `[a*, b*]`; any other edge's lies within the larger endpoint radius of it (faceted-vertex-bounds §2: a chord's
