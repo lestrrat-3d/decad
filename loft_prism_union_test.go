@@ -112,7 +112,7 @@ func TestAxialLoftPrismUnionManyIndependentTabs(t *testing.T) {
 				left, right = right, left
 			}
 			operands := []*Body{blank, left, right}
-			_, admitted, err := prismboolean.StraightLoftUnionMany(t.Context(), envOf(documentNode(doc), doc.nextProducerID()),
+			_, admitted, err := prismboolean.StraightLoftUnionMany(t.Context(), envOf(documentNode(doc), doc.producerAt(t.Context())),
 				bodyNodes(operands))
 			require.NoError(t, err)
 			require.True(t, admitted, "the independent tabs should use one prism scene")
@@ -136,7 +136,7 @@ func TestAxialLoftPrismUnionTangentDoesNotAdmit(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, admitted)
 	valid := axialLineLoft(t, doc, 8, 4, 12, 6, 4)
-	_, admitted, err = prismboolean.StraightLoftUnionMany(t.Context(), envOf(documentNode(doc), doc.nextProducerID()),
+	_, admitted, err = prismboolean.StraightLoftUnionMany(t.Context(), envOf(documentNode(doc), doc.producerAt(t.Context())),
 		bodyNodes([]*Body{blank, valid, tangent}))
 	require.NoError(t, err)
 	require.False(t, admitted)
@@ -196,7 +196,7 @@ func TestStraightLoftPrismUnionManyGates(t *testing.T) {
 	far := axialLineLoft(t, doc, 40, 4, 44, 6, 4)
 	run := func(operands ...*Body) (bool, error) {
 		t.Helper()
-		_, ok, err := prismboolean.StraightLoftUnionMany(t.Context(), envOf(documentNode(doc), doc.nextProducerID()),
+		_, ok, err := prismboolean.StraightLoftUnionMany(t.Context(), envOf(documentNode(doc), doc.producerAt(t.Context())),
 			bodyNodes(operands))
 		return ok, err
 	}
@@ -218,7 +218,7 @@ func TestStraightLoftPrismUnionManyGates(t *testing.T) {
 
 	cancelled, cancel := context.WithCancel(t.Context())
 	cancel()
-	_, ok, err = prismboolean.StraightLoftUnionMany(cancelled, envOf(documentNode(doc), doc.nextProducerID()),
+	_, ok, err = prismboolean.StraightLoftUnionMany(cancelled, envOf(documentNode(doc), doc.producerAt(t.Context())),
 		bodyNodes([]*Body{blank, loft}))
 	require.True(t, ok)
 	require.ErrorIs(t, err, context.Canceled)

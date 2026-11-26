@@ -49,8 +49,8 @@ func AddBoundary(ctx context.Context, env topo.Env, body *topo.Body, candidate C
 		return proofbound.BoundedScalar{}, err
 	}
 	normal := tool.Dir(0, 0, 1)
-	lowLevel := env.Doc.MintLevel(tool.Point(0, 0, tool.Z0), normal)
-	highLevel := env.Doc.MintLevel(tool.Point(0, 0, tool.Z1), normal)
+	lowLevel := env.Doc.MintLevel(ctx, tool.Point(0, 0, tool.Z0), normal)
+	highLevel := env.Doc.MintLevel(ctx, tool.Point(0, 0, tool.Z1), normal)
 	walls, bottom, top, perimeter, err := prismrecord.BuildLoopSidesAs(ctx, env, body, tool, 1, true,
 		hole, freeform.NewFreeformWork(), nil, lowLevel, highLevel, true)
 	if err != nil {

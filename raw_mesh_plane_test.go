@@ -50,7 +50,7 @@ func TestRawMeshPlaneOnBooleanFragments(t *testing.T) {
 	for _, face := range moved.Faces() {
 		require.Nil(t, face.n.MeshPlaneSlab())
 	}
-	bounded, err := solidFromMeshBodyBoundedAt(ctx, doc, target, doc.nextProducerID(), .001)
+	bounded, err := solidFromMeshBodyBoundedAt(ctx, doc, target, doc.producerAt(t.Context()), .001)
 	require.NoError(t, err)
 	for _, face := range bounded.Faces() {
 		require.Nil(t, face.n.MeshPlaneSlab())

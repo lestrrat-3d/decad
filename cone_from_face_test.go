@@ -245,12 +245,12 @@ func coneFromFaceRefusalKeepsDocument(t *testing.T, section []planePoint, a, b p
 	blank := spiralTestRevolveBlank(t, section)
 	doc := documentHandle(blank.n.Doc)
 	before := doc.Bodies()
-	producer := doc.nextProducerID()
+	producer := doc.producerAt(t.Context())
 	_, err := ConeFromFace(t.Context(), blank, coneFromFaceSelector(t, blank, a, b), far)
 	require.ErrorIs(t, err, want)
 	require.ErrorContains(t, err, message)
 	require.Equal(t, before, doc.Bodies())
-	require.Equal(t, producer, doc.nextProducerID())
+	require.Equal(t, producer, doc.producerAt(t.Context()))
 	require.Equal(t, wantOrigins, coneFromFaceNextFeatureOrigins(t, doc))
 }
 
@@ -266,7 +266,7 @@ func TestCommitExactPointConeRefusalKeepsDocument(t *testing.T) {
 	blank := spiralTestRevolveBlank(t, coneFromFaceSpiralSection())
 	doc := documentHandle(blank.n.Doc)
 	before := doc.Bodies()
-	producer := doc.nextProducerID()
+	producer := doc.producerAt(t.Context())
 	world := sketch.NewWorld()
 	s, err := world.CreateSketch(world.XY())
 	require.NoError(t, err)
@@ -285,12 +285,12 @@ func TestCommitExactPointConeRefusalKeepsDocument(t *testing.T) {
 		SketchLine{Start: planePoint{}, End: planePoint{U: 1}}, FullRevolution{}, nil)
 	require.NoError(t, err)
 	require.Equal(t, before, doc.Bodies(), "building registers nothing")
-	require.Equal(t, producer, doc.nextProducerID())
+	require.Equal(t, producer, doc.producerAt(t.Context()))
 
 	err = commitExactPointCone(t.Context(), doc, built)
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.Equal(t, before, doc.Bodies())
-	require.Equal(t, producer, doc.nextProducerID())
+	require.Equal(t, producer, doc.producerAt(t.Context()))
 }
 
 func TestConeFromFaceNonConvexSectionIsAccepted(t *testing.T) {
@@ -370,7 +370,7 @@ func TestConeFromFaceCancelledDuringConstruction(t *testing.T) {
 		blank := spiralTestRevolveBlank(t, section)
 		sel := coneFromFaceSelector(t, blank, section[3], section[2])
 		doc := documentHandle(blank.n.Doc)
-		before, producer := doc.Bodies(), doc.nextProducerID()
+		before, producer := doc.Bodies(), doc.producerAt(t.Context())
 		ctx := newCancelAfterContext(t.Context(), cancelAt)
 		_, err := ConeFromFace(ctx, blank, sel, units.Millimeters(-5))
 		if err == nil {
@@ -380,7 +380,7 @@ func TestConeFromFaceCancelledDuringConstruction(t *testing.T) {
 		}
 		require.ErrorIs(t, err, context.Canceled, "cancelAt=%d", cancelAt)
 		require.Equal(t, before, doc.Bodies())
-		require.Equal(t, producer, doc.nextProducerID())
+		require.Equal(t, producer, doc.producerAt(t.Context()))
 		canceledLate = canceledLate || cancelAt > 3
 	}
 }

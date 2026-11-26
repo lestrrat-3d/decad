@@ -111,8 +111,8 @@ func Build(ctx context.Context, env topo.Env, pp Payload, work *freeform.Freefor
 	var levelZ0, levelZ1 denotation.LevelToken
 	if pp.SectionDelta == 0 {
 		levelNormal := pp.Dir(0, 0, 1)
-		levelZ0 = env.Doc.MintLevel(pp.Point(0, 0, pp.Z0), levelNormal)
-		levelZ1 = env.Doc.MintLevel(pp.Point(0, 0, pp.Z1), levelNormal)
+		levelZ0 = env.Doc.MintLevel(ctx, pp.Point(0, 0, pp.Z0), levelNormal)
+		levelZ1 = env.Doc.MintLevel(ctx, pp.Point(0, 0, pp.Z1), levelNormal)
 	}
 
 	// Topology: one shell over every loop's side faces plus the two caps.
@@ -586,7 +586,7 @@ func buildLoopSidesAs(ctx context.Context, env topo.Env, body *topo.Body, pp Pay
 		if !mintCurveTokens {
 			return denotation.CurveToken{}
 		}
-		return body.Doc.MintCurve()
+		return body.Doc.MintCurve(ctx)
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, nil, nil, proofbound.BoundedScalar{}, err

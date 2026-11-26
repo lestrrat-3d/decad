@@ -116,7 +116,7 @@ func alignedNativeRim(ctx context.Context, d *Document, b *Body, e *topo.Edge, s
 	if !ok || err != nil {
 		return none, false, err
 	}
-	result, ok, err := directUpperRimAligned(ctx, envOf(b.n.Doc, d.nextProducerID()), &b.n, a.cap, a.wall, a.center, a.hinge, a.radius, setback, proofbound.RatFloatUp(height), cheek, faces, m)
+	result, ok, err := directUpperRimAligned(ctx, envOf(b.n.Doc, d.producerAt(ctx)), &b.n, a.cap, a.wall, a.center, a.hinge, a.radius, setback, proofbound.RatFloatUp(height), cheek, faces, m)
 	if !ok || err != nil {
 		return result, ok, err
 	}

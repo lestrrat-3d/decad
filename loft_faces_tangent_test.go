@@ -271,18 +271,18 @@ func TestLoftFacesConeTangentEndRefuses(t *testing.T) {
 func TestLoftFacesConeTangentEndRefusalKeepsProvenance(t *testing.T) {
 	f := newTangentLoftFixture(t)
 	cone := f.cone(t, f.doc)
-	next := f.doc.nextProducerID()
+	next := f.doc.producerAt(t.Context())
 	_, err := LoftFaces(t.Context(), []*Face{f.toe, f.heel},
 		WithConeTangentEnd(cone, r3.NewVec(1e-9, 1, 0)))
 	require.ErrorIs(t, err, ErrDegenerate)
 	_, err = LoftFaces(t.Context(), []*Face{f.toe, f.heel},
 		WithConeTangentEnd(f.near, r3.NewVec(0, 1, 0)))
 	require.ErrorIs(t, err, ErrUnsupported)
-	require.Equal(t, next, f.doc.nextProducerID(), "refused calls consume no provenance number")
+	require.Equal(t, next, f.doc.producerAt(t.Context()), "refused calls consume no provenance number")
 	out, err := LoftFaces(t.Context(), []*Face{f.toe, f.heel}, WithConeTangentEnd(cone, r3.NewVec(0, 1, 0)))
 	require.NoError(t, err)
 	require.NotNil(t, out)
-	require.Equal(t, next+1, f.doc.nextProducerID(), "the produced feature takes the unconsumed number")
+	require.Equal(t, next+1, f.doc.producerAt(t.Context()), "the produced feature takes the unconsumed number")
 }
 
 // countdownContext reports cancellation after a fixed number of Err calls, so
@@ -321,11 +321,11 @@ func TestLoftFacesConeTangentEndCancelledDuringEvaluation(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			f := newTangentLoftFixture(t)
 			end := WithConeTangentEnd(f.cone(t, f.doc), radial)
-			before, next := len(f.doc.Bodies()), f.doc.nextProducerID()
+			before, next := len(f.doc.Bodies()), f.doc.producerAt(t.Context())
 			_, err := LoftFaces(&countdownContext{Context: t.Context(), left: left}, []*Face{f.toe, f.heel}, end)
 			require.ErrorIs(t, err, context.Canceled)
 			require.Len(t, f.doc.Bodies(), before)
-			require.Equal(t, next, f.doc.nextProducerID())
+			require.Equal(t, next, f.doc.producerAt(t.Context()))
 		})
 	}
 }

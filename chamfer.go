@@ -277,7 +277,7 @@ func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value,
 			DDelta: dDelta, OtherDelta: o.Asymmetric.OtherDelta}
 	}
 
-	res, err := brepmodify.Chamfer(ctx, envOf(b.n.Doc, b.n.Doc.NextProducer), &b.n, brepmodify.ChamferCall{
+	res, err := brepmodify.Chamfer(ctx, envOf(b.n.Doc, documentHandle(b.n.Doc).producerAt(ctx)), &b.n, brepmodify.ChamferCall{
 		Sel: fmt.Sprint(sel), Edges: edgeNodes(edges), D: dmm, DDelta: dDelta, Asym: asym, Hooks: modifyHooks(),
 	})
 	if err != nil {
@@ -291,7 +291,7 @@ func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value,
 			}
 			// Whole loops with sharp corners on a mesh Boolean result are cut by a polyhedral cutter, after the exact
 			// wedge route has declined them (agent-docs/modify-design.md Part M §15a).
-			if res, matched, lerr := brepmodify.RetainedLoopChamfer(ctx, envOf(b.n.Doc, b.n.Doc.NextProducer), modifyHooks(),
+			if res, matched, lerr := brepmodify.RetainedLoopChamfer(ctx, envOf(b.n.Doc, documentHandle(b.n.Doc).producerAt(ctx)), modifyHooks(),
 				&b.n, edgeNodes(edges), dmm, dDelta, nil); matched {
 				if lerr != nil {
 					return nil, lerr
@@ -302,7 +302,7 @@ func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value,
 		// A chamfer of whole runs of a cap loop's edges, each ending at a sharp corner (agent-docs/modify-design.md Part R
 		// §8.3.2), is cut by one cutter per run.
 		if errors.Is(err, ErrUnsupported) && asym == nil {
-			if res, matched, perr := brepmodify.PartialLoopChamfer(ctx, envOf(b.n.Doc, b.n.Doc.NextProducer), modifyHooks(),
+			if res, matched, perr := brepmodify.PartialLoopChamfer(ctx, envOf(b.n.Doc, documentHandle(b.n.Doc).producerAt(ctx)), modifyHooks(),
 				&b.n, edgeNodes(edges), dmm, dDelta, nil); matched {
 				if perr != nil {
 					return nil, perr
@@ -313,7 +313,7 @@ func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value,
 		// Tangent chains of a mesh Boolean result that share no base plane are cut by one swept cutter per chain
 		// (agent-docs/modify-design.md Part M §15b).
 		if errors.Is(err, ErrUnsupported) && asym == nil {
-			if res, matched, cerr := brepmodify.ChainCutterChamfer(ctx, envOf(b.n.Doc, b.n.Doc.NextProducer), modifyHooks(),
+			if res, matched, cerr := brepmodify.ChainCutterChamfer(ctx, envOf(b.n.Doc, documentHandle(b.n.Doc).producerAt(ctx)), modifyHooks(),
 				&b.n, edgeNodes(edges), dmm, dDelta, nil); matched {
 				if cerr != nil {
 					return nil, cerr

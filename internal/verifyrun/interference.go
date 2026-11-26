@@ -94,7 +94,7 @@ func MeasuredInterference(ctx context.Context, alloc topo.Alloc, a, b *topo.Body
 		return a.Volume, boundaryaudit.InterferenceMeasured, nil
 	}
 
-	analyticNode, ok, err := booleandispatch.AnalyticIntersect(ctx, topo.Env{Doc: a.Doc, Ref: a.Doc.NextProducer, Alloc: alloc}, a, b)
+	analyticNode, ok, err := booleandispatch.AnalyticIntersect(ctx, topo.Env{Doc: a.Doc, Ref: a.Doc.ProducerAt(ctx), Alloc: alloc}, a, b)
 	if err != nil {
 		if expected, ok := asExpectedBoolean(err); ok {
 			return vocab.Measurement{}, boundaryaudit.InterferenceOutcomeForExpected(expected), nil
@@ -209,7 +209,7 @@ func evaluateBooleanMeshes(ctx context.Context, op meshbool.OperationKind, a, b 
 // body takes a fresh producer identity from a's document.
 func prismOverlapVolume(ctx context.Context, alloc topo.Alloc, a, b *topo.Body) (vocab.Measurement, bool, error) {
 	sum, bound, ok, err := prismcells.OverlapVolume(ctx, a.Payload, b.Payload, func() topo.Env {
-		return topo.Env{Doc: a.Doc, Ref: a.Doc.NextProducer, Alloc: alloc}
+		return topo.Env{Doc: a.Doc, Ref: a.Doc.ProducerAt(ctx), Alloc: alloc}
 	})
 	if err != nil || !ok {
 		return vocab.Measurement{}, false, err

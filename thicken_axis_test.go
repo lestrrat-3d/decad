@@ -47,7 +47,7 @@ func TestThickenPrismUnrepresentableOffset(t *testing.T) {
 	require.True(t, strings.Contains(err.Error(), "rounded"), err.Error())
 
 	doc := New()
-	node, err := thickenbuild.Thicken(t.Context(), envOf(documentNode(doc), doc.nextProducerID()), &topo.Body{Payload: pp}, thickenbuild.Negative, 1, 0)
+	node, err := thickenbuild.Thicken(t.Context(), envOf(documentNode(doc), doc.producerAt(t.Context())), &topo.Body{Payload: pp}, thickenbuild.Negative, 1, 0)
 	result := node
 	require.Nil(t, result)
 	require.ErrorIs(t, err, ErrUnsupported)
