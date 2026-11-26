@@ -4,8 +4,8 @@ Exact classification of coplanar facet contacts in the mesh boolean, and exact p
 cause (§1), required behavior (§2), the classification rule (§3), composition with face bounds and records (§4), the
 manifold audit (§5), the proximity gates' obligation (§6), planar face simplification (§7), records of results (§8),
 soundness (§9), performance (§10), tests (§11), risks (§12), user decisions (§13), code map (§14), open questions
-(§15), seats in an Intersect (§16), placed seats (§17), flush planes that agree only within a bound (§18) and
-separated cap pairs (§19).
+(§15), seats in an Intersect (§16), placed seats (§17), flush planes that agree only within a bound (§18),
+separated cap pairs (§19) and separated caps on mesh Boolean results (§20).
 
 Implements `agent-docs/interference-design.md` §5.2 and §11 row 4. Companion to `agent-docs/evaluator-design.md` §9
 (mesh boolean), `agent-docs/gap-tolerance-design.md` §5.2 (shifted retry),
@@ -35,6 +35,7 @@ Navigation, not authority.
 | Why do planes that agree only within a bound go to the gap-tolerance retry? | §18 |
 | How are two bodies on opposite sides of a shared cap, such as a frustum and a cone on one circle, decided? | §19 |
 | Why does the shifted retry never read a separation certificate? | §19.7 |
+| How is a mesh `Cut` or `Union` result decided across a shared cap? | §20 |
 
 ## Assumptions
 
@@ -970,7 +971,8 @@ two operands' cap sides; `separatedPair` decides one face pair, memoised.
 
 A `meshbool.CapSide` is a payload's claim: its true solid lies in the closed half-space `{x : N·(x − O) ≤ 0}`, the
 true face `Face` lies in the plane `N·(x − O) = 0`, and the solid meets that plane only in the closure of `Face`.
-`booleaneval.capSides` reads three payloads; every other payload, every mesh `Boolean` result included, states none.
+`booleaneval.capSides` reads three payloads and the sides a mesh `Union` recorded on its result (§20.1); every other
+payload states none.
 
 | Payload | Read when | Why the claim holds |
 |---|---|---|
@@ -1067,7 +1069,8 @@ retry runs from that refusal as it did before, under the full gate.
 | Case | Why |
 |---|---|
 | Caps that touch, or overlap by less than their reaches | no deep point (§19.4) |
-| A mesh `Boolean` result, a revolve with an arc or a section displacement, a filleted, bored or joined loft, a sheet | no cap side (§19.2) |
+| A revolve with an arc or a section displacement, a filleted, bored or joined loft, a sheet | no cap side (§19.2) |
+| A mesh `Boolean` result | no cap side of its own, unless its `Union` carried one (§20.1) or it reads a local side (§20.2) |
 | A placed body whose cap plane holds no held corner exactly | §19.1 item 2 |
 | A meridian or held wall that touches the plane beside the cap | §19.2, §19.1 item 3 |
 | An extruded circle and a revolve of the same radius | near-coincident chords (below) |
@@ -1091,3 +1094,114 @@ Root tests in `union_shared_cap_test.go`. Each `TestUnionSharedCap*` test that s
 | `TestUnionSharedCapBossOnPlate` | an extruded boss standing inside a plate's top, default and `ExactOnly` | `Union` builds with no shift (fails red: the retry shifts, `ExactOnly` refuses) |
 | `TestUnionSharedCapTangentCapsRefused` | a cone whose cap touches a frustum's top at one point, `ExactOnly` | `BooleanUnsupportedContact` (passes before; fails red when §19.4 accepts every pair) |
 | `TestRevolveCapSidesNeedTheCapAloneOnItsPlane` | a cone, and a revolve whose meridian returns to its lowest level at radius 1 | two sides, then only the top side |
+
+## 20. Separated caps on mesh Boolean results
+
+§19 reads cap sides from three analytic payloads only, so a separated pair whose operand is itself a mesh Boolean
+result reaches the proximity gate. A slider tongue cut to length by a box (a mesh `Cut` result) and a drive boss lofted
+on its end face with a cone on top (a mesh `Union` result) meet that way: the boss's base is the tongue's end region and
+their walls continue each other's along the shared rim. The gate refuses the rim contacts, and the shifted retry cannot
+open the walls that continue each other. This section gives such operands sides of their own.
+
+Code: `internal/booleaneval/cap_sides.go` (§20.1), `internal/meshbool/local_cap_side.go` (§20.2), `SeparatedOperands`
+in `internal/meshbool/separated_caps.go`, `facetedrecord.Payload.CapSides`.
+
+### 20.1 Sides a Union carries
+
+An unshifted live mesh `Union` of A and B with no replay and no fixed operand carries a cap side `s` of A, on plane `P`
+with face `X`, to its result when B states a side `t` whose normal is a positive multiple of `s`'s and whose plane lies
+strictly inside `s`'s half-space: `N_s·(O_t − O_s) < 0`. The same holds with A and B swapped.
+
+**Claim U.** The true result `R = A ∪ B` lies in `s`'s closed half-space and meets `P` only in the closure of `X`'s
+true patch, which is `R`'s face there.
+
+B lies in `t`'s half-space, which lies in the open half-space of `s`, so B misses `P`, and `R ∩ P = A ∩ P = cl(X)`.
+Every point of `X` lies outside B, so `X` stays on `R`'s boundary.
+
+The result records the side against `X`'s source group (`facetedrecord.CapSideRecord`), bound to its held mesh with an
+`occupancy.Binding` (`CapSideRecords`). Placement and scaling clear it, and every other rewrite allocates new held
+arrays, so a copied record is never read. `booleaneval.capSides` reads a record only when every facet of the group
+lies in one face of the result, which becomes the side's face; a later `Union` carries it again.
+
+**Kept outline.** A faceted face's outline corners read with the weak radius of `agent-docs/flush-contact-design.md`
+§4.3, `√3·(w₁ + w₂)/sin φ`. A lofted cap's outline borders one ruled wall facet per chord, and consecutive chords meet
+at nearly straight angles, so that reading gives the boss's base above 1.6 mm, which the band of §19.5 then charges to
+every kept piece near the outlines. A record sets `KeptOutline` when the result group holds exactly the operand face's
+facets, compared by their exact corners, every corner's bound in the result is no smaller than in the operand, and the
+operand read its outline with radius `β` (an analytic payload, or a face that already kept its outline). Each outline
+vertex then stands for the same true point within its own bound, as it did in the operand, so `readOutline` gives it
+`ρ = β`. The boss's base then reads 0.0056 mm.
+
+### 20.2 Local sides
+
+A mesh `Cut` result states no side, and the tongue need not lie below its end plane everywhere: the end cutter leaves
+the tongue's root rounds standing past it, far from the boss. When no pair of payload sides is separated,
+`SeparatedOperands` pairs each payload side `t` of one operand B with a **local side** of the other operand A: plane
+`P` of `t`, outward normal `−N_t`, and region `K`, the box of B's held vertices widened by the largest bound any face of
+B states, padded by a relative `10⁻⁹` and 64 ulps of the coordinate scale. B's true solid lies inside its boundary's
+box, so it lies in `K`.
+
+A face `X` of A is the side's face when its held corners lie in `P`, its first facet faces `−N_t` and every facet is
+carrier-exact (§16.1). The side holds when every other face F of A whose held facets come within F's bound of `K`
+(its gate bound or largest facet bound, padded by a relative `10⁻⁹`) passes one of:
+
+- **Clear below.** Every held vertex of F lies inside the half-space farther from `P` than that bound, exactly. F's true
+  patch, within the bound of its facets, lies in the open half-space.
+- **Leaving wall.** F carries a retained `Plane` or `Cylinder` tag with no `TagDeparture`, denoted patch,
+  `AxialDelta`, `ExtentDelta`, view charge or flat patch, so its true patch lies on the tag
+  (`agent-docs/faceted-source-retention-design.md` Claim R). The tag crosses `P`: a cylinder's axis is not parallel to
+  `P`, a plane is not parallel to it. Every held vertex lies in the closed half-space, and every edge of F is shared
+  with `X`, with a face that is clear below, or with another such tag along a seam. A seam needs a direction `d` with
+  `d·N_t ≠ 0` along which both tags are invariant: two planes' crossing direction, a cylinder's axis held by the plane,
+  or the axis of two parallel cylinders that are not one surface. One end vertex of the seam lies on `X`'s loops and the
+  other end, or both, lies below `P` farther than its vertex bound.
+
+**Claim L.** Then A's true solid has no point inside `K` strictly beyond `P`.
+
+- A leaving wall's true seam is a connected piece of the two tags' intersection (faceted-source-retention Claim E),
+  which is a union of lines along `d`, so the seam is the segment between its true end vertices. One lies in `P` (on
+  `X`'s boundary) or below it, the other below it, so the seam lies in the closed half-space. Edges shared with `X` lie
+  in `P`, and edges shared with a face clear below lie in the open half-space.
+- F's true patch is a compact piece of its tag whose boundary lies in the closed half-space. The tag's part strictly
+  beyond `P` is connected and unbounded, since every ruling crosses `P`. F meets that part in a set that is closed in it,
+  and open in it because no boundary point of F lies there, so F misses it.
+- Every true face of A that reaches `K` is `X`, clear below or a leaving wall, so A's true boundary misses the open
+  convex set of points of `K` beyond `P`. The point just beyond `X` above §19.4's deep point lies outside A, since `X`
+  faces out of A there, so the whole set lies outside A.
+
+So `A ∩ B` lies in `P`, and `A ∩ P ∩ K` lies in `cl(X)`: a point of A in `P` inside `K` lies on A's boundary, the
+walls meet `P` only along their edges with `X` (an interior point of a crossing tag would have neighbours beyond `P`),
+and the other faces miss `P`. Claim P1 of §19.3 then holds for the pair, and §19.3–§19.6 apply unchanged. The held checks
+of §19.1 item 3 read only the facets whose boxes meet `K` (`CapSide.Region`): a facet outside `K` meets no facet of B.
+
+A local side joins A's sides only when the pair it forms is separated; `SeparatedOperands` then clears the separated
+verdicts read before it joined.
+
+### 20.3 Kept refusals
+
+| Case | Why |
+|---|---|
+| A face of A near `K` that crosses `P`, such as a post standing beside the boss | the held check of §19.1 item 3, and no claim of §20.2 |
+| A curved wall near `K` other than a retained cylinder, a wall whose tag departs or carries a charge, or a cylinder whose axis lies along `P` | no leaving wall |
+| Two operands that both state only local sides | §20.2 needs one payload side for `K` |
+| A carried side of a shifted, replayed or fixed-tool `Union` | §20.1 reads the unshifted live attempt only |
+| A tangent or shallow cap overlap | no deep point (§19.4) |
+
+A local side reads A's own outline with the weak corner radius: the tongue's end face reads 0.066 mm, about five times
+its facets' bound, and the band charges it to the kept pieces near the outlines.
+
+### 20.4 Tests
+
+`union_faceted_cap_test.go`:
+
+| Test | Case | Expect |
+|---|---|---|
+| `TestUnionFlushCapCutPrismAndLoft` | a hull prism cut back to its top plane by a box, and a boss lofted from that hull; both orders, default and `ExactOnly` | `Union` builds with no shift (fails red: the gate refuses) |
+| `TestUnionFlushCapFarPostAcrossPlane` | the cut prism with a post standing through the cap plane outside `K` | `Union` builds, two lumps (fails red: the gate refuses) |
+| `TestUnionFlushCapNearPostRefused` | the post inside `K`, clear of the boss | `BooleanUnsupportedContact` |
+| `TestUnionFlushCapTangentBossRefused` | a cylinder boss whose floor touches the cut prism's top at one point | `BooleanUnsupportedContact` (fails red when §19.4 accepts every pair) |
+| `TestUnionFlushCapCarriedByDrive` | an analytic hull prism and the boss with a cone on top | `Union` builds, boundary bound under 0.05 mm (fails red: the gate refuses; about 3 mm without `KeptOutline`) |
+| `TestUnionFlushCapCutPrismAndDrive` | the cut prism and the boss with a cone on top | `Union` builds, boundary bound under 0.15 mm (fails red: the gate refuses) |
+
+`internal/meshbool/local_cap_side_internal_test.go` covers the seam directions and the tags `exactRuledTag` refuses;
+`internal/facetedrecord/cap_side_record_test.go` covers the binding.

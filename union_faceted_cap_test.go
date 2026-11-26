@@ -1,0 +1,91 @@
+package decad
+
+// CI: isolated-tests
+
+import (
+	"testing"
+
+	"github.com/lestrrat-3d/sketch"
+	"github.com/lestrrat-3d/units"
+	"github.com/stretchr/testify/require"
+)
+
+func TestUnionFlushCapCutPrismAndLoft(t *testing.T) {
+	t.Parallel()
+	for _, exact := range []bool{false, true} {
+		for _, bossFirst := range []bool{false, true} {
+			doc := New()
+			if exact {
+				doc = New(ExactOnly())
+			}
+			lower := facetedCapCutPrism(t, doc)
+			boss := facetedCapBoss(t, doc)
+			var joined *Body
+			var err error
+			if bossFirst {
+				joined, err = Union(t.Context(), boss, lower)
+			} else {
+				joined, err = Union(t.Context(), lower, boss)
+			}
+			require.NoError(t, err, "exact only %v, boss first %v", exact, bossFirst)
+			requireStackedUnion(t, facetedCapCutPrism(t, doc), facetedCapBoss(t, doc), joined, 1, 0.15)
+		}
+	}
+}
+
+func TestUnionFlushCapFarPostAcrossPlane(t *testing.T) {
+	t.Parallel()
+	doc := New(ExactOnly())
+	lower, err := Union(t.Context(), facetedCapCutPrism(t, doc), facetedCapPost(t, doc, 5, 0))
+	require.NoError(t, err)
+	joined, err := Union(t.Context(), lower, facetedCapBoss(t, doc))
+	require.NoError(t, err)
+	lower, err = Union(t.Context(), facetedCapCutPrism(t, doc), facetedCapPost(t, doc, 5, 0))
+	require.NoError(t, err)
+	requireStackedUnion(t, lower, facetedCapBoss(t, doc), joined, 2, 0.15)
+}
+
+func TestUnionFlushCapNearPostRefused(t *testing.T) {
+	t.Parallel()
+	doc := New(ExactOnly())
+	// The post stands inside the boss's box, clear of the boss, and crosses the cap plane: the lower body does not
+	// lie below the plane near the boss.
+	lower, err := Union(t.Context(), facetedCapCutPrism(t, doc), facetedCapPost(t, doc, 0.7, -3.3))
+	require.NoError(t, err)
+	_, err = Union(t.Context(), lower, facetedCapBoss(t, doc))
+	var be *BooleanError
+	require.ErrorAs(t, err, &be)
+	require.Equal(t, BooleanUnsupportedContact, be.Code)
+}
+
+func TestUnionFlushCapTangentBossRefused(t *testing.T) {
+	t.Parallel()
+	doc := New(ExactOnly())
+	// The boss's floor touches the lower body's top at one point of the axis circle: no disc of the plane lies inside
+	// both faces.
+	w := sketch.NewWorld()
+	s, p := sharedCapCircle(t, w, 0, [2]float64{facetedCapJoinR + 0.5, 0}, 0.5)
+	boss, err := Extrude(t.Context(), doc, s, p, Distance{D: units.Millimeters(1), Dir: Along})
+	require.NoError(t, err)
+	_, err = Union(t.Context(), facetedCapCutPrism(t, doc), boss)
+	var be *BooleanError
+	require.ErrorAs(t, err, &be)
+	require.Equal(t, BooleanUnsupportedContact, be.Code)
+}
+
+func TestUnionFlushCapCarriedByDrive(t *testing.T) {
+	t.Parallel()
+	// The drive's walls are held to its own Union's chord tolerance, which this small pair's is finer than.
+	doc := New(WithChainTolerance(units.Millimeters(0.01)))
+	joined, err := Union(t.Context(), facetedCapPrism(t, doc, -2.4, 0), facetedCapDrive(t, doc))
+	require.NoError(t, err)
+	requireStackedUnion(t, facetedCapPrism(t, doc, -2.4, 0), facetedCapDrive(t, doc), joined, 1, 0.05)
+}
+
+func TestUnionFlushCapCutPrismAndDrive(t *testing.T) {
+	t.Parallel()
+	doc := New(WithChainTolerance(units.Millimeters(0.01)))
+	joined, err := Union(t.Context(), facetedCapCutPrism(t, doc), facetedCapDrive(t, doc))
+	require.NoError(t, err)
+	requireStackedUnion(t, facetedCapCutPrism(t, doc), facetedCapDrive(t, doc), joined, 1, 0.15)
+}

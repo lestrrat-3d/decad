@@ -961,6 +961,11 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 		DPair:       dPair,
 		Xform:       r3.Identity(),
 	}
+	// An unshifted live Union carries each operand's cap side that the other operand stays strictly inside
+	// (agent-docs/coplanar-contact-design.md §20.1).
+	if op == meshbool.OpUnion && !hasShifts && replay == nil && fixed == nil {
+		bindCapSides(&payload, unionCapSides(a, b, facesA, facesB, ma, mb, bmA, bmB, stitched))
+	}
 	if trackOccupancy && bmA.Bulge != nil {
 		payload.Occupancy = composeOccupancy(ctx, op, occA, occB, bmA, bmB, ma, mb, memo, stitched.Round, deepTerm, sites, coplanarKeys != nil)
 		if payload.Occupancy != nil {

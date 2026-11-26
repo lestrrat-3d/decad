@@ -64,6 +64,8 @@ type flushOperand struct {
 	planes map[*topo.Face]*exactPlane
 	// srcByFace maps a source face to its source id, filled on first use (srcOf).
 	srcByFace map[*topo.Face]int
+	// keptOutline holds the faces whose outline vertices read as an analytic operand's (CapSide.KeptOutline).
+	keptOutline map[*topo.Face]struct{}
 }
 
 // flushFace is one source face's reading. head fills src, facets, first and planar; the carrier and outline reads
@@ -393,12 +395,13 @@ func (op *flushOperand) readOutline(budget *proofbound.WorkBudget, f *flushFace)
 		incident[oe.a] = append(incident[oe.a], e)
 		incident[oe.b] = append(incident[oe.b], e)
 	}
+	_, kept := op.keptOutline[f.source]
 	rho := make(map[int]float64, len(incident))
 	for v, at := range incident {
 		if err := budget.Step(); err != nil {
 			return err
 		}
-		rho[v] = op.radius(v, at, edges, axis)
+		rho[v] = op.radius(v, at, edges, axis, kept)
 	}
 	out := flushface.Outline{Axis: axis, Edges: make([]flushface.Edge, len(edges))}
 	for e, oe := range edges {
@@ -457,14 +460,15 @@ func tagLeavesPlane(g *topo.Face, n r3.Vec) bool {
 	return m.Sub(n).Len() > pad && m.Add(n).Len() > pad
 }
 
-// radius is outline vertex v's ρ (§4.3). at lists the outline edges that meet v.
-func (op *flushOperand) radius(v int, at []int, edges []outlineEdge, axis int) float64 {
+// radius is outline vertex v's ρ (§4.3). at lists the outline edges that meet v. kept marks a face whose outline
+// vertices read as an analytic operand's (CapSide.KeptOutline, agent-docs/coplanar-contact-design.md §20.1).
+func (op *flushOperand) radius(v int, at []int, edges []outlineEdge, axis int, kept bool) float64 {
 	bm := op.bm
 	beta := bm.VertexBound[v]
 	if beta == 0 {
 		return 0
 	}
-	if op.analytic {
+	if op.analytic || kept {
 		return beta
 	}
 	if len(at) != 2 {
