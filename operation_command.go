@@ -58,3 +58,14 @@ func subjectError(kind OperationKind, subject string, err error) error {
 	}
 	return &OperationError{err: err, diagnostics: diagnostics}
 }
+
+// subjectFault names subject, the method or constructor argument a stored value came from, in err, which
+// the implementation returns untagged. An empty subject leaves err as it is: a
+// composite that calls the implementation with a value it computed clears it
+// (agent-docs/command-api-design.md §11).
+func subjectFault(kind OperationKind, subject string, err error) error {
+	if err == nil || subject == "" {
+		return err
+	}
+	return subjectError(kind, subject, err)
+}

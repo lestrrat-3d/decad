@@ -65,7 +65,7 @@ func TestThreadLeftHandRod(t *testing.T) {
 	require.NoError(t, err)
 	volume, err := out.Volume()
 	require.NoError(t, err)
-	requireThreadVolume(t, volume, math.Pi*25*20-removedExternal(5, 20, threadPitch))
+	requireThreadVolume(t, volume, math.Pi*25*20-removedExternal(5, 20))
 
 	// Seen from +Z the groove of a left-hand thread descends as the angle turns
 	// counter-clockwise: a quarter turn on it is a quarter pitch lower.

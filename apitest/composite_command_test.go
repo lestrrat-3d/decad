@@ -37,7 +37,7 @@ type compositeCommand struct {
 
 // The names a composite fault carries.
 const (
-	subjectDocument = "document"
+	subjectDocument = "d"
 	methodDraft     = "Draft"
 	methodHead      = "Head"
 )
@@ -138,17 +138,21 @@ func compositeCommands() []compositeCommand {
 			},
 			stride: 4},
 		{name: "Thread", kind: decad.OperationThread, recorded: true,
+			// The smallest rod the Thread route accepts keeps the race cost down;
+			// TestThreadExternalRod owns the full 20 mm rod.
 			build: func(t *testing.T) (func() func(context.Context) (*decad.Body, error), *decad.Document) {
 				doc := decad.New()
-				rod := circleBodyAtZ(t, doc, 0, 5, 0, 20)
+				rod := circleBodyAtZ(t, doc, 0, 2, 0, 1.5)
 				return func() func(context.Context) (*decad.Body, error) {
-					return decad.Thread(rod, decad.Faces(decad.Cylindrical()), mm(threadPitch)).Do
+					return decad.Thread(rod, decad.Faces(decad.Cylindrical()), mm(1.5)).Do
 				}, doc
 			},
 			check: func(t *testing.T, got *decad.Body, doc *decad.Document) {
 				v, err := got.Volume()
 				require.NoError(t, err)
-				requireThreadVolume(t, v, math.Pi*25*20-removedExternal(5, 20, threadPitch))
+				removed := math.Pi*4*1.5 - v.Value.Base()
+				require.LessOrEqual(t, math.Abs(removed-removedExternal(2, 1.5)), v.Bound.Base(),
+					"the groove removes %v", removed)
 				require.Equal(t, []*decad.Body{got}, doc.Bodies(), "the rod is retired")
 			},
 			sweep: func(t *testing.T) (func() func(context.Context) (*decad.Body, error), *decad.Document) {
@@ -162,29 +166,18 @@ func compositeCommands() []compositeCommand {
 		{name: "Infill", kind: decad.OperationInfill,
 			build: func(t *testing.T) (func() func(context.Context) (*decad.Body, error), *decad.Document) {
 				doc := decad.New()
-				block := boxBody(t, doc, 5, 5, 15, 15, 12)
-				return func() func(context.Context) (*decad.Body, error) {
-					return decad.Infill(block, decad.GyroidInfill, mm(10), units.Scalar(0.8)).Resolution(8).Do
-				}, doc
-			},
-			check: func(t *testing.T, got *decad.Body, doc *decad.Document) {
-				box, err := got.Bounds()
-				require.NoError(t, err)
-				require.GreaterOrEqual(t, box.Min.X, 5-1e-6)
-				require.LessOrEqual(t, box.Max.X, 15+1e-6)
-				require.LessOrEqual(t, box.Max.Z, 12+1e-6)
-				v, err := got.Volume()
-				require.NoError(t, err)
-				require.Greater(t, v.Value.Base(), 100.0, "the lattice leaves material")
-				require.Less(t, v.Value.Base(), 1200.0, "the lattice leaves holes")
-				require.Equal(t, []*decad.Body{got}, doc.Bodies(), "the block and the lattice are consumed")
-			},
-			sweep: func(t *testing.T) (func() func(context.Context) (*decad.Body, error), *decad.Document) {
-				doc := decad.New()
 				block := boxBody(t, doc, 0, 0, 5, 5, 5)
 				return func() func(context.Context) (*decad.Body, error) {
 					return decad.Infill(block, decad.GyroidInfill, mm(5), units.Scalar(0.8)).Resolution(4).Do
 				}, doc
+			},
+			check: func(t *testing.T, got *decad.Body, doc *decad.Document) {
+				requireCompositeBounds(t, got, r3.Vec{}, r3.Vec{X: 5, Y: 5, Z: 5})
+				v, err := got.Volume()
+				require.NoError(t, err)
+				require.Greater(t, v.Value.Base(), 10.0, "the lattice leaves material")
+				require.Less(t, v.Value.Base(), 120.0, "the lattice leaves holes")
+				require.Equal(t, []*decad.Body{got}, doc.Bodies(), "the block and the lattice are consumed")
 			},
 			stride: 1200},
 		{name: "SheetMetal", kind: decad.OperationSheetMetal, noBody: true,
@@ -447,6 +440,14 @@ func TestCompositeCommandsRefuseMethodFaultsAtTheirGate(t *testing.T) {
 			return mod(decad.Thread(rod, decad.Faces(decad.Cylindrical()), mm(threadPitch))).Do, []*decad.Body{rod}
 		}
 	}
+	blockInfill := func(mod func(*decad.InfillCommand) *decad.InfillCommand) func(t *testing.T) (func(context.Context) (*decad.Body, error), []*decad.Body) {
+		return func(t *testing.T) (func(context.Context) (*decad.Body, error), []*decad.Body) {
+			block := boxBody(t, decad.New(), 0, 0, 5, 5, 5)
+			// Infill refuses a retired body only when its intersect runs, after the lattice and
+			// the method values, so these rows have no retired-body leg.
+			return mod(decad.Infill(block, decad.GyroidInfill, mm(5), units.Scalar(0.8))).Do, nil
+		}
+	}
 	rows := []fixture{
 		{name: "Hole.Head", kind: decad.OperationHole, method: methodHead, fault: decad.ErrNegativeMagnitude,
 			build: plateHole(func(c *decad.HoleCommand) *decad.HoleCommand {
@@ -484,6 +485,26 @@ func TestCompositeCommandsRefuseMethodFaultsAtTheirGate(t *testing.T) {
 			build: rodThread(func(c *decad.ThreadCommand) *decad.ThreadCommand { return c.LeadIn(mm(0)) })},
 		{name: "Thread.LeadInAngle", kind: decad.OperationThread, method: "LeadInAngle", fault: decad.ErrDegenerate,
 			build: rodThread(func(c *decad.ThreadCommand) *decad.ThreadCommand { return c.LeadInAngle(mm(0.5), deg(95)) })},
+		{name: "Thread.LeadInAngle distance", kind: decad.OperationThread, method: "LeadInAngle", fault: decad.ErrDegenerate,
+			build: rodThread(func(c *decad.ThreadCommand) *decad.ThreadCommand { return c.LeadInAngle(mm(0), deg(30)) })},
+		{name: "Thread.LeadInAngle distance kind", kind: decad.OperationThread, method: "LeadInAngle", fault: decad.ErrUnitKind,
+			build: rodThread(func(c *decad.ThreadCommand) *decad.ThreadCommand { return c.LeadInAngle(deg(1), deg(30)) })},
+		{name: "Thread.Form all zero trapezoid", kind: decad.OperationThread, method: "Form", fault: decad.ErrDegenerate,
+			build: rodThread(func(c *decad.ThreadCommand) *decad.ThreadCommand {
+				return c.Form(decad.TrapezoidThreadForm(units.Value{}, units.Value{}, units.Value{}))
+			})},
+		{name: "Thread.Form all zero buttress", kind: decad.OperationThread, method: "Form", fault: decad.ErrDegenerate,
+			build: rodThread(func(c *decad.ThreadCommand) *decad.ThreadCommand {
+				return c.Form(decad.ButtressThreadForm(units.Value{}, units.Value{}, units.Value{}, units.Value{}))
+			})},
+		{name: "Boss.Bore pilot thread", kind: decad.OperationBoss, method: "Bore", fault: decad.ErrDegenerate,
+			build: plateBoss(func(c *decad.BossCommand) *decad.BossCommand {
+				return c.Bore(decad.NewBossBore(mm(3), mm(4)).Thread(decad.NewHoleThread(mm(0))))
+			})},
+		{name: "Infill.Resolution", kind: decad.OperationInfill, method: "Resolution", fault: decad.ErrDegenerate,
+			build: blockInfill(func(c *decad.InfillCommand) *decad.InfillCommand { return c.Resolution(2) })},
+		{name: "Infill.Skin", kind: decad.OperationInfill, method: "Skin", fault: decad.ErrNegativeMagnitude,
+			build: blockInfill(func(c *decad.InfillCommand) *decad.InfillCommand { return c.Skin(mm(-1)) })},
 		{name: "SheetMetal.KFactor", kind: decad.OperationSheetMetal, method: "KFactor", fault: decad.ErrDegenerate,
 			build: func(t *testing.T) (func(context.Context) (*decad.Body, error), []*decad.Body) {
 				legs, bends := sheetMetalFixture()
@@ -590,12 +611,12 @@ func TestCompositeMethodsLastCallWins(t *testing.T) {
 	t.Run("Thread.LeadIn and LeadInAngle share one slot", func(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
-		rod := circleBodyAtZ(t, doc, 0, 5, 0, 20)
-		_, err := decad.Thread(rod, decad.Faces(decad.Cylindrical()), mm(threadPitch)).
+		rod := circleBodyAtZ(t, doc, 0, 2, 0, 1.5)
+		_, err := decad.Thread(rod, decad.Faces(decad.Cylindrical()), mm(1.5)).Length(mm(1.5)).
 			LeadInAngle(mm(0.5), units.Degrees(95)).LeadIn(mm(0.5)).Do(t.Context())
 		require.NoError(t, err, "LeadIn replaces the invalid angle with the 45 degree bevel")
-		rod2 := circleBodyAtZ(t, doc, 0, 5, 0, 20)
-		_, err = decad.Thread(rod2, decad.Faces(decad.Cylindrical()), mm(threadPitch)).
+		rod2 := circleBodyAtZ(t, doc, 0, 2, 0, 1.5)
+		_, err = decad.Thread(rod2, decad.Faces(decad.Cylindrical()), mm(1.5)).Length(mm(1.5)).
 			LeadIn(mm(0.5)).LeadInAngle(mm(0.5), units.Degrees(95)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrDegenerate, "LeadInAngle replaces LeadIn")
 		require.Equal(t, "LeadInAngle", requireOperationKind(t, err, decad.OperationThread)[0].Subject.Name)
@@ -662,9 +683,9 @@ func TestCompositeCommandsCopyTheirArguments(t *testing.T) {
 	t.Run("Thread face selector", func(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
-		rod := circleBodyAtZ(t, doc, 0, 5, 0, 20)
+		rod := circleBodyAtZ(t, doc, 0, 2, 0, 1.5)
 		q := decad.Faces(decad.Cylindrical())
-		cmd := decad.Thread(rod, q, mm(threadPitch))
+		cmd := decad.Thread(rod, q, mm(1.5)).Length(mm(1.5))
 		q.Exactly(7)
 		got, err := cmd.Do(t.Context())
 		require.NoError(t, err)
@@ -760,29 +781,6 @@ func TestCompositeCommandsKeepTheirGeometry(t *testing.T) {
 		require.Greater(t, box.Max.Y, 4+4.5, "the first rib reaches out along +Y")
 		decadtest.MeasuresBounds(t, got, r3.Vec{X: -20, Y: -20}, r3.Vec{X: 20, Y: 20, Z: 13})
 	})
-	t.Run("thread length", func(t *testing.T) {
-		t.Parallel()
-		doc := decad.New()
-		rod := circleBodyAtZ(t, doc, 0, 5, 0, 20)
-		got, err := decad.Thread(rod, decad.Faces(decad.Cylindrical()), mm(threadPitch)).LeftHand().Length(mm(10)).Do(t.Context())
-		require.NoError(t, err)
-		v, err := got.Volume()
-		require.NoError(t, err)
-		full := removedExternal(5, 20, threadPitch)
-		removed := math.Pi*25*20 - v.Value.Base()
-		require.Greater(t, removed, 0.25*full, "half the face is threaded")
-		require.Less(t, removed, 0.75*full, "half the face is threaded")
-	})
-	t.Run("thread left hand keeps the groove volume", func(t *testing.T) {
-		t.Parallel()
-		doc := decad.New()
-		rod := circleBodyAtZ(t, doc, 0, 3, 0, 10)
-		got, err := decad.Thread(rod, decad.Faces(decad.Cylindrical()), mm(1)).LeftHand().Do(t.Context())
-		require.NoError(t, err)
-		v, err := got.Volume()
-		require.NoError(t, err)
-		requireThreadVolume(t, v, math.Pi*9*10-removedExternal(3, 10, 1))
-	})
 	t.Run("sheet metal k factor", func(t *testing.T) {
 		t.Parallel()
 		legs, bends := sheetMetalFixture()
@@ -808,4 +806,121 @@ func TestInfillTagsNestedRefusalsWithItsKind(t *testing.T) {
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 	requireOperationKind(t, err, decad.OperationInfill)
 	require.Equal(t, []*decad.Body{block}, doc.Bodies(), "a refusal leaves the block live")
+}
+
+// A method called with an explicit units.Value{} is validated as that value, not
+// read as unset (agent-docs/command-api-design.md section 12): each is refused by
+// Do naming the method.
+func TestCompositeMethodsRefuseAnExplicitZeroValue(t *testing.T) {
+	t.Parallel()
+	mm := units.Millimeters
+	deg := units.Degrees
+	zero := units.Value{}
+	type row struct {
+		name    string
+		method  string
+		kind    decad.OperationKind
+		fault   error
+		command func(t *testing.T) func(context.Context) (*decad.Body, error)
+	}
+	hole := func(mod func(*decad.HoleCommand) *decad.HoleCommand) func(t *testing.T) func(context.Context) (*decad.Body, error) {
+		return func(t *testing.T) func(context.Context) (*decad.Body, error) {
+			_, plate := drillPlate(t)
+			return mod(decad.Hole(plate, capFace(true, plate), r3.Vec{X: 10, Y: 10, Z: 10}, mm(4), decad.ThroughHole{})).Do
+		}
+	}
+	boss := func(mod func(*decad.BossCommand) *decad.BossCommand) func(t *testing.T) func(context.Context) (*decad.Body, error) {
+		return func(t *testing.T) func(context.Context) (*decad.Body, error) {
+			_, plate := bossPlate(t)
+			return mod(decad.Boss(plate, capFace(true, plate), r3.Vec{Z: 5}, mm(8), mm(8))).Do
+		}
+	}
+	rod := func(mod func(*decad.ThreadCommand) *decad.ThreadCommand) func(t *testing.T) func(context.Context) (*decad.Body, error) {
+		return func(t *testing.T) func(context.Context) (*decad.Body, error) {
+			rod := circleBodyAtZ(t, decad.New(), 0, 2, 0, 1.5)
+			return mod(decad.Thread(rod, decad.Faces(decad.Cylindrical()), mm(1.5))).Do
+		}
+	}
+	rows := []row{
+		{"Hole.Draft", methodDraft, decad.OperationHole, decad.ErrUnitKind,
+			hole(func(c *decad.HoleCommand) *decad.HoleCommand { return c.Draft(zero) })},
+		{"Boss.Draft", methodDraft, decad.OperationBoss, decad.ErrUnitKind,
+			boss(func(c *decad.BossCommand) *decad.BossCommand { return c.Draft(zero) })},
+		{"Boss.RootFillet", "RootFillet", decad.OperationBoss, decad.ErrUnitKind,
+			boss(func(c *decad.BossCommand) *decad.BossCommand { return c.RootFillet(zero) })},
+		{"Boss.Tilt angle", "Tilt", decad.OperationBoss, decad.ErrUnitKind,
+			boss(func(c *decad.BossCommand) *decad.BossCommand { return c.Tilt(zero, deg(0)) })},
+		{"Boss.Tilt direction", "Tilt", decad.OperationBoss, decad.ErrUnitKind,
+			boss(func(c *decad.BossCommand) *decad.BossCommand { return c.Tilt(deg(30), zero) })},
+		{"Thread.Length", "Length", decad.OperationThread, decad.ErrUnitKind,
+			rod(func(c *decad.ThreadCommand) *decad.ThreadCommand { return c.Length(zero) })},
+		{"Thread.LeadIn", "LeadIn", decad.OperationThread, decad.ErrUnitKind,
+			rod(func(c *decad.ThreadCommand) *decad.ThreadCommand { return c.LeadIn(zero) })},
+		{"Thread.LeadInAngle angle", "LeadInAngle", decad.OperationThread, decad.ErrUnitKind,
+			rod(func(c *decad.ThreadCommand) *decad.ThreadCommand { return c.LeadInAngle(mm(0.5), zero) })},
+		{"Infill.Skin", "Skin", decad.OperationInfill, decad.ErrUnitKind,
+			func(t *testing.T) func(context.Context) (*decad.Body, error) {
+				block := boxBody(t, decad.New(), 0, 0, 5, 5, 5)
+				return decad.Infill(block, decad.GyroidInfill, mm(5), units.Scalar(0.8)).Skin(zero).Do
+			}},
+		{"SheetMetal.KFactor", "KFactor", decad.OperationSheetMetal, decad.ErrDegenerate,
+			func(t *testing.T) func(context.Context) (*decad.Body, error) {
+				legs, bends := sheetMetalFixture()
+				c := decad.SheetMetal(decad.New(), mm(2), mm(3), mm(10), legs, bends).KFactor(zero)
+				return func(ctx context.Context) (*decad.Body, error) {
+					b, _, err := c.Do(ctx)
+					return b, err
+				}
+			}},
+	}
+	for _, tc := range rows {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			_, err := tc.command(t)(t.Context())
+			require.Error(t, err)
+			require.ErrorIs(t, err, tc.fault)
+			require.Equal(t, tc.method, requireOperationKind(t, err, tc.kind)[0].Subject.Name)
+		})
+	}
+}
+
+// A nil shape is no shape variant: the shape switch refuses it as ErrDegenerate.
+func TestCompositeShapedConstructorsRefuseANilShape(t *testing.T) {
+	t.Parallel()
+	mm := units.Millimeters
+	_, plate := drillPlate(t)
+	_, err := decad.HoleShaped(plate, capFace(true, plate), r3.Vec{X: 10, Y: 10, Z: 10}, nil, decad.ThroughHole{}).Do(t.Context())
+	require.ErrorIs(t, err, decad.ErrDegenerate)
+	require.ErrorContains(t, err, "unknown hole shape", "the shape switch refuses it, not a later gate")
+	requireOperationKind(t, err, decad.OperationHole)
+
+	_, plate = bossPlate(t)
+	_, err = decad.BossShaped(plate, capFace(true, plate), r3.Vec{Z: 5}, nil, mm(8)).Do(t.Context())
+	require.ErrorIs(t, err, decad.ErrDegenerate)
+	require.ErrorContains(t, err, "unknown boss shape", "the shape switch refuses it, not a later gate")
+	requireOperationKind(t, err, decad.OperationBoss)
+}
+
+// A refused Infill leaves the document as it found it: the bodies, the history
+// and the producer numbering. The skin route has published its copies and made
+// history entries by the time the shell refuses the thickness, so only the
+// snapshot restore puts them back. The next box built in the document gets the
+// provenance it would get in a document that never ran the Infill.
+func TestInfillRestoresHistoryAfterARefusal(t *testing.T) {
+	t.Parallel()
+	mm := units.Millimeters
+	doc := decad.New()
+	block := boxBody(t, doc, 0, 0, 5, 5, 5)
+	bodies := doc.Bodies()
+	history := len(doc.OperationHistory().Operations())
+	_, err := decad.Infill(block, decad.GyroidInfill, mm(5), units.Scalar(0.8)).Resolution(4).Skin(mm(-1)).Do(t.Context())
+	require.ErrorIs(t, err, decad.ErrNegativeMagnitude)
+	require.True(t, slicesEqualBodies(bodies, doc.Bodies()), "the live bodies changed")
+	require.Equal(t, history, len(doc.OperationHistory().Operations()), "the refused Infill left history entries")
+
+	next := boxBody(t, doc, 20, 0, 25, 5, 5)
+	fresh := decad.New()
+	boxBody(t, fresh, 0, 0, 5, 5, 5)
+	want := boxBody(t, fresh, 20, 0, 25, 5, 5)
+	require.Equal(t, want.Faces()[0].Origins(), next.Faces()[0].Origins(), "the refused Infill used producer numbers")
 }

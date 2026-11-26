@@ -376,7 +376,7 @@ func bossCombine(ctx context.Context, d *Document, b *Body, in bossRequest) (*Bo
 		if in.tap != nil {
 			tap, err := planHoleThread(in.tap, false, *in.bore, plan)
 			if err != nil {
-				return nil, err
+				return nil, subjectFault(OperationBoss, in.boreSubject, err)
 			}
 			coil, err := buildThreadCoil(toolCtx, d, tap.frame, tap.plan, tap.pitch, tap.leftHand, true)
 			if err != nil {
@@ -416,11 +416,13 @@ type bossRequest struct {
 	// tap the thread to cut in it.
 	bore *holeplan.Input
 	tap  *HoleThread
+	// boreSubject names the bore's method in a refusal of the bore's own values.
+	boreSubject string
 }
 
-// resolveBossSite resolves spec.Face to the plane the boss stands on: a planar
+// resolveBossSite resolves the spec's face to the plane the boss stands on: a planar
 // face is its own plane, and a cylindrical face gives the plane tangent to it at
-// spec.At, which MUST lie on the cylinder, as a hole's site does.
+// the spec's point, which MUST lie on the cylinder, as a hole's site does.
 func resolveBossSite(ctx context.Context, b *Body, spec bossSpec) (holeSite, error) {
 	if faces, err := spec.face.SelectFaces(b); err == nil && len(faces) == 1 {
 		if cyl, ok := faces[0].Surface().(Cylinder); ok {
@@ -438,7 +440,7 @@ func resolveBossSite(ctx context.Context, b *Body, spec bossSpec) (holeSite, err
 }
 
 func bossInput(ctx context.Context, b *Body, spec bossSpec) (bossRequest, error) {
-	var in bossRequest
+	in := bossRequest{boreSubject: spec.boreSubject}
 	site, err := resolveBossSite(ctx, b, spec)
 	if err != nil {
 		return in, err

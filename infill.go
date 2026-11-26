@@ -2,9 +2,11 @@ package decad
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/lattice"
 	"github.com/lestrrat-3d/decad/internal/modifyoption"
 	"github.com/lestrrat-3d/decad/internal/opcommand"
 	"github.com/lestrrat-3d/r3"
@@ -65,6 +67,8 @@ type infillSpec struct {
 	resolution  int
 	skin        units.Value
 	skinSet     bool
+	// resolutionSubject and skinSubject name the method in a refusal of its value.
+	resolutionSubject, skinSubject string
 }
 
 // Infill returns the command that fills b with a lattice and returns the lattice
@@ -85,8 +89,11 @@ type infillSpec struct {
 // admits a bigger part, and a lattice too fine for that is ErrUnsupported. The
 // errors of the values are those of the lattice builders, an unknown kind is
 // ErrDegenerate and a nil context or body ErrDegenerate. An intersection that
-// leaves nothing is the Boolean's own error. Every error carries [OperationInfill],
-// including the refusals of the nested [Union], [Intersect] and [Shell].
+// leaves nothing is the Boolean's own error. An error carries [OperationInfill],
+// including the refusals of the nested [Shell], except a bare [BooleanError] of the
+// nested [Union] or [Intersect], which keeps [OperationIntersect] or
+// [OperationUnion]. A refusal of the nested Union or Intersect that
+// names an operand names it `operand`.
 func Infill(b *Body, kind LatticeKind, cell, level units.Value) *InfillCommand {
 	c := &InfillCommand{b: b, spec: infillSpec{kind: kind, cell: cell, level: level}}
 	if b == nil {
@@ -103,8 +110,9 @@ type InfillCommand struct {
 }
 
 // Resolution sets the samples to a cell of the lattice along each axis, from 4 up,
-// as [LatticeSpec].Resolution does. A count of zero takes 16. A second call
-// replaces the first.
+// as [LatticeSpec].Resolution does. A count of zero takes 16, not the value zero.
+// A count below 4 is ErrDegenerate, returned by Do naming Resolution as the
+// subject. A second call replaces the first.
 func (c *InfillCommand) Resolution(samples int) *InfillCommand {
 	c.spec.resolution = samples
 	return c
@@ -112,7 +120,8 @@ func (c *InfillCommand) Resolution(samples int) *InfillCommand {
 
 // Skin keeps a solid skin of the given thickness round the part, a positive
 // length, and the lattice fills what is inside it: the part's closed [Shell] of
-// that thickness joined by [Union] to the lattice cut to the part. A second call
+// that thickness joined by [Union] to the lattice cut to the part. A thickness the
+// shell refuses is returned by Do naming Skin as the subject. A second call
 // replaces the first.
 func (c *InfillCommand) Skin(thickness units.Value) *InfillCommand {
 	c.spec.skin, c.spec.skinSet = thickness, true
@@ -130,9 +139,13 @@ func (c *InfillCommand) run(ctx context.Context) (result *Body, retErr error) {
 	if c.b == nil || c.b.n.Doc == nil {
 		return nil, fmt.Errorf(`%w: the body belongs to no document`, ErrDegenerate)
 	}
+	spec := c.spec
+	spec.resolutionSubject, spec.skinSubject = "Resolution", "Skin"
 	// The lattice body and the copies the skin route makes are published before the
 	// result, so a failed or canceled call restores the document to what it found
-	// (agent-docs/command-api-design.md §9).
+	// (agent-docs/command-api-design.md §9). The snapshot comes before the gates,
+	// which sit in infillInterior behind the skin route's copies, so a refusal
+	// costs one snapshot.
 	d := documentHandle(c.b.n.Doc)
 	snap := d.snapshot()
 	defer func() {
@@ -140,10 +153,10 @@ func (c *InfillCommand) run(ctx context.Context) (result *Body, retErr error) {
 			d.restore(snap)
 		}
 	}()
-	if !c.spec.skinSet {
-		return infillInterior(ctx, c.b, c.spec)
+	if !spec.skinSet {
+		return infillInterior(ctx, c.b, spec)
 	}
-	return infillWithSkin(ctx, c.b, c.spec)
+	return infillWithSkin(ctx, c.b, spec)
 }
 
 // infillWithSkin is Infill for a spec with a skin: the part's closed [Shell] of the skin's thickness joined by [Union]
@@ -171,7 +184,7 @@ func infillWithSkin(ctx context.Context, b *Body, spec infillSpec) (result *Body
 	temporaries = append(temporaries, fillSource)
 	skin, err := shell(ctx, skinSource, nil, spec.skin, modifyoption.ShellConfig{NoOpenings: true}, nil)
 	if err != nil {
-		return nil, fmt.Errorf("decad: the infill skin: %w", err)
+		return nil, subjectFault(OperationInfill, spec.skinSubject, fmt.Errorf("decad: the infill skin: %w", err))
 	}
 	temporaries = append(temporaries, skin)
 	interior := spec
@@ -238,6 +251,9 @@ func infillInterior(ctx context.Context, b *Body, spec infillSpec) (*Body, error
 	}
 	mesh, err := build(ctx, ls)
 	if err != nil {
+		if errors.Is(err, lattice.ErrResolution) {
+			return nil, subjectFault(OperationInfill, spec.resolutionSubject, err)
+		}
 		return nil, err
 	}
 	lattice, err := SolidFromMesh(ctx, documentHandle(b.n.Doc), mesh)

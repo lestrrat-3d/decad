@@ -85,13 +85,18 @@ func commandConstructorNames(t *testing.T) []string {
 
 // TestCommandConstructorCallsEndInDo fails when a command constructor call is
 // an expression statement, alone or chained without Do, such as
-// decad.Cut(a, b).MatchingFaces(). The unusedresult lint setting catches only
+// decad.Cut(a, b).MatchingFaces(), and likewise a statement that starts at a
+// value builder (NewHoleThread, NewBossBore, NewBossRibs). The unusedresult lint setting catches only
 // the bare constructor call (agent-docs/command-api-design.md §10). The scan
 // is syntactic and covers apitest/, examples/, the root tests and _gallery/.
 func TestCommandConstructorCallsEndInDo(t *testing.T) {
 	t.Parallel()
 	constructors := commandConstructorNames(t)
 	require.NotEmpty(t, constructors, "the scan must find the command constructors")
+	// The value builders are no commands, but a statement that starts at one drops
+	// the value its chain builds, such as decad.NewBossBore(d, z).Head(h), and no
+	// lint catches that (agent-docs/command-api-design.md §10).
+	constructors = append(constructors, "NewHoleThread", "NewBossBore", "NewBossRibs")
 
 	var files []string
 	rootTests, err := filepath.Glob("*_test.go")

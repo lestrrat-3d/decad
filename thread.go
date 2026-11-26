@@ -20,10 +20,12 @@ import (
 // symmetric trapezoidal groove, such as an Acme or trapezoidal thread, and
 // [ButtressThreadForm] an asymmetric one (agent-docs/thread-design.md §6). The
 // groove mouth opens a twentieth of the pitch past the face, as the ISO groove's
-// does.
+// does. A form that a constructor built with a zero value is ErrDegenerate, never
+// the ISO profile.
 type ThreadForm struct {
 	angle, depth, flat    units.Value
 	flankLead, flankTrail units.Value
+	built                 bool // set by a constructor, so an all-zero built form is not the zero form
 }
 
 // TrapezoidThreadForm returns a symmetric trapezoidal groove. angle is the
@@ -31,7 +33,7 @@ type ThreadForm struct {
 // is how far the groove reaches from the face to its root and flat the width of
 // the root, both positive lengths.
 func TrapezoidThreadForm(angle, depth, flat units.Value) ThreadForm {
-	return ThreadForm{angle: angle, depth: depth, flat: flat}
+	return ThreadForm{angle: angle, depth: depth, flat: flat, built: true}
 }
 
 // ButtressThreadForm returns an asymmetric groove, a buttress thread's. lead and
@@ -40,7 +42,7 @@ func TrapezoidThreadForm(angle, depth, flat units.Value) ThreadForm {
 // the one toward its far end. Each is an angle above zero and below 90 degrees.
 // depth and flat are as in [TrapezoidThreadForm].
 func ButtressThreadForm(lead, trail, depth, flat units.Value) ThreadForm {
-	return ThreadForm{flankLead: lead, flankTrail: trail, depth: depth, flat: flat}
+	return ThreadForm{flankLead: lead, flankTrail: trail, depth: depth, flat: flat, built: true}
 }
 
 // threadSpec is the request a [ThreadCommand] hands to the implementation: the
@@ -231,12 +233,18 @@ func thread(ctx context.Context, b *Body, spec threadSpec) (*Body, error) {
 	if !spec.leadSet {
 		return cut(b)
 	}
+	// LeadInAngle stores its distance in the lead-in slot, so a fault of the
+	// distance names the method the caller used.
+	distanceSubject := spec.leadInSubject
+	if spec.angleSet {
+		distanceSubject = spec.leadAngleSubject
+	}
 	leadIn, err := sectionrecord.MagnitudeIn(spec.leadIn, units.Length, units.Millimeter, "the thread lead-in")
 	if err != nil {
-		return nil, subjectFault(OperationThread, spec.leadInSubject, err)
+		return nil, subjectFault(OperationThread, distanceSubject, err)
 	}
 	if leadIn == 0 {
-		return nil, subjectFault(OperationThread, spec.leadInSubject,
+		return nil, subjectFault(OperationThread, distanceSubject,
 			fmt.Errorf(`%w: a thread lead-in needs a positive distance`, ErrDegenerate))
 	}
 	leadAngle := 0.0
@@ -291,7 +299,8 @@ func threadLeadInEdges(face *Face) []*Edge {
 }
 
 // threadForm reads a ThreadForm into the planner's millimetre form: the zero
-// form is the ISO profile, and a partly set one is ErrDegenerate.
+// form, which no constructor built, is the ISO profile, and a built form with a
+// missing value is ErrDegenerate.
 func threadForm(f ThreadForm) (threadplan.Form, error) {
 	if f == (ThreadForm{}) {
 		return threadplan.Form{}, nil

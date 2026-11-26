@@ -137,8 +137,9 @@ func Example_thread_form() {
 }
 
 // A buttress groove has a steep flank on one side and a shallow one on the other:
-// set FlankLead, the flank toward the face's start, and FlankTrail, the one toward
-// its far end, in place of Angle. Here a 10 mm rod takes a buttress thread of pitch
+// build the form with ButtressThreadForm(lead, trail, depth, flat), where lead is the
+// flank toward the face's start and trail the one toward its far end, in place of
+// TrapezoidThreadForm's single angle. Here a 10 mm rod takes a buttress thread of pitch
 // 3 mm, 45 degrees on the lead flank and 7 on the trail.
 func Example_thread_buttress() {
 	w := sketch.NewWorld()

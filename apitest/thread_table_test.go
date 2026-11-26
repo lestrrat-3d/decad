@@ -112,5 +112,5 @@ func TestLookupThreadSizeCutsTheThreadItNames(t *testing.T) {
 	require.NoError(t, err)
 	v, err := out.Volume()
 	require.NoError(t, err)
-	requireThreadVolume(t, v, math.Pi*25*20-removedExternal(5, 20, 1.5))
+	requireThreadVolume(t, v, math.Pi*25*20-removedExternal(5, 20))
 }

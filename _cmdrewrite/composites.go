@@ -96,6 +96,30 @@ func (f specFields) present(name string) (ast.Expr, bool) {
 	return e, true
 }
 
+// zeroDefault reports a named field set by an expression that may be the zero
+// value at run time. The old spec read zero as unset, and the new method validates
+// the value it is given, so `.Draft(v)` with a zero `v` is refused where the old
+// call took the default. Only a call (`units.Degrees(30)`) or a non-empty literal
+// is known to be non-zero; the author decides what a variable meant.
+func (f specFields) zeroDefault(names ...string) string {
+	for _, n := range names {
+		e, ok := f.present(n)
+		if !ok {
+			continue
+		}
+		switch v := e.(type) {
+		case *ast.CallExpr:
+			continue
+		case *ast.CompositeLit:
+			if len(v.Elts) > 0 {
+				continue
+			}
+		}
+		return "a " + n + " that is not a call or a literal and may be zero, which the old call took as unset"
+	}
+	return ""
+}
+
 // checkFields reports a field the rule does not know.
 func (f specFields) checkFields(allowed ...string) string {
 	known := map[string]struct{}{}
@@ -153,6 +177,9 @@ func (c *callSite) holeThread(e ast.Expr) (string, string) {
 		return "", why
 	}
 	if why := f.checkFields("Pitch", "LeftHand", "Length"); why != "" {
+		return "", why
+	}
+	if why := f.zeroDefault("Length"); why != "" {
 		return "", why
 	}
 	pitch, why := c.required(f, "Pitch")
@@ -215,6 +242,9 @@ func ruleHole(c *callSite) (string, string) {
 	if why := f.checkFields("Face", "At", "Diameter", "Depth", "Head", "Shape", "Thread", "Draft"); why != "" {
 		return "", why
 	}
+	if why := f.zeroDefault("Draft"); why != "" {
+		return "", why
+	}
 	ctx, body := c.text(c.args[0]), c.text(c.args[1])
 	if shape, ok := f.present("Shape"); ok {
 		if _, has := f.present("Diameter"); has {
@@ -253,6 +283,9 @@ func (c *callSite) bossBore(e ast.Expr) (string, string) {
 	if why := f.checkFields("Diameter", "Depth", "Head", "Thread", "Draft"); why != "" {
 		return "", why
 	}
+	if why := f.zeroDefault("Draft"); why != "" {
+		return "", why
+	}
 	req, why := c.required(f, "Diameter", "Depth")
 	if why != "" {
 		return "", why
@@ -271,6 +304,9 @@ func (c *callSite) bossRibs(e ast.Expr) (string, string) {
 		return "", why
 	}
 	if why := f.checkFields("Count", "Thickness", "Length", "Height", "Angle"); why != "" {
+		return "", why
+	}
+	if why := f.zeroDefault("Angle"); why != "" {
 		return "", why
 	}
 	req, why := c.required(f, "Count", "Thickness", "Length", "Height")
@@ -298,6 +334,9 @@ func ruleBoss(c *callSite) (string, string) {
 	}
 	if why := f.checkFields("Face", "At", "Diameter", "Height", "Bore", "Draft", "RootFillet", "Shape", "Ribs",
 		"Tilt", "TiltDirection"); why != "" {
+		return "", why
+	}
+	if why := f.zeroDefault("Draft", "RootFillet", "Tilt", "TiltDirection"); why != "" {
 		return "", why
 	}
 	ctx, body := c.text(c.args[0]), c.text(c.args[1])
@@ -402,6 +441,9 @@ func ruleThread(c *callSite) (string, string) {
 	if why := f.checkFields("Face", "Pitch", "LeftHand", "Length", "Form", "LeadIn", "LeadInAngle"); why != "" {
 		return "", why
 	}
+	if why := f.zeroDefault("Length", "LeadIn", "LeadInAngle"); why != "" {
+		return "", why
+	}
 	req, why := c.required(f, "Face", "Pitch")
 	if why != "" {
 		return "", why
@@ -450,6 +492,9 @@ func ruleInfill(c *callSite) (string, string) {
 	if why := f.checkFields("Kind", "Cell", "Level", "Resolution", "Skin"); why != "" {
 		return "", why
 	}
+	if why := f.zeroDefault("Skin"); why != "" {
+		return "", why
+	}
 	req, why := c.required(f, "Cell", "Level")
 	if why != "" {
 		return "", why
@@ -480,6 +525,9 @@ func ruleSheetMetal(c *callSite) (string, string) {
 		return "", why
 	}
 	if why := f.checkFields("Thickness", "InnerRadius", "Width", "KFactor", "Legs", "Bends"); why != "" {
+		return "", why
+	}
+	if why := f.zeroDefault("KFactor"); why != "" {
 		return "", why
 	}
 	req, why := c.required(f, "Thickness", "InnerRadius", "Width")

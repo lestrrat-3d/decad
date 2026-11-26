@@ -175,7 +175,9 @@ serves Fillet and Chamfer, and `MatchingFaces` serves Cut and Intersect.
 - **Every error from `Do` except cancellation is tagged with the command's own `OperationKind`.** This covers the
   nil-ctx error. `PathPattern`
   tags `OperationCopy` and `Arrange` tags `OperationTransform`, since they gain no `OperationKind` constant.
-  `Infill` and `SheetMetal` have none to reuse, so they add `OperationInfill` and `OperationSheetMetal`.
+  `Infill` and `SheetMetal` have none to reuse, so they add `OperationInfill` and `OperationSheetMetal`. Those two
+  kinds tag errors only. The history never records them: it records the strip's `OperationExtrude` for `SheetMetal`
+  and the `OperationIntersect`, or with a skin the `OperationUnion`, for `Infill`.
 - **A recorded fault names its subject (A8) in `OperationSubject.Name`.** A gate that refuses a stored method
   value names the method by returning `subjectError(kind, method, err)`; the tag `runCommand` adds keeps it.
 - **Subject names follow the constructor's parameter names.** `Union(bodies ...*Body)` reports operand `i` as
@@ -223,6 +225,14 @@ entries that the restore later withdraws, and the next call reuses their produce
   statement's call is the method. A repo-wide syntactic Go test fails on any expression statement whose call chain
   starts at a command constructor and does not end in `Do`, and on a constructor call used as a statement. It
   scans `apitest/`, `examples/`, the root tests and `_gallery/`.
+- The lint does not catch a dropped value-builder call either. `bore.Head(h)` or `thread.LeftHand()` written as a
+  statement changes a copy and drops it, and `unusedresult.funcs` lists package functions only, never methods.
+  Staticcheck's SA4017 (pure function result unused, enabled through `default: all`) catches it for
+  `HoleThread.LeftHand`, `HoleThread.Length` and `BossRibs.Angle`: a `golangci-lint` v2.15.0 run on a probe that
+  drops each call reports SA4017 for those three. It does not catch `BossBore.Head`, `BossBore.Thread` or
+  `BossBore.Draft`, which staticcheck does not judge pure because they copy their argument. The syntactic test above
+  also fails a statement whose chain starts at `NewHoleThread`, `NewBossBore` or `NewBossRibs`. A dropped
+  `bore.Head(h)` on a variable is therefore caught by neither, and stays a review check.
 - The setting and both checks protect this repository only. A downstream caller's code gets no lint from them.
 - The `unusedresult.funcs` comment in `.golangci.yml` names the x/tools version the standard-library entries were
   copied from (v0.52.0, inside golangci-lint v2.15.0). A golangci-lint bump re-copies that list. A stale list never
@@ -245,9 +255,11 @@ entries that the restore later withdraws, and the next call reuses their produce
 - **A root composite calls the unexported implementation, never a public command.** `hole.go`, `infill.go`,
   `pattern.go`, `path_pattern.go`, `arrange.go`, `fillet_chord.go` and `chamfer_angle.go` call `cut`, `union`,
   `copyBody` and the like. A composite allocates and consumes no command.
-  `infill.go` is the one root composite that still calls a public operation, `SolidFromMesh`. The last stack PR
-  (§13, PR 7) moves that call onto the implementation, `solidFromMeshBody`, in the PR that converts
-  `SolidFromMesh`.
+  Two root files still call the public operation `SolidFromMesh`: `infill.go` and `extrude_tilted_face.go` (the
+  tilted-face Extrude route). The last stack PR (§13, PR 7) moves both calls onto the implementation,
+  `solidFromMeshBody`, in the PR that converts `SolidFromMesh`. `infill.go` keeps its `ctx.Err()` guard before it maps
+  the error to `ErrUnsupported` (§3). The tilted-face route swallows every error and falls back, so it needs no
+  guard.
 - **A composite may tag the implementation's error with that operation's kind itself, but the outermost command's
   kind wins.** `operationError` re-tags every nested non-selection diagnostic with the kind it is given, and the
   public `Do` applies it once with its own kind. A composite's own tag therefore decides a diagnostic's kind only for
@@ -269,7 +281,7 @@ entries that the restore later withdraws, and the next call reuses their produce
   value at its gate and tags the error with `OperationCopy` and the subject in `pathFollow.stationsSubject`, which the
   command sets to `stations`. The subject travels in the settings the implementation takes, as `pathFollow.subject`
   does, so that a composite that calls the implementation with a value it computed can clear it or set the name of
-  its own argument, by the rule above. `subjectFault` (`hole.go`) applies it: an empty subject leaves the error
+  its own argument, by the rule above. `subjectFault` (`operation_command.go`) applies it: an empty subject leaves the error
   untagged.
 - **A stored method value's fault is named in one of two ways.** Settings that the implementation takes carry the
   subject next to the value and its error (`extrudeSettings.taperSubject`), or the folding code returns a typed
@@ -331,12 +343,25 @@ name its methods and special rules.
   `TrapezoidThreadForm(angle, depth, flat)` or `ButtressThreadForm(lead, trail, depth, flat)`.
   `Infill(b, kind, cell, level)` has `Resolution` and `Skin`, and `SheetMetal(d, thickness, innerRadius, width, legs,
   bends)` has `KFactor` and `Do` returns `(*Body, SheetMetalReport, error)`. A constructor records a nil body (`body`)
-  or a nil document (`document`). Every other value is refused at its old gate, and a refused method value names its
-  method. A method called with an explicit zero value is validated as that value, so `KFactor(units.Value{})` is
-  `ErrDegenerate` and `Draft(units.Degrees(0))` is a straight wall. `Infill` and `SheetMetal` add `OperationInfill`
-  and `OperationSheetMetal`, and `Infill` re-tags its nested `Union`, `Intersect` and `Shell` diagnostics as
-  `OperationInfill` (§11). A failed or canceled `Infill` withdraws its lattice body and copies (§9).
-- Surface, mesh-to-solid and retirement: no methods. `Remove(b).Do(ctx)` returns `error`.
+  or a nil document (`d`). Every other value is refused at its old gate, and a refused method value names its
+  method, `LeadInAngle` for its distance too and `Bore` for the bore's pilot thread. A method called with an explicit
+  zero value is validated as that value, so `KFactor(units.Value{})` is `ErrDegenerate` and
+  `Draft(units.Degrees(0))` is a straight wall. Three things are not validated as the value they hold:
+  `Resolution(0)` takes the default 16, as `LatticeSpec.Resolution` does; the zero `ThreadForm`, which no
+  constructor built, is the ISO profile, while a form a constructor built with zero values is `ErrDegenerate`
+  (thread-design F1); and the sealed shape variants, which are constructor arguments and not methods, so
+  `OutlineHole.Angle` zero is no turn while `RectangularHole`, `SlotHole` and `PolygonHole` refuse a zero `Angle` as
+  `ErrUnitKind`. `Infill` and `SheetMetal` add `OperationInfill` and `OperationSheetMetal`, and `Infill` re-tags its
+  nested `Shell` diagnostics and the non-`BooleanError` refusals of its `Union` and `Intersect` as `OperationInfill`
+  (§11). A nested `BooleanError` keeps its own kind, `OperationIntersect` or `OperationUnion`, because
+  `operationError` passes it through. A `CoarseHeldContactError` from the nested Boolean names its operand `operand`
+  with an ordinal, not `a`, `b` or `bodies`. A failed or canceled `Infill` withdraws its lattice body and copies (§9).
+  `Infill` takes its snapshot before its gates, because the skin route makes its copies ahead of the gates in
+  `infillInterior`, so a refusal costs one snapshot.
+- Surface, mesh-to-solid and retirement: no methods. `Remove(b).Do(ctx)` returns `error`, so `RemoveCommand` passes
+  `struct{}` through `runCommand` as `SheetMetal` passes `sheetMetalResult`. `SolidFromMesh(d, m)` records a nil
+  document with the shared `errNilDocument` under the subject `d`, as `Loft`, `PatchProfile` and the section
+  constructors do.
 - `PatternSpec` and every `Extent`, `AngularExtent`, `Axis` and `MirrorPlane` stay sealed constructor arguments.
 
 ## 13. Migration stack
@@ -353,7 +378,7 @@ its option tier and its `With...` constructors in the same PR, and no wrapper su
 | 4 | Atomic `PathPattern` and `Arrange` (§9). It changes behaviour only on failure and cancellation and converts nothing. |
 | 5 | Placement and patterns. |
 | 6 | Spec composites. They follow PRs 2–5 because they call those operations' implementations (§11). |
-| 7 | Surface, mesh-to-solid ops and `Remove`. It moves `infill.go`'s call of `SolidFromMesh` onto `solidFromMeshBody` (§11) and deletes the rewrite tool. |
+| 7 | Surface, mesh-to-solid ops and `Remove`. It moves the calls of `SolidFromMesh` in `infill.go` and `extrude_tilted_face.go` onto `solidFromMeshBody` (§11) and deletes the rewrite tool. |
 
 ## 14. What each family PR carries
 
@@ -397,7 +422,7 @@ its option tier and its `With...` constructors in the same PR, and no wrapper su
 - The rewrite tool's rules for the family, run over `apitest/`, `examples/`, the root tests and `_gallery/`. The tool
   is `_cmdrewrite/`, its own nested module recorded in `agent-docs/modules.md`, because `gofmt -r` cannot match a
   variadic option list. The rules match the pre-migration names, such as `WithTangentChain` and
-  `WithNoOpenings`, and the tool's tests feed old-API code and assert the rewritten output, because the tool must
+  `WithNoOpenings`. A spec field whose zero value meant unset in the old call (`Draft`, `Tilt`, `Length`, `Skin`, `KFactor` and the like) and holds a variable is reported, not rewritten, because the new method refuses a zero value. The tool's tests feed old-API code and assert the rewritten output, because the tool must
   migrate calls that land on `main` while the stack is open. A new-name call is not input.
 - The Module boundary gate evidence (`agent-docs/module-boundary.md`) in the PR body.
 
@@ -408,6 +433,7 @@ its option tier and its `With...` constructors in the same PR, and no wrapper su
 | `opcommand.State` | `internal/opcommand/state.go` | Zero value is a fresh command. `Record(subject, err)` keeps the first non-nil fault. `Fault()` returns it. `Consume()` reports true to exactly one caller, racing callers included. |
 | `runCommand[T]` | `operation_command.go` | Steps 1–3 of §3, then the implementation, then the `operationError` tag. A root adapter: it applies the root-owned `OperationKind`, `OperationError` and `OperationSubject`. |
 | `subjectError` | `operation_command.go` | Tags an error with the kind and names the subject on every diagnostic that names none. |
+| `subjectFault` | `operation_command.go` | `subjectError` for an implementation's untagged error, or the error as it is when the subject is empty (§11). |
 | `opcommand.Slot[T]` | `internal/opcommand/slot.go` | Holds one method's value and the error validating it. `Set(value, err)` replaces both. `Get()` returns them. `IsSet()` reports a call. |
 | `ErrConsumed` | `internal/decaderr/errors.go`, `errors.go` | Mapped to `OpDiagInputRejected` at `OperationStageInput` by `operationErrorCode`. |
 

@@ -365,17 +365,6 @@ func hole(ctx context.Context, b *Body, spec holeSpec) (*Body, error) {
 	return combineTools(ctx, d, OperationHole, b, meshbool.OpCut, tools, in.Margin != 0, nil, capture)
 }
 
-// subjectFault names subject, the method or constructor argument a stored value came from, in err, which
-// the implementation returns untagged. An empty subject leaves err as it is: a
-// composite that calls the implementation with a value it computed clears it
-// (agent-docs/command-api-design.md §11).
-func subjectFault(kind OperationKind, subject string, err error) error {
-	if err == nil || subject == "" {
-		return err
-	}
-	return subjectError(kind, subject, err)
-}
-
 // holeInput resolves spec into the plain-data request holeplan reads.
 func holeInput(ctx context.Context, b *Body, spec holeSpec) (holeplan.Input, error) {
 	var in holeplan.Input

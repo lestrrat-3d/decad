@@ -60,7 +60,7 @@ that field and its range.
 
 ## 5. Infill
 
-`Infill(b, kind, cell, level)` returns the command that fills a solid with a lattice. `Resolution(n)` sets the samples to a cell (16 unless called) and `Skin(t)` keeps a skin (I5). `Do` is tagged `OperationInfill`, including the refusals of its nested `Union`, `Intersect` and `Shell`, and a failed or canceled `Do` leaves the document as it found it: the lattice body and the copies are withdrawn. The command form is `agent-docs/command-api-design.md`.
+`Infill(b, kind, cell, level)` returns the command that fills a solid with a lattice. `Resolution(n)` sets the samples to a cell (16 unless called) and `Skin(t)` keeps a skin (I5). `Do` is tagged `OperationInfill`, including the refusals of its nested `Shell` and the non-`BooleanError` refusals of its `Union` and `Intersect`; a bare `BooleanError` keeps `OperationIntersect` or `OperationUnion`. A `Resolution` below 4 and a refused `Skin` name their method as the subject. A failed or canceled `Do` leaves the document as it found it: the lattice body and the copies are withdrawn. The command form is `agent-docs/command-api-design.md`.
 
 | Decision | Rule |
 |---|---|

@@ -11,7 +11,7 @@ func (c *SheetMetalCommand) KFactor(k units.Value) *SheetMetalCommand
 func (c *SheetMetalCommand) Do(ctx context.Context) (*Body, SheetMetalReport, error)
 ```
 
-The constructor records a nil document, named `document`, and copies both slices. `KFactor` stores its value, and
+The constructor records a nil document, named `d`, and copies both slices. `KFactor` stores its value, and
 `Do` refuses a bad one naming `KFactor` as the subject, after the three lengths and before the leg count. A second
 `KFactor` call replaces the first. Every error is tagged `OperationSheetMetal`. The command form is
 `agent-docs/command-api-design.md`.

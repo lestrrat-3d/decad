@@ -62,7 +62,7 @@ func SheetMetal(d *Document, thickness, innerRadius, width units.Value, legs, be
 	c := &SheetMetalCommand{d: d, spec: sheetMetalSpec{thickness: thickness, innerRadius: innerRadius,
 		width: width, legs: slices.Clone(legs), bends: slices.Clone(bends)}}
 	if d == nil {
-		c.state.Record("document", errNilSheetMetalDocument)
+		c.state.Record("d", errNilSheetMetalDocument)
 	}
 	return c
 }

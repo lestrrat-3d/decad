@@ -18,10 +18,11 @@ const (
 	threadHeight = 0.8660254037844386 // √3/2
 )
 
-// removedExternal is the groove volume inside the major radius for a groove
-// that runs out of both ends of a rod: at each radius the groove covers
-// width(rho)/pitch of the length, whatever the turn.
-func removedExternal(radius, length, pitch float64) float64 {
+// removedExternal is the groove volume inside the major radius for a groove of
+// threadPitch that runs out of both ends of a rod: at each radius the groove
+// covers width(rho)/pitch of the length, whatever the turn.
+func removedExternal(radius, length float64) float64 {
+	const pitch = threadPitch
 	depth := threadHeight * 17 / 24 * pitch
 	return integrateGroove(radius-depth, radius, length, pitch, pitch/8, func(rho float64) float64 { return rho - (radius - depth) })
 }
@@ -71,7 +72,7 @@ func TestThreadExternalRod(t *testing.T) {
 	require.Equal(t, decad.OperationThread, operations[len(operations)-1].Kind())
 	volume, err := out.Volume()
 	require.NoError(t, err)
-	requireThreadVolume(t, volume, math.Pi*25*20-removedExternal(5, 20, threadPitch))
+	requireThreadVolume(t, volume, math.Pi*25*20-removedExternal(5, 20))
 	box, err := out.Bounds()
 	require.NoError(t, err)
 	require.InDelta(t, 5, box.Max.X, 0.05+box.Bound.Base(), "the thread's crest stays inside the major diameter")

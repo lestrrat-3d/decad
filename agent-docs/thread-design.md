@@ -85,7 +85,7 @@ Whitworth-style threads. `threadplan.ComputeForm` takes the form, and `Compute` 
 
 | Decision | Rule |
 |---|---|
-| F1 | The zero `ThreadForm` is the ISO profile of T5. A form built with a zero `units.Value` for its angle, depth or flat is `ErrDegenerate`. |
+| F1 | The zero `ThreadForm` is the ISO profile of T5. A form built with a zero `units.Value` for its angle, depth or flat is `ErrDegenerate`, including a form whose every value is zero. |
 | F2 | `Angle` is the included angle between the flanks, above zero and at most 120 degrees. Each flank widens the groove by `tan(Angle/2)` per unit of depth. A wrong unit kind is `ErrUnitKind`, a negative value `ErrNegativeMagnitude`, a non-finite one `ErrNotFinite`, and zero or past 120 degrees `ErrDegenerate`. |
 | F3 | `Depth` is the root's distance from the face, below the major radius for a rod and beyond the minor radius for a bore, and `Flat` is the root's width. Both are positive lengths, read as `Pitch` is. |
 | F4 | The groove is the four-corner polygon of T5 with these three numbers: root at `Depth`, mouth `0.05·P` past the face, and the width at the mouth `Flat + 2·tan(Angle/2)·(Depth + 0.05·P)`. T6 holds for it: a groove whose width reaches `0.95·P` or whose root reaches the axis is `ErrDegenerate`. |
@@ -112,8 +112,8 @@ one behind it. Its `lead` and `trail` replace the angle.
 
 | Decision | Rule |
 |---|---|
-| B1 | Each flank is an angle above zero and under 90 degrees, its lean from the radial direction: `FlankLead` for the flank toward the start of the face (its least position along the axis) and `FlankTrail` for the one toward its far end. `ButtressThreadForm` sets both and no angle, and `TrapezoidThreadForm` sets an angle and no flanks, so no other mix can be written. `Depth` and `Flat` are required as in F1. |
-| B2 | The groove polygon is T5's with the mouth reaching `Flat/2 + h·tan(FlankLead)` from the middle of the root toward the start and `Flat/2 + h·tan(FlankTrail)` toward the far end, `h` the root's distance from the mouth. `threadplan.Form.BackSlope` is the far flank's slope, zero meaning the start flank's. |
+| B1 | Each flank is an angle above zero and under 90 degrees, its lean from the radial direction: the `lead` argument for the flank toward the start of the face (its least position along the axis) and the `trail` argument for the one toward its far end. `ButtressThreadForm` sets both and no angle, and `TrapezoidThreadForm` sets an angle and no flanks, so no other mix can be written. The `depth` and `flat` arguments are required as in F1. |
+| B2 | The groove polygon is T5's with the mouth reaching `flat/2 + h·tan(lead)` from the middle of the root toward the start and `flat/2 + h·tan(trail)` toward the far end, `h` the root's distance from the mouth. `threadplan.Form.BackSlope` is the far flank's slope, zero meaning the start flank's. |
 | B3 | The first groove lies wholly before the start plane, so its middle sits the far reach and the margin before it, and the coil carries on until the start reach clears the far end: `(length + lead + trail + 2·margin)/pitch` turns. A groove whose two reaches together reach `0.95·P` is `ErrDegenerate`. |
 | B4 | The volume of a groove that runs out of both ends depends on the sum of the two slopes alone, so it is F5's with `tan` of the mean: the tests compute that independently, and the polygon's own corners are pinned in `threadplan`. Which flank is which is read from the polygon, not from the volume. |
 
