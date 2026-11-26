@@ -35,6 +35,7 @@ func restingBossCases() []restingBossCase {
 				plate := boxBody(t, doc, 0, 0, 100, 60, 10)
 				first, err := decad.Union(plate, circlePrismAtZ(t, doc, 20, 30, 6, 10, 8)).Do(t.Context())
 				require.NoError(t, err)
+				first = withRestingBossPost(t, doc, first)
 				second := translated(t, circlePrismAtZ(t, doc, 20, 30, 6, 10, 8), 30, 0, 0)
 				joined, err := decad.Union(first, second).Do(t.Context())
 				require.NoError(t, err)
@@ -44,6 +45,20 @@ func restingBossCases() []restingBossCase {
 			bosses: 2,
 		},
 	}
+}
+
+// restingBossPostVolume is the volume restingBossPost adds above the plate's top.
+const restingBossPostVolume = 0.3 * 0.3 * 2
+
+// withRestingBossPost unions plate with a 0.3 mm square post that stands from the plate's floor through its top at
+// z = 10 to z = 12, in the corner of the box of the moved boss's solid, 1.85 mm clear of its wall. The plate then
+// crosses its top plane beside the boss, so it reads no local side there (agent-docs/coplanar-contact-design.md
+// §20.2) and the boss's Union takes the shifted retry.
+func withRestingBossPost(t *testing.T, doc *decad.Document, plate *decad.Body) *decad.Body {
+	t.Helper()
+	joined, err := decad.Union(plate, boxBodyAtZ(t, doc, 55.55, 35.55, 55.85, 35.85, 0, 12)).Do(t.Context())
+	require.NoError(t, err)
+	return joined
 }
 
 // movedBossShift returns the shift s the retry gave the boss whose unmoved
@@ -159,7 +174,7 @@ func TestBooleanGapShiftFilletsRestingBoss(t *testing.T) {
 			require.Equal(t, edges, tori, "each root and rim is blended by a Torus")
 
 			s := movedBossShift(t, joined, tc.at)
-			hand := 60000 + float64(tc.bosses)*perBoss
+			hand := 60000 + float64(tc.bosses)*perBoss + restingBossPostVolume
 			v := requireVolumeWithin(t, filleted, hand)
 			shifted := hand - 36*math.Pi*math.Abs(s.Z)
 			require.LessOrEqual(t, math.Abs(volumeMM(t, v)-shifted), v.Bound.Base(),

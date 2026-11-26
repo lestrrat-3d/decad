@@ -215,8 +215,11 @@ func TestStackedUnionSeparateBossesFillet(t *testing.T) {
 // a stacked prism whose volume is short of two bosses by the lens they share,
 // 8·(72·acos(2/3) − 4·√80). Two bosses 12 mm apart touch at one point, and a
 // boss 6 mm in from the plate's edge touches the edge at one point: the brep
-// build misses both, and the Union takes the mesh path with a shift, as a
-// boss resting on a plate always has.
+// build misses both, and the Union takes the mesh path. The second of two
+// touching bosses meets the first boss's wall beside its floor, so the plate
+// reads no local side there (agent-docs/coplanar-contact-design.md §20.2) and
+// the Union shifts it. The boss at x = 50 stands clear of the first one, so the
+// plate's top reads as a local side and that boss joins with no shift.
 func TestStackedUnionTouchingBosses(t *testing.T) {
 	t.Parallel()
 	t.Run("overlapping", func(t *testing.T) {
@@ -230,8 +233,9 @@ func TestStackedUnionTouchingBosses(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
 		bosses []separateBoss
+		shift  bool
 	}{
-		{name: "tangent bosses", bosses: []separateBoss{onTop(20), onTop(32)}},
+		{name: "tangent bosses", bosses: []separateBoss{onTop(20), onTop(32)}, shift: true},
 		{name: "tangent to the edge", bosses: []separateBoss{onTop(6), onTop(50)}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -240,6 +244,13 @@ func TestStackedUnionTouchingBosses(t *testing.T) {
 			joined := unionOf(tc.bosses...)(t, doc)
 			require.True(t, tookMeshPath(joined), "the touching bosses take the mesh path")
 			diagnostics := joined.OperationDiagnostics()
+			if !tc.shift {
+				for _, d := range diagnostics {
+					require.NotEqual(t, decad.OpDiagGapShiftApplied, d.Code)
+				}
+				requireVolumeWithin(t, joined, 60000+2*288*math.Pi)
+				return
+			}
 			require.NotEmpty(t, diagnostics)
 			require.Equal(t, decad.OpDiagGapShiftApplied, diagnostics[len(diagnostics)-1].Code)
 		})
