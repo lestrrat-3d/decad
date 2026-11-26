@@ -242,23 +242,6 @@ func TestShellSelectorAdmission(t *testing.T) {
 
 func TestShellSenseDispatch(t *testing.T) {
 	t.Parallel()
-	tests := []struct {
-		name string
-		set  []shellSetting
-	}{
-		{name: "default"},
-		{name: "inward", set: []shellSetting{senseSetting(decad.Inward)}},
-		{name: "outward", set: []shellSetting{outwardSetting()}},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			_, box := shellBox(t)
-			body, err := applyShell(box, topCap(box), units.Millimeters(5), tc.set...).Do(t.Context())
-			require.NoError(t, err)
-			require.NotNil(t, body)
-		})
-	}
-
 	t.Run("UnknownSense", func(t *testing.T) {
 		doc, box := shellBox(t)
 

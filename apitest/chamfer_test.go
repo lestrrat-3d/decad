@@ -14,20 +14,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestChamferContextCancellationLeavesReceiverLive(t *testing.T) {
-	t.Parallel()
-	doc, box := filletBox(t)
-	ctx, cancel := context.WithCancel(t.Context())
-	cancel()
-	body, err := decad.Chamfer(box, verticalEdges(), units.Millimeters(10)).Do(ctx)
-	require.Nil(t, body)
-	require.ErrorIs(t, err, context.Canceled)
-	require.Equal(t, []*decad.Body{box}, doc.Bodies())
-	body, err = decad.Chamfer(box, verticalEdges(), units.Millimeters(10)).Do(t.Context())
-	require.NoError(t, err)
-	require.Equal(t, []*decad.Body{body}, doc.Bodies())
-}
-
 func TestChamferContextCancellationAtCommitLeavesReceiverLive(t *testing.T) {
 	t.Parallel()
 	doc, box := filletBox(t)

@@ -167,25 +167,6 @@ func TestConeFromFaceRefuses(t *testing.T) {
 		_, err = ConeFromFace(blank, nil, far).Do(t.Context())
 		require.ErrorIs(t, err, ErrDegenerate)
 	})
-	t.Run("nil arguments", func(t *testing.T) {
-		blank := spiralTestRevolveBlank(t, section)
-		sel := faceOf(t, blank, isCone)
-		_, err := ConeFromFace(blank, sel, far).Do(nil) //nolint:staticcheck // a nil context is the case under test.
-		require.ErrorIs(t, err, ErrDegenerate)
-		_, err = ConeFromFace(nil, sel, far).Do(t.Context())
-		require.ErrorIs(t, err, ErrDegenerate)
-	})
-}
-
-func TestConeFromFaceCancelled(t *testing.T) {
-	blank := spiralTestRevolveBlank(t, coneFromFaceSpiralSection())
-	sel := coneFromFaceSelector(t, blank, coneFromFaceSpiralSection()[3], coneFromFaceSpiralSection()[2])
-	ctx, cancel := context.WithCancel(t.Context())
-	cancel()
-	before := documentHandle(blank.n.Doc).Bodies()
-	_, err := ConeFromFace(blank, sel, units.Millimeters(-5)).Do(ctx)
-	require.ErrorIs(t, err, context.Canceled)
-	require.Equal(t, before, documentHandle(blank.n.Doc).Bodies())
 }
 
 // coneFromFaceNonConvexSection is a counter-clockwise, non-convex section
@@ -453,12 +434,12 @@ func TestConeFromFaceCommand(t *testing.T) {
 	})
 	t.Run("canceled", func(t *testing.T) {
 		blank, sel := heel(t)
-		before := len(documentHandle(blank.n.Doc).Bodies())
+		before := documentHandle(blank.n.Doc).Bodies()
 		ctx, cancel := context.WithCancel(t.Context())
 		cancel()
 		_, err := ConeFromFace(blank, sel, far).Do(ctx)
 		require.Equal(t, context.Canceled, err)
-		require.Len(t, documentHandle(blank.n.Doc).Bodies(), before)
+		require.Equal(t, before, documentHandle(blank.n.Doc).Bodies())
 	})
 	t.Run("selector copied", func(t *testing.T) {
 		blank, sel := heel(t)

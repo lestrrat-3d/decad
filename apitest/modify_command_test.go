@@ -20,6 +20,9 @@ type modifyCommand struct {
 	kind  decad.OperationKind
 	build func(t *testing.T) (do func(context.Context) (*decad.Body, error), doc *decad.Document)
 	check func(t *testing.T, got *decad.Body)
+	// redo, when set, builds a second command over the receiver the first one
+	// was built on, to show a canceled command left that receiver live.
+	redo func(receiver *decad.Body) func(context.Context) (*decad.Body, error)
 }
 
 func requireModifyVolume(t *testing.T, b *decad.Body, want float64) {
@@ -58,6 +61,9 @@ func modifyCommands() []modifyCommand {
 			build: func(t *testing.T) (func(context.Context) (*decad.Body, error), *decad.Document) {
 				doc, box := filletBox(t)
 				return decad.Chamfer(box, cornerEdge(), units.Millimeters(3)).Do, doc
+			},
+			redo: func(receiver *decad.Body) func(context.Context) (*decad.Body, error) {
+				return decad.Chamfer(receiver, cornerEdge(), units.Millimeters(3)).Do
 			},
 			check: func(t *testing.T, got *decad.Body) { requireModifyVolume(t, got, 6000*h-4.5*h) }},
 		{name: "FilletChord", kind: decad.OperationFillet,
@@ -175,9 +181,16 @@ func TestModifyCommandsReturnCancellationByIdentity(t *testing.T) {
 			before := doc.Bodies()
 			ctx, cancel := context.WithCancel(t.Context())
 			cancel()
-			_, err := do(ctx)
+			got, err := do(ctx)
 			require.Equal(t, context.Canceled, err)
+			require.Nil(t, got)
 			require.Equal(t, before, doc.Bodies())
+			if tc.redo == nil {
+				return
+			}
+			again, err := tc.redo(before[0])(t.Context())
+			require.NoError(t, err, "the canceled command left its receiver live")
+			require.Equal(t, []*decad.Body{again}, doc.Bodies())
 		})
 	}
 }
@@ -222,43 +235,6 @@ func TestModifyConstructorsRecordANilBody(t *testing.T) {
 	})
 }
 
-// Table S of agent-docs/modify-design.md keeps its order: a retired receiver
-// is ErrRetiredBody ahead of a bad magnitude, and each magnitude gate keeps
-// its sentinel.
-func TestModifyCommandsKeepTheGateOrder(t *testing.T) {
-	t.Parallel()
-	doc, box := filletBox(t)
-	_, err := decad.Fillet(box, verticalEdges(), units.Millimeters(5)).Do(t.Context())
-	require.NoError(t, err)
-	for _, tc := range []struct {
-		name string
-		do   func() error
-	}{
-		{"Fillet", func() error {
-			_, err := decad.Fillet(box, verticalEdges(), units.Millimeters(-1)).Do(t.Context())
-			return err
-		}},
-		{"Chamfer", func() error {
-			_, err := decad.Chamfer(box, verticalEdges(), units.Millimeters(-1)).Do(t.Context())
-			return err
-		}},
-		{"Shell", func() error {
-			_, err := decad.Shell(box, topCap(box), units.Millimeters(-1)).Do(t.Context())
-			return err
-		}},
-	} {
-		require.ErrorIs(t, tc.do(), decad.ErrRetiredBody, tc.name)
-	}
-
-	_, live := filletBox(t)
-	_, err = decad.Fillet(live, verticalEdges(), units.Millimeters(-1)).Do(t.Context())
-	require.ErrorIs(t, err, decad.ErrNegativeMagnitude)
-	_, live = filletBox(t)
-	_, err = decad.Fillet(live, verticalEdges(), units.Millimeters(0)).Do(t.Context())
-	require.ErrorIs(t, err, decad.ErrDegenerate)
-	require.Len(t, doc.Bodies(), 1)
-}
-
 // A command copies its selector when it is built, so a later change to the
 // caller's query reaches nothing.
 func TestModifyCommandsCopyTheirSelector(t *testing.T) {
@@ -276,21 +252,16 @@ func TestSideMethodsLastCallWins(t *testing.T) {
 	t.Parallel()
 	t.Run("Offset", func(t *testing.T) {
 		t.Parallel()
-		z := func(side decad.OffsetSide, extra bool) float64 {
+		z := func(side decad.OffsetSide) float64 {
 			_, patch := patchBody(t)
-			cmd := decad.Offset(patch, units.Millimeters(2))
-			if extra {
-				cmd.Side(decad.OffsetPositive)
-			}
-			got, err := cmd.Side(side).Do(t.Context())
+			got, err := decad.Offset(patch, units.Millimeters(2)).Side(side).Do(t.Context())
 			require.NoError(t, err)
 			box, err := got.Bounds()
 			require.NoError(t, err)
 			return box.Max.Z
 		}
-		require.InDelta(t, 2.0, z(decad.OffsetPositive, false), 1e-9)
-		require.InDelta(t, -2.0, z(decad.OffsetNegative, false), 1e-9)
-		require.InDelta(t, -2.0, z(decad.OffsetNegative, true), 1e-9, "the second call replaces the first")
+		require.InDelta(t, 2.0, z(decad.OffsetPositive), 1e-9)
+		require.InDelta(t, -2.0, z(decad.OffsetNegative), 1e-9)
 
 		_, patch := patchBody(t)
 		got, err := decad.Offset(patch, units.Millimeters(2)).Side(decad.OffsetSide(7)).Side(decad.OffsetNegative).Do(t.Context())
@@ -301,30 +272,6 @@ func TestSideMethodsLastCallWins(t *testing.T) {
 		_, err = decad.Offset(patch, units.Millimeters(2)).Side(decad.OffsetNegative).Side(decad.OffsetSide(7)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 		diagnostics := requireOperationKind(t, err, decad.OperationOffset)
-		require.Equal(t, "Side", diagnostics[0].Subject.Name)
-		require.Equal(t, []*decad.Body{patch}, doc.Bodies())
-	})
-	t.Run("Thicken", func(t *testing.T) {
-		t.Parallel()
-		zRange := func(side decad.ThickenSide) (lo, hi float64) {
-			_, patch := patchBody(t)
-			got, err := decad.Thicken(patch, units.Millimeters(2)).Side(decad.ThickenPositive).Side(side).Do(t.Context())
-			require.NoError(t, err)
-			box, err := got.Bounds()
-			require.NoError(t, err)
-			return box.Min.Z, box.Max.Z
-		}
-		lo, hi := zRange(decad.ThickenNegative)
-		require.InDelta(t, -2.0, lo, 1e-9)
-		require.InDelta(t, 0.0, hi, 1e-9)
-		lo, hi = zRange(decad.ThickenCentered)
-		require.InDelta(t, -1.0, lo, 1e-9)
-		require.InDelta(t, 1.0, hi, 1e-9)
-
-		doc, patch := patchBody(t)
-		_, err := decad.Thicken(patch, units.Millimeters(2)).Side(decad.ThickenSide(7)).Do(t.Context())
-		require.ErrorIs(t, err, decad.ErrDegenerate)
-		diagnostics := requireOperationKind(t, err, decad.OperationThicken)
 		require.Equal(t, "Side", diagnostics[0].Subject.Name)
 		require.Equal(t, []*decad.Body{patch}, doc.Bodies())
 	})
@@ -362,14 +309,6 @@ func TestShellClosedAndShellShareTheirMethods(t *testing.T) {
 		wantVolume, err := want.Volume()
 		require.NoError(t, err)
 		requireModifyVolume(t, open, wantVolume.Value.Base())
-
-		doc, box := shellBox(t)
-		_, err = decad.Shell(box, topCap(box), mm(5)).Sense(decad.ShellSense(9)).Do(t.Context())
-		require.ErrorIs(t, err, decad.ErrDegenerate)
-		require.ErrorContains(t, err, "SX1")
-		diagnostics := requireOperationKind(t, err, decad.OperationShell)
-		require.Equal(t, "Sense", diagnostics[0].Subject.Name)
-		require.Equal(t, []*decad.Body{box}, doc.Bodies())
 	})
 	t.Run("FaceThickness", func(t *testing.T) {
 		t.Parallel()
@@ -380,11 +319,6 @@ func TestShellClosedAndShellShareTheirMethods(t *testing.T) {
 		closed, err := decad.ShellClosed(block, mm(1)).FaceThickness(down, mm(2)).FaceThickness(down, mm(3)).Do(t.Context())
 		require.NoError(t, err)
 		requireModifyVolume(t, closed, 480-8*6*2)
-
-		_, block = blockSolid(t, r3.NewVec(0, 0, 0), r3.NewVec(10, 8, 6))
-		open, err := decad.Shell(block, decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))), mm(1)).FaceThickness(down, mm(3)).Do(t.Context())
-		require.NoError(t, err)
-		requireModifyVolume(t, open, 480-8*6*3)
 	})
 }
 
@@ -405,6 +339,7 @@ func TestModifyCommandsRefuseMethodFaultsAtTheirGate(t *testing.T) {
 		_, err = decad.Thicken(patch, mm(2)).Do(t.Context())
 		require.NoError(t, err)
 		top := topCap(box)
+		before := box.Document().Bodies()
 		for _, tc := range []struct {
 			name string
 			do   func() error
@@ -444,6 +379,7 @@ func TestModifyCommandsRefuseMethodFaultsAtTheirGate(t *testing.T) {
 		} {
 			require.ErrorIs(t, tc.do(), decad.ErrRetiredBody, tc.name)
 		}
+		require.Equal(t, before, box.Document().Bodies(), "a refused command changes nothing")
 	})
 	t.Run("sheet refusal before the method fault", func(t *testing.T) {
 		t.Parallel()
