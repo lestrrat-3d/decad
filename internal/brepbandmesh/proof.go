@@ -93,8 +93,9 @@ func VolumeTerms(bands []Band, areaUpper map[*topo.Face]float64) []float64 {
 		if bands[bi].fillet == nil {
 			continue
 		}
-		for face, eps := range bands[bi].fillet.PatchEps {
-			terms = append(terms, proofbound.ProductUpper(areaUpper[face], eps))
+		fillet := bands[bi].fillet
+		for _, face := range fillet.PatchFaces {
+			terms = append(terms, proofbound.ProductUpper(areaUpper[face], fillet.PatchEps[face]))
 		}
 	}
 	return terms
