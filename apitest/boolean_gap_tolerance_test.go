@@ -240,23 +240,25 @@ func TestBooleanGapToleranceStaysExactForCurvedContact(t *testing.T) {
 // TestBooleanGapToleranceRestingBossJoinsPlate unions a plate that already
 // carries a short boss with a round boss that a Transform placed on the
 // plate's top face. The placed boss carries a bound, so its facets meet the
-// plate's top within the chord tolerance. The plate is a mesh Union result,
-// whose payload proves no half-space, so the two form no separated cap pair
-// (agent-docs/coplanar-contact-design.md §19) and the retry moves the boss. The
-// boss must sink into the plate, so the result is one solid whose volume is the
-// plate's plus both bosses': 100·60·10 + π·6²·(4 + 8) = 60000 + 432π.
+// plate's top within the chord tolerance. The plate is a mesh Union result with
+// a post through its top beside the boss (withRestingBossPost), so the two form
+// no separated cap pair (agent-docs/coplanar-contact-design.md §19, §20.2) and
+// the retry moves the boss. The boss must sink into the plate, so the result is
+// one solid whose volume is the plate's plus both bosses' and the post's:
+// 100·60·10 + π·6²·(4 + 8) + 0.18 = 60000 + 432π + 0.18.
 func TestBooleanGapToleranceRestingBossJoinsPlate(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	plate, err := decad.Union(boxBody(t, doc, 0, 0, 100, 60, 10), circlePrismAtZ(t, doc, 20, 30, 6, 10, 4)).Do(t.Context())
 	require.NoError(t, err)
+	plate = withRestingBossPost(t, doc, plate)
 	boss := translated(t, circlePrismAtZ(t, doc, 20, 30, 6, 10, 8), 30, 0, 0)
 	joined, err := decad.Union(plate, boss).Do(t.Context())
 	require.NoError(t, err)
 	require.True(t, joined.IsSolid())
 	require.Len(t, joined.Lumps(), 1, "the boss rests on the plate, so the union is one piece")
 	require.Len(t, joined.Shells(), 1)
-	requireVolumeWithin(t, joined, 60000+432*math.Pi)
+	requireVolumeWithin(t, joined, 60000+432*math.Pi+restingBossPostVolume)
 	box, err := joined.Bounds()
 	require.NoError(t, err)
 	require.Less(t, box.Max.Z, 18.0, "the boss sank into the plate, so its top lies below z = 18")

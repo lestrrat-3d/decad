@@ -3,6 +3,7 @@ package facetedrecord
 import (
 	"fmt"
 	"math"
+	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/occupancy"
 
@@ -166,6 +167,33 @@ type Payload struct {
 	// maximum; every other reader keeps VertexBound.
 	SurfaceBound []float64
 	SurfaceMesh  occupancy.Binding
+	// CapSides are the cap sides a mesh Union carried from its operands to its result
+	// (agent-docs/coplanar-contact-design.md §20.1), read only while CapSideMesh matches Verts and Tris
+	// (CapSideRecords). Placement and every rewrite allocate new arrays, so a copied record is never read.
+	CapSides    []CapSideRecord
+	CapSideMesh occupancy.Binding
+}
+
+// CapSideRecord is one cap side of a mesh Union result (agent-docs/coplanar-contact-design.md §20.1): the true solid
+// lies in the closed half-space {x : N·(x − O) ≤ 0} and meets its boundary plane only in the closure of the true
+// patch of group Group, which lies in that plane. O and N are exact.
+//
+// KeptOutline records that the group's held facets are the cap operand face's own, vertex for vertex, from an operand
+// whose vertex bounds are agent-docs/faceted-vertex-bounds-design.md §2.1's reading, each vertex's bound no smaller
+// than it was there. Each outline vertex then stands for its true point within its own bound
+// (agent-docs/flush-contact-design.md §4.2), as it did in the operand.
+type CapSideRecord struct {
+	Group       int
+	O, N        [3]*big.Rat
+	KeptOutline bool
+}
+
+// CapSideRecords returns the payload's cap sides when a mesh Union proved them for this payload's own held mesh.
+func (fp Payload) CapSideRecords() []CapSideRecord {
+	if len(fp.CapSides) == 0 || !fp.CapSideMesh.Matches(fp.Verts, fp.Tris) {
+		return nil
+	}
+	return fp.CapSides
 }
 
 // SurfaceBounds returns σ(f) per facet when Refine proved them for this
