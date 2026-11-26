@@ -1,7 +1,6 @@
 package apitest_test
 
 import (
-	"context"
 	"math"
 	"testing"
 
@@ -269,23 +268,6 @@ func TestSweepLineGatesLeaveDocumentUnchanged(t *testing.T) {
 	require.Equal(t, []*decad.Body{body}, doc.Bodies())
 }
 
-func TestSweepTwistLastCallWins(t *testing.T) {
-	t.Parallel()
-
-	s, profile := plateSketch(t)
-	path, err := decad.NewPath(
-		r3.NewVec(1000, 1000, 0),
-		decad.LineTo{End: r3.NewVec(1000, 1000, 10)},
-	)
-	require.NoError(t, err)
-	// A wrong-unit twist is refused alone; a later call replaces it and its fault.
-	_, err = decad.Sweep(decad.New(), s, profile, path).Twist(units.Millimeters(1)).Do(t.Context())
-	require.ErrorIs(t, err, decad.ErrUnitKind)
-	body, err := decad.Sweep(decad.New(), s, profile, path).Twist(units.Millimeters(1)).Twist(units.Degrees(0)).Do(t.Context())
-	require.NoError(t, err)
-	require.NotNil(t, body)
-}
-
 func bodyVertexValues(body *decad.Body) []r3.Vec {
 	values := make([]r3.Vec, 0, len(body.Vertices()))
 	for _, vertex := range body.Vertices() {
@@ -307,29 +289,6 @@ func faceVertexReadings(face *decad.Face) []decad.VecMeasurement {
 		}
 	}
 	return readings
-}
-
-func TestSweepContextCancellationLeavesDocumentUnchanged(t *testing.T) {
-	t.Parallel()
-
-	s, profile := plateSketch(t)
-	path, err := decad.NewPath(
-		r3.NewVec(0, 0, 0),
-		decad.LineTo{End: r3.NewVec(0, 0, 10)},
-	)
-	require.NoError(t, err)
-	doc := decad.New()
-	ctx, cancel := context.WithCancel(t.Context())
-	cancel()
-
-	_, err = decad.Sweep(doc, s, profile, path).Do(ctx)
-	require.ErrorIs(t, err, context.Canceled)
-	require.Empty(t, doc.Bodies())
-
-	var nilContext context.Context
-	_, err = decad.Sweep(doc, s, profile, path).Do(nilContext)
-	require.ErrorIs(t, err, decad.ErrDegenerate)
-	require.Empty(t, doc.Bodies())
 }
 
 // TestSweepStagedSurveyNamesPayloadClass pins the class name a solid

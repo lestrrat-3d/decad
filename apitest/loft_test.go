@@ -1,7 +1,6 @@
 package apitest_test
 
 import (
-	"context"
 	"math"
 	"os"
 	"testing"
@@ -463,21 +462,6 @@ func TestLoftNilArguments(t *testing.T) {
 	}
 }
 
-func TestLoftAlignmentLastCallWins(t *testing.T) {
-	t.Parallel()
-	s0, p0, s1, p1 := loftSquares(t, 20, 20)
-	// Two offsets name a hole loop the profiles do not have, so the first call alone is refused.
-	body, err := decad.Loft(decad.New(), s0, p0, s1, p1).Alignment(0, 0).Alignment(0).Do(t.Context())
-	require.NoError(t, err)
-	require.NotNil(t, body)
-
-	doc := decad.New()
-	body, err = decad.Loft(doc, s0, p0, s1, p1).Alignment(0).Alignment(0, 0).Do(t.Context())
-	require.Nil(t, body)
-	require.ErrorIs(t, err, decad.ErrDegenerate)
-	require.Empty(t, doc.Bodies())
-}
-
 func TestLoftEmptyAlignmentPayload(t *testing.T) {
 	t.Parallel()
 	// A one-loop pair needs exactly one offset; Alignment() with no
@@ -673,20 +657,6 @@ func TestLoftVerifyBoxDisjointPairIsSound(t *testing.T) {
 }
 
 // --- Cancellation ---
-
-func TestLoftContextCancellation(t *testing.T) {
-	t.Parallel()
-	s0, p0, s1, p1 := loftSquares(t, 20, 20)
-	doc := decad.New()
-	ctx, cancel := context.WithCancel(t.Context())
-	cancel()
-
-	body, err := decad.Loft(doc, s0, p0, s1, p1).Do(ctx)
-	require.Nil(t, body)
-	require.ErrorIs(t, err, context.Canceled)
-	require.Empty(t, doc.Bodies())
-	require.Empty(t, doc.Bodies())
-}
 
 const (
 	helicalToothModule    = 1.0

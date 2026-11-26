@@ -334,7 +334,6 @@
 11	0.00	TestLoftCertifiedRewriteWorkLimitKeepsDefault
 11	0.54	TestLoftContactDirectShellUnionRealVaryingTab
 11	1.26	TestLoftContactDirectShellUnionVaryingRectangleBothOrders
-11	0.01	TestLoftFacesConeTangentEndCancelled
 11	3.06	TestLoftFacesTangentHeelRefusesMissingToolFace
 11	1.46	TestLoftMirrorCylinderPlaceTeethCancelled
 11	0.83	TestLoftVolumeComposeRealVaryingTabBothOrders

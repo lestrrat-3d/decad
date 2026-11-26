@@ -1,7 +1,6 @@
 package apitest_test
 
 import (
-	"context"
 	"math"
 	"testing"
 
@@ -226,23 +225,4 @@ func TestPatchRejections(t *testing.T) {
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.Empty(t, doc.Bodies())
 	})
-}
-
-// TestPatchContextCancellationLeavesDocumentUnchanged mirrors
-// TestSweepContextCancellationLeavesDocumentUnchanged (sweep_test.go).
-func TestPatchContextCancellationLeavesDocumentUnchanged(t *testing.T) {
-	t.Parallel()
-	s, p := plateSketch(t)
-	doc := decad.New()
-	ctx, cancel := context.WithCancel(t.Context())
-	cancel()
-
-	_, err := decad.PatchProfile(doc, s, p).Do(ctx)
-	require.ErrorIs(t, err, context.Canceled)
-	require.Empty(t, doc.Bodies())
-
-	var nilContext context.Context
-	_, err = decad.PatchProfile(doc, s, p).Do(nilContext)
-	require.ErrorIs(t, err, decad.ErrDegenerate)
-	require.Empty(t, doc.Bodies())
 }

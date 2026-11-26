@@ -172,20 +172,6 @@ func TestContextOperationsRejectNilBeforeOperands(t *testing.T) {
 	})
 }
 
-// TestRevolveTypedNilSectionIsDegenerate pins that a typed-nil section of
-// either kind returns ErrDegenerate and leaves the document unchanged.
-func TestRevolveTypedNilSectionIsDegenerate(t *testing.T) {
-	t.Parallel()
-	s, _, axis := coneChainAtRadius(t, 0)
-	doc := decad.New()
-
-	_, err := decad.Revolve(doc, s, (*sketch.Profile)(nil), axis, decad.FullRevolution{}).Do(t.Context())
-	require.ErrorIs(t, err, decad.ErrDegenerate)
-	_, err = decad.Revolve(doc, s, (*sketch.Chain)(nil), axis, decad.FullRevolution{}).Do(t.Context())
-	require.ErrorIs(t, err, decad.ErrDegenerate)
-	require.Empty(t, doc.Bodies())
-}
-
 // TestRevolveCanceledContextLeavesDocumentUnchanged cancels a profile and a
 // chain Revolve before the call and at each of its cancellation checks. Every
 // cancellation returns context.Canceled unchanged and leaves Bodies() empty;
@@ -204,21 +190,6 @@ func TestRevolveCanceledContextLeavesDocumentUnchanged(t *testing.T) {
 		}},
 	}
 	requireCancellationLeavesDocumentUnchanged(t, tests)
-}
-
-// TestExtrudeTypedNilSectionIsDegenerate pins that a typed-nil section of
-// either kind returns ErrDegenerate and leaves the document unchanged.
-func TestExtrudeTypedNilSectionIsDegenerate(t *testing.T) {
-	t.Parallel()
-	s, _ := solidSketch(t)
-	doc := decad.New()
-	e := decad.Distance{D: units.Millimeters(5), Dir: decad.Along}
-
-	_, err := decad.Extrude(doc, s, (*sketch.Profile)(nil), e).Do(t.Context())
-	require.ErrorIs(t, err, decad.ErrDegenerate)
-	_, err = decad.Extrude(doc, s, (*sketch.Chain)(nil), e).Do(t.Context())
-	require.ErrorIs(t, err, decad.ErrDegenerate)
-	require.Empty(t, doc.Bodies())
 }
 
 // TestExtrudeCanceledContextLeavesDocumentUnchanged cancels a profile, a

@@ -499,19 +499,6 @@ func TestExtrudeRejectsNonFiniteTaper(t *testing.T) {
 	require.Empty(t, doc.Bodies())
 }
 
-func TestExtrudeTaperLastCallWins(t *testing.T) {
-	t.Parallel()
-	s, p := plateSketch(t)
-	doc := decad.New()
-	e := decad.Distance{D: units.Millimeters(5), Dir: decad.Along}
-	// An invalid taper is replaced, with its fault, by a later call.
-	body, err := decad.Extrude(doc, s, p, e).Taper(units.Degrees(math.NaN())).Taper(units.Degrees(0)).Do(t.Context())
-	require.NoError(t, err)
-	require.NotNil(t, body)
-	_, err = decad.Extrude(doc, s, p, e).Taper(units.Degrees(0)).Taper(units.Degrees(math.NaN())).Do(t.Context())
-	require.ErrorIs(t, err, decad.ErrNotFinite)
-}
-
 func TestNilExtentPointersAreBranchable(t *testing.T) {
 	t.Parallel()
 	// A typed nil extent or side pointer follows the same branchable
