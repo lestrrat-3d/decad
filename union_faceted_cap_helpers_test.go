@@ -97,9 +97,13 @@ func facetedCapPost(t *testing.T, doc *Document, x, y float64) *Body {
 	return internalBoxBodyAtZ(t, doc, x-0.15, y-0.15, x+0.15, y+0.15, -2.4, 3.4)
 }
 
-// requireStackedUnion asserts that joined, the Union of lower and upper, has that many lumps and no gap shift, a volume equal
-// to the sum of the operands' within the three bounds, and a boundary bound under maxBound.
-func requireStackedUnion(t *testing.T, lower, upper, joined *Body, lumps int, maxBound float64) {
+// facetedCapMaxBound is the boundary bound every faceted-cap Union must stay under: the outline radii of §4.3 of
+// agent-docs/flush-contact-design.md alone, without the seam radius or a kept outline, give 0.08 mm and more.
+const facetedCapMaxBound = 0.03
+
+// requireStackedUnion asserts that joined, the Union of lower and upper, has that many lumps and no gap shift, a volume
+// equal to the sum of the operands' within the three bounds, and a boundary bound under facetedCapMaxBound.
+func requireStackedUnion(t *testing.T, lower, upper, joined *Body, lumps int) {
 	t.Helper()
 	require.True(t, joined.IsSolid())
 	require.Len(t, joined.Lumps(), lumps)
@@ -114,5 +118,5 @@ func requireStackedUnion(t *testing.T, lower, upper, joined *Body, lumps int, ma
 	require.InDelta(t, lv.Value.Base()+uv.Value.Base(), jv.Value.Base(), slack, "volume of the union vs the sum of its operands")
 	jb, err := joined.Bounds()
 	require.NoError(t, err)
-	require.Less(t, jb.Bound.Base(), maxBound, "boundary bound of the union")
+	require.Less(t, jb.Bound.Base(), facetedCapMaxBound, "boundary bound of the union")
 }

@@ -28,7 +28,7 @@ func TestUnionFlushCapCutPrismAndLoft(t *testing.T) {
 				joined, err = Union(t.Context(), lower, boss)
 			}
 			require.NoError(t, err, "exact only %v, boss first %v", exact, bossFirst)
-			requireStackedUnion(t, facetedCapCutPrism(t, doc), facetedCapBoss(t, doc), joined, 1, 0.15)
+			requireStackedUnion(t, facetedCapCutPrism(t, doc), facetedCapBoss(t, doc), joined, 1)
 		}
 	}
 }
@@ -42,7 +42,7 @@ func TestUnionFlushCapFarPostAcrossPlane(t *testing.T) {
 	require.NoError(t, err)
 	lower, err = Union(t.Context(), facetedCapCutPrism(t, doc), facetedCapPost(t, doc, 5, 0))
 	require.NoError(t, err)
-	requireStackedUnion(t, lower, facetedCapBoss(t, doc), joined, 2, 0.15)
+	requireStackedUnion(t, lower, facetedCapBoss(t, doc), joined, 2)
 }
 
 func TestUnionFlushCapNearPostRefused(t *testing.T) {
@@ -79,7 +79,7 @@ func TestUnionFlushCapCarriedByDrive(t *testing.T) {
 	doc := New(WithChainTolerance(units.Millimeters(0.01)))
 	joined, err := Union(t.Context(), facetedCapPrism(t, doc, -2.4, 0), facetedCapDrive(t, doc))
 	require.NoError(t, err)
-	requireStackedUnion(t, facetedCapPrism(t, doc, -2.4, 0), facetedCapDrive(t, doc), joined, 1, 0.05)
+	requireStackedUnion(t, facetedCapPrism(t, doc, -2.4, 0), facetedCapDrive(t, doc), joined, 1)
 }
 
 func TestUnionFlushCapCutPrismAndDrive(t *testing.T) {
@@ -87,5 +87,5 @@ func TestUnionFlushCapCutPrismAndDrive(t *testing.T) {
 	doc := New(WithChainTolerance(units.Millimeters(0.01)))
 	joined, err := Union(t.Context(), facetedCapCutPrism(t, doc), facetedCapDrive(t, doc))
 	require.NoError(t, err)
-	requireStackedUnion(t, facetedCapCutPrism(t, doc), facetedCapDrive(t, doc), joined, 1, 0.15)
+	requireStackedUnion(t, facetedCapCutPrism(t, doc), facetedCapDrive(t, doc), joined, 1)
 }

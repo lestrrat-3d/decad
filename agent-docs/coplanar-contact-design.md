@@ -1187,8 +1187,9 @@ verdicts read before it joined.
 | A carried side of a shifted, replayed or fixed-tool `Union` | §20.1 reads the unshifted live attempt only |
 | A tangent or shallow cap overlap | no deep point (§19.4) |
 
-A local side reads A's own outline with the weak corner radius: the tongue's end face reads 0.066 mm, about five times
-its facets' bound, and the band charges it to the kept pieces near the outlines.
+A local side reads A's own outline with §4.3's corner radius of `agent-docs/flush-contact-design.md`. Without its
+seam radius the cut prism's top reads its tangent corners at about 0.07 mm, which the band charges to every kept piece
+near the outlines; with it, `TestUnionFlushCapCutPrismAndLoft`'s result holds a 0.011 mm boundary bound.
 
 ### 20.4 Tests
 
@@ -1196,12 +1197,13 @@ its facets' bound, and the band charges it to the kept pieces near the outlines.
 
 | Test | Case | Expect |
 |---|---|---|
-| `TestUnionFlushCapCutPrismAndLoft` | a hull prism cut back to its top plane by a box, and a boss lofted from that hull; both orders, default and `ExactOnly` | `Union` builds with no shift (fails red: the gate refuses) |
-| `TestUnionFlushCapFarPostAcrossPlane` | the cut prism with a post standing through the cap plane outside `K` | `Union` builds, two lumps (fails red: the gate refuses) |
+| `TestUnionFlushCapCutPrismAndLoft` | a hull prism cut back to its top plane by a box, and a boss lofted from that hull; both orders, default and `ExactOnly` | `Union` builds with no shift, boundary bound under 0.03 mm (fails red: the gate refuses; about 0.08 mm without the seam radius) |
+| `TestUnionFlushCapFarPostAcrossPlane` | the cut prism with a post standing through the cap plane outside `K` | `Union` builds, two lumps, boundary bound under 0.03 mm (fails red: the gate refuses) |
 | `TestUnionFlushCapNearPostRefused` | the post inside `K`, clear of the boss | `BooleanUnsupportedContact` |
 | `TestUnionFlushCapTangentBossRefused` | a cylinder boss whose floor touches the cut prism's top at one point | `BooleanUnsupportedContact` (fails red when §19.4 accepts every pair) |
-| `TestUnionFlushCapCarriedByDrive` | an analytic hull prism and the boss with a cone on top | `Union` builds, boundary bound under 0.05 mm (fails red: the gate refuses; about 3 mm without `KeptOutline`) |
-| `TestUnionFlushCapCutPrismAndDrive` | the cut prism and the boss with a cone on top | `Union` builds, boundary bound under 0.15 mm (fails red: the gate refuses) |
+| `TestUnionFlushCapCarriedByDrive` | an analytic hull prism and the boss with a cone on top | `Union` builds, boundary bound under 0.03 mm (fails red: the gate refuses; about 3 mm without `KeptOutline`) |
+| `TestUnionFlushCapCutPrismAndDrive` | the cut prism and the boss with a cone on top | `Union` builds, boundary bound under 0.03 mm (fails red: the gate refuses) |
 
 `internal/meshbool/local_cap_side_internal_test.go` covers the seam directions and the tags `exactRuledTag` refuses;
-`internal/facetedrecord/cap_side_record_test.go` covers the binding.
+`internal/facetedrecord/cap_side_record_test.go` covers the binding; `TestFlushOutline` covers the seam radius and
+its fallback to §4.3's corner radius.
