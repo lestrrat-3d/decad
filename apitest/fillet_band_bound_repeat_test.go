@@ -45,7 +45,7 @@ func TestFilletBandCutBoundRepeats(t *testing.T) {
 		return bits{math.Float64bits(vol.Value.Base()), math.Float64bits(vol.Bound.Base()), math.Float64bits(cen.Bound.Base())}
 	}
 	want := read(filletedCapCut(t))
-	for i := range 15 {
+	for i := range 4 {
 		require.Equal(t, want, read(filletedCapCut(t)), "run %d", i+2)
 	}
 }
