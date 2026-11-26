@@ -169,7 +169,7 @@ func roundedDrilledPlateWithBoreZ(t *testing.T, boreZ float64) *decad.Body {
 	require.NoError(t, err)
 	drill, err := decad.Extrude(t.Context(), doc, ds, ds.Profiles()[0], decad.Symmetric{D: units.Millimeters(11)})
 	require.NoError(t, err)
-	out, err := decad.Cut(t.Context(), rounded, drill)
+	out, err := decad.Cut(rounded, drill).Do(t.Context())
 	require.NoError(t, err)
 	return out
 }

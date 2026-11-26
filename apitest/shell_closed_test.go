@@ -189,7 +189,7 @@ func TestShellClosedPrismGatesAndConsumers(t *testing.T) {
 		// and opens the cavity to the outside.
 		doc, closed := closedShellBox(t, 5)
 		bar := boxBodyAtZ(t, doc, 45, 25, 55, 35, -1, shellBoxHeight+2)
-		cut, err := decad.Cut(t.Context(), closed, bar)
+		cut, err := decad.Cut(closed, bar).Do(t.Context())
 		require.NoError(t, err)
 		requireVolumeNear(t, cut, 75000-1000)
 		for _, sh := range cut.Shells() {

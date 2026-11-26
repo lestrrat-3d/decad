@@ -16,7 +16,7 @@ func TestChamferRetainedCylinderRim(t *testing.T) {
 	doc := New()
 	a := internalBoxBody(t, doc, 0, 0, 10, 10, 10)
 	b := mergeTranslated(t, internalBoxBody(t, doc, 0, 0, 10, 10, 10), 0.5, 0, 10)
-	stock, err := Union(ctx, a, b)
+	stock, err := Union(a, b).Do(ctx)
 	require.NoError(t, err)
 	// The pad protrudes 0.2001 mm. The chamfer leaves 0.0001 mm of straight wall.
 	frame, err := r3.NewFrame(r3.Vec{X: 4, Y: 9.2001, Z: 5}, r3.Vec{X: 1}, r3.Vec{Z: 1})
@@ -31,7 +31,7 @@ func TestChamferRetainedCylinderRim(t *testing.T) {
 	require.NoError(t, err)
 	boss, err := Extrude(ctx, doc, s, s.Profiles()[0], Distance{D: units.Millimeters(1), Dir: Against})
 	require.NoError(t, err)
-	joined, err := Union(ctx, stock, boss)
+	joined, err := Union(stock, boss).Do(ctx)
 	require.NoError(t, err)
 	finished, err := Chamfer(ctx, joined, Edges(OuterLoopOf(CapStart(boss))).Exactly(1), units.Millimeters(.2))
 	require.NoError(t, err)

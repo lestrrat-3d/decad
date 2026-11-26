@@ -116,9 +116,9 @@ func TestCurvedLoftFacesUnionStopsAtTheChainDepthGate(t *testing.T) {
 	}
 	loft, err := decad.LoftFaces(t.Context(), sections)
 	require.NoError(t, err)
-	toe, err := decad.Cut(t.Context(), loft, pointConeTool(t, doc, 6.5))
+	toe, err := decad.Cut(loft, pointConeTool(t, doc, 6.5)).Do(t.Context())
 	require.NoError(t, err)
-	trimmed, err := decad.Intersect(t.Context(), toe, pointConeTool(t, doc, 8))
+	trimmed, err := decad.Intersect(toe, pointConeTool(t, doc, 8)).Do(t.Context())
 	require.NoError(t, err)
 	blank := finiteConicalBlank(t, doc)
 	blankVolume, err := blank.Volume()
@@ -128,7 +128,7 @@ func TestCurvedLoftFacesUnionStopsAtTheChainDepthGate(t *testing.T) {
 	require.NoError(t, err)
 	require.Positive(t, trimmedVolume.Value.Base())
 	before := doc.Bodies()
-	_, err = decad.Union(t.Context(), blank, trimmed)
+	_, err = decad.Union(blank, trimmed).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.ErrorContains(t, err, "coarser than this pair's chord tolerance")
 	require.Equal(t, before, doc.Bodies())
@@ -137,7 +137,7 @@ func TestCurvedLoftFacesUnionStopsAtTheChainDepthGate(t *testing.T) {
 	require.NoError(t, err)
 	shifted, err := decad.Copy(t.Context(), blank, decad.WithCopyPlacement(move))
 	require.NoError(t, err)
-	_, err = decad.Union(t.Context(), shifted, trimmed)
+	_, err = decad.Union(shifted, trimmed).Do(t.Context())
 	if err != nil {
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 	}

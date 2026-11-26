@@ -25,7 +25,7 @@ func Example_parts_views() {
 		fmt.Printf("failed to build the bore tool: %s\n", err)
 		return
 	}
-	if plate, err = decad.Cut(ctx, plate, bore); err != nil {
+	if plate, err = decad.Cut(plate, bore).Do(ctx); err != nil {
 		fmt.Printf("failed to bore the plate: %s\n", err)
 		return
 	}

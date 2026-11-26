@@ -66,7 +66,7 @@ func axialDrilledBar(t *testing.T) *decad.Body {
 	doc := decad.New()
 	box := boxBodyAtZ(t, doc, -10, -10, 10, 10, 0, 10)
 	rod := circleBodyAtZ(t, doc, 0, 3, -1, 12)
-	drilled, err := decad.Cut(t.Context(), box, rod)
+	drilled, err := decad.Cut(box, rod).Do(t.Context())
 	require.NoError(t, err)
 	return drilled
 }
@@ -340,7 +340,7 @@ func TestShellClosedDrilledBarRefusals(t *testing.T) {
 		doc := decad.New()
 		box := boxBodyAtZ(t, doc, -20, -20, 20, 20, 0, 4)
 		rod := circleBodyAtZ(t, doc, 0, 3, -1, 6)
-		bar, err := decad.Cut(t.Context(), box, rod)
+		bar, err := decad.Cut(box, rod).Do(t.Context())
 		require.NoError(t, err)
 		_, err = decad.Shell(t.Context(), bar, nil, units.Millimeters(2), decad.WithNoOpenings())
 		require.ErrorIs(t, err, decad.ErrDegenerate)
@@ -363,7 +363,7 @@ func TestShellClosedDrilledBarThroughCut(t *testing.T) {
 	closed, err := decad.Shell(t.Context(), bar, nil, units.Millimeters(1), decad.WithNoOpenings())
 	require.NoError(t, err)
 	rod := circleBodyAtZ(t, doc, 9.5, 0.3, -1, 12)
-	cut, err := decad.Cut(t.Context(), closed, rod)
+	cut, err := decad.Cut(closed, rod).Do(t.Context())
 	require.NoError(t, err)
 	want := (400-9*math.Pi)*10 - (18*18-16*math.Pi)*8 - 0.09*math.Pi*10
 	vol, err := cut.Volume()
@@ -393,7 +393,7 @@ func TestShellClosedBoxThroughCut(t *testing.T) {
 	closed, err := decad.Shell(t.Context(), box, nil, units.Millimeters(1), decad.WithNoOpenings())
 	require.NoError(t, err)
 	rod := circleBodyAtZ(t, doc, 9.5, 0.3, -1, 12)
-	cut, err := decad.Cut(t.Context(), closed, rod)
+	cut, err := decad.Cut(closed, rod).Do(t.Context())
 	require.NoError(t, err)
 	require.False(t, tookMeshPath(cut), `the stacked through cut builds the result exactly`)
 	requireVolumeNear(t, cut, 400*10-18*18*8-0.09*math.Pi*10)

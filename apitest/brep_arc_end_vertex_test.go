@@ -104,7 +104,7 @@ func drilledTombstone(t *testing.T, doc *decad.Document) (*decad.Body, sectionre
 	s.CreateCircle(c, 2)
 	drill, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Symmetric{D: units.Millimeters(40)})
 	require.NoError(t, err)
-	cut, err := decad.Cut(t.Context(), tomb, drill)
+	cut, err := decad.Cut(tomb, drill).Do(t.Context())
 	require.NoError(t, err)
 	require.False(t, tookMeshPath(cut), `the cut builds a brep body`)
 	return cut, arc
@@ -161,7 +161,7 @@ func TestBrepVertexReachesArcNaturalEnd(t *testing.T) {
 		doc := decad.New()
 		pie, arc := offRadiusSection(t, doc, 10, pieSection)
 		boss := boxBodyAtZ(t, doc, 0, 0, 5, 5, 10, 5)
-		got, err := decad.Union(t.Context(), pie, boss)
+		got, err := decad.Union(pie, boss).Do(t.Context())
 		require.NoError(t, err)
 		require.False(t, tookMeshPath(got), `the union builds a brep body`)
 		gap := requireArcEndsReached(t, got, arc, true)

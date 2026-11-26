@@ -69,6 +69,73 @@ linters:
         - shadow
         - fieldalignment
       enable-all: true
+      settings:
+        # Replaces the analyzer's default list, so it carries the standard-library
+        # defaults too. Every constructor of an operation command is listed, so that
+        # a statement such as decad.Union(a, b) with no Do fails lint
+        # (agent-docs/command-api-design.md §10).
+        unusedresult:
+          funcs:
+            - context.WithCancel
+            - context.WithDeadline
+            - context.WithTimeout
+            - context.WithValue
+            - errors.New
+            - fmt.Append
+            - fmt.Appendf
+            - fmt.Appendln
+            - fmt.Errorf
+            - fmt.Sprint
+            - fmt.Sprintf
+            - fmt.Sprintln
+            - maps.All
+            - maps.Clone
+            - maps.Collect
+            - maps.Equal
+            - maps.EqualFunc
+            - maps.Keys
+            - maps.Values
+            - slices.All
+            - slices.AppendSeq
+            - slices.Backward
+            - slices.BinarySearch
+            - slices.BinarySearchFunc
+            - slices.Chunk
+            - slices.Clip
+            - slices.Clone
+            - slices.Collect
+            - slices.Compact
+            - slices.CompactFunc
+            - slices.Compare
+            - slices.CompareFunc
+            - slices.Concat
+            - slices.Contains
+            - slices.ContainsFunc
+            - slices.Delete
+            - slices.DeleteFunc
+            - slices.Equal
+            - slices.EqualFunc
+            - slices.Grow
+            - slices.Index
+            - slices.IndexFunc
+            - slices.Insert
+            - slices.IsSorted
+            - slices.IsSortedFunc
+            - slices.Max
+            - slices.MaxFunc
+            - slices.Min
+            - slices.MinFunc
+            - slices.Repeat
+            - slices.Replace
+            - slices.Sorted
+            - slices.SortedFunc
+            - slices.SortedStableFunc
+            - slices.Values
+            - sort.Reverse
+            - github.com/lestrrat-3d/decad.Union
+            - github.com/lestrrat-3d/decad.Cut
+            - github.com/lestrrat-3d/decad.Intersect
+            - github.com/lestrrat-3d/decad.Refine
   exclusions:
     generated: lax
     presets:

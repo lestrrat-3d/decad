@@ -71,7 +71,7 @@ func bandDrilledBox(t *testing.T, round float64) *decad.Body {
 	require.NoError(t, err)
 	drill, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Symmetric{D: units.Millimeters(11)})
 	require.NoError(t, err)
-	out, err := decad.Cut(t.Context(), body, drill)
+	out, err := decad.Cut(body, drill).Do(t.Context())
 	require.NoError(t, err)
 	return out
 }
@@ -94,7 +94,7 @@ func bandRoundBoss(t *testing.T) *decad.Body {
 	require.NoError(t, err)
 	boss, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(15), Dir: decad.Along})
 	require.NoError(t, err)
-	out, err := decad.Union(t.Context(), plate, boss)
+	out, err := decad.Union(plate, boss).Do(t.Context())
 	require.NoError(t, err)
 	return out
 }
@@ -646,7 +646,7 @@ func bandPocketMouthFilletAt(t *testing.T, off float64) *decad.Body {
 	require.NoError(t, err)
 	tool, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
 	require.NoError(t, err)
-	cut, err := decad.Cut(t.Context(), plate, tool)
+	cut, err := decad.Cut(plate, tool).Do(t.Context())
 	require.NoError(t, err)
 	return bandFillet(t, cut, 10, 1, 1.5)
 }

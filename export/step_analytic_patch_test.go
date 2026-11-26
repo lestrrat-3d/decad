@@ -46,7 +46,7 @@ func patchPocketMouthChamfer(t *testing.T) *decad.Body {
 	require.NoError(t, err)
 	tool, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
 	require.NoError(t, err)
-	cut, err := decad.Cut(t.Context(), plate, tool)
+	cut, err := decad.Cut(plate, tool).Do(t.Context())
 	require.NoError(t, err)
 	out, err := decad.Chamfer(t.Context(), cut, bandLoopQuery(bandFacing(t, cut, bandUp, 10).Loops()[1]), units.Millimeters(1))
 	require.NoError(t, err)

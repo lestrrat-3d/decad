@@ -68,7 +68,7 @@ func TestHoleThreadOutOfABore(t *testing.T) {
 	const Rb = 6.0
 	doc := decad.New()
 	block := boxBody(t, doc, -20, -20, 20, 20, 10)
-	part, err := decad.Cut(t.Context(), block, circleBodyAtZ(t, doc, 0, Rb, -1, 12))
+	part, err := decad.Cut(block, circleBodyAtZ(t, doc, 0, Rb, -1, 12)).Do(t.Context())
 	require.NoError(t, err)
 	// A tapped hole from the bore wall at (6, 0, 5) out along +X, 8 mm deep from the tangent plane.
 	// The wall of a bore rises toward the plane, so the material starts at x = √(R² − y²), below

@@ -140,7 +140,7 @@ func TestFacetedRetainedBlendRevolvedShaft(t *testing.T) {
 	flatShaft := func(t *testing.T) *decad.Body {
 		t.Helper()
 		sc := newRetentionScene()
-		cut, err := decad.Cut(t.Context(), revolvedShaft(t, sc), flatTool(t, sc))
+		cut, err := decad.Cut(revolvedShaft(t, sc), flatTool(t, sc)).Do(t.Context())
 		require.NoError(t, err)
 		return cut
 	}
@@ -174,7 +174,7 @@ func TestFacetedRetainedBlendRevolvedShaft(t *testing.T) {
 		turn := rotation(t, r3.Vec{}, r3.NewVec(0, 0, 1), 0.3)
 		turned, err := decad.Transform(t.Context(), revolvedShaft(t, sc), turn)
 		require.NoError(t, err)
-		cut, err := decad.Cut(t.Context(), turned, flatTool(t, sc))
+		cut, err := decad.Cut(turned, flatTool(t, sc)).Do(t.Context())
 		require.NoError(t, err)
 		var q *decad.EdgeQuery
 		for _, e := range cut.Edges() {
@@ -236,7 +236,7 @@ func TestFacetedRetainedBlendRevolvedShaft(t *testing.T) {
 
 			// The Extrude twin blends the same flat to the same volume.
 			sc := newRetentionScene()
-			twinCut, err := decad.Cut(t.Context(), extrudedShaft(t, sc), flatTool(t, sc))
+			twinCut, err := decad.Cut(extrudedShaft(t, sc), flatTool(t, sc)).Do(t.Context())
 			require.NoError(t, err)
 			twinBefore, err := twinCut.Volume()
 			require.NoError(t, err)
@@ -323,7 +323,7 @@ func TestFacetedRetainedBlendRevolvedRim(t *testing.T) {
 			}
 
 			sc := newRetentionScene()
-			cut, err := decad.Cut(t.Context(), revolvedShaft(t, sc), slotTool(t, sc))
+			cut, err := decad.Cut(revolvedShaft(t, sc), slotTool(t, sc)).Do(t.Context())
 			require.NoError(t, err)
 			blended, before, after := blend(cut)
 			requireVolumeChange(t, before, after, want)
@@ -334,7 +334,7 @@ func TestFacetedRetainedBlendRevolvedRim(t *testing.T) {
 
 			// The Extrude twin blends the same rim to the same volume.
 			tsc := newRetentionScene()
-			twinCut, err := decad.Cut(t.Context(), extrudedShaft(t, tsc), slotTool(t, tsc))
+			twinCut, err := decad.Cut(extrudedShaft(t, tsc), slotTool(t, tsc)).Do(t.Context())
 			require.NoError(t, err)
 			_, twinBefore, twinAfter := blend(twinCut)
 			requireVolumeChange(t, twinBefore, twinAfter, want)

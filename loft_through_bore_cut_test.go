@@ -245,7 +245,7 @@ func TestLoftThroughBoreCutGates(t *testing.T) {
 		require.NoError(t, err)
 		require.True(t, admitted)
 		require.NotNil(t, node)
-		cut, err := Cut(t.Context(), blank, dTool)
+		cut, err := Cut(blank, dTool).Do(t.Context())
 		require.NoError(t, err)
 		result, ok := cut.n.Payload.(loftPayload)
 		require.True(t, ok, "a contained D-shaped tool must stay on the exact loft route")
@@ -302,7 +302,7 @@ func throughDToolFixture(t *testing.T, doc *Document) *Body {
 	capBody, err := Extrude(t.Context(), doc, capSketch, capSketch.Profiles()[0],
 		Distance{D: units.Millimeters(4), Dir: Along})
 	require.NoError(t, err)
-	dTool, err := Cut(t.Context(), cylinder, capBody)
+	dTool, err := Cut(cylinder, capBody).Do(t.Context())
 	require.NoError(t, err)
 	return dTool
 }

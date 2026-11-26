@@ -199,9 +199,9 @@ func TestVerifyIdentityPlacedChain(t *testing.T) {
 			yarn := yarnRod(t, doc, p, packTangent(58, -160, 22, tc.rt))
 			if tc.chain {
 				feed := yarnRod(t, doc, yarnPoint(58, -224, 22), p)
-				joined, err := decad.Union(t.Context(), feed, yarn)
+				joined, err := decad.Union(feed, yarn).Do(t.Context())
 				require.NoError(t, err)
-				refined, err := decad.Refine(t.Context(), joined, units.Millimeters(0.12))
+				refined, err := decad.Refine(joined, units.Millimeters(0.12)).Do(t.Context())
 				require.NoError(t, err)
 				yarn, err = decad.Transform(t.Context(), refined, r3.Identity())
 				require.NoError(t, err)

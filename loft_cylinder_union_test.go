@@ -77,7 +77,7 @@ func loftCylinderTabJoin(t *testing.T) (*Document, *Body) {
 	require.Len(t, s.Profiles(), 1)
 	blank, err := Extrude(ctx, doc, s, s.Profiles()[0], Distance{D: units.Millimeters(2), Dir: Along})
 	require.NoError(t, err)
-	joined, err := Union(ctx, blank, tab)
+	joined, err := Union(blank, tab).Do(ctx)
 	require.NoError(t, err)
 	return doc, joined
 }
@@ -98,7 +98,7 @@ func TestLoftCylinderBoreCentroidDiameter(t *testing.T) {
 	require.NoError(t, err)
 	tool, err := Extrude(ctx, doc, s, s.Profiles()[0], Distance{D: units.Millimeters(4), Dir: Along})
 	require.NoError(t, err)
-	bored, err := Cut(ctx, joined, tool)
+	bored, err := Cut(joined, tool).Do(ctx)
 	require.NoError(t, err)
 	fp, ok := bored.n.Payload.(facetedPayload)
 	require.True(t, ok)

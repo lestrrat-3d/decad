@@ -41,7 +41,7 @@ func sb7Plate(t *testing.T, h float64, draw func(s *sketch.Sketch, fix func(x, y
 	require.Len(t, bs.Profiles(), 1)
 	boss, err := decad.Extrude(t.Context(), doc, bs, bs.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
 	require.NoError(t, err)
-	u, err := decad.Union(t.Context(), plate, boss)
+	u, err := decad.Union(plate, boss).Do(t.Context())
 	require.NoError(t, err)
 	return u
 }

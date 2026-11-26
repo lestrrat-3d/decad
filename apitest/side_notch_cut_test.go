@@ -28,12 +28,12 @@ func TestSideNotchCutKeepsEarlierResults(t *testing.T) {
 	t.Parallel()
 	plate := func(t *testing.T, d *decad.Document) *decad.Body { return boxBody(t, d, -10, -10, 10, 10, 10) }
 	holed := func(t *testing.T, d *decad.Document, both bool) *decad.Body {
-		part, err := decad.Cut(t.Context(), plate(t, d), boxBodyAtZ(t, d, -8, -2, -4, 2, 0, 10))
+		part, err := decad.Cut(plate(t, d), boxBodyAtZ(t, d, -8, -2, -4, 2, 0, 10)).Do(t.Context())
 		require.NoError(t, err)
 		if !both {
 			return part
 		}
-		part, err = decad.Cut(t.Context(), part, boxBodyAtZ(t, d, 4, -2, 8, 2, 0, 10))
+		part, err = decad.Cut(part, boxBodyAtZ(t, d, 4, -2, 8, 2, 0, 10)).Do(t.Context())
 		require.NoError(t, err)
 		return part
 	}
@@ -60,7 +60,7 @@ func TestSideNotchCutKeepsEarlierResults(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			doc := decad.New()
-			part, err := decad.Cut(t.Context(), tc.target(t, doc), tc.tool(t, doc))
+			part, err := decad.Cut(tc.target(t, doc), tc.tool(t, doc)).Do(t.Context())
 			require.NoError(t, err)
 			if tc.mesh {
 				require.True(t, tookMeshPath(part), "class %s", decadtest.PayloadClass(part))
@@ -228,7 +228,7 @@ func TestSideNotchCutTangentFork(t *testing.T) {
 			doc := decad.New()
 			fork := forkBody(t, doc, 0, mm(6.5), tc.slots, leverForkSketch(false, forkOptions{slots: tc.slots}))
 			notch := forkBody(t, doc, 2.5, mm(5), 0, leverForkSketch(true, forkOptions{}))
-			part, err := decad.Cut(t.Context(), fork, notch)
+			part, err := decad.Cut(fork, notch).Do(t.Context())
 			require.NoError(t, err)
 			require.Equal(t, "decad.brepPayload", decadtest.PayloadClass(part))
 
@@ -261,7 +261,7 @@ func TestSideNotchCutDeclinesObliqueCut(t *testing.T) {
 	doc := decad.New()
 	fork := forkBody(t, doc, 0, mm(6.5), 0, leverForkSketch(false, forkOptions{}))
 	notch := forkBody(t, doc, 2.5, mm(5), 0, leverForkSketch(true, forkOptions{wideWall: true}))
-	part, err := decad.Cut(t.Context(), fork, notch)
+	part, err := decad.Cut(fork, notch).Do(t.Context())
 	if err == nil {
 		require.True(t, tookMeshPath(part), "class %s", decadtest.PayloadClass(part))
 		return

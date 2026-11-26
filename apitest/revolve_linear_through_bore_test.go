@@ -36,7 +36,7 @@ func TestLinearRevolveDThroughBore(t *testing.T) {
 	require.NoError(t, err)
 	toolMass, err := tool.MassProperties(t.Context(), density)
 	require.NoError(t, err)
-	result, err := decad.Cut(t.Context(), host, tool)
+	result, err := decad.Cut(host, tool).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, decad.BodySolid, result.Kind())
 	require.Equal(t, 1, countSurface[decad.Cone](result))

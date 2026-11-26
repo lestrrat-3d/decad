@@ -50,7 +50,7 @@ func wrapBlockHeight(t *testing.T, w *sketch.World, doc *decad.Document, corners
 		block, err = decad.Fillet(t.Context(), block, sel.Exactly(corners), units.Millimeters(wrapR))
 		require.NoError(t, err)
 	}
-	out, err := decad.Union(t.Context(), plate, placed(t, block, 9))
+	out, err := decad.Union(plate, placed(t, block, 9)).Do(t.Context())
 	require.NoError(t, err)
 	return out
 }
@@ -61,7 +61,7 @@ func wrapBlockHeight(t *testing.T, w *sketch.World, doc *decad.Document, corners
 func wrapBlockWithCube(t *testing.T, corners int, x0, x1, y0 float64) *decad.Body {
 	t.Helper()
 	w, doc := sketch.NewWorld(), decad.New()
-	out, err := decad.Union(t.Context(), wrapBlockIn(t, w, doc, corners), placed(t, rectBox(t, w, doc, x0, y0, x1, y0+0.1, 0.1), 10.05))
+	out, err := decad.Union(wrapBlockIn(t, w, doc, corners), placed(t, rectBox(t, w, doc, x0, y0, x1, y0+0.1, 0.1), 10.05)).Do(t.Context())
 	require.NoError(t, err)
 	return out
 }
@@ -171,8 +171,7 @@ func TestFacetedRetainedBlendChainBaseWrap(t *testing.T) {
 	t.Run("a second block standing in the base's setback band is refused", func(t *testing.T) {
 		t.Parallel()
 		w, doc := sketch.NewWorld(), decad.New()
-		joined, err := decad.Union(t.Context(), wrapBlockIn(t, w, doc, 2),
-			placed(t, rectBox(t, w, doc, 9.5, 8.5, 10.5, 9.5, 5), 9))
+		joined, err := decad.Union(wrapBlockIn(t, w, doc, 2), placed(t, rectBox(t, w, doc, 9.5, 8.5, 10.5, 9.5, 5), 9)).Do(t.Context())
 		require.NoError(t, err)
 		_, err = decad.Fillet(t.Context(), joined, wrapRoot(), units.Millimeters(1), decad.WithTangentChain())
 		require.ErrorIs(t, err, decad.ErrDegenerate)

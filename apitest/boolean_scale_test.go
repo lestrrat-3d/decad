@@ -23,7 +23,7 @@ func facetedBooleanScaleSource(t *testing.T) (*decad.Document, *decad.Body, [2]d
 	second, err = decad.Transform(t.Context(), second, turn)
 	require.NoError(t, err)
 	roles := [2]decad.FeatureRef{decad.CapStart(first), decad.CapEnd(second)}
-	joined, err := decad.Union(t.Context(), first, second)
+	joined, err := decad.Union(first, second).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, joined.Lumps(), 1)
 	require.True(t, tookMeshPath(joined))

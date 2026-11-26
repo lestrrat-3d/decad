@@ -19,7 +19,7 @@ func lBracket(t *testing.T) *decad.Body {
 	doc := decad.New()
 	a := blockIn(t, doc, r3.NewVec(0, 0, 0), r3.NewVec(10, 4, 4))
 	b := blockIn(t, doc, r3.NewVec(0, 0, 0), r3.NewVec(4, 10, 4))
-	out, err := decad.Union(t.Context(), a, b)
+	out, err := decad.Union(a, b).Do(t.Context())
 	require.NoError(t, err)
 	requireVolume(t, out, 256)
 	return out

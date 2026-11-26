@@ -196,7 +196,7 @@ func requireRevolveBoreRepeatedPlacement(t *testing.T, outline string, toolArea 
 	require.Len(t, ts.Profiles(), 1)
 	tool, err := Extrude(t.Context(), doc, ts, ts.Profiles()[0], Distance{D: units.Millimeters(32), Dir: Along})
 	require.NoError(t, err)
-	result, err := Cut(t.Context(), host, tool)
+	result, err := Cut(host, tool).Do(t.Context())
 	require.NoError(t, err)
 	_, ok := result.n.Payload.(revolvebore.Payload)
 	require.True(t, ok, "the fixture exercises the native axial Revolve bore record")

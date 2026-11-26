@@ -91,7 +91,7 @@ func TestRegroupPlansBuildByHand(t *testing.T) {
 	t.Run("F1 two overlapping parallel holes", func(t *testing.T) {
 		t.Parallel()
 		sc := newRetentionScene()
-		first, err := decad.Cut(t.Context(), sc.roundedBox(t), sc.tool(t, 20))
+		first, err := decad.Cut(sc.roundedBox(t), sc.tool(t, 20)).Do(t.Context())
 		require.NoError(t, err)
 		// A Copy ends the history chain, so the final call is the sequential gate, not a regroup.
 		held, err := decad.Copy(t.Context(), first)
@@ -99,16 +99,16 @@ func TestRegroupPlansBuildByHand(t *testing.T) {
 		// The second hole's rim reads the first hole's cylinder slab, not the first rim's
 		// bound (agent-docs/faceted-source-retention-design.md §11, Claim C).
 		want := regroupBoxVolume - 20*(25*math.Pi-regroupLens(4, 3, 2))
-		sequential, err := decad.Cut(t.Context(), held, slabYTool(t, sc, 22, 3))
+		sequential, err := decad.Cut(held, slabYTool(t, sc, 22, 3)).Do(t.Context())
 		require.NoError(t, err)
 		requireRegroupResult(t, sequential, want)
 
 		sc = newRetentionScene()
 		box, t1, t2 := sc.roundedBox(t), sc.tool(t, 20), slabYTool(t, sc, 22, 3)
-		u, err := decad.Union(t.Context(), t1, t2)
+		u, err := decad.Union(t1, t2).Do(t.Context())
 		require.NoError(t, err)
 		require.False(t, tookMeshPath(u), "Union(t1, t2) is analytic")
-		got, err := decad.Cut(t.Context(), box, u)
+		got, err := decad.Cut(box, u).Do(t.Context())
 		require.NoError(t, err)
 		requireRegroupResult(t, got, want)
 	})
@@ -116,20 +116,20 @@ func TestRegroupPlansBuildByHand(t *testing.T) {
 	t.Run("F2 a straight hole into an earlier hole", func(t *testing.T) {
 		t.Parallel()
 		sc := newRetentionScene()
-		first, err := decad.Cut(t.Context(), sc.roundedBox(t), sc.tool(t, 20))
+		first, err := decad.Cut(sc.roundedBox(t), sc.tool(t, 20)).Do(t.Context())
 		require.NoError(t, err)
 		// A Copy ends the history chain, so the final call is the sequential gate, not a regroup.
 		held, err := decad.Copy(t.Context(), first)
 		require.NoError(t, err)
-		_, err = decad.Cut(t.Context(), held, regroupCylinderZ(t, sc))
+		_, err = decad.Cut(held, regroupCylinderZ(t, sc)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 
 		sc = newRetentionScene()
 		box, t1, t3 := sc.roundedBox(t), sc.tool(t, 20), regroupCylinderZ(t, sc)
-		step, err := decad.Cut(t.Context(), box, t3)
+		step, err := decad.Cut(box, t3).Do(t.Context())
 		require.NoError(t, err)
 		require.False(t, tookMeshPath(step), "Cut(box, t3) is analytic")
-		got, err := decad.Cut(t.Context(), step, t1)
+		got, err := decad.Cut(step, t1).Do(t.Context())
 		require.NoError(t, err)
 		vx := regroupCrossVolume(4096)
 		require.InDelta(t, vx, regroupCrossVolume(2048), 1e-12)
@@ -146,21 +146,21 @@ func TestRegroupPlansBuildByHand(t *testing.T) {
 			return plate, box2, boss
 		}
 		plate, box2, boss := build(t)
-		first, err := decad.Union(t.Context(), plate, boss)
+		first, err := decad.Union(plate, boss).Do(t.Context())
 		require.NoError(t, err)
 		// A Copy ends the history chain, so the final call is not a regroup. The copy of an axis-square result keeps
 		// its exact vertices, so the grid route joins it with the box where the sequential gate once refused.
 		held, err := decad.Copy(t.Context(), first)
 		require.NoError(t, err)
-		joined, err := decad.Union(t.Context(), held, box2)
+		joined, err := decad.Union(held, box2).Do(t.Context())
 		require.NoError(t, err)
 		requireRegroupResult(t, joined, 12240)
 
 		plate, box2, boss = build(t)
-		step, err := decad.Union(t.Context(), plate, box2)
+		step, err := decad.Union(plate, box2).Do(t.Context())
 		require.NoError(t, err)
 		require.False(t, tookMeshPath(step), "Union(plate, box2) is analytic")
-		got, err := decad.Union(t.Context(), step, boss)
+		got, err := decad.Union(step, boss).Do(t.Context())
 		require.NoError(t, err)
 		requireRegroupResult(t, got, 12240)
 	})
@@ -168,20 +168,20 @@ func TestRegroupPlansBuildByHand(t *testing.T) {
 	t.Run("F4 an analytic intersect after a mesh cut", func(t *testing.T) {
 		t.Parallel()
 		sc := newRetentionScene()
-		first, err := decad.Cut(t.Context(), sc.roundedBox(t), sc.tool(t, 20))
+		first, err := decad.Cut(sc.roundedBox(t), sc.tool(t, 20)).Do(t.Context())
 		require.NoError(t, err)
 		// A Copy ends the history chain, so the final call is the sequential gate, not a regroup.
 		held, err := decad.Copy(t.Context(), first)
 		require.NoError(t, err)
-		_, err = decad.Intersect(t.Context(), held, regroupSlabC(t, sc))
+		_, err = decad.Intersect(held, regroupSlabC(t, sc)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 
 		sc = newRetentionScene()
 		box, t1, c := sc.roundedBox(t), sc.tool(t, 20), regroupSlabC(t, sc)
-		step, err := decad.Intersect(t.Context(), box, c)
+		step, err := decad.Intersect(box, c).Do(t.Context())
 		require.NoError(t, err)
 		require.False(t, tookMeshPath(step), "Intersect(box, C) is analytic")
-		got, err := decad.Cut(t.Context(), step, t1)
+		got, err := decad.Cut(step, t1).Do(t.Context())
 		require.NoError(t, err)
 		requireRegroupResult(t, got, 2560-16*(32*math.Pi/3+4*math.Sqrt(3)))
 	})
@@ -191,11 +191,11 @@ func TestRegroupPlansBuildByHand(t *testing.T) {
 	t.Run("D1 a Copy keeps the sequential refusal", func(t *testing.T) {
 		t.Parallel()
 		sc := newRetentionScene()
-		first, err := decad.Cut(t.Context(), sc.roundedBox(t), sc.taperedTool(t))
+		first, err := decad.Cut(sc.roundedBox(t), sc.taperedTool(t)).Do(t.Context())
 		require.NoError(t, err)
 		cp, err := decad.Copy(t.Context(), first)
 		require.NoError(t, err)
-		_, err = decad.Cut(t.Context(), cp, slabYTool(t, sc, 22, 3))
+		_, err = decad.Cut(cp, slabYTool(t, sc, 22, 3)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 	})
 
@@ -209,16 +209,16 @@ func TestRegroupPlansBuildByHand(t *testing.T) {
 			return b
 		}
 		sc := newRetentionScene()
-		first, err := decad.Cut(t.Context(), sc.roundedBox(t), sc.taperedTool(t))
+		first, err := decad.Cut(sc.roundedBox(t), sc.taperedTool(t)).Do(t.Context())
 		require.NoError(t, err)
 		// A Copy ends the history chain, so the final call is the sequential gate, not a regroup.
 		held, err := decad.Copy(t.Context(), first)
 		require.NoError(t, err)
-		_, err = decad.Cut(t.Context(), held, tilted(t, sc))
+		_, err = decad.Cut(held, tilted(t, sc)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 
 		sc = newRetentionScene()
-		u, err := decad.Union(t.Context(), sc.tool(t, 20), tilted(t, sc))
+		u, err := decad.Union(sc.tool(t, 20), tilted(t, sc)).Do(t.Context())
 		require.NoError(t, err)
 		require.True(t, tookMeshPath(u), "Union(t1, t2') takes the mesh path")
 	})

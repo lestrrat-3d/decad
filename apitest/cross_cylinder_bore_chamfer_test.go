@@ -44,7 +44,7 @@ func crossCylinderBoreAt(t *testing.T, radius, bore, height, centerZ, toolY floa
 	tool, err := decad.Extrude(t.Context(), doc, ts, ts.Profiles()[0],
 		decad.Symmetric{D: units.Millimeters(2*radius + 2)})
 	require.NoError(t, err)
-	bored, err := decad.Cut(t.Context(), target, tool)
+	bored, err := decad.Cut(target, tool).Do(t.Context())
 	require.NoError(t, err)
 	return doc, target, bored
 }

@@ -16,7 +16,7 @@ func TestOrthogonalBooleanTakesAnExtrudedPartnerForAMeshSolid(t *testing.T) {
 	doc := decad.New()
 	stl := blockIn(t, doc, r3.NewVec(0, 0, 0), r3.NewVec(10, 10, 10))
 	extruded := boxBody(t, doc, 10, 0, 20, 10, 10) // x 10 to 20, y 0 to 10, z 0 to 10: touches the block at a face
-	out, err := decad.Union(t.Context(), stl, extruded)
+	out, err := decad.Union(stl, extruded).Do(t.Context())
 	require.NoError(t, err)
 	requireVolume(t, out, 2000)
 	require.Len(t, out.Faces(), 6)

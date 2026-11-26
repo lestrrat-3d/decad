@@ -44,7 +44,7 @@ func plateCollar(t *testing.T, collarZ0 float64) (*decad.Body, error) {
 	doc := decad.New()
 	plate := annulusAt(t, doc, 4.55, 32.65, 8.095, 1.2)
 	collar := annulusAt(t, doc, 4.55, 5.9, collarZ0, 18.9-collarZ0)
-	return decad.Union(t.Context(), plate, collar)
+	return decad.Union(plate, collar).Do(t.Context())
 }
 
 // TestPlateCollarRimChamfer chamfers the bore's rim on the bed face of a plate joined to a collar that starts inside

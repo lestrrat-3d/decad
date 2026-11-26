@@ -52,12 +52,11 @@ func figureEight(t *testing.T) *decad.Body {
 // figureEightIn is figureEight built in sc.
 func figureEightIn(t *testing.T, sc *retentionScene) *decad.Body {
 	t.Helper()
-	b, err := decad.Union(t.Context(), zCylinderAt(t, sc, pairAxes[0][0], pairAxes[0][1], pairRad, 0, 20),
-		zCylinderAt(t, sc, pairAxes[1][0], pairAxes[1][1], pairRad, 0, 20))
+	b, err := decad.Union(zCylinderAt(t, sc, pairAxes[0][0], pairAxes[0][1], pairRad, 0, 20), zCylinderAt(t, sc, pairAxes[1][0], pairAxes[1][1], pairRad, 0, 20)).Do(t.Context())
 	require.NoError(t, err)
-	b, err = decad.Cut(t.Context(), b, slabCutter(t, sc, 15, 40))
+	b, err = decad.Cut(b, slabCutter(t, sc, 15, 40)).Do(t.Context())
 	require.NoError(t, err)
-	b, err = decad.Cut(t.Context(), b, slabCutter(t, sc, -40, 5))
+	b, err = decad.Cut(b, slabCutter(t, sc, -40, 5)).Do(t.Context())
 	require.NoError(t, err)
 	return b
 }
@@ -165,7 +164,7 @@ func TestFacetedRetainedBlendParallelCylindersConcave(t *testing.T) {
 	valleyWithBox := func(t *testing.T, z0 float64) *decad.Body {
 		t.Helper()
 		sc := newRetentionScene()
-		b, err := decad.Union(t.Context(), figureEightIn(t, sc), placed(t, rectBox(t, sc.w, sc.doc, 17.45, 7.8, 17.55, 7.9, 1), z0))
+		b, err := decad.Union(figureEightIn(t, sc), placed(t, rectBox(t, sc.w, sc.doc, 17.45, 7.8, 17.55, 7.9, 1), z0)).Do(t.Context())
 		require.NoError(t, err)
 		return b
 	}
@@ -239,9 +238,9 @@ func TestFacetedRetainedBlendParallelCylindersGrazing(t *testing.T) {
 	// blend's floor (SM7).
 	sc := newRetentionScene()
 	b := blendPlate(t, sc)
-	b, err := decad.Cut(t.Context(), b, zCylinderAt(t, sc, 14, 10, pairRad, -10, 30))
+	b, err := decad.Cut(b, zCylinderAt(t, sc, 14, 10, pairRad, -10, 30)).Do(t.Context())
 	require.NoError(t, err)
-	b, err = decad.Cut(t.Context(), b, zCylinderAt(t, sc, 21.997, 10, pairRad, -10, 30))
+	b, err = decad.Cut(b, zCylinderAt(t, sc, 21.997, 10, pairRad, -10, 30)).Do(t.Context())
 	require.NoError(t, err)
 	var ridge r3.Vec
 	found := false

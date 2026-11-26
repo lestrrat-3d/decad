@@ -31,7 +31,7 @@ func positiveBoundFacetedFloorFixture(t *testing.T) (*decad.Document, *decad.Bod
 	require.NoError(t, err)
 	upper, err = decad.Transform(t.Context(), upper, shift)
 	require.NoError(t, err)
-	union, err := decad.Union(t.Context(), base, upper)
+	union, err := decad.Union(base, upper).Do(t.Context())
 	require.NoError(t, err)
 	floor := makeBox(t, doc, -20, -20, 20, 20, -10, 10)
 	return doc, floor, union
@@ -160,7 +160,7 @@ func facetedFloorStepFixture(t *testing.T) (*decad.Document, *decad.Body, *decad
 	// the pair and the union stays faceted.
 	upperCap, err := decad.Transform(t.Context(), makeBox(t, doc, -2, -2, 2, 2, 0, 4), translation(t, r3.Vec{Z: 8}))
 	require.NoError(t, err)
-	faceted, err := decad.Union(t.Context(), base, upperCap)
+	faceted, err := decad.Union(base, upperCap).Do(t.Context())
 	require.NoError(t, err)
 	floor := makeBox(t, doc, -20, -20, 20, 20, -10, 10)
 	center, err := faceted.Centroid()
@@ -202,7 +202,7 @@ func TestBoundedFacetedMassAdmitsDynamicWorld(t *testing.T) {
 	// Placed up to z = 8 so the union stays faceted (see facetedFloorStepFixture).
 	upper, err := decad.Transform(t.Context(), makeBox(t, doc, -2, -2, 2, 2, 0, 4), translation(t, r3.Vec{Z: 8}))
 	require.NoError(t, err)
-	union, err := decad.Union(t.Context(), base, upper)
+	union, err := decad.Union(base, upper).Do(t.Context())
 	require.NoError(t, err)
 	shift, err := r3.Translation(r3.Vec{X: .1})
 	require.NoError(t, err)
@@ -237,7 +237,7 @@ func TestBoundedFacetedMassClearStepAndTrace(t *testing.T) {
 	// Placed up to z = 8 so the union stays faceted (see facetedFloorStepFixture).
 	upper, err := decad.Transform(t.Context(), makeBox(t, doc, -2, -2, 2, 2, 0, 4), translation(t, r3.Vec{Z: 8}))
 	require.NoError(t, err)
-	union, err := decad.Union(t.Context(), base, upper)
+	union, err := decad.Union(base, upper).Do(t.Context())
 	require.NoError(t, err)
 	shift, err := r3.Translation(r3.Vec{X: .1})
 	require.NoError(t, err)

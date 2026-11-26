@@ -31,7 +31,7 @@ func borePair(t *testing.T) *decad.Body {
 	b := blendPlate(t, sc)
 	for _, a := range pairAxes {
 		var err error
-		b, err = decad.Cut(t.Context(), b, zCylinderAt(t, sc, a[0], a[1], pairRad, -10, 30))
+		b, err = decad.Cut(b, zCylinderAt(t, sc, a[0], a[1], pairRad, -10, 30)).Do(t.Context())
 		require.NoError(t, err)
 	}
 	return b
@@ -170,10 +170,9 @@ func TestFacetedRetainedBlendParallelCylinders(t *testing.T) {
 	t.Run("a valley that ends on the plate and on the boss top refuses", func(t *testing.T) {
 		t.Parallel()
 		sc := newRetentionScene()
-		tools, err := decad.Union(t.Context(), zCylinderAt(t, sc, pairAxes[0][0], pairAxes[0][1], pairRad, 10, 30),
-			zCylinderAt(t, sc, pairAxes[1][0], pairAxes[1][1], pairRad, 10, 30))
+		tools, err := decad.Union(zCylinderAt(t, sc, pairAxes[0][0], pairAxes[0][1], pairRad, 10, 30), zCylinderAt(t, sc, pairAxes[1][0], pairAxes[1][1], pairRad, 10, 30)).Do(t.Context())
 		require.NoError(t, err)
-		b, err := decad.Union(t.Context(), blendPlate(t, sc), tools)
+		b, err := decad.Union(blendPlate(t, sc), tools).Do(t.Context())
 		require.NoError(t, err)
 		// The valley is concave, so it must end on a face that is reflex at the
 		// corner. The boss top is, but the plate's top face is convex there.
@@ -186,7 +185,7 @@ func TestFacetedRetainedBlendParallelCylinders(t *testing.T) {
 		t.Parallel()
 		sc := newRetentionScene()
 		b := blendPlate(t, sc)
-		b, err := decad.Cut(t.Context(), b, zCylinderAt(t, sc, 20, 10, 4.5, -10, 30))
+		b, err := decad.Cut(b, zCylinderAt(t, sc, 20, 10, 4.5, -10, 30)).Do(t.Context())
 		require.NoError(t, err)
 		s, err := sc.w.CreateSketch(sc.w.YZ())
 		require.NoError(t, err)
@@ -201,7 +200,7 @@ func TestFacetedRetainedBlendParallelCylinders(t *testing.T) {
 		require.NoError(t, err)
 		cross, err = decad.Transform(t.Context(), cross, shift)
 		require.NoError(t, err)
-		b, err = decad.Cut(t.Context(), b, cross)
+		b, err = decad.Cut(b, cross).Do(t.Context())
 		require.NoError(t, err)
 		// The two bores meet along a curve that is not a straight generator, so
 		// none of its edges is a Line3 between two cylinders. The straight

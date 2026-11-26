@@ -24,7 +24,7 @@ func TestPrismPatternUnionOfCopiedExtrudes(t *testing.T) {
 	require.NoError(t, err)
 	toothVolume, err := tooth.Volume()
 	require.NoError(t, err)
-	result, err := Union(t.Context(), blank, tooth, rotated)
+	result, err := Union(blank, tooth, rotated).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, doc.Bodies(), 1)
 	volume, err := result.Volume()
@@ -40,7 +40,7 @@ func TestPrismPatternUnionOfCopiedExtrudes(t *testing.T) {
 
 func TestPrismPatternUnionRefusesOutwardRootWithoutRetiringSources(t *testing.T) {
 	doc, blank, tooth, rotated := prismPatternTabBodies(t, 2.999)
-	_, err := Union(t.Context(), blank, tooth, rotated)
+	_, err := Union(blank, tooth, rotated).Do(t.Context())
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.ErrorContains(t, err, "root is not strictly inside")
 	require.Len(t, doc.Bodies(), 3)
@@ -58,7 +58,7 @@ func TestPrismPatternUnionOfTangentRootJoinsBySectionUnion(t *testing.T) {
 		parts += v.Value.Base()
 		slack += v.Bound.Base()
 	}
-	joined, err := Union(t.Context(), blank, tooth, rotated)
+	joined, err := Union(blank, tooth, rotated).Do(t.Context())
 	require.NoError(t, err)
 	require.True(t, joined.IsSolid())
 	got, err := joined.Volume()
@@ -68,7 +68,7 @@ func TestPrismPatternUnionOfTangentRootJoinsBySectionUnion(t *testing.T) {
 
 func TestPrismPatternUnionSelectsProvenAxialChains(t *testing.T) {
 	_, blank, section, rotated := prismPatternTabBodies(t, prismPatternInsetBlank)
-	joined, err := Union(t.Context(), blank, section, rotated)
+	joined, err := Union(blank, section, rotated).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, joined.Edges(), 36)
 	selected, err := Edges(ParallelTo(r3.Vec{Z: 1})).SelectEdges(joined)

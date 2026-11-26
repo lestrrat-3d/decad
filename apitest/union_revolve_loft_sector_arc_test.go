@@ -118,9 +118,9 @@ func arcToothHubAndLug(t testing.TB, shape arcToothShape) (*decad.Document, *dec
 	require.Len(t, lugProfiles, 1)
 	tooth, err := decad.LoftFromPoint(t.Context(), doc, r3.Vec{}, lug, lugProfiles[0])
 	require.NoError(t, err)
-	toeTrim, err := decad.Cut(t.Context(), tooth, pointConeTool(t, doc, 7.5))
+	toeTrim, err := decad.Cut(tooth, pointConeTool(t, doc, 7.5)).Do(t.Context())
 	require.NoError(t, err)
-	trimmed, err := decad.Intersect(t.Context(), toeTrim, pointConeTool(t, doc, 12))
+	trimmed, err := decad.Intersect(toeTrim, pointConeTool(t, doc, 12)).Do(t.Context())
 	require.NoError(t, err)
 	return doc, hub, trimmed
 }
@@ -137,7 +137,7 @@ func arcToothRing(t testing.TB, hub, tooth *decad.Body) *decad.Body {
 		require.NoError(t, err)
 		teeth = append(teeth, copied)
 	}
-	joined, err := decad.Union(t.Context(), hub, teeth...)
+	joined, err := decad.Union(append([]*decad.Body{hub}, teeth...)...).Do(t.Context())
 	require.NoError(t, err)
 	return joined
 }
@@ -165,7 +165,7 @@ func TestUnionArcToothSectorJoin(t *testing.T) {
 	require.Equal(t, 2, revolveLugEuler(mesh))
 	require.Contains(t, doc.Bodies(), joined)
 
-	refined, err := decad.Refine(t.Context(), joined, units.Millimeters(0.05))
+	refined, err := decad.Refine(joined, units.Millimeters(0.05)).Do(t.Context())
 	require.NoError(t, err)
 	require.LessOrEqual(t, refineSectorFloor(t, refined), 0.05)
 	_, err = refined.Tessellate(t.Context(), units.Millimeters(0.05), decad.WithVerification(decad.VerifyAll))
@@ -184,7 +184,7 @@ func TestUnionArcToothSectorJoinRefusals(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			doc, hub, tooth := arcToothHubAndLug(t, test.shape)
 			before := doc.Bodies()
-			_, err := decad.Union(t.Context(), hub, tooth)
+			_, err := decad.Union(hub, tooth).Do(t.Context())
 			require.ErrorIs(t, err, decad.ErrUnsupported)
 			require.Equal(t, before, doc.Bodies())
 		})

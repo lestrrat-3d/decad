@@ -155,22 +155,26 @@ func (m bevelMember) toothProfile(t *testing.T) (*sketch.Sketch, *sketch.Profile
 
 // tooth lofts one tooth from the common apex and trims it at the toe cone and
 // at the heel cone, the latter with opts.
-func (m bevelMember) tooth(t *testing.T, doc *decad.Document, opts ...decad.BooleanOption) (*decad.Body, error) {
+func (m bevelMember) tooth(t *testing.T, doc *decad.Document, matching bool) (*decad.Body, error) {
 	t.Helper()
 	s, profile := m.toothProfile(t)
 	loft, err := decad.LoftFromPoint(t.Context(), doc, r3.Vec{}, s, profile)
 	require.NoError(t, err)
-	toeKept, err := decad.Cut(t.Context(), loft, m.endCone(t, doc, m.toeApex))
+	toeKept, err := decad.Cut(loft, m.endCone(t, doc, m.toeApex)).Do(t.Context())
 	require.NoError(t, err)
-	return decad.Intersect(t.Context(), toeKept, m.endCone(t, doc, m.heelApex), opts...)
+	cmd := decad.Intersect(toeKept, m.endCone(t, doc, m.heelApex))
+	if matching {
+		cmd.MatchingFaces()
+	}
+	return cmd.Do(t.Context())
 }
 
 // join places count teeth around the blank and joins them in one Union.
-func (m bevelMember) join(t *testing.T, count int, opts ...decad.BooleanOption) (*decad.Body, *decad.Body, error) {
+func (m bevelMember) join(t *testing.T, count int, matching bool) (*decad.Body, *decad.Body, error) {
 	t.Helper()
 	doc := decad.New()
 	blank := bevelRevolved(t, doc, m.blank)
-	tooth, err := m.tooth(t, doc, opts...)
+	tooth, err := m.tooth(t, doc, matching)
 	require.NoError(t, err)
 	pattern := []*decad.Body{tooth}
 	for i := 1; i < count; i++ {
@@ -180,7 +184,7 @@ func (m bevelMember) join(t *testing.T, count int, opts ...decad.BooleanOption) 
 		require.NoError(t, err)
 		pattern = append(pattern, copied)
 	}
-	joined, err := decad.Union(t.Context(), blank, pattern...)
+	joined, err := decad.Union(append([]*decad.Body{blank}, pattern...)...).Do(t.Context())
 	return blank, joined, err
 }
 
@@ -194,9 +198,9 @@ func requireVerified(t *testing.T, body *decad.Body) {
 
 // requireTeethAddGain checks that count teeth add count times the volume one
 // tooth adds, within the proven bounds.
-func requireTeethAddGain(t *testing.T, m bevelMember, count int, blank, joined *decad.Body, opts ...decad.BooleanOption) {
+func requireTeethAddGain(t *testing.T, m bevelMember, count int, blank, joined *decad.Body, matching bool) {
 	t.Helper()
-	_, single, err := m.join(t, 1, opts...)
+	_, single, err := m.join(t, 1, matching)
 	require.NoError(t, err)
 	blankVolume, err := blank.Volume()
 	require.NoError(t, err)
@@ -219,10 +223,10 @@ func TestUnionBevelBlankAndEmbeddedRootTeeth(t *testing.T) {
 	if testing.Short() {
 		t.Skip("joins three sectors")
 	}
-	blank, joined, err := bevel32.join(t, 3)
+	blank, joined, err := bevel32.join(t, 3, false)
 	require.NoError(t, err)
 	requireVerified(t, joined)
-	requireTeethAddGain(t, bevel32, 3, blank, joined)
+	requireTeethAddGain(t, bevel32, 3, blank, joined, false)
 }
 
 // The 16-tooth member's tooth plane touches the heel cone along a ruling. Its
@@ -233,17 +237,17 @@ func TestUnionBevelTipTouchingHeelConeNeedsMatchingFaces(t *testing.T) {
 	if testing.Short() {
 		t.Skip("joins two sectors")
 	}
-	blank, joined, err := bevel16.join(t, 2, decad.WithMatchingFaces())
+	blank, joined, err := bevel16.join(t, 2, true)
 	require.NoError(t, err)
 	requireVerified(t, joined)
-	requireTeethAddGain(t, bevel16, 2, blank, joined, decad.WithMatchingFaces())
+	requireTeethAddGain(t, bevel16, 2, blank, joined, true)
 }
 
 func TestUnionBevelTipTouchingHeelConeRefusesWithoutMatchingFaces(t *testing.T) {
 	if testing.Short() {
 		t.Skip("joins two sectors")
 	}
-	_, _, err := bevel16.join(t, 2)
+	_, _, err := bevel16.join(t, 2, false)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.ErrorContains(t, err, "far source plane")
 }

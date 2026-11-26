@@ -44,7 +44,7 @@ func (sc *stripScene) lipSocket(t testing.TB, x4, x6 float64) (*Body, FeatureRef
 	require.NoError(t, err)
 	tool, err = Transform(t.Context(), tool, move)
 	require.NoError(t, err)
-	socket, err := Cut(t.Context(), block, tool)
+	socket, err := Cut(block, tool).Do(t.Context())
 	require.NoError(t, err)
 	return socket, lips
 }
@@ -242,7 +242,7 @@ func TestRetainedLineChamferExact(t *testing.T) {
 		require.NoError(t, err)
 		tool, err = Transform(t.Context(), tool, down)
 		require.NoError(t, err)
-		cut, err := Cut(t.Context(), block, tool)
+		cut, err := Cut(block, tool).Do(t.Context())
 		require.NoError(t, err)
 		before, err := cut.Volume()
 		require.NoError(t, err)

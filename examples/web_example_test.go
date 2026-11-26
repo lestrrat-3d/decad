@@ -32,7 +32,7 @@ func Example_web() {
 		fmt.Printf("failed to build pocket: %s\n", err)
 		return
 	}
-	part, err := decad.Cut(ctx, block, pocketTool)
+	part, err := decad.Cut(block, pocketTool).Do(ctx)
 	if err != nil {
 		fmt.Printf("failed to cut pocket: %s\n", err)
 		return

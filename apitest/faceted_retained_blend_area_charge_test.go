@@ -25,7 +25,7 @@ func TestFacetedRetainedBlendAreaCharge(t *testing.T) {
 	sc := newRetentionScene()
 	plate := rectBox(t, sc.w, sc.doc, 0, 0, 80, 60, 10)
 	top := decad.CapEnd(plate)
-	body, err := decad.Union(t.Context(), plate, placed(t, rectBox(t, sc.w, sc.doc, 30, 20, 50, 40, 15), 10))
+	body, err := decad.Union(plate, placed(t, rectBox(t, sc.w, sc.doc, 30, 20, 50, 40, 15), 10)).Do(t.Context())
 	require.NoError(t, err)
 	body, err = decad.Hole(t.Context(), body, decad.HoleSpec{Face: decad.Faces(decad.FaceCreatedBy(top)),
 		At: r3.NewVec(15, 15, 10), Diameter: units.Millimeters(6.6), Depth: decad.ThroughHole{},
@@ -45,7 +45,7 @@ func TestFacetedRetainedBlendAreaCharge(t *testing.T) {
 	require.NoError(t, err)
 	post, err = decad.Transform(t.Context(), post, move)
 	require.NoError(t, err)
-	body, err = decad.Union(t.Context(), body, post)
+	body, err = decad.Union(body, post).Do(t.Context())
 	require.NoError(t, err)
 	exact := 54000 - math.Pi*3.3*3.3*10 - math.Pi*(5.5*5.5-3.3*3.3)*6.4 + math.Pi*36*8
 	requireBossVolume(t, body, exact)

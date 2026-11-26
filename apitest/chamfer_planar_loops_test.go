@@ -150,7 +150,7 @@ func TestChamferTangentOutlineAfterPinUnion(t *testing.T) {
 	pin := pinBody(t, doc, world, plateOrbit, -9, 7.5, 9+1.5)
 	pins, err := decad.PatternCopies(t.Context(), pin, decad.CircularPattern{Center: r3.NewVec(0, 0, 0), Axis: r3.NewVec(0, 0, 1), Count: 3})
 	require.NoError(t, err)
-	carrier, err := decad.Union(t.Context(), plate, append([]*decad.Body{pin}, pins...)...)
+	carrier, err := decad.Union(append([]*decad.Body{plate}, append([]*decad.Body{pin}, pins...)...)...).Do(t.Context())
 	require.NoError(t, err)
 	for _, z := range []float64{0, 3} {
 		q, n := planeLoopEdges(t, carrier, z, func(l *decad.Loop, _ []*decad.Edge) bool { return l.IsOuter() })
@@ -243,7 +243,7 @@ func TestChamferWindowLoopsAfterBossUnion(t *testing.T) {
 	require.NotNil(t, ring)
 	boss, err := decad.Extrude(t.Context(), doc, s, ring, decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
 	require.NoError(t, err)
-	cover, err := decad.Union(t.Context(), frame, boss)
+	cover, err := decad.Union(frame, boss).Do(t.Context())
 	require.NoError(t, err)
 	// The bevel on the cap face z=0 takes the rim and the bore with the windows, as one selection.
 	for _, step := range []struct {
@@ -315,7 +315,7 @@ func windowedCoverWithBoss(t *testing.T) *decad.Body {
 	require.NotNil(t, ring)
 	boss, err := decad.Extrude(t.Context(), doc, s, ring, decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
 	require.NoError(t, err)
-	cover, err := decad.Union(t.Context(), frame, boss)
+	cover, err := decad.Union(frame, boss).Do(t.Context())
 	require.NoError(t, err)
 	return cover
 }

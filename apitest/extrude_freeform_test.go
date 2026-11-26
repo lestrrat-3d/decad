@@ -905,7 +905,7 @@ func TestFreeformPrismCutsAnInteriorBox(t *testing.T) {
 	innerVolume, err := inner.Volume()
 	require.NoError(t, err)
 
-	result, err := decad.Cut(t.Context(), body, inner)
+	result, err := decad.Cut(body, inner).Do(t.Context())
 	require.NoError(t, err)
 	got, err := result.Volume()
 	require.NoError(t, err)

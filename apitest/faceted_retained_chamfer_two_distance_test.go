@@ -18,7 +18,7 @@ import (
 func crossDrilled(t *testing.T) *decad.Body {
 	t.Helper()
 	sc := newRetentionScene()
-	out, err := decad.Cut(t.Context(), sc.roundedBox(t), sc.tool(t, 20))
+	out, err := decad.Cut(sc.roundedBox(t), sc.tool(t, 20)).Do(t.Context())
 	require.NoError(t, err)
 	return out
 }
@@ -110,7 +110,7 @@ func TestFacetedRetainedChamferTwoDistance(t *testing.T) {
 	t.Run("arc that breaks out of the side, reference the plane", func(t *testing.T) {
 		t.Parallel()
 		sc := newRetentionScene()
-		broken, err := decad.Cut(t.Context(), blendPlate(t, sc), zCylinderAt(t, sc, 2, 10, 4, -30, 30))
+		broken, err := decad.Cut(blendPlate(t, sc), zCylinderAt(t, sc, 2, 10, 4, -30, 30)).Do(t.Context())
 		require.NoError(t, err)
 		before, err := broken.Volume()
 		require.NoError(t, err)

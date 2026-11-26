@@ -40,7 +40,7 @@ func TestReplayTrialChordRealPublicProducers(t *testing.T) {
 	require.NoError(t, err)
 	tool, err := Transform(ctx, raw, move)
 	require.NoError(t, err)
-	cut, err := Cut(ctx, cylinder, tool)
+	cut, err := Cut(cylinder, tool).Do(ctx)
 	require.NoError(t, err)
 	_, ok := cut.n.Payload.(facetedrecord.Payload)
 	require.True(t, ok, "first Cut did not produce a faceted payload")

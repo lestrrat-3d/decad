@@ -76,7 +76,7 @@ func TestRoundedBoxContactFaceReadsABound(t *testing.T) {
 func TestCoplanarUnionDropsTheOccupancyRecord(t *testing.T) {
 	w := sketch.NewWorld()
 	doc := New()
-	flush, err := Union(t.Context(), boxAt(t, w, doc, 0, 0, 0, 10, 10, 10), boxAt(t, w, doc, 0.5, 0, 10, 10, 10, 10))
+	flush, err := Union(boxAt(t, w, doc, 0, 0, 0, 10, 10, 10), boxAt(t, w, doc, 0.5, 0, 10, 10, 10, 10)).Do(t.Context())
 	require.NoError(t, err)
 	payload, ok := flush.n.Payload.(facetedPayload)
 	require.True(t, ok)
@@ -86,7 +86,7 @@ func TestCoplanarUnionDropsTheOccupancyRecord(t *testing.T) {
 	require.Equal(t, 2000.0, v.Value.Base())
 	require.Zero(t, v.Bound.Base())
 
-	crossing, err := Union(t.Context(), boxAt(t, w, doc, 0, 0, 0, 10, 10, 10), boxAt(t, w, doc, 5, 3, 4, 10, 10, 10))
+	crossing, err := Union(boxAt(t, w, doc, 0, 0, 0, 10, 10, 10), boxAt(t, w, doc, 5, 3, 4, 10, 10, 10)).Do(t.Context())
 	require.NoError(t, err)
 	payload, ok = crossing.n.Payload.(facetedPayload)
 	require.True(t, ok)

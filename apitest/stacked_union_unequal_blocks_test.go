@@ -30,7 +30,7 @@ func unionUnequalBlocks(t *testing.T, doc *decad.Document, blocks []unequalBlock
 	body := boxBody(t, doc, 0, 0, 60, 40, 10)
 	for _, b := range blocks {
 		var err error
-		body, err = decad.Union(t.Context(), body, boxBodyAtZ(t, doc, b.x0, b.y0, b.x1, b.y1, 10, b.h))
+		body, err = decad.Union(body, boxBodyAtZ(t, doc, b.x0, b.y0, b.x1, b.y1, 10, b.h)).Do(t.Context())
 		require.NoError(t, err)
 	}
 	return body
@@ -118,7 +118,7 @@ func TestStackedUnionUnequalBlocksRootFillet(t *testing.T) {
 func TestStackedUnionBlocksApartTakeMeshPath(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
-	got, err := decad.Union(t.Context(), boxBody(t, doc, 0, 0, 10, 10, 10), boxBodyAtZ(t, doc, 12, 3, 15, 7, 5, 10))
+	got, err := decad.Union(boxBody(t, doc, 0, 0, 10, 10, 10), boxBodyAtZ(t, doc, 12, 3, 15, 7, 5, 10)).Do(t.Context())
 	require.NoError(t, err)
 	require.True(t, tookMeshPath(got))
 	require.Len(t, got.Lumps(), 2)
@@ -128,7 +128,7 @@ func TestStackedUnionBlocksApartTakeMeshPath(t *testing.T) {
 // union refuses.
 func joinOrRefuse(t *testing.T, a, b *decad.Body) (*decad.Body, error) {
 	t.Helper()
-	got, err := decad.Union(t.Context(), a, b)
+	got, err := decad.Union(a, b).Do(t.Context())
 	if err != nil {
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		return nil, err
@@ -147,7 +147,7 @@ func TestStackedUnionApartGroupsMustNotTouch(t *testing.T) {
 	bridged := func(t *testing.T, doc *decad.Document, x0, y0 float64) *decad.Body {
 		t.Helper()
 		body := unionUnequalBlocks(t, doc, []unequalBlock{{10, 10, 20, 20, 15}, {x0, y0, x0 + 10, y0 + 10, 15}})
-		got, err := decad.Union(t.Context(), body, boxBodyAtZ(t, doc, 15, 15, 30, 25, 25, 5))
+		got, err := decad.Union(body, boxBodyAtZ(t, doc, 15, 15, 30, 25, 25, 5)).Do(t.Context())
 		require.NoError(t, err)
 		return got
 	}
@@ -181,9 +181,9 @@ func TestStackedUnionApartGroupsMustNotTouch(t *testing.T) {
 			t.Parallel()
 			doc := decad.New()
 			plate := boxBody(t, doc, 0, -10, 60, 10, 10)
-			body, err := decad.Union(t.Context(), plate, circleBodyAtZ(t, doc, 15, 5, 10, 15))
+			body, err := decad.Union(plate, circleBodyAtZ(t, doc, 15, 5, 10, 15)).Do(t.Context())
 			require.NoError(t, err)
-			body, err = decad.Union(t.Context(), body, circleBodyAtZ(t, doc, 35, 5, 10, 15))
+			body, err = decad.Union(body, circleBodyAtZ(t, doc, 35, 5, 10, 15)).Do(t.Context())
 			require.NoError(t, err)
 			// The bridge's edge x = 30 touches the second boss's top circle at (30, 0, 25).
 			got, err := joinOrRefuse(t, body, boxBodyAtZ(t, doc, 15, -3, tc.x1, 3, 25, 5))
@@ -214,14 +214,13 @@ func TestStackedUnionApartFloatingPiece(t *testing.T) {
 			t.Parallel()
 			doc := decad.New()
 			body := unionUnequalBlocks(t, doc, []unequalBlock{{10, 10, 20, 20, 15}})
-			blocks, err := decad.Union(t.Context(), boxBodyAtZ(t, doc, 12, 12, 18, 18, 20, 10),
-				boxBodyAtZ(t, doc, 40, 10, 50, 20, 20, 10))
+			blocks, err := decad.Union(boxBodyAtZ(t, doc, 12, 12, 18, 18, 20, 10), boxBodyAtZ(t, doc, 40, 10, 50, 20, 20, 10)).Do(t.Context())
 			require.NoError(t, err)
 			a, b := body, blocks
 			if swap {
 				a, b = blocks, body
 			}
-			got, err := decad.Union(t.Context(), a, b)
+			got, err := decad.Union(a, b).Do(t.Context())
 			require.NoError(t, err)
 			require.False(t, tookMeshPath(got))
 			require.Len(t, got.Lumps(), 2)

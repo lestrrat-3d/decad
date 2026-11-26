@@ -57,7 +57,7 @@ func TestContainedCutUsesCertifiedSourceCentroid(t *testing.T) {
 	toolCentroid, err := tool.Centroid()
 	require.NoError(t, err)
 
-	result, err := Cut(t.Context(), target, tool)
+	result, err := Cut(target, tool).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, "facetedPayload", result.n.Payload.(facetedPayload).SurveyClass())
 	require.Len(t, result.Lumps(), 1)
@@ -118,7 +118,7 @@ func TestContainedCutCentroidEvidenceFailureKeepsDocumentUnchanged(t *testing.T)
 	bodiesBefore := doc.Bodies()
 	operationsBefore := doc.OperationHistory().Operations()
 	producerBefore := doc.producerAt(t.Context())
-	_, err := Cut(t.Context(), target, tool)
+	_, err := Cut(target, tool).Do(t.Context())
 	require.ErrorContains(t, err, "contained-cut centroid evidence is invalid")
 	var booleanErr *BooleanError
 	require.ErrorAs(t, err, &booleanErr)

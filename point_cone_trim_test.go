@@ -42,7 +42,7 @@ func TestPointConeTrimRejectsRoundTrippedPointLoft(t *testing.T) {
 			require.Equal(t, r3.Identity(), fp.Xform)
 			require.True(t, fp.PointSection == nil, "a nonidentity delta must drop the source record")
 
-			got, err := Cut(t.Context(), back, pointLoftConeTool(t, doc, 5))
+			got, err := Cut(back, pointLoftConeTool(t, doc, 5)).Do(t.Context())
 			require.NoError(t, err)
 			gfp, ok := got.n.Payload.(facetedPayload)
 			require.True(t, ok)
@@ -57,7 +57,7 @@ func TestPointConeTrimRejectsRoundTrippedPointLoft(t *testing.T) {
 		fp, ok := cloned.n.Payload.(facetedPayload)
 		require.True(t, ok)
 		require.NotNil(t, fp.PointSection)
-		got, err := Cut(t.Context(), cloned, pointLoftConeTool(t, doc, 5))
+		got, err := Cut(cloned, pointLoftConeTool(t, doc, 5)).Do(t.Context())
 		require.NoError(t, err)
 		gfp, ok := got.n.Payload.(facetedPayload)
 		require.True(t, ok)
@@ -96,7 +96,7 @@ func TestPointConeUpperCapNodeMatchingFaces(t *testing.T) {
 
 	_, _, err = pointcone.UpperCapNode(near, sample, false, false)
 	require.ErrorIs(t, err, ErrUnsupported)
-	require.ErrorContains(t, err, "WithMatchingFaces")
+	require.ErrorContains(t, err, "MatchingFaces")
 	point, round, err := pointcone.UpperCapNode(near, sample, false, true)
 	require.NoError(t, err)
 	require.Equal(t, near, point)
@@ -109,7 +109,7 @@ func TestPointConeUpperCapNodeMatchingFaces(t *testing.T) {
 	_, _, err = pointcone.UpperCapNode(far, sample, false, true)
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.ErrorContains(t, err, "misses the cone by")
-	require.NotContains(t, err.Error(), "WithMatchingFaces")
+	require.NotContains(t, err.Error(), "MatchingFaces")
 }
 
 func TestPointConeOutsideWitnessRejectsUncertainContact(t *testing.T) {

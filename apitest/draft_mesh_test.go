@@ -220,9 +220,9 @@ func TestDraftBooleanWithStraightPrism(t *testing.T) {
 		want *big.Float
 		run  func(a, b *decad.Body) (*decad.Body, error)
 	}{
-		{"union", bfAdd(box, bf(160)), func(a, b *decad.Body) (*decad.Body, error) { return decad.Union(t.Context(), a, b) }},
-		{"cut", bfSub(box, bf(160)), func(a, b *decad.Body) (*decad.Body, error) { return decad.Cut(t.Context(), a, b) }},
-		{"intersect", bf(160), func(a, b *decad.Body) (*decad.Body, error) { return decad.Intersect(t.Context(), a, b) }},
+		{"union", bfAdd(box, bf(160)), func(a, b *decad.Body) (*decad.Body, error) { return decad.Union(a, b).Do(t.Context()) }},
+		{"cut", bfSub(box, bf(160)), func(a, b *decad.Body) (*decad.Body, error) { return decad.Cut(a, b).Do(t.Context()) }},
+		{"intersect", bf(160), func(a, b *decad.Body) (*decad.Body, error) { return decad.Intersect(a, b).Do(t.Context()) }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -425,7 +425,7 @@ func TestDraftNearTangentJoinBooleans(t *testing.T) {
 	require.NoError(t, export.STL(t.Context(), &stl, b, units.Millimeters(0.1)))
 
 	post := boxBodyAtZ(t, doc, -2, -2, 2, 2, -5, 20)
-	got, err := decad.Cut(t.Context(), b, post)
+	got, err := decad.Cut(b, post).Do(t.Context())
 	require.NoError(t, err)
 	d := bfMul(bf(8), taperTan(3))
 	straight := bfMul(bf(2), bfAdd(bf(30), bf(shift)), bfSub(bf(5), bfQuo(d, bf(2))))
@@ -447,7 +447,7 @@ func requirePastLimitNearTangentCutRefusal(t *testing.T, draw func(*sketch.Sketc
 	require.False(t, mesh.VolumeVerified())
 
 	post := boxBodyAtZ(t, doc, -2, -2, 2, 2, -5, 20)
-	_, err = decad.Cut(t.Context(), b, post)
+	_, err = decad.Cut(b, post).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.ErrorContains(t, err, "no proof of the volume")
 	require.ErrorContains(t, err, "tapered extrude")
@@ -507,7 +507,7 @@ func TestDraftTwoArcNearTangentJoinBooleans(t *testing.T) {
 	require.True(t, mesh.VolumeVerified())
 
 	post := boxBodyAtZ(t, doc, -2, -2, 2, 2, -5, 20)
-	got, err := decad.Cut(t.Context(), b, post)
+	got, err := decad.Cut(b, post).Do(t.Context())
 	require.NoError(t, err)
 	d := bfMul(bf(8), taperTan(3))
 	round := bfMul(bigPi, bfAdd(bfSub(bf(25), bfMul(bf(5), d)), bfQuo(bfMul(d, d), bf(3))))

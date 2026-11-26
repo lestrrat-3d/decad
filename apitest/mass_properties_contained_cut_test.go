@@ -42,7 +42,7 @@ func TestMassPropertiesContainedCutSourceMoments(t *testing.T) {
 	require.NoError(t, err)
 	tool, err = decad.Transform(t.Context(), tool, placement)
 	require.NoError(t, err)
-	result, err := decad.Cut(t.Context(), target, tool)
+	result, err := decad.Cut(target, tool).Do(t.Context())
 	require.NoError(t, err)
 	history := doc.OperationHistory().Operations()
 	require.Len(t, history, 4)

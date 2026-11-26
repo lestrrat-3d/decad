@@ -147,7 +147,7 @@ func TestFilletOfMitredEdgesRefusesAFaceBoundaryInTheirReach(t *testing.T) {
 	box := blockIn(t, doc, r3.NewVec(0, 0, 0), r3.NewVec(20, 20, 10))
 	// A pocket 1.5 mm from the wall x = 0 sits inside the 2 mm the fillet takes from the top face.
 	pocket := blockIn(t, doc, r3.NewVec(1.5, 8, 8), r3.NewVec(4.5, 11, 12))
-	cut, err := decad.Cut(t.Context(), box, pocket)
+	cut, err := decad.Cut(box, pocket).Do(t.Context())
 	require.NoError(t, err)
 	_, err = decad.Fillet(t.Context(), cut, pair, units.Millimeters(2))
 	require.ErrorIs(t, err, decad.ErrUnsupported)

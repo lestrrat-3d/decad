@@ -103,7 +103,7 @@ func TestPatternedPairwiseRing(t *testing.T) {
 	loops := decad.Edges(decad.OuterLoopOf(decad.CapStart(disc))).Or(decad.OuterLoopOf(decad.CapEnd(disc)))
 	disc, err = decad.Chamfer(t.Context(), disc, loops, units.Millimeters(0.5))
 	require.NoError(t, err)
-	cut, err := decad.Cut(t.Context(), disc, ring)
+	cut, err := decad.Cut(disc, ring).Do(t.Context())
 	require.NoError(t, err)
 	dv, err := disc.Volume()
 	require.NoError(t, err)

@@ -363,7 +363,7 @@ func classBCut(t *testing.T, draw func(s *sketch.Sketch)) *decad.Body {
 	require.NoError(t, err)
 	tool, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Symmetric{D: units.Millimeters(11)})
 	require.NoError(t, err)
-	result, err := decad.Cut(t.Context(), box, tool)
+	result, err := decad.Cut(box, tool).Do(t.Context())
 	require.NoError(t, err)
 	return result
 }
@@ -506,7 +506,7 @@ func TestSTEPBlindPocketOneShell(t *testing.T) {
 	tool, err := decad.Extrude(t.Context(), doc, toolSketch, toolSketch.Profiles()[0],
 		decad.Distance{D: units.Millimeters(4), Dir: decad.Along})
 	require.NoError(t, err)
-	pocket, err := decad.Cut(t.Context(), plate, tool)
+	pocket, err := decad.Cut(plate, tool).Do(t.Context())
 	require.NoError(t, err)
 	f, err := export.NewSTEPFile(t.Context(), pocket, units.Millimeters(0.1), header())
 	require.NoError(t, err)
@@ -704,7 +704,7 @@ func flushBossUnion(t *testing.T, draw func(s *sketch.Sketch)) *decad.Body {
 	require.NoError(t, err)
 	boss, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(15), Dir: decad.Along})
 	require.NoError(t, err)
-	result, err := decad.Union(t.Context(), plate, boss)
+	result, err := decad.Union(plate, boss).Do(t.Context())
 	require.NoError(t, err)
 	return result
 }
@@ -767,7 +767,7 @@ func TestNewSTEPFileRootedCrossingBossAnalytic(t *testing.T) {
 	require.NoError(t, err)
 	boss, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
 	require.NoError(t, err)
-	body, err := decad.Union(t.Context(), plate, boss)
+	body, err := decad.Union(plate, boss).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, body.Faces(), 10)
 	f, err := export.NewSTEPFile(t.Context(), body, units.Millimeters(0.1), header())
@@ -818,7 +818,7 @@ func TestNewSTEPFileMeshBooleanStaysFaceted(t *testing.T) {
 	require.NoError(t, err)
 	tool, err := decad.Transform(t.Context(), pin, down)
 	require.NoError(t, err)
-	body, err := decad.Cut(t.Context(), plate, tool)
+	body, err := decad.Cut(plate, tool).Do(t.Context())
 	require.NoError(t, err)
 
 	f, err := export.NewSTEPFile(t.Context(), body, units.Millimeters(0.1), header())

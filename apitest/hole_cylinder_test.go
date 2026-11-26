@@ -87,7 +87,7 @@ func TestHoleRadialOutOfABore(t *testing.T) {
 	doc := decad.New()
 	block := boxBody(t, doc, -20, -20, 20, 20, 10)
 	bore := circleBodyAtZ(t, doc, 0, 5, -1, 12)
-	part, err := decad.Cut(t.Context(), block, bore)
+	part, err := decad.Cut(block, bore).Do(t.Context())
 	require.NoError(t, err)
 	// A radial hole from the bore wall at (5, 0, 5) out through the wall along +X.
 	out, err := decad.Hole(t.Context(), part, decad.HoleSpec{
@@ -117,7 +117,7 @@ func TestHoleRadialOutOfATightBore(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	block := boxBody(t, doc, -20, -20, 20, 20, 10)
-	part, err := decad.Cut(t.Context(), block, circleBodyAtZ(t, doc, 0, 3, -1, 12))
+	part, err := decad.Cut(block, circleBodyAtZ(t, doc, 0, 3, -1, 12)).Do(t.Context())
 	require.NoError(t, err)
 	out, err := decad.Hole(t.Context(), part, decad.HoleSpec{
 		Face:     decad.Faces(decad.Cylindrical()),
@@ -167,7 +167,7 @@ func TestHoleOnACylinderRefusals(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
 		block := boxBody(t, doc, -20, -20, 20, 20, 10)
-		part, err := decad.Cut(t.Context(), block, circleBodyAtZ(t, doc, 0, 5, -1, 12))
+		part, err := decad.Cut(block, circleBodyAtZ(t, doc, 0, 5, -1, 12)).Do(t.Context())
 		require.NoError(t, err)
 		_, err = decad.Hole(t.Context(), part, decad.HoleSpec{
 			Face: decad.Faces(decad.Cylindrical()), At: r3.NewVec(5, 0, 5),

@@ -75,7 +75,7 @@ func boredPlateR(t *testing.T, doc *decad.Document, radius float64) *decad.Body 
 	t.Helper()
 	plate := block(t, doc, 0, 0, 20, 20, 0, 10)
 	tool := cylinder(t, doc, 10, radius, -1, 12)
-	out, err := decad.Cut(t.Context(), plate, tool)
+	out, err := decad.Cut(plate, tool).Do(t.Context())
 	require.NoError(t, err)
 	return out
 }

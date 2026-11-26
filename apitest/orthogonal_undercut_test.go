@@ -20,7 +20,7 @@ func tCap(t *testing.T) *decad.Document {
 	base := blockIn(t, doc, r3.NewVec(0, 0, 0), r3.NewVec(10, 10, 4))
 	post := blockIn(t, doc, r3.NewVec(4, 4, 4), r3.NewVec(6, 6, 10))
 	lid := blockIn(t, doc, r3.NewVec(0, 0, 10), r3.NewVec(10, 10, 14))
-	_, err := decad.Union(t.Context(), base, post, lid)
+	_, err := decad.Union(base, post, lid).Do(t.Context())
 	require.NoError(t, err)
 	return doc
 }

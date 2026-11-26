@@ -83,7 +83,7 @@ func TestBrepPartialRootFilletFlushSide(t *testing.T) {
 	doc := decad.New()
 	plate := boxBody(t, doc, 0, 0, 40, 20, 10)
 	block := boxBodyAtZ(t, doc, 10, 0, 20, 6, 10, 5)
-	body, err := decad.Union(t.Context(), plate, block)
+	body, err := decad.Union(plate, block).Do(t.Context())
 	require.NoError(t, err)
 	require.False(t, tookMeshPath(body))
 	var sel *decad.EdgeQuery
@@ -106,7 +106,7 @@ func TestBrepPartialRootFilletFlushCorner(t *testing.T) {
 	doc := decad.New()
 	plate := boxBody(t, doc, 0, 0, 40, 20, 10)
 	block := boxBodyAtZ(t, doc, 30, 0, 40, 6, 10, 5)
-	body, err := decad.Union(t.Context(), plate, block)
+	body, err := decad.Union(plate, block).Do(t.Context())
 	require.NoError(t, err)
 	require.False(t, tookMeshPath(body))
 	var sel *decad.EdgeQuery
@@ -127,7 +127,7 @@ func TestBrepPartialRootFilletMixedSidesRefuses(t *testing.T) {
 	doc := decad.New()
 	plate := boxBody(t, doc, 0, 0, 40, 20, 10)
 	block := boxBodyAtZ(t, doc, 10, 0, 20, 6, 10, 5)
-	body, err := decad.Union(t.Context(), plate, block)
+	body, err := decad.Union(plate, block).Do(t.Context())
 	require.NoError(t, err)
 	var sel *decad.EdgeQuery
 	sel = rootEdge(sel, 10, 0, r3.NewVec(0, 1, 0))

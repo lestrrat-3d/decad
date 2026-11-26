@@ -243,11 +243,11 @@ func TestMeshSolidBooleansAgreeWithTheCubeByCubeBoolean(t *testing.T) {
 			var err error
 			switch op {
 			case opUnion:
-				out, err = decad.Union(t.Context(), ba, bb)
+				out, err = decad.Union(ba, bb).Do(t.Context())
 			case opCut:
-				out, err = decad.Cut(t.Context(), ba, bb)
+				out, err = decad.Cut(ba, bb).Do(t.Context())
 			default:
-				out, err = decad.Intersect(t.Context(), ba, bb)
+				out, err = decad.Intersect(ba, bb).Do(t.Context())
 			}
 			if err != nil {
 				// An empty result, or cubes that meet only along an edge, which no solid is: refused, never a wrong volume.
@@ -560,11 +560,11 @@ func TestMeshSolidWithAPrismAgreesWithTheCubeByCubeBoolean(t *testing.T) {
 			var out *decad.Body
 			switch op {
 			case opUnion:
-				out, err = decad.Union(t.Context(), mesh, prism)
+				out, err = decad.Union(mesh, prism).Do(t.Context())
 			case opCut:
-				out, err = decad.Cut(t.Context(), mesh, prism)
+				out, err = decad.Cut(mesh, prism).Do(t.Context())
 			default:
-				out, err = decad.Intersect(t.Context(), mesh, prism)
+				out, err = decad.Intersect(mesh, prism).Do(t.Context())
 			}
 			if err != nil {
 				continue
@@ -601,7 +601,7 @@ func TestMirroredCopyAndUnionAgreeWithTheMirroredCubes(t *testing.T) {
 		require.NoError(t, err)
 		got, bound := volumeOf(t, image)
 		require.InDelta(t, float64(c.count()), got, bound+1e-9, "a mirror keeps the volume")
-		both, err := decad.Union(t.Context(), b, image)
+		both, err := decad.Union(b, image).Do(t.Context())
 		if err != nil {
 			continue // cubes that meet only along an edge are refused, never a wrong volume
 		}

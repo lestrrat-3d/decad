@@ -39,7 +39,7 @@ func TestBrepLoopFilletUndercutReadsEachPipePatch(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	plate := boxBody(t, doc, 0, 0, 40, 40, 10)
-	pocket, err := decad.Cut(t.Context(), plate, boxBodyAtZ(t, doc, 10, 15, 30, 25, 5, 5))
+	pocket, err := decad.Cut(plate, boxBodyAtZ(t, doc, 10, 15, 30, 25, 5, 5)).Do(t.Context())
 	require.NoError(t, err)
 	top := planeFacing(t, pocket, r3.NewVec(0, 0, 1), r3.NewVec(0, 0, 10))
 	got, err := decad.Fillet(t.Context(), pocket, loopEdgeQuery(top.Loops()[0]), units.Millimeters(1.5))

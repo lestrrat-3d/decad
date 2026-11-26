@@ -158,7 +158,7 @@ func TestSweepTwistRoundedProfileAxisRefusalIsAtomic(t *testing.T) {
 
 func TestSweepTwistRoundedProfileUnionKeepsHeldProof(t *testing.T) {
 	doc, swept, box := roundedTwistUnionOperands(t, 1, 2.5)
-	joined, err := decad.Union(t.Context(), swept, box)
+	joined, err := decad.Union(swept, box).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, doc.Bodies(), 1)
 	volume, err := joined.Volume()
@@ -192,7 +192,7 @@ func TestSweepTwistRoundedProfileUnionKeepsHeldProof(t *testing.T) {
 
 func TestSweepTwistRoundedProfileUnionRefusesNearContact(t *testing.T) {
 	doc, swept, box := roundedTwistUnionOperands(t, 2.1, 3.6)
-	_, err := decad.Union(t.Context(), swept, box)
+	_, err := decad.Union(swept, box).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.ErrorContains(t, err, "held facets come within the chord tolerance")
 	var booleanErr *decad.BooleanError

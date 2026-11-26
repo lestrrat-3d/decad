@@ -18,7 +18,7 @@ func TestOrthogonalUnionOfSeveralBodiesJoinsThemOnOneGrid(t *testing.T) {
 	a := blockIn(t, doc, r3.NewVec(0, 0, 0), r3.NewVec(10, 4, 4))
 	b := blockIn(t, doc, r3.NewVec(10, 0, 0), r3.NewVec(20, 4, 4))
 	c := blockIn(t, doc, r3.NewVec(20, 0, 0), r3.NewVec(30, 4, 4))
-	bar, err := decad.Union(t.Context(), a, b, c)
+	bar, err := decad.Union(a, b, c).Do(t.Context())
 	require.NoError(t, err)
 	requireVolume(t, bar, 480)
 	require.Len(t, bar.Faces(), 6, "three bars end to end are one bar")
@@ -34,7 +34,7 @@ func TestOrthogonalUnionOfSeveralBodiesTakesAnExtrudedPartner(t *testing.T) {
 	a := blockIn(t, doc, r3.NewVec(0, 0, 0), r3.NewVec(10, 4, 4))
 	b := boxBody(t, doc, 10, 0, 20, 4, 4)
 	c := blockIn(t, doc, r3.NewVec(20, 0, 0), r3.NewVec(30, 4, 4))
-	bar, err := decad.Union(t.Context(), a, b, c)
+	bar, err := decad.Union(a, b, c).Do(t.Context())
 	require.NoError(t, err)
 	requireVolume(t, bar, 480)
 }
@@ -46,7 +46,7 @@ func TestPatternUnionOfAMeshSolidIsExact(t *testing.T) {
 	tooth := blockIn(t, doc, r3.NewVec(2, 2, 4), r3.NewVec(6, 18, 12))
 	copies, err := decad.PatternCopies(t.Context(), tooth, decad.LinearPattern{Dir: r3.NewVec(1, 0, 0), Step: units.Millimeters(10), Count: 9})
 	require.NoError(t, err)
-	comb, err := decad.Union(t.Context(), base, append([]*decad.Body{tooth}, copies...)...)
+	comb, err := decad.Union(append([]*decad.Body{base}, append([]*decad.Body{tooth}, copies...)...)...).Do(t.Context())
 	require.NoError(t, err)
 	requireVolume(t, comb, 100*20*4+9*4*16*8)
 	inside, err := comb.LocatePoint(t.Context(), r3.NewVec(84, 10, 8), units.Millimeters(0.01))
@@ -65,7 +65,7 @@ func TestOrthogonalUnionOfSeveralBodiesLeavesNearCoincidentFacesToTheGeneralRout
 	// A face almost, but not quite, in the plane of another's: the grid will not merge two coordinates 1e-12 apart,
 	// so the set is joined two at a time by the general mesh route.
 	c := blockIn(t, doc, r3.NewVec(20+1e-12, 0, 0), r3.NewVec(30, 4, 4))
-	bar, err := decad.Union(t.Context(), a, b, c)
+	bar, err := decad.Union(a, b, c).Do(t.Context())
 	if err != nil {
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.Len(t, doc.Bodies(), 3, "a refusal leaves every body live")

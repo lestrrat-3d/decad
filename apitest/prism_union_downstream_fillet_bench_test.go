@@ -23,7 +23,7 @@ func BenchmarkPrismUnionDownstreamFillet(b *testing.B) {
 		require.NoError(b, err)
 		bBody, err := decad.Transform(b.Context(), bSrc, farAbove)
 		require.NoError(b, err)
-		union, err := decad.Union(b.Context(), a, bBody)
+		union, err := decad.Union(a, bBody).Do(b.Context())
 		require.NoError(b, err)
 		b.StartTimer()
 

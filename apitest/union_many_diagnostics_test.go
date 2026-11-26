@@ -31,7 +31,7 @@ func TestUnionManyOperationWarnings(t *testing.T) {
 				others[0], others[1] = others[1], others[0]
 			}
 
-			joined, err := decad.Union(t.Context(), first, others...)
+			joined, err := decad.Union(append([]*decad.Body{first}, others...)...).Do(t.Context())
 			require.NoError(t, err)
 			requireVolumeWithin(t, joined, 1000+math.Pi*9*10)
 			live := doc.Bodies()

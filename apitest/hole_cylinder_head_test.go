@@ -62,7 +62,7 @@ func TestHoleCounterboreOutOfABore(t *testing.T) {
 	const Rb = 5.0
 	doc := decad.New()
 	block := boxBody(t, doc, -20, -20, 20, 20, 10)
-	part, err := decad.Cut(t.Context(), block, circleBodyAtZ(t, doc, 0, Rb, -1, 12))
+	part, err := decad.Cut(block, circleBodyAtZ(t, doc, 0, Rb, -1, 12)).Do(t.Context())
 	require.NoError(t, err)
 	// A 2 mm hole through from the bore wall at (5, 0, 5) out along +X, with an 8 mm counterbore
 	// 1.5 mm deep from the tangent plane x = 5; the wall rises 2 mm toward that plane at 4 mm across. The wall at y across is x = √(R² − y²), below
@@ -145,7 +145,7 @@ func TestHoleCountersinkOutOfABore(t *testing.T) {
 	const Rb = 5.0
 	doc := decad.New()
 	block := boxBody(t, doc, -20, -20, 20, 20, 10)
-	part, err := decad.Cut(t.Context(), block, circleBodyAtZ(t, doc, 0, Rb, -1, 12))
+	part, err := decad.Cut(block, circleBodyAtZ(t, doc, 0, Rb, -1, 12)).Do(t.Context())
 	require.NoError(t, err)
 	// A 2 mm hole through from the bore wall at (5, 0, 5) out along +X, with a 90 degree countersink 4 mm
 	// across at the tangent plane x = 5: the cone has radius 7 − x there, so 2 at x = 5 and 1 at x = 6,

@@ -1165,34 +1165,42 @@ implicitly-chosen target — and they never mutate an operand or take a target-o
 parameter:
 
 ```go
-func Union(ctx context.Context, first *Body, others ...*Body) (*Body, error)
-func UnionRefined(ctx context.Context, bodies []*Body, maxBound units.Value) (*Body, error)
-func Cut(ctx context.Context, target, tool *Body, opts ...BooleanOption) (*Body, error)
-func Intersect(ctx context.Context, a, b *Body, opts ...BooleanOption) (*Body, error)
+func Union(bodies ...*Body) *UnionCommand
+func (c *UnionCommand) RefineTo(maxBound units.Value) *UnionCommand
+func (c *UnionCommand) Do(ctx context.Context) (*Body, error)
+
+func Cut(target, tool *Body) *CutCommand
+func (c *CutCommand) MatchingFaces() *CutCommand
+func (c *CutCommand) Do(ctx context.Context) (*Body, error)
+
+func Intersect(a, b *Body) *IntersectCommand
+func (c *IntersectCommand) MatchingFaces() *IntersectCommand
+func (c *IntersectCommand) Do(ctx context.Context) (*Body, error)
 ```
 
-`BooleanOption` is a sealed option tier for `Cut` and `Intersect`. A nil or zero
-option is `ErrDegenerate`. `WithMatchingFaces()` declares that faces of the two
+Each is a command (`agent-docs/command-api-design.md`). `Union` with fewer than two bodies is `ErrDegenerate`,
+returned by `Do`. `MatchingFaces()` declares that faces of the two
 operands are meant to match where they meet: a cap drawn to touch the tool's
 cone, or two faces meant to coincide. Faces drawn in floating point seldom
 match exactly, and a design that matches on paper can miss by a few last-place
-steps. With the option, a miss of at most 64 binary64 steps at 1 is taken as
+steps. With the declaration, a miss of at most 64 binary64 steps at 1 is taken as
 the intended match and its effect is charged into the result's error bounds. A
-larger miss disproves the declaration and refuses as it would without the
-option. The declaration comes from the caller and decad's check can only reject
-it, so the option never admits a shape for another reason. It is read only
+larger miss disproves the declaration and refuses as it would without it.
+The declaration comes from the caller and decad's check can only reject
+it, so it never admits a shape for another reason. It is read only
 where a pair's source records keep a cone limit (a point-Loft cut or
 intersected by a cone about an axis through the world origin in a world
 coordinate plane); elsewhere it has no effect. The
 construction is in `agent-docs/revolve-loft-design.md`.
 
-`UnionRefined` joins a straight-bevel sector join of three or more bodies directly at the refinement bound
-(`agent-docs/body-refine-design.md` §7.1), where `Union` followed by `Refine` builds it at 0.1 mm and then again at
-the bound. It takes the bodies before the bound, as §6.3 orders a free function's parameters. It is a separate
-function rather than a `Union` option, since the options tier of `Cut` and `Intersect` carries declarations, not a
-result bound, and `Union` has no options. It returns the joined body or an error with nothing committed: a set the
+`Union(bodies...).RefineTo(maxBound)` joins a straight-bevel sector join of three or more bodies directly at the
+refinement bound (`agent-docs/body-refine-design.md` §7.1), where `Union` followed by `Refine` builds it at 0.1 mm
+and then again at the bound. It is a method rather than a build of `Union` then `Refine`, so the history does not
+depend on the input. `Do` returns the joined body or an error with nothing committed: a set the
 direct build does not take (a pair, a union of another kind, a join folded two bodies at a time) is `ErrUnsupported`
-before anything is built, and its message says to call `Union`, then `Refine`. It differs from that pair in the
+before anything is built, and its message says to call `Union`, then `Refine`. A bad bound (`ErrUnitKind`,
+`ErrNotFinite`, `ErrNegativeMagnitude`, or zero `ErrDegenerate`) is refused by `Do` before anything is built and
+names `RefineTo` as its subject. Every error carries `OperationUnion`. It differs from that pair in the
 face and producer identities of the result, which stay `Union`'s, in its history, which holds one `Union` entry and
 no `Refine` entry so later producer identities are one lower, in the way `LocatePoint`, a two-body `Section` and
 the regroup of a later `Cut` or `Union` read it, as a `Union` of its operands where the pair's refined body is a

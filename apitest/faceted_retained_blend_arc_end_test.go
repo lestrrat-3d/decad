@@ -28,7 +28,7 @@ func arcEndBody(t *testing.T) (*decad.Body, decad.EdgeSelector) {
 	sc := newRetentionScene()
 	corner := roundedCornerBox(t, sc)
 	block := placed(t, rectBox(t, sc.w, sc.doc, -5, -5, arcEndGx, 25, 30), -5)
-	trimmed, err := decad.Cut(t.Context(), corner, block)
+	trimmed, err := decad.Cut(corner, block).Do(t.Context())
 	require.NoError(t, err)
 	return trimmed, arcSeedAt(t, trimmed, 20)
 }

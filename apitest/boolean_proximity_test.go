@@ -186,7 +186,7 @@ func TestUnionOfTiltedPrismsCrossingMidWall(t *testing.T) {
 	pa := newPlacedPrism(axisFrame(t, r3.Vec{}, r3.Vec{Z: 1}), 11, 1.5, 8, 0)
 	pb := newPlacedPrism(axisFrame(t, joint.Sub(lean.Scale(1.5)), lean), 11.5, 1.2, 8, 0.2)
 
-	u, err := decad.Union(t.Context(), pa.body(t, doc), pb.body(t, doc))
+	u, err := decad.Union(pa.body(t, doc), pb.body(t, doc)).Do(t.Context())
 	require.NoError(t, err)
 	require.True(t, u.IsSolid())
 	require.Len(t, u.Lumps(), 1)
@@ -255,7 +255,7 @@ func TestUnionRefusesPlacedPrismGrazingAlongAnEdge(t *testing.T) {
 			require.Equal(t, tc.EdgeZ, pb.bottom[6].Z, `B's lowest long edge sits where the case says`)
 			require.Equal(t, tc.EdgeZ, pb.top[6].Z)
 
-			_, err := decad.Union(t.Context(), a, pb.body(t, doc))
+			_, err := decad.Union(a, pb.body(t, doc)).Do(t.Context())
 			require.ErrorIs(t, err, decad.ErrUnsupported)
 			require.ErrorContains(t, err, `without provably interpenetrating`)
 		})

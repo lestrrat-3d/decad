@@ -149,7 +149,7 @@ func TestVerifyMitredBranchUnionUnderPrismArmIsDisjoint(t *testing.T) {
 		r3.NewVec(46-12*lean, 10, 26.5), r3.NewVec(46-12*lean, 10, 27.5),
 		r3.NewVec(46-12*lean-4, 14, 33), r3.NewVec(46-12*lean-4, 14, 37.8), r3.NewVec(46-12*lean-4, 14, 39.8),
 	}, []float64{1.2, 1.2, 1.0, 0.9, 0.5})
-	tree, err := decad.Union(t.Context(), trunk, twig)
+	tree, err := decad.Union(trunk, twig).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, doc.Bodies(), 2)
 

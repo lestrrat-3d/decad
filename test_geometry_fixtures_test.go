@@ -164,7 +164,7 @@ func internalRoundBoss(t *testing.T) *Body {
 	require.NoError(t, err)
 	boss, err := Extrude(t.Context(), doc, s, s.Profiles()[0], Distance{D: units.Millimeters(15), Dir: Along})
 	require.NoError(t, err)
-	body, err := Union(t.Context(), plate, boss)
+	body, err := Union(plate, boss).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }

@@ -158,7 +158,7 @@ func TestFilletLoopNearTangentCut(t *testing.T) {
 	tool := roundedHexPrism(t, doc, r3.Vec{Z: 1}, 5)
 	tool, err = decad.Fillet(ctx, tool, decad.Edges(decad.OuterLoopOf(decad.CapStart(tool))), units.Millimeters(r))
 	require.NoError(t, err)
-	got, err := decad.Cut(ctx, arm, tool)
+	got, err := decad.Cut(arm, tool).Do(ctx)
 	require.NoError(t, err)
 
 	vol, err := got.Volume()
@@ -240,7 +240,7 @@ func TestFilletLoopNearTangentBossRoot(t *testing.T) {
 	doc := decad.New()
 	plate := boxBodyAtZ(t, doc, -6, -5, 6, 5, 0, 3)
 	boss := roundedHexPrism(t, doc, r3.Vec{Z: 3}, 3)
-	joined, err := decad.Union(ctx, plate, boss)
+	joined, err := decad.Union(plate, boss).Do(ctx)
 	require.NoError(t, err)
 	before, err := joined.Volume()
 	require.NoError(t, err)

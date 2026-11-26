@@ -59,7 +59,7 @@ func patchesOf(b *Body, parent *Face) []*Face {
 
 func TestSplitPlaneSharesOneSourceRecord(t *testing.T) {
 	sc := newSourceScene(t)
-	bored, err := Cut(t.Context(), sc.plate, sc.tool(t, 20))
+	bored, err := Cut(sc.plate, sc.tool(t, 20)).Do(t.Context())
 	require.NoError(t, err)
 	boredTop := planeFaceAt(t, bored, 20)
 	boredBottom := planeFaceAt(t, bored, 0)
@@ -67,7 +67,7 @@ func TestSplitPlaneSharesOneSourceRecord(t *testing.T) {
 
 	// A slot across the full width splits the top into two patches.
 	slot := boxAt(t, sc.w, sc.doc, 28, -5, 10, 4, 30, 15)
-	split, err := Cut(t.Context(), bored, slot)
+	split, err := Cut(bored, slot).Do(t.Context())
 	require.NoError(t, err)
 	patches := patchesOf(split, boredTop)
 	require.Len(t, patches, 2)
@@ -86,7 +86,7 @@ func TestSplitPlaneSharesOneSourceRecord(t *testing.T) {
 
 	// Cutting again turns the two patches into separate operand faces with
 	// equal Origins, which get distinct records with one shared Parent.
-	again, err := Cut(t.Context(), split, sc.tool(t, 8))
+	again, err := Cut(split, sc.tool(t, 8)).Do(t.Context())
 	require.NoError(t, err)
 	faces := topobuild.Faces(&split.n)
 	var records []*facetedrecord.SourcePatch
@@ -142,7 +142,7 @@ func TestShiftedRetryGroupsKeepSource(t *testing.T) {
 	a := boxAt(t, w, doc, 0, 0, 0, 10, 10, 10)
 	b := roundedBoxAt(t, w, doc, 0.5, 0, 10, 10, 10, 10)
 	requireRoundedContactFace(t, b, 10)
-	joined, err := Union(t.Context(), a, b)
+	joined, err := Union(a, b).Do(t.Context())
 	require.NoError(t, err)
 	shifted := false
 	for _, d := range joined.OperationDiagnostics() {

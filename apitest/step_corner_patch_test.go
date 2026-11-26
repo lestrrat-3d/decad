@@ -68,7 +68,7 @@ func TestSTEPWritesCornerPatches(t *testing.T) {
 	t.Run("reflex cone patches", func(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
-		pocket, err := decad.Cut(t.Context(), boxBody(t, doc, 0, 0, 40, 40, 10), boxBodyAtZ(t, doc, 10, 15, 30, 25, 5, 5))
+		pocket, err := decad.Cut(boxBody(t, doc, 0, 0, 40, 40, 10), boxBodyAtZ(t, doc, 10, 15, 30, 25, 5, 5)).Do(t.Context())
 		require.NoError(t, err)
 		mouth := planeFacing(t, pocket, up, r3.NewVec(0, 0, 10))
 		body, err := decad.Chamfer(t.Context(), pocket, loopEdgeQuery(mouth.Loops()[1]), units.Millimeters(1))

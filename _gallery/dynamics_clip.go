@@ -629,7 +629,7 @@ func tumbleTray(ctx context.Context, doc *decad.Document) (*decad.Body, error) {
 	if err != nil {
 		return nil, err
 	}
-	return decad.Cut(ctx, outer, inner)
+	return decad.Cut(outer, inner).Do(ctx)
 }
 
 // translatedBox is the source box [x0, x1]×[y0, y1]×[z0, z0+height],

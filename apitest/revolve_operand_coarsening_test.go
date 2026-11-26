@@ -53,7 +53,7 @@ func TestUnionTorusArcWithStemShortSweep(t *testing.T) {
 	doc := decad.New()
 	arc := torusArcBody(t, doc, math.Pi/9)
 	stem := radialStemBody(t, doc)
-	out, err := decad.Union(t.Context(), arc, stem)
+	out, err := decad.Union(arc, stem).Do(t.Context())
 	require.NoError(t, err)
 	vol, err := out.Volume()
 	require.NoError(t, err)
@@ -162,7 +162,7 @@ func TestUnionTorusArcWithStemCoarsensItsOperandPastTheCeilings(t *testing.T) {
 	for i, deg := range []float64{60, 180, 300} {
 		sweep := deg * math.Pi / 180
 		doc := decad.New()
-		out, err := decad.Union(t.Context(), torusArcBody(t, doc, sweep), radialStemBody(t, doc))
+		out, err := decad.Union(torusArcBody(t, doc, sweep), radialStemBody(t, doc)).Do(t.Context())
 		require.NoError(t, err, "%v degrees", deg)
 		vol, err := out.Volume()
 		require.NoError(t, err)

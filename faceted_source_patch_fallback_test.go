@@ -66,14 +66,14 @@ func requireSameRefusal(t *testing.T, realErr, ctrlErr error) {
 func fallbackP3(t *testing.T, ctx context.Context, opt CopyOption) (*Body, *Body, error) {
 	t.Helper()
 	sc := &slabScene{w: sketch.NewWorld(), doc: New()}
-	target, err := Cut(ctx, sc.roundedBox(ctx, t), sc.yTool(ctx, t, 20, 4))
+	target, err := Cut(sc.roundedBox(ctx, t), sc.yTool(ctx, t, 20, 4)).Do(ctx)
 	require.NoError(t, err)
 	tool := sc.yTool(ctx, t, 30, 4)
 	target, err = Copy(ctx, target, opt)
 	require.NoError(t, err)
 	tool, err = Copy(ctx, tool, opt)
 	require.NoError(t, err)
-	got, err := Cut(ctx, target, tool)
+	got, err := Cut(target, tool).Do(ctx)
 	return target, got, err
 }
 
@@ -177,7 +177,7 @@ func TestFacetedSourcePatchFallback(t *testing.T) {
 		run := func(ctx context.Context) (*Body, error) {
 			sc := &slabScene{w: sketch.NewWorld(), doc: New()}
 			part := sc.revolvedShaft(ctx, t)
-			built, err := Cut(ctx, part, sc.zPin(ctx, t, 4, 6))
+			built, err := Cut(part, sc.zPin(ctx, t, 4, 6)).Do(ctx)
 			require.NoError(t, err)
 			// A Copy ends the operation history's Boolean chain, so the later cut meets the
 			// sequential gate and not a chain the regroup rebuilds.
@@ -187,7 +187,7 @@ func TestFacetedSourcePatchFallback(t *testing.T) {
 			require.Len(t, caps, 1, "the pin pierces one cap")
 			require.True(t, caps[0].RetainedTag)
 			require.NotNil(t, caps[0].Denoted, "the cap carries a denoted patch")
-			return Cut(ctx, first, sc.zPin(ctx, t, 8, 6))
+			return Cut(first, sc.zPin(ctx, t, 8, 6)).Do(ctx)
 		}
 		_, realErr := run(t.Context())
 		_, ctrlErr := run(booleaneval.WithoutRetainedPlaneSlab(t.Context()))
@@ -202,13 +202,13 @@ func TestFacetedSourcePatchFallback(t *testing.T) {
 			// lies within its chord's sagitta of each facet's plane, so the new
 			// rim reads that slab (faceted-source-retention §11, Claim C).
 			sc := &slabScene{w: sketch.NewWorld(), doc: New()}
-			built, err := Cut(ctx, sc.roundedBox(ctx, t), sc.yTool(ctx, t, 20, 4))
+			built, err := Cut(sc.roundedBox(ctx, t), sc.yTool(ctx, t, 20, 4)).Do(ctx)
 			require.NoError(t, err)
 			// A Copy ends the operation history's Boolean chain, so the cut under test
 			// is the sequential gate and not a chain the regroup rebuilds.
 			first, err := Copy(ctx, built)
 			require.NoError(t, err)
-			return Cut(ctx, first, sc.yTool(ctx, t, 22, 3))
+			return Cut(first, sc.yTool(ctx, t, 22, 3)).Do(ctx)
 		}
 		got, err := run(t.Context())
 		require.NoError(t, err)

@@ -19,7 +19,7 @@ func requireBoredLoft(t *testing.T, body *decad.Body, height, r float64, msg str
 	before, err := body.Volume()
 	require.NoError(t, err, msg)
 	tool := circleBodyAtZ(t, body.Document(), 0, r, -1, height+2)
-	bored, err := decad.Cut(t.Context(), body, tool)
+	bored, err := decad.Cut(body, tool).Do(t.Context())
 	require.NoError(t, err, msg)
 	after, err := bored.Volume()
 	require.NoError(t, err, msg)

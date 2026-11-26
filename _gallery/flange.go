@@ -72,7 +72,7 @@ func flangeBody(ctx context.Context, shape flangeShape) (*decad.Body, error) {
 		if err != nil {
 			return nil, fmt.Errorf("hole %s: %w", d.name, err)
 		}
-		plate, err = decad.Cut(ctx, plate, tool)
+		plate, err = decad.Cut(plate, tool).Do(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("drill hole %s: %w", d.name, err)
 		}

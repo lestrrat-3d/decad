@@ -35,10 +35,10 @@ func opposedArcPockets(t *testing.T, doc *decad.Document, plate, top, bottom opp
 	if !topFirst {
 		first, second = bottom, top
 	}
-	part, err := decad.Cut(t.Context(), plate(t, doc), first(t, doc))
+	part, err := decad.Cut(plate(t, doc), first(t, doc)).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, "decad.stackedPrismPayload", decadtest.PayloadClass(part))
-	return decad.Cut(t.Context(), part, second(t, doc))
+	return decad.Cut(part, second(t, doc)).Do(t.Context())
 }
 
 // TestStackedOpposedArcLoops cuts pockets from opposite faces of a

@@ -22,7 +22,7 @@ func touchHoledPlate(t *testing.T, doc *decad.Document) *decad.Body {
 	t.Helper()
 	plate := boxBody(t, doc, -10, -10, 10, 10, 10)
 	hole := boxBody(t, doc, -4, -2, 0, 2, 10)
-	holed, err := decad.Cut(t.Context(), plate, hole)
+	holed, err := decad.Cut(plate, hole).Do(t.Context())
 	require.NoError(t, err)
 	return holed
 }
@@ -32,7 +32,7 @@ func touchHoledPlate(t *testing.T, doc *decad.Document) *decad.Body {
 func touchStackedPlate(t *testing.T, doc *decad.Document) *decad.Body {
 	t.Helper()
 	pocket := boxBodyAtZ(t, doc, 4, 4, 8, 8, 6, 4)
-	stacked, err := decad.Cut(t.Context(), touchHoledPlate(t, doc), pocket)
+	stacked, err := decad.Cut(touchHoledPlate(t, doc), pocket).Do(t.Context())
 	require.NoError(t, err)
 	require.False(t, tookMeshPath(stacked))
 	return stacked
@@ -85,7 +85,7 @@ func TestCutTangentPocketTakesMeshPath(t *testing.T) {
 			name: "enclosed round hole",
 			target: func(t *testing.T, doc *decad.Document) *decad.Body {
 				plate := boxBody(t, doc, -10, -10, 10, 10, 10)
-				holed, err := decad.Cut(t.Context(), plate, circleBodyAtZ(t, doc, -2, 2, 0, 10))
+				holed, err := decad.Cut(plate, circleBodyAtZ(t, doc, -2, 2, 0, 10)).Do(t.Context())
 				require.NoError(t, err)
 				return holed
 			},
@@ -136,7 +136,7 @@ func TestCutTangentPocketTakesMeshPath(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			doc := decad.New()
-			got, err := decad.Cut(t.Context(), tc.target(t, doc), tc.tool(t, doc))
+			got, err := decad.Cut(tc.target(t, doc), tc.tool(t, doc)).Do(t.Context())
 			require.NoError(t, err)
 			require.True(t, tookMeshPath(got))
 			volume, err := got.Volume()
@@ -189,8 +189,7 @@ func TestCutTangentThroughToolRefuses(t *testing.T) {
 			name:   "prism group tool",
 			target: touchHoledPlate,
 			tool: func(t *testing.T, doc *decad.Document) *decad.Body {
-				group, err := decad.Union(t.Context(), circleBodyAtZ(t, doc, 2, 2, 0, 10),
-					circleBodyAtZ(t, doc, 7, 1, 0, 10))
+				group, err := decad.Union(circleBodyAtZ(t, doc, 2, 2, 0, 10), circleBodyAtZ(t, doc, 7, 1, 0, 10)).Do(t.Context())
 				require.NoError(t, err)
 				require.False(t, tookMeshPath(group))
 				return group
@@ -201,7 +200,7 @@ func TestCutTangentThroughToolRefuses(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			doc := decad.New()
-			_, err := decad.Cut(t.Context(), tc.target(t, doc), tc.tool(t, doc))
+			_, err := decad.Cut(tc.target(t, doc), tc.tool(t, doc)).Do(t.Context())
 			require.ErrorIs(t, err, decad.ErrUnsupported)
 			var be *decad.BooleanError
 			require.ErrorAs(t, err, &be)
@@ -233,7 +232,7 @@ func TestCutLineTouchPocket(t *testing.T) {
 			t.Parallel()
 			doc := decad.New()
 			tool := boxBodyAtZ(t, doc, tc.x0, tc.y0, tc.x1, tc.y1, 6, 4)
-			got, err := decad.Cut(t.Context(), touchHoledPlate(t, doc), tool)
+			got, err := decad.Cut(touchHoledPlate(t, doc), tool).Do(t.Context())
 			require.NoError(t, err)
 			volume, err := got.Volume()
 			require.NoError(t, err)
@@ -319,7 +318,7 @@ func TestCutLineEndTouch(t *testing.T) {
 			if tc.stacked {
 				target = touchStackedPlate(t, doc)
 			}
-			got, err := decad.Cut(t.Context(), target, polygonPrismAtZ(t, doc, tc.z0, tc.h, tc.pts...))
+			got, err := decad.Cut(target, polygonPrismAtZ(t, doc, tc.z0, tc.h, tc.pts...)).Do(t.Context())
 			require.NoError(t, err)
 			require.True(t, tookMeshPath(got))
 			volume, err := got.Volume()

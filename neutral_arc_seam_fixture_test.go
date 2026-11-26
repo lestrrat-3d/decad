@@ -104,9 +104,9 @@ func neutralArcSeamSource(t *testing.T) (*Body, *Body) {
 	}
 	loft, err := LoftFaces(t.Context(), sections)
 	require.NoError(t, err)
-	toe, err := Cut(t.Context(), loft, neutralArcSeamCone(t, doc, 6.5))
+	toe, err := Cut(loft, neutralArcSeamCone(t, doc, 6.5)).Do(t.Context())
 	require.NoError(t, err)
-	trimmed, err := Intersect(t.Context(), toe, neutralArcSeamCone(t, doc, 8))
+	trimmed, err := Intersect(toe, neutralArcSeamCone(t, doc, 8)).Do(t.Context())
 	require.NoError(t, err)
 	trimmedPayload, ok := trimmed.n.Payload.(facetedPayload)
 	require.True(t, ok)

@@ -91,7 +91,7 @@ func TestLoftFacesEightSourceSlabsKeepVolumeAndRejectBadCapOrder(t *testing.T) {
 	}
 	require.InDelta(t, sum, volume.Value.Base(), allowance)
 	const toeApex = 5.3
-	cut, err := decad.Cut(t.Context(), loft, pointConeTool(t, doc, toeApex))
+	cut, err := decad.Cut(loft, pointConeTool(t, doc, toeApex)).Do(t.Context())
 	require.NoError(t, err)
 	cutVolume, err := cut.Volume()
 	require.NoError(t, err)
@@ -103,10 +103,10 @@ func TestLoftFacesEightSourceSlabsKeepVolumeAndRejectBadCapOrder(t *testing.T) {
 	require.True(t, cutMesh.VolumeVerified())
 	wrongHeel := pointConeTool(t, doc, math.Nextafter(8, math.Inf(1)))
 	beforeWrong := doc.Bodies()
-	_, err = decad.Intersect(t.Context(), cut, wrongHeel)
+	_, err = decad.Intersect(cut, wrongHeel).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Equal(t, beforeWrong, doc.Bodies())
-	heel, err := decad.Intersect(t.Context(), cut, pointConeTool(t, doc, 8))
+	heel, err := decad.Intersect(cut, pointConeTool(t, doc, 8)).Do(t.Context())
 	require.NoError(t, err)
 	heelVolume, err := heel.Volume()
 	require.NoError(t, err)

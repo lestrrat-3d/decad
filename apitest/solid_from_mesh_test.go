@@ -70,7 +70,7 @@ func TestSolidFromMeshTakesPartInBooleans(t *testing.T) {
 	doc, body := solidFromBlock(t)
 	// A tool box overlapping the block's x 2..4, y 1..2, z 0..2 corner region removes 2 x 1 x 2 = 4.
 	tool := boxBody(t, doc, 2, 1, 6, 2, 3)
-	out, err := decad.Cut(t.Context(), body, tool)
+	out, err := decad.Cut(body, tool).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := out.Volume()
 	require.NoError(t, err)
@@ -79,7 +79,7 @@ func TestSolidFromMeshTakesPartInBooleans(t *testing.T) {
 	// the overlap: the bar is x 3..8, y -1..4, z 0.5..1.5 for 25, and inside the block's x 3..4 it
 	// meets the cut result over the 2 mm of y the notch leaves, 1 x 2 x 1 = 2, so the union holds 20 + 25 - 2 = 43.
 	bar := boxBodyAtZ(t, doc, 3, -1, 8, 4, 0.5, 1)
-	joined, err := decad.Union(t.Context(), out, bar)
+	joined, err := decad.Union(out, bar).Do(t.Context())
 	require.NoError(t, err)
 	jv, err := joined.Volume()
 	require.NoError(t, err)

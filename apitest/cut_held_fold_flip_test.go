@@ -82,7 +82,7 @@ func toothedToolBody(t *testing.T, doc *decad.Document, teeth int, root, tip, le
 	disc := circleBodyAtZ(t, doc, 0, root, 0, length)
 	copies, err := decad.PatternCopies(t.Context(), tooth, decad.CircularPattern{Axis: r3.Vec{Z: 1}, Count: teeth})
 	require.NoError(t, err)
-	tool, err := decad.Union(t.Context(), disc, append([]*decad.Body{tooth}, copies...)...)
+	tool, err := decad.Union(append([]*decad.Body{disc}, append([]*decad.Body{tooth}, copies...)...)...).Do(t.Context())
 	require.NoError(t, err)
 	return tool
 }
@@ -119,7 +119,7 @@ func TestCutHoledDiscByToothedToolKeepsEmbeddedMesh(t *testing.T) {
 			blank := boltHoleDiscBody(t, doc, outer, bolt, tc.holeD/2, z0, length)
 			tool := toothedToolBody(t, doc, tc.teeth, root, tip, length+2*z0)
 
-			ring, err := decad.Cut(t.Context(), blank, tool)
+			ring, err := decad.Cut(blank, tool).Do(t.Context())
 			require.NoError(t, err)
 			require.True(t, ring.IsSolid())
 			require.Len(t, ring.Lumps(), 1)

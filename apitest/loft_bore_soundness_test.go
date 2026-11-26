@@ -156,7 +156,7 @@ func TestLoftCutExactToolCenterRefusesRewrite(t *testing.T) {
 	toolFrame, err := r3.NewFrame(r3.NewVec(1e9, 0, -1), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	require.NoError(t, err)
 	tool := loftBoreSoundnessTool(t, doc, toolFrame, .427, 0, 4, decad.Along)
-	cut, err := decad.Cut(t.Context(), blank, tool)
+	cut, err := decad.Cut(blank, tool).Do(t.Context())
 	require.NoError(t, err)
 	requireRetainedBoreWall(t, cut)
 }
@@ -168,7 +168,7 @@ func TestLoftCutRoundedYToolCenterKeepsFacetedTopology(t *testing.T) {
 	toolFrame, err := r3.NewFrame(r3.NewVec(0, 1e9, -1), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	require.NoError(t, err)
 	tool := loftBoreSoundnessTool(t, doc, toolFrame, 0, .427, 4, decad.Along)
-	cut, err := decad.Cut(t.Context(), blank, tool)
+	cut, err := decad.Cut(blank, tool).Do(t.Context())
 	require.NoError(t, err)
 	requireLoftCutFacetedVolume(t, cut)
 }
@@ -180,7 +180,7 @@ func TestLoftCutRoundedZToolCenterKeepsFacetedTopology(t *testing.T) {
 	toolFrame, err := r3.NewFrame(r3.NewVec(0, 0, .427), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	require.NoError(t, err)
 	tool := loftBoreSoundnessTool(t, doc, toolFrame, 0, 0, 14, decad.Along)
-	cut, err := decad.Cut(t.Context(), blank, tool)
+	cut, err := decad.Cut(blank, tool).Do(t.Context())
 	require.NoError(t, err)
 	requireLoftCutFacetedVolume(t, cut)
 }
@@ -190,7 +190,7 @@ func TestLoftCutTiltedFrameMapBoundsCylinder(t *testing.T) {
 	require.NoError(t, err)
 	blank, doc := loftBoreSoundnessBlank(t, frame)
 	tool := loftBoreSoundnessTool(t, doc, frame, 0, 0, 4, decad.Along)
-	cut, err := decad.Cut(t.Context(), blank, tool)
+	cut, err := decad.Cut(blank, tool).Do(t.Context())
 	require.NoError(t, err)
 	// The certified Cut keeps the Loft, and its bore cylinder charges the
 	// tilted frame map's departure to every normal reading.
@@ -242,7 +242,7 @@ func TestLoftCutExactToolSpanKeepsUncutCap(t *testing.T) {
 			require.NoError(t, err)
 			tool := loftBoreSoundnessTool(t, doc, toolFrame, 0, 0, tc.height, tc.dir)
 			uncut := tc.cap(blank)
-			cut, err := decad.Cut(t.Context(), blank, tool)
+			cut, err := decad.Cut(blank, tool).Do(t.Context())
 			if err != nil {
 				// The general mesh boolean may refuse a rounded cap contact.
 				require.ErrorIs(t, err, decad.ErrUnsupported)

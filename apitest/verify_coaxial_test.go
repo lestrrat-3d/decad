@@ -65,7 +65,7 @@ func keyedShaft(t *testing.T, doc *decad.Document) *decad.Body {
 	key, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0],
 		decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
 	require.NoError(t, err)
-	keyed, err := decad.Cut(t.Context(), shaft, placedAlongZ(t, key, 10.001))
+	keyed, err := decad.Cut(shaft, placedAlongZ(t, key, 10.001)).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, "decad.facetedPayload", decadtest.PayloadClass(keyed))
 	return keyed
@@ -175,7 +175,7 @@ func TestVerifyCoaxialNaryUnion(t *testing.T) {
 				placedAlongZ(t, coaxialSection(t, doc, 0, 0, 10, 4), 10),
 				placedAlongZ(t, coaxialSection(t, doc, 0, 0, 10, 4), 20),
 			}
-			shaft, err := decad.Union(t.Context(), segments[0], segments[1:]...)
+			shaft, err := decad.Union(append([]*decad.Body{segments[0]}, segments[1:]...)...).Do(t.Context())
 			require.NoError(t, err)
 			bearing := placedAlongZ(t, coaxialSection(t, doc, 0, 0, 8, 11, tc.bore), 6)
 			report, err := doc.Verify(t.Context())
@@ -216,7 +216,7 @@ func TestVerifyCoaxialCutTool(t *testing.T) {
 			doc := decad.New()
 			plate := slab(t, doc, -15, -15, 15, 15, 0, 8, r3.Identity())
 			tool := placedAlongZ(t, coaxialSection(t, doc, 0, 0, tc.toolH, tc.radius), tc.toolZ)
-			bored, err := decad.Cut(t.Context(), plate, tool)
+			bored, err := decad.Cut(plate, tool).Do(t.Context())
 			require.NoError(t, err)
 			shaft := placedAlongZ(t, coaxialSection(t, doc, 0, 0, 40, 4), -10)
 			report, err := doc.Verify(t.Context())

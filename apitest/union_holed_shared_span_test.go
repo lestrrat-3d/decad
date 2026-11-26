@@ -343,7 +343,7 @@ func TestUnionHoledSharedSpanExactLines(t *testing.T) {
 		doc := decad.New()
 		plate := holedSquarePlate(t, doc)
 		block := boxBodyAtZ(t, doc, -8, 5, 8, 15, 4, 2)
-		out, err := decad.Union(t.Context(), plate, block)
+		out, err := decad.Union(plate, block).Do(t.Context())
 		require.NoError(t, err)
 		return out
 	}
@@ -405,7 +405,7 @@ func TestUnionHoledSharedSpanExactLines(t *testing.T) {
 	// the hole's top wall, which the build does not cover, so it takes the mesh
 	// path with no error and a volume within its bound.
 	second := boxBodyAtZ(t, out.Document(), -8, -15, 8, -5, 4, 2)
-	joined, err := decad.Union(t.Context(), out, second)
+	joined, err := decad.Union(out, second).Do(t.Context())
 	require.NoError(t, err)
 	jv, jb := volumeAndBound(t, joined)
 	require.LessOrEqual(t, math.Abs(jv-(want+16*10*1)), jb)

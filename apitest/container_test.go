@@ -130,7 +130,7 @@ func TestContainerPlacement(t *testing.T) {
 	tool := containerBox(t, doc, a, 1, 1, 2, 2, 2)
 	require.Same(t, a, containerOf(t, doc, base), "an extrude lands in its sketch's container")
 
-	cut, err := decad.Cut(t.Context(), base, tool)
+	cut, err := decad.Cut(base, tool).Do(t.Context())
 	require.NoError(t, err)
 	require.Same(t, a, containerOf(t, doc, cut), "a boolean lands in its target's container")
 
@@ -186,7 +186,7 @@ func TestContainerResultFollowsSketchNotAmbientState(t *testing.T) {
 
 	rootA := containerBox(t, doc, nil, 20, 0, 24, 4, 4)
 	rootB := containerBox(t, doc, nil, 22, 0, 26, 4, 4)
-	cut, err := decad.Cut(t.Context(), rootA, rootB)
+	cut, err := decad.Cut(rootA, rootB).Do(t.Context())
 	require.NoError(t, err)
 	require.Same(t, doc.Root(), containerOf(t, doc, cut), "a cut of two root bodies lands in the root")
 }
@@ -204,13 +204,13 @@ func TestContainerCrossRefusal(t *testing.T) {
 	live := len(doc.Bodies())
 
 	for name, run := range map[string]func() error{
-		"Union of two": func() error { _, err := decad.Union(t.Context(), inA, inB); return err },
+		"Union of two": func() error { _, err := decad.Union(inA, inB).Do(t.Context()); return err },
 		"Union of three": func() error {
-			_, err := decad.Union(t.Context(), inA, inB, containerBox(t, doc, a, 9, 9, 10, 10, 1))
+			_, err := decad.Union(inA, inB, containerBox(t, doc, a, 9, 9, 10, 10, 1)).Do(t.Context())
 			return err
 		},
-		"Cut by a tool":    func() error { _, err := decad.Cut(t.Context(), inA, inB); return err },
-		"Intersect of two": func() error { _, err := decad.Intersect(t.Context(), inA, inB); return err },
+		"Cut by a tool":    func() error { _, err := decad.Cut(inA, inB).Do(t.Context()); return err },
+		"Intersect of two": func() error { _, err := decad.Intersect(inA, inB).Do(t.Context()); return err },
 		"Extrude to a face": func() error {
 			s, p := containerRect(t, a, 5, 5, 6, 6)
 			_, err := decad.Extrude(t.Context(), doc, s, p, decad.ToFace{Body: inB, Face: capEndFace(inB)})
@@ -251,7 +251,7 @@ func TestContainerAddBody(t *testing.T) {
 	box, err := inB.Bounds()
 	require.NoError(t, err)
 
-	_, err = decad.Cut(t.Context(), inA, inB)
+	_, err = decad.Cut(inA, inB).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrCrossContainer)
 
 	require.NoError(t, a.AddBody(inB))
@@ -268,7 +268,7 @@ func TestContainerAddBody(t *testing.T) {
 	require.Same(t, a, containerOf(t, doc, inB))
 	require.ElementsMatch(t, []*decad.Body{inA, inB}, a.Bodies())
 
-	cut, err := decad.Cut(t.Context(), inA, inB)
+	cut, err := decad.Cut(inA, inB).Do(t.Context())
 	require.NoError(t, err)
 	require.Same(t, a, containerOf(t, doc, cut), "after AddBody the operands share a container")
 	require.NoError(t, doc.Root().AddBody(cut))

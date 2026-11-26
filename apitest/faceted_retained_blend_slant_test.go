@@ -63,7 +63,7 @@ func TestFacetedRetainedBlendArcSlantedEndBound(t *testing.T) {
 				sc := newRetentionScene()
 				bar := xCylinderAt(t, sc.doc, 0, 0, 3, -15, 15)
 				box := placed(t, rectBox(t, sc.w, sc.doc, 0, -half, earLen, half, 4), -5)
-				body, err := decad.Union(t.Context(), bar, box)
+				body, err := decad.Union(bar, box).Do(t.Context())
 				require.NoError(t, err)
 				held, err := body.Tessellate(t.Context(), units.Millimeters(0.1))
 				require.NoError(t, err)

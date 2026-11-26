@@ -164,7 +164,7 @@ func tcBar(t *testing.T, sc *tcScene, r, l float64) *decad.Body {
 	elev := sc.prism(t, r3.NewVec(0, r+1, 0), tcX, tcZ, []tcSeg{
 		tcLine(-r-1, 0, l, 0), tcArc(l, r, l, 0, l, 2*r), tcLine(l, 2*r, -r-1, 2*r), tcLine(-r-1, 2*r, -r-1, 0),
 	}, tcAlong(2*r+2))
-	b, err := decad.Intersect(t.Context(), plan, elev)
+	b, err := decad.Intersect(plan, elev).Do(t.Context())
 	require.NoError(t, err)
 	return b
 }
@@ -206,7 +206,7 @@ func tcCut(t *testing.T, b *decad.Body, tools ...*decad.Body) *decad.Body {
 	t.Helper()
 	for _, tool := range tools {
 		var err error
-		b, err = decad.Cut(t.Context(), b, tool)
+		b, err = decad.Cut(b, tool).Do(t.Context())
 		require.NoError(t, err)
 	}
 	return b

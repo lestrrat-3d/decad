@@ -70,7 +70,7 @@ func Example_cut() {
 		return
 	}
 
-	drilled, err := decad.Cut(context.Background(), plate, tool)
+	drilled, err := decad.Cut(plate, tool).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to cut: %s\n", err)
 		return

@@ -53,7 +53,7 @@ func TestBrepAdjacentUnderBossRootChamferAddsCornerMaterial(t *testing.T) {
 	doc := decad.New()
 	plate := boxBody(t, doc, -10, -10, 10, 10, 5)
 	boss := boxBodyAtZ(t, doc, -5, -5, 5, 5, -5, 5)
-	joined, err := decad.Union(t.Context(), plate, boss)
+	joined, err := decad.Union(plate, boss).Do(t.Context())
 	require.NoError(t, err)
 	corner := r3.NewVec(5, -5, 0)
 	roots := decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0)), decad.EndpointAt(corner)).
@@ -134,7 +134,7 @@ func TestBrepSingleUnderBossRootChamferAddsMaterial(t *testing.T) {
 	doc := decad.New()
 	plate := boxBody(t, doc, -10, -10, 10, 10, 5)
 	boss := boxBodyAtZ(t, doc, -5, -5, 5, 5, -5, 5)
-	joined, err := decad.Union(t.Context(), plate, boss)
+	joined, err := decad.Union(plate, boss).Do(t.Context())
 	require.NoError(t, err)
 	root := decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0)),
 		decad.EndpointAt(r3.NewVec(-5, -5, 0))).Exactly(1)

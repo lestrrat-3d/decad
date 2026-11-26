@@ -88,7 +88,7 @@ func TestBrepLoopChamferPublicPlateTopLoop(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	plate := boxBody(t, doc, 0, 0, 40, 40, 10)
-	pocket, err := decad.Cut(t.Context(), plate, boxBodyAtZ(t, doc, 10, 15, 30, 25, 5, 5))
+	pocket, err := decad.Cut(plate, boxBodyAtZ(t, doc, 10, 15, 30, 25, 5, 5)).Do(t.Context())
 	require.NoError(t, err)
 	top := planeFacing(t, pocket, r3.NewVec(0, 0, 1), r3.NewVec(0, 0, 10))
 	got, err := decad.Chamfer(t.Context(), pocket, loopEdgeQuery(top.Loops()[0]), units.Millimeters(1.5))
@@ -121,7 +121,7 @@ func TestBrepLoopChamferPublicPlateTopLoop(t *testing.T) {
 
 	// The corner box removes 250 − (25d − (5³ − (5 − d)³)/3) = 239.875 of the
 	// chamfered corner's volume.
-	cut, err := decad.Cut(t.Context(), got, boxBodyAtZ(t, doc, 35, 35, 45, 45, -5, 30))
+	cut, err := decad.Cut(got, boxBodyAtZ(t, doc, 35, 35, 45, 45, -5, 30)).Do(t.Context())
 	require.NoError(t, err)
 	remaining, err := cut.Volume()
 	require.NoError(t, err)
@@ -150,7 +150,7 @@ func TestBrepLoopChamferPublicBossRoot(t *testing.T) {
 	require.NoError(t, err)
 	boss, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(15), Dir: decad.Along})
 	require.NoError(t, err)
-	part, err := decad.Union(t.Context(), plate, boss)
+	part, err := decad.Union(plate, boss).Do(t.Context())
 	require.NoError(t, err)
 
 	top := planeFacing(t, part, r3.NewVec(0, 0, 1), r3.NewVec(0, 0, 10))
@@ -208,7 +208,7 @@ func roundedDrilledPlate(t *testing.T) *decad.Body {
 	require.NoError(t, err)
 	drill, err := decad.Extrude(t.Context(), doc, ds, ds.Profiles()[0], decad.Symmetric{D: units.Millimeters(11)})
 	require.NoError(t, err)
-	out, err := decad.Cut(t.Context(), rounded, drill)
+	out, err := decad.Cut(rounded, drill).Do(t.Context())
 	require.NoError(t, err)
 	return out
 }

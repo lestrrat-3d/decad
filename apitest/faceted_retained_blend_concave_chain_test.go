@@ -62,7 +62,7 @@ func roundedBoss(t *testing.T) *decad.Body {
 	boss, err := decad.Fillet(t.Context(), boss, decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1))).Exactly(4),
 		units.Millimeters(concaveR))
 	require.NoError(t, err)
-	out, err := decad.Union(t.Context(), plate, placed(t, boss, 8))
+	out, err := decad.Union(plate, placed(t, boss, 8)).Do(t.Context())
 	require.NoError(t, err)
 	return out
 }
@@ -76,10 +76,10 @@ func pocketWithCube(t *testing.T, y0, z0, side float64) *decad.Body {
 	tool, err := decad.Fillet(t.Context(), rectBox(t, w, doc, 10, 10, 30, 30, 20),
 		decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1))).Exactly(4), units.Millimeters(concaveR))
 	require.NoError(t, err)
-	pocket, err := decad.Cut(t.Context(), plate, placed(t, tool, 5))
+	pocket, err := decad.Cut(plate, placed(t, tool, 5)).Do(t.Context())
 	require.NoError(t, err)
 	cube := rectBox(t, w, doc, 15, y0, 17, y0+side, side)
-	joined, err := decad.Union(t.Context(), pocket, placed(t, cube, z0))
+	joined, err := decad.Union(pocket, placed(t, cube, z0)).Do(t.Context())
 	require.NoError(t, err)
 	return joined
 }
@@ -215,7 +215,7 @@ func TestFacetedRetainedBlendConcaveChain(t *testing.T) {
 			decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1))).Exactly(4), units.Millimeters(concaveR))
 		require.NoError(t, err)
 		tool = placed(t, tool, 5)
-		pocket, err := decad.Cut(t.Context(), plate, tool)
+		pocket, err := decad.Cut(plate, tool).Do(t.Context())
 		require.NoError(t, err)
 		before, err := pocket.Volume()
 		require.NoError(t, err)

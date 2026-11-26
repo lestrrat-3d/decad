@@ -83,7 +83,7 @@ func TestCutTwistedSweepThroughBothCaps(t *testing.T) {
 		plateVolume, err := plate.Volume()
 		require.NoError(t, err)
 
-		out, err := decad.Cut(t.Context(), plate, tool)
+		out, err := decad.Cut(plate, tool).Do(t.Context())
 		require.NoError(t, err, "%g degrees", deg)
 		require.True(t, out.IsSolid())
 		want := plateVolume.Value.Base() - twistBoreLength*twistBoreWidth*4
@@ -111,7 +111,7 @@ func TestCutTwistedSweepRefinementRimBound(t *testing.T) {
 		doc := decad.New()
 		tool := twistBoreTool(t, doc, deg)
 		plate := circleBodyAtZ(t, doc, 0, 18.5, 1, 4)
-		out, err := decad.Cut(t.Context(), plate, tool)
+		out, err := decad.Cut(plate, tool).Do(t.Context())
 		require.NoError(t, err, "%g degrees", deg)
 		mesh, err := out.Tessellate(t.Context(), units.Millimeters(3), decad.WithVerification(decad.VerifyAll))
 		require.NoError(t, err, "%g degrees", deg)
@@ -141,7 +141,7 @@ func TestCutTwistedSweepCrossesTubeWall(t *testing.T) {
 		// The piece the Cut removes is what the same tool leaves in the tube,
 		// so the Intersect volume must enclose the independent overlap.
 		tube, tool := setup(tc.deg, tc.offset)
-		kept, err := decad.Intersect(t.Context(), tube, tool)
+		kept, err := decad.Intersect(tube, tool).Do(t.Context())
 		require.NoError(t, err, "%+v", tc)
 		keptVolume, err := kept.Volume()
 		require.NoError(t, err)
@@ -151,7 +151,7 @@ func TestCutTwistedSweepCrossesTubeWall(t *testing.T) {
 		tube, tool = setup(tc.deg, tc.offset)
 		tubeVolume, err := tube.Volume()
 		require.NoError(t, err)
-		out, err := decad.Cut(t.Context(), tube, tool)
+		out, err := decad.Cut(tube, tool).Do(t.Context())
 		require.NoError(t, err, "%+v", tc)
 		require.True(t, out.IsSolid())
 		want := tubeVolume.Value.Base() - overlap
@@ -244,7 +244,7 @@ func TestCutTwistedSweepTiltedAcrossTubeWall(t *testing.T) {
 	require.Greater(t, overlap, 100.0)
 
 	tube, tool := setup()
-	kept, err := decad.Intersect(t.Context(), tube, tool)
+	kept, err := decad.Intersect(tube, tool).Do(t.Context())
 	require.NoError(t, err)
 	keptVolume, err := kept.Volume()
 	require.NoError(t, err)
@@ -254,7 +254,7 @@ func TestCutTwistedSweepTiltedAcrossTubeWall(t *testing.T) {
 	tube, tool = setup()
 	tubeVolume, err := tube.Volume()
 	require.NoError(t, err)
-	out, err := decad.Cut(t.Context(), tube, tool)
+	out, err := decad.Cut(tube, tool).Do(t.Context())
 	require.NoError(t, err)
 	require.True(t, out.IsSolid())
 	volume, err := out.Volume()

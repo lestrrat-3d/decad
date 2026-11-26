@@ -39,7 +39,7 @@ func placedBox(t *testing.T, doc *decad.Document, box [6]float64) *decad.Body {
 // cutOf is the Boolean target minus tool over two placed boxes.
 func cutOf(t *testing.T, doc *decad.Document, target, tool [6]float64) *decad.Body {
 	t.Helper()
-	body, err := decad.Cut(t.Context(), placedBox(t, doc, target), placedBox(t, doc, tool))
+	body, err := decad.Cut(placedBox(t, doc, target), placedBox(t, doc, tool)).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }

@@ -58,7 +58,7 @@ func Example_refine() {
 		fmt.Printf("failed to build the second span: %s\n", err)
 		return
 	}
-	wire, err := decad.Union(ctx, first, second)
+	wire, err := decad.Union(first, second).Do(ctx)
 	if err != nil {
 		fmt.Printf("failed to join the spans: %s\n", err)
 		return
@@ -66,7 +66,7 @@ func Example_refine() {
 	_, err = wire.Tessellate(ctx, units.Millimeters(0.02))
 	fmt.Println("0.02 mm before Refine is refused:", errors.Is(err, decad.ErrUnsupported))
 
-	refined, err := decad.Refine(ctx, wire, units.Millimeters(0.02))
+	refined, err := decad.Refine(wire, units.Millimeters(0.02)).Do(ctx)
 	if err != nil {
 		fmt.Printf("failed to refine: %s\n", err)
 		return

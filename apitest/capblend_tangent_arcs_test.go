@@ -63,7 +63,7 @@ func TestCapBlendCutAfterTangentArcChamfer(t *testing.T) {
 	require.NoError(t, err)
 
 	box := boxBodyAtZ(t, doc, -2, -2, 2, 2, -1, 4)
-	got, err := decad.Cut(ctx, chamfered, box)
+	got, err := decad.Cut(chamfered, box).Do(ctx)
 	require.NoError(t, err)
 	vol, err := got.Volume()
 	require.NoError(t, err)

@@ -138,7 +138,7 @@ func lineChordWedgeJoinsRing(t *testing.T, r0, r1, ringR0, ringR1, spanDeg float
 	s, p := lineChordSketch(t, frame, [][2]float64{{-30, -30}, {30, -30}, {30, 30}, {-30, 30}})
 	slab, err := decad.Extrude(ctx, d, s, p, decad.Distance{D: units.Millimeters(5.4), Dir: decad.Along})
 	require.NoError(t, err)
-	trimmed, err := decad.Intersect(ctx, wedge, slab)
+	trimmed, err := decad.Intersect(wedge, slab).Do(ctx)
 	require.NoError(t, err)
 	theta := spanDeg * math.Pi / 180
 	half := (r1*r1 - r0*r0) / 2
@@ -149,7 +149,7 @@ func lineChordWedgeJoinsRing(t *testing.T, r0, r1, ringR0, ringR1, spanDeg float
 	s, p = lineChordMeridian(t, lineChordRect(ringR0, ringR1, -2, 0))
 	ring, err := decad.Revolve(ctx, d, s, p, lineChordAxis, decad.FullRevolution{})
 	require.NoError(t, err)
-	joined, err := decad.Union(ctx, ring, trimmed)
+	joined, err := decad.Union(ring, trimmed).Do(ctx)
 	require.NoError(t, err)
 	vol, err = joined.Volume()
 	require.NoError(t, err)

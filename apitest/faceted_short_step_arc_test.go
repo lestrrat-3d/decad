@@ -50,7 +50,7 @@ func TestFacetedShortStepArc(t *testing.T) {
 	window, err := decad.Extrude(ctx, doc, ws, shortStepProfile(t, ws),
 		decad.Distance{D: units.Millimeters(6), Dir: decad.Along})
 	require.NoError(t, err)
-	body, err := decad.Cut(ctx, drum, window)
+	body, err := decad.Cut(drum, window).Do(ctx)
 	require.NoError(t, err)
 
 	// The window loops on the plate's two faces, y = -11.5 and y = -15.5:
@@ -180,10 +180,10 @@ func TestFacetedShortStepArcAtCapRound(t *testing.T) {
 	cavity := shortStepPrism(t, doc, r3.Vec{X: left + 9.8}, r3.Vec{Y: 1}, r3.Vec{Z: 1},
 		[][2]float64{{front + 9.8, floor + 5}, {back - 9.8, floor + 5}, {back - 9.8, top + 1}, {front + 9.8, top + 1}},
 		[]float64{0, 3, 0, 0}, 31)
-	tray, err := decad.Cut(ctx, block, cavity)
+	tray, err := decad.Cut(block, cavity).Do(ctx)
 	require.NoError(t, err)
 	ear := shortStepBox(t, doc, -19, -11, -40, -24, floor-8, floor+1)
-	out, err := decad.Union(ctx, tray, ear)
+	out, err := decad.Union(tray, ear).Do(ctx)
 	require.NoError(t, err)
 
 	var found *decad.Edge

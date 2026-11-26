@@ -402,7 +402,7 @@ nothing else:
 - The document's producer record for the body is a `Cut`, `Union` or
   `Intersect` with the body as its output, read through `historyProducers`
   (`boolean_regroup.go`). A `Cut` must carry exactly a `target` and a `tool`.
-- `PointCone` is nil. `decad.WithMatchingFaces` reaches only the point-cone
+- `PointCone` is nil. `MatchingFaces` of `decad.Cut` and `decad.Intersect` reaches only the point-cone
   route, and its result denotes the declared match with its effect charged
   into the bounds, not the operation over its inputs.
 - Every `OperationWarnings` record is classified as moving no geometry: a

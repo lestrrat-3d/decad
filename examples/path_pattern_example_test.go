@@ -250,7 +250,7 @@ func Example_path_pattern_join() {
 		fmt.Printf("failed to copy: %s\n", err)
 		return
 	}
-	joined, err := decad.Union(context.Background(), bar, append([]*decad.Body{peg}, copies...)...)
+	joined, err := decad.Union(append([]*decad.Body{bar}, append([]*decad.Body{peg}, copies...)...)...).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to join: %s\n", err)
 		return

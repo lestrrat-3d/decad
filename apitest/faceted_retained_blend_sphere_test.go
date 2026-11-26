@@ -68,7 +68,7 @@ func ballCap(t *testing.T, sc *retentionScene, h float64) *decad.Body {
 func flatBall(t *testing.T, cu, cv float64) *decad.Body {
 	t.Helper()
 	sc := newRetentionScene()
-	cut, err := decad.Cut(t.Context(), revolvedBall(t, sc, cu, cv), ballCap(t, sc, ballCut))
+	cut, err := decad.Cut(revolvedBall(t, sc, cu, cv), ballCap(t, sc, ballCut)).Do(t.Context())
 	require.NoError(t, err)
 	return cut
 }
@@ -279,9 +279,9 @@ func TestFacetedRetainedBlendSphereRim(t *testing.T) {
 		// plane's outward normal is -z, so it sees the centre at −low.
 		const r, low = 0.2, -1.5
 		sc := newRetentionScene()
-		top, err := decad.Cut(t.Context(), revolvedBall(t, sc, 0, 0), ballCap(t, sc, ballCut))
+		top, err := decad.Cut(revolvedBall(t, sc, 0, 0), ballCap(t, sc, ballCut)).Do(t.Context())
 		require.NoError(t, err)
-		slice, err := decad.Cut(t.Context(), top, ballCap(t, sc, low-20))
+		slice, err := decad.Cut(top, ballCap(t, sc, low-20)).Do(t.Context())
 		require.NoError(t, err)
 		before, err := slice.Volume()
 		require.NoError(t, err)
@@ -347,7 +347,7 @@ func TestFacetedRetainedBlendSphereRim(t *testing.T) {
 		turned, err := decad.Transform(t.Context(), revolvedBall(t, sc, 0, 0),
 			rotation(t, r3.Vec{}, r3.NewVec(0, 0, 1), 0.3))
 		require.NoError(t, err)
-		cut, err := decad.Cut(t.Context(), turned, ballCap(t, sc, ballCut))
+		cut, err := decad.Cut(turned, ballCap(t, sc, ballCut)).Do(t.Context())
 		require.NoError(t, err)
 		_, err = decad.Fillet(t.Context(), cut, chordRim(t, cut), units.Millimeters(0.3))
 		require.ErrorIs(t, err, decad.ErrUnsupported)
@@ -477,9 +477,9 @@ func TestFacetedRetainedBlendSphereRimSides(t *testing.T) {
 			var body *decad.Body
 			var err error
 			if tc.up {
-				body, err = decad.Union(t.Context(), ball, slab)
+				body, err = decad.Union(ball, slab).Do(t.Context())
 			} else {
-				body, err = decad.Cut(t.Context(), slab, ball)
+				body, err = decad.Cut(slab, ball).Do(t.Context())
 			}
 			require.NoError(t, err)
 			before, err := body.Volume()

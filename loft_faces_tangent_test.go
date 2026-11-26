@@ -387,7 +387,7 @@ func buildTangentTrimChain(t *testing.T) tangentTrimChain {
 		WithConeTangentEnd(c.heelTool, r3.NewVec(0, tangentCos, tangentSin)))
 	require.NoError(t, err)
 	c.loftRecord = c.loft.n.Payload.(facetedPayload).LoftFacesCap
-	c.cut, err = Cut(t.Context(), c.loft, c.toeTool)
+	c.cut, err = Cut(c.loft, c.toeTool).Do(t.Context())
 	require.NoError(t, err)
 	require.NotNil(t, c.cut.n.Payload.(facetedPayload).LoftFacesToe)
 	return c
@@ -504,7 +504,7 @@ func TestLoftFacesTangentHeelIntersectKeepsTrimRecord(t *testing.T) {
 	require.Equal(t, proofbound.AbsSumUpper(held.n.VolSymDiff, meshes.Cone.VolSymDiff, roundVol),
 		eval.payload.VolSymDiff, "the result volume allowance composes the unextended operand's")
 
-	trim, err := Intersect(t.Context(), c.cut, c.heelTool)
+	trim, err := Intersect(c.cut, c.heelTool).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, eval.payload.VolSymDiff, trim.n.Payload.(facetedPayload).VolSymDiff,
 		"the published allowance is the composed one")
@@ -694,7 +694,7 @@ func TestLoftFacesTangentHeelRefusesWrongSide(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			c := buildTangentTrimChain(t)
 			movePreviousCap(t, c.cut, test.factor)
-			trim, err := Intersect(t.Context(), c.cut, c.heelTool)
+			trim, err := Intersect(c.cut, c.heelTool).Do(t.Context())
 			if !test.refused {
 				require.NoError(t, err)
 				require.NotNil(t, trim.n.Payload.(facetedPayload).LoftFacesTrim)
@@ -720,7 +720,7 @@ func TestLoftFacesTangentHeelRefusesMissingToolFace(t *testing.T) {
 	p.LoftFacesToe = &toe
 	c.cut.n.Payload = p
 
-	trim, err := Intersect(t.Context(), c.cut, c.heelTool)
+	trim, err := Intersect(c.cut, c.heelTool).Do(t.Context())
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.Nil(t, trim)
 	require.Len(t, c.f.doc.Bodies(), 5, "the refusal leaves the document unchanged")
@@ -741,7 +741,7 @@ func TestLoftFacesTangentHeelRefusesOtherCone(t *testing.T) {
 	require.NoError(t, err)
 	require.Nil(t, plane, "the record gate fails")
 
-	trim, err := Intersect(t.Context(), c.cut, other)
+	trim, err := Intersect(c.cut, other).Do(t.Context())
 	if err == nil {
 		require.Nil(t, trim.n.Payload.(facetedPayload).LoftFacesTrim, "no trim record is issued")
 		return

@@ -101,7 +101,7 @@ func wheelFilletedAndBored(t *testing.T) *decad.Body {
 	require.NoError(t, err)
 	wheelD(s)
 	tool := wheelExtrude(t, doc, s, 0, wheelHeight+1.5)
-	bored, err := decad.Cut(t.Context(), filleted, tool)
+	bored, err := decad.Cut(filleted, tool).Do(t.Context())
 	require.NoError(t, err)
 	requireAnalyticEdges(t, bored)
 	return bored
@@ -164,7 +164,7 @@ func TestDisplacedCapChamferMeshCutByBoxComposes(t *testing.T) {
 	require.NoError(t, err)
 	box, err := decad.Extrude(t.Context(), chamfered.Document(), s, s.Profiles()[0], decad.Distance{D: units.Millimeters(6), Dir: decad.Along})
 	require.NoError(t, err)
-	cut, err := decad.Cut(t.Context(), chamfered, box)
+	cut, err := decad.Cut(chamfered, box).Do(t.Context())
 	require.NoError(t, err)
 	before, err := chamfered.Volume()
 	require.NoError(t, err)

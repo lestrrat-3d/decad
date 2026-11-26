@@ -107,7 +107,7 @@ func Example_pattern_join() {
 		fmt.Printf("failed to pattern: %s\n", err)
 		return
 	}
-	joined, err := decad.Union(ctx, disc, append([]*decad.Body{lobe}, copies...)...)
+	joined, err := decad.Union(append([]*decad.Body{disc}, append([]*decad.Body{lobe}, copies...)...)...).Do(ctx)
 	if err != nil {
 		fmt.Printf("failed to join: %s\n", err)
 		return

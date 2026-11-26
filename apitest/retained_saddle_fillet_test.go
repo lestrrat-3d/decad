@@ -365,7 +365,7 @@ func saddleTubeRoot(t *testing.T) *decad.Body {
 	pin, err := decad.Extrude(t.Context(), sc.doc, ps, ps.Profiles()[0],
 		decad.Distance{D: units.Millimeters(13), Dir: decad.Along})
 	require.NoError(t, err)
-	body, err := decad.Union(t.Context(), tube, pin)
+	body, err := decad.Union(tube, pin).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -398,7 +398,7 @@ func TestRetainedSaddleFilletRefusals(t *testing.T) {
 		// The pin's part inside the shaft: its two ends are convex seams with
 		// the ball inside both cylinders, σ = (−1, −1), which no route builds.
 		sc := newRetentionScene()
-		body, err := decad.Intersect(t.Context(), saddleRevolve(t, sc), saddlePin(t, sc, 3, 0))
+		body, err := decad.Intersect(saddleRevolve(t, sc), saddlePin(t, sc, 3, 0)).Do(t.Context())
 		require.NoError(t, err)
 		_, err = decad.Fillet(t.Context(), body, saddleMouths(t, body, 3, 0), units.Millimeters(0.5))
 		require.ErrorIs(t, err, decad.ErrUnsupported)
@@ -486,9 +486,7 @@ func TestRetainedSaddleFilletExtrudeShaft(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			sc := newRetentionScene()
-			body, err := decad.Cut(t.Context(),
-				saddleExtrudedCylinder(t, sc, tc.shaft(sc.w), saddleR, 40, tc.move),
-				saddleExtrudedCylinder(t, sc, tc.bore(sc.w), r, 30, tc.move))
+			body, err := decad.Cut(saddleExtrudedCylinder(t, sc, tc.shaft(sc.w), saddleR, 40, tc.move), saddleExtrudedCylinder(t, sc, tc.bore(sc.w), r, 30, tc.move)).Do(t.Context())
 			require.NoError(t, err)
 			at := func(p r3.Vec, i int) float64 { return [3]float64{p.X, p.Y, p.Z}[i] }
 			var q *decad.EdgeQuery
@@ -592,7 +590,7 @@ func TestRetainedSaddleFilletOutside(t *testing.T) {
 			t.Skip("the boss on a rod carries the race build")
 		}
 		sc := newRetentionScene()
-		body, err := decad.Union(t.Context(), saddleRevolve(t, sc), saddlePin(t, sc, 3, 0))
+		body, err := decad.Union(saddleRevolve(t, sc), saddlePin(t, sc, 3, 0)).Do(t.Context())
 		require.NoError(t, err)
 		out, err := decad.Fillet(t.Context(), body, saddleMouths(t, body, 3, 0), units.Millimeters(1.5))
 		require.NoError(t, err)

@@ -226,11 +226,9 @@ func TestVerifyMeridianCutTool(t *testing.T) {
 			t.Parallel()
 			doc := decad.New()
 			block := slab(t, doc, 0, -5, 20, 5, 0, 10, r3.Identity())
-			pilots, err := decad.Union(t.Context(),
-				placedAlongZ(t, coaxialSection(t, doc, 5, 0, 12, 1), -1),
-				placedAlongZ(t, coaxialSection(t, doc, 15, 0, 12, 1), -1))
+			pilots, err := decad.Union(placedAlongZ(t, coaxialSection(t, doc, 5, 0, 12, 1), -1), placedAlongZ(t, coaxialSection(t, doc, 15, 0, 12, 1), -1)).Do(t.Context())
 			require.NoError(t, err)
-			bored, err := decad.Cut(t.Context(), block, pilots)
+			bored, err := decad.Cut(block, pilots).Do(t.Context())
 			require.NoError(t, err)
 			w := sketch.NewWorld()
 			s, err := w.CreateSketch(w.XZ())

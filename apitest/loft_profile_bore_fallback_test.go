@@ -97,7 +97,7 @@ func TestLoftLineAndArcProfileThroughBorePreservesExactSections(t *testing.T) {
 				decad.Distance{D: units.Millimeters(4), Dir: decad.Along})
 			require.NoError(t, err)
 
-			cut, err := decad.Cut(t.Context(), blank, tool)
+			cut, err := decad.Cut(blank, tool).Do(t.Context())
 			require.NoError(t, err)
 			require.True(t, cut.IsSolid())
 			volume, err := cut.Volume()

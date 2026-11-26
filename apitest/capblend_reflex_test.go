@@ -95,7 +95,7 @@ func TestCapBlendReflexDBoreCut(t *testing.T) {
 		require.NoError(t, err)
 		require.InDelta(t, v0, volumeMM(t, vol), 1e-6, `the chamfer itself is exact`)
 
-		cut, err := decad.Cut(t.Context(), ch, boxBodyAtZ(t, doc, 11, -2, 15, 2, -1, 8))
+		cut, err := decad.Cut(ch, boxBodyAtZ(t, doc, 11, -2, 15, 2, -1, 8)).Do(t.Context())
 		require.NoError(t, err)
 		cv, err := cut.Volume()
 		require.NoError(t, err)
@@ -107,7 +107,7 @@ func TestCapBlendReflexDBoreCut(t *testing.T) {
 		requireBodyWatertight(t, cut)
 
 		// The second box spans z in [3, 6], so only its 2 mm inside the 5 mm plate cuts: 4 x 4 x 2 = 32 mm3.
-		cut2, err := decad.Cut(t.Context(), cut, boxBodyAtZ(t, doc, -15, -2, -11, 2, 3, 3))
+		cut2, err := decad.Cut(cut, boxBodyAtZ(t, doc, -15, -2, -11, 2, 3, 3)).Do(t.Context())
 		require.NoError(t, err)
 		cv2, err := cut2.Volume()
 		require.NoError(t, err)
@@ -120,12 +120,10 @@ func TestCapBlendReflexDBoreCut(t *testing.T) {
 	t.Run("box across the D's corner band", func(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
-		cutBody, err := decad.Cut(t.Context(), reflexDPlateChamfered(t, doc),
-			boxBodyAtZ(t, doc, -3, 2.5, -1, 5, -1, 3))
+		cutBody, err := decad.Cut(reflexDPlateChamfered(t, doc), boxBodyAtZ(t, doc, -3, 2.5, -1, 5, -1, 3)).Do(t.Context())
 		require.NoError(t, err)
 		doc2 := decad.New()
-		inter, err := decad.Intersect(t.Context(), reflexDPlateChamfered(t, doc2),
-			boxBodyAtZ(t, doc2, -3, 2.5, -1, 5, -1, 3))
+		inter, err := decad.Intersect(reflexDPlateChamfered(t, doc2), boxBodyAtZ(t, doc2, -3, 2.5, -1, 5, -1, 3)).Do(t.Context())
 		require.NoError(t, err)
 		cv, err := cutBody.Volume()
 		require.NoError(t, err)
@@ -152,9 +150,9 @@ func TestCapBlendReflexLBodyBoolean(t *testing.T) {
 	t.Run("across the corner", func(t *testing.T) {
 		t.Parallel()
 		a, b := mk(), mk()
-		cut, err := decad.Cut(t.Context(), a, boxBodyAtZ(t, a.Document(), 15, 15, 25, 25, -1, 30))
+		cut, err := decad.Cut(a, boxBodyAtZ(t, a.Document(), 15, 15, 25, 25, -1, 30)).Do(t.Context())
 		require.NoError(t, err)
-		in, err := decad.Intersect(t.Context(), b, boxBodyAtZ(t, b.Document(), 15, 15, 25, 25, -1, 30))
+		in, err := decad.Intersect(b, boxBodyAtZ(t, b.Document(), 15, 15, 25, 25, -1, 30)).Do(t.Context())
 		require.NoError(t, err)
 		cv, err := cut.Volume()
 		require.NoError(t, err)
@@ -169,7 +167,7 @@ func TestCapBlendReflexLBodyBoolean(t *testing.T) {
 		t.Parallel()
 		a := mk()
 		// 10 x 10 x 16 mm inside the middle of one arm, away from every band.
-		cut, err := decad.Cut(t.Context(), a, boxBodyAtZ(t, a.Document(), 5, 5, 15, 15, 2, 16))
+		cut, err := decad.Cut(a, boxBodyAtZ(t, a.Document(), 5, 5, 15, 15, 2, 16)).Do(t.Context())
 		require.NoError(t, err)
 		cv, err := cut.Volume()
 		require.NoError(t, err)

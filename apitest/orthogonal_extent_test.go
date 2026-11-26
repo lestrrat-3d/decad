@@ -29,7 +29,7 @@ func TestToFaceStopsAtAMeshSolidFace(t *testing.T) {
 	require.Equal(t, decad.Exact, volume.Exactness, "the stop is the face's own plane, with no displacement")
 
 	// The tool pocket through the plate takes the part of it between z = 5 and 10.
-	out, err := decad.Cut(t.Context(), plate, tool)
+	out, err := decad.Cut(plate, tool).Do(t.Context())
 	require.NoError(t, err)
 	requireVolume(t, out, 40*30*5-10*6*5)
 }

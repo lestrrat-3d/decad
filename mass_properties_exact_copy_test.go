@@ -16,7 +16,7 @@ import (
 
 func TestExactCopyUsesContainedCutSourceMassProperties(t *testing.T) {
 	doc, target, tool := containedCutCentroidSources(t)
-	source, err := Cut(t.Context(), target, tool)
+	source, err := Cut(target, tool).Do(t.Context())
 	require.NoError(t, err)
 	require.NotNil(t, source.n.VolumeLineage.Moments)
 	require.Len(t, source.Lumps(), 1)
@@ -95,7 +95,7 @@ func TestExactCopyUsesContainedCutSourceMassProperties(t *testing.T) {
 
 func TestExactCopyMomentHistoryAndRetiredSource(t *testing.T) {
 	doc, target, tool := containedCutCentroidSources(t)
-	source, err := Cut(t.Context(), target, tool)
+	source, err := Cut(target, tool).Do(t.Context())
 	require.NoError(t, err)
 	copyBody, err := Copy(t.Context(), source, WithCopyRotation(r3.NewVec(10, 10, 10),
 		r3.NewVec(1, 2, 3), units.Degrees(37)))
@@ -122,7 +122,7 @@ func TestExactCopyMomentHistoryAndRetiredSource(t *testing.T) {
 
 func TestExactCopyMomentEvidenceRollback(t *testing.T) {
 	doc, target, tool := containedCutCentroidSources(t)
-	source, err := Cut(t.Context(), target, tool)
+	source, err := Cut(target, tool).Do(t.Context())
 	require.NoError(t, err)
 	source.n.VolumeLineage.Target.Value = units.CubicMillimeters(
 		source.n.VolumeLineage.Target.Value.Base() + 1)
@@ -146,7 +146,7 @@ func TestExactCopyMomentEvidenceRollback(t *testing.T) {
 
 func TestExactCopyMomentScope(t *testing.T) {
 	_, target, tool := containedCutCentroidSources(t)
-	source, err := Cut(t.Context(), target, tool)
+	source, err := Cut(target, tool).Do(t.Context())
 	require.NoError(t, err)
 	ordinary, err := Copy(t.Context(), source)
 	require.NoError(t, err)
@@ -175,7 +175,7 @@ func TestExactCopyMomentScope(t *testing.T) {
 
 func TestExactCopyMassQueriesAreReadOnly(t *testing.T) {
 	doc, target, tool := containedCutCentroidSources(t)
-	source, err := Cut(t.Context(), target, tool)
+	source, err := Cut(target, tool).Do(t.Context())
 	require.NoError(t, err)
 	copyBody, err := Copy(t.Context(), source, WithCopyRotation(r3.NewVec(10, 10, 10),
 		r3.NewVec(1, 2, 3), units.Degrees(37)))

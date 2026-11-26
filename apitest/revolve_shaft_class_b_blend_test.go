@@ -172,7 +172,7 @@ func twice(a *big.Float) *big.Float { return bMul(jf(2), a) }
 func dFlat(t *testing.T, shaft func(*testing.T, *retentionScene) *decad.Body) *decad.Body {
 	t.Helper()
 	sc := newRetentionScene()
-	cut, err := decad.Cut(t.Context(), shaft(t, sc), shaftTool(t, sc, flatPlane(t, sc), -5, -20, shaftL+5, 20))
+	cut, err := decad.Cut(shaft(t, sc), shaftTool(t, sc, flatPlane(t, sc), -5, -20, shaftL+5, 20)).Do(t.Context())
 	require.NoError(t, err)
 	return cut
 }
@@ -181,7 +181,7 @@ func dFlat(t *testing.T, shaft func(*testing.T, *retentionScene) *decad.Body) *d
 func keyway(t *testing.T) *decad.Body {
 	t.Helper()
 	sc := newRetentionScene()
-	cut, err := decad.Cut(t.Context(), revolvedShaft(t, sc), shaftTool(t, sc, flatPlane(t, sc), -5, -3, shaftL+5, 3))
+	cut, err := decad.Cut(revolvedShaft(t, sc), shaftTool(t, sc, flatPlane(t, sc), -5, -3, shaftL+5, 3)).Do(t.Context())
 	require.NoError(t, err)
 	return cut
 }
@@ -229,7 +229,7 @@ func requireBlendedShaft(t *testing.T, got *decad.Body, planes, cylinders, blend
 func requireAgreesWithMeshTwin(t *testing.T, value, bound float64, fillet bool, size float64) {
 	t.Helper()
 	sc := newRetentionScene()
-	cut, err := decad.Cut(t.Context(), revolvedShaft(t, sc), flatTool(t, sc))
+	cut, err := decad.Cut(revolvedShaft(t, sc), flatTool(t, sc)).Do(t.Context())
 	require.NoError(t, err)
 	var twin *decad.Body
 	if fillet {

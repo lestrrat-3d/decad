@@ -73,7 +73,7 @@ func Example_thread_cut() {
 	}
 
 	// Cut the groove out of the shaft.
-	threaded, err := decad.Cut(context.Background(), shaft, groove)
+	threaded, err := decad.Cut(shaft, groove).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to cut thread: %s\n", err)
 		return

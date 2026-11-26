@@ -109,7 +109,7 @@ func testBlindGroupPublicContainer(t *testing.T) {
 	if err := container.AddBody(group); err != nil {
 		t.Fatal(err)
 	}
-	result, err := Cut(t.Context(), host, group)
+	result, err := Cut(host, group).Do(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -241,7 +241,7 @@ func blindGroupSources(t *testing.T, withSlot bool) (*Document, *Body, *Body) {
 	for _, x := range []float64{-6, -2, 2, 6} {
 		leaves = append(leaves, internalCircleBody(t, doc, x, 1, 6, Distance{D: units.Millimeters(4), Dir: Along}))
 	}
-	group, err := Union(t.Context(), leaves[0], leaves[1:]...)
+	group, err := Union(append([]*Body{leaves[0]}, leaves[1:]...)...).Do(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -251,7 +251,7 @@ func blindGroupSources(t *testing.T, withSlot bool) (*Document, *Body, *Body) {
 func testBlindGroupPublicCut(t *testing.T) {
 	doc, host, group := blindGroupSources(t, true)
 	unrelated := internalBoxBody(t, doc, 30, 30, 2, 2, 2)
-	result, err := Cut(t.Context(), host, group)
+	result, err := Cut(host, group).Do(t.Context())
 	if err != nil || result == nil || result.blindProof == nil {
 		t.Fatalf("public Cut body=%t proof=%t error=%v", result != nil,
 			result != nil && result.blindProof != nil, err)
@@ -918,7 +918,7 @@ func testBlindGroupFaceLedger(t *testing.T, withSlot bool) {
 		structureWork, structureRecords, structureMeter.Bytes())
 	if withSlot {
 		unrelated := internalBoxBody(t, doc, 30, 30, 2, 2, 2)
-		publicCandidate, err = Cut(t.Context(), host, group)
+		publicCandidate, err = Cut(host, group).Do(t.Context())
 		if err != nil || publicCandidate == nil || publicCandidate.blindProof == nil {
 			t.Fatalf("public Cut candidate=%t proof=%t error=%v", publicCandidate != nil,
 				publicCandidate != nil && publicCandidate.blindProof != nil, err)

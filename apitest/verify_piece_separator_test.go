@@ -59,7 +59,7 @@ func pieceHole(t *testing.T, doc *decad.Document, host *decad.Body, radius, s fl
 	require.NoError(t, err)
 	tool, err := decad.Extrude(t.Context(), doc, sk, sk.Profiles()[0], decad.Distance{D: units.Millimeters(25 * s), Dir: decad.Along})
 	require.NoError(t, err)
-	out, err := decad.Cut(t.Context(), host, tool)
+	out, err := decad.Cut(host, tool).Do(t.Context())
 	require.NoError(t, err)
 	return out
 }
@@ -140,7 +140,7 @@ func pieceLeaf(t *testing.T, doc *decad.Document, holeTop float64) *decad.Body {
 	require.NoError(t, err)
 	knuckle, err := decad.Extrude(t.Context(), doc, s2, s2.Profiles()[0], decad.Symmetric{D: units.Millimeters(7.5)})
 	require.NoError(t, err)
-	both, err := decad.Union(t.Context(), plate, knuckle)
+	both, err := decad.Union(plate, knuckle).Do(t.Context())
 	require.NoError(t, err)
 	w3 := sketch.NewWorld()
 	// The XZ plane's normal is -y: the tool hangs below the plane at y = holeTop.
@@ -156,7 +156,7 @@ func pieceLeaf(t *testing.T, doc *decad.Document, holeTop float64) *decad.Body {
 	tool, err := decad.Extrude(t.Context(), doc, s3, s3.Profiles()[0],
 		decad.Distance{D: units.Millimeters(holeTop + 5), Dir: decad.Along})
 	require.NoError(t, err)
-	out, err := decad.Cut(t.Context(), both, tool)
+	out, err := decad.Cut(both, tool).Do(t.Context())
 	require.NoError(t, err)
 	return out
 }
@@ -237,7 +237,7 @@ func TestVerifyBoxInRecess(t *testing.T) {
 			require.NoError(t, err)
 			recess, err := decad.Extrude(t.Context(), doc, s2, s2.Profiles()[0], decad.Distance{D: units.Millimeters(6), Dir: decad.Along})
 			require.NoError(t, err)
-			bar, err = decad.Cut(t.Context(), bar, recess)
+			bar, err = decad.Cut(bar, recess).Do(t.Context())
 			require.NoError(t, err)
 
 			w3 := sketch.NewWorld()
@@ -307,7 +307,7 @@ func TestVerifyPieceTangentKnuckle(t *testing.T) {
 			require.NoError(t, err)
 			knuckle, err := decad.Extrude(t.Context(), doc, s2, s2.Profiles()[0], decad.Symmetric{D: units.Millimeters(6)})
 			require.NoError(t, err)
-			leaf, err := decad.Union(t.Context(), plate, knuckle)
+			leaf, err := decad.Union(plate, knuckle).Do(t.Context())
 			require.NoError(t, err)
 			w3 := sketch.NewWorld()
 			// The XZ plane's normal is -y: the hole tool hangs below the plane at y = 3.4.
@@ -322,7 +322,7 @@ func TestVerifyPieceTangentKnuckle(t *testing.T) {
 			require.NoError(t, err)
 			tool, err := decad.Extrude(t.Context(), doc, s3, s3.Profiles()[0], decad.Distance{D: units.Millimeters(8.4), Dir: decad.Along})
 			require.NoError(t, err)
-			leaf, err = decad.Cut(t.Context(), leaf, tool)
+			leaf, err = decad.Cut(leaf, tool).Do(t.Context())
 			require.NoError(t, err)
 
 			x := tc.axisX

@@ -122,7 +122,7 @@ func TestStackedViewObliqueWallTag(t *testing.T) {
 
 	t.Run("a mesh Cut away from the windows keeps the sides tagged", func(t *testing.T) {
 		pocket := boxBodyAtZ(t, doc, 19.5, -0.5, 20.5, 0.5, 1, 2)
-		cut, err := decad.Cut(t.Context(), part, pocket)
+		cut, err := decad.Cut(part, pocket).Do(t.Context())
 		require.NoError(t, err)
 		// The pocket's own four walls are exact planes with no stated tilt.
 		var kept []obliqueWall

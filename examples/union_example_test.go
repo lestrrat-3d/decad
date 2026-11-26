@@ -62,7 +62,7 @@ func Example_union() {
 		return
 	}
 
-	part, err := decad.Union(context.Background(), plate, block)
+	part, err := decad.Union(plate, block).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to join: %s\n", err)
 		return

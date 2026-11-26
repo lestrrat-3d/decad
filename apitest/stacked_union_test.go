@@ -37,7 +37,7 @@ func TestStackedUnionBossOnPlate(t *testing.T) {
 	plate := boxBody(t, doc, -20, -20, 20, 20, 10)
 	boss := circleBodyAtZ(t, doc, 0, 5, 10, 15)
 
-	got, err := decad.Union(t.Context(), plate, boss)
+	got, err := decad.Union(plate, boss).Do(t.Context())
 	require.NoError(t, err)
 	require.False(t, tookMeshPath(got))
 	require.Len(t, got.Lumps(), 1)
@@ -99,7 +99,7 @@ func TestStackedUnionRootedBoss(t *testing.T) {
 	plate := boxBody(t, doc, -20, -20, 20, 20, 10)
 	boss := circleBodyAtZ(t, doc, 0, 5, 5, 20)
 
-	got, err := decad.Union(t.Context(), plate, boss)
+	got, err := decad.Union(plate, boss).Do(t.Context())
 	require.NoError(t, err)
 	require.False(t, tookMeshPath(got))
 	// The boss's buried wall from z = 5 to 10 is interior and makes no face.
@@ -119,7 +119,7 @@ func TestStackedUnionEqualBoxesStacked(t *testing.T) {
 	lower := boxBody(t, doc, 0, 0, 10, 10, 10)
 	upper := boxBodyAtZ(t, doc, 0, 0, 10, 10, 10, 10)
 
-	got, err := decad.Union(t.Context(), lower, upper)
+	got, err := decad.Union(lower, upper).Do(t.Context())
 	require.NoError(t, err)
 	require.False(t, tookMeshPath(got))
 	// One wall per side runs the whole 20 mm, and the shared plane makes no
@@ -142,7 +142,7 @@ func TestStackedUnionFlangeOnShaft(t *testing.T) {
 	shaft := discBody(t, doc, 0, 5, 40)
 	flange := circleBodyAtZ(t, doc, 0, 15, 40, 5)
 
-	got, err := decad.Union(t.Context(), shaft, flange)
+	got, err := decad.Union(shaft, flange).Do(t.Context())
 	require.NoError(t, err)
 	require.False(t, tookMeshPath(got))
 	// Shaft wall, flange wall, bottom cap, top cap, and the flange's
@@ -164,7 +164,7 @@ func TestStackedUnionFlangeOnShaft(t *testing.T) {
 
 	// Chained: a second, narrower boss on the flange's top adds a slab.
 	top := circleBodyAtZ(t, doc, 0, 3, 45, 2)
-	chained, err := decad.Union(t.Context(), got, top)
+	chained, err := decad.Union(got, top).Do(t.Context())
 	require.NoError(t, err)
 	require.False(t, tookMeshPath(chained))
 	volume, err = chained.Volume()
@@ -184,7 +184,7 @@ func TestStackedUnionRootedCrossingBoss(t *testing.T) {
 	// Rooted at z = 5, centre 2 mm inside the plate's x = 20 wall.
 	boss := circleBodyAtZ(t, doc, 18, 5, 5, 20)
 
-	got, err := decad.Union(t.Context(), plate, boss)
+	got, err := decad.Union(plate, boss).Do(t.Context())
 	require.NoError(t, err)
 	require.False(t, tookMeshPath(got))
 	require.Len(t, got.Faces(), 10)
@@ -215,7 +215,7 @@ func TestStackedUnionPatchRingsMustClear(t *testing.T) {
 	plate := discBody(t, doc, 0, 10, 10)
 	const half = 7.07
 	boss := boxBodyAtZ(t, doc, -half, -half, half, half, 10, 5)
-	got, err := decad.Union(t.Context(), plate, boss)
+	got, err := decad.Union(plate, boss).Do(t.Context())
 	require.NoError(t, err)
 	require.False(t, tookMeshPath(got))
 	_, err = got.Tessellate(t.Context(), units.Millimeters(0.05))
@@ -233,7 +233,7 @@ func TestStackedUnionKnifeEdgeNestedWedge(t *testing.T) {
 	w := sketch.NewWorld()
 	a := wedgePrism(t, doc, w, w.XY(), [3][2]float64{{0, 0}, {12, -4}, {12, 6}}, 5)
 	b := wedgePrism(t, doc, w, w.XY(), [3][2]float64{{0, 0}, {8, -1}, {8, 2}}, 3)
-	got, err := decad.Union(t.Context(), a, b)
+	got, err := decad.Union(a, b).Do(t.Context())
 	require.NoError(t, err)
 	require.False(t, tookMeshPath(got))
 	require.Len(t, got.Faces(), 5)

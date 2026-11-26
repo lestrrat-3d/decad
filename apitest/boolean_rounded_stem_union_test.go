@@ -94,7 +94,7 @@ func TestUnionRoundedStemWithFlushArm(t *testing.T) {
 			doc := decad.New()
 			stem := roundedStem(t, doc, w, th, tc.Round, z0, top-z0)
 			arm := flushArm(t, doc, -th/2, th, poly)
-			got, err := decad.Union(t.Context(), stem, arm)
+			got, err := decad.Union(stem, arm).Do(t.Context())
 			require.NoError(t, err)
 			require.True(t, got.IsSolid())
 			require.Len(t, got.Lumps(), 1)

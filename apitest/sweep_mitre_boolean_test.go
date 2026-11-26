@@ -120,7 +120,7 @@ func TestSweepMitredTreeUnionChain(t *testing.T) {
 		slack += vol.Bound.Base()
 
 		start := time.Now()
-		tree, err = decad.Union(t.Context(), tree, b)
+		tree, err = decad.Union(tree, b).Do(t.Context())
 		require.NoError(t, err, `union %d`, i+1)
 		t.Logf("union %2d: %v, %d faces", i+1, time.Since(start), len(tree.Faces()))
 		require.Len(t, tree.Lumps(), 1, `union %d is one lump`, i+1)
@@ -179,7 +179,7 @@ func TestSweepMitredCrossingUnion(t *testing.T) {
 	overlap := report.Interferences[0].Volume
 	require.InDelta(t, 2*1.5*2, overlap.Value.Base(), overlap.Bound.Base())
 
-	u, err := decad.Union(t.Context(), a, b)
+	u, err := decad.Union(a, b).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, u.Lumps(), 1)
 	vol, err := u.Volume()
@@ -228,7 +228,7 @@ func TestSweepMitredTaperedBranchesCross(t *testing.T) {
 	require.Len(t, report.Interferences, 1)
 	overlap := report.Interferences[0].Volume
 
-	u, err := decad.Union(t.Context(), a, b)
+	u, err := decad.Union(a, b).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, u.Lumps(), 1)
 	vu, err := u.Volume()
@@ -238,7 +238,7 @@ func TestSweepMitredTaperedBranchesCross(t *testing.T) {
 
 	idoc := decad.New()
 	ia, ib := build(idoc)
-	inter, err := decad.Intersect(t.Context(), ia, ib)
+	inter, err := decad.Intersect(ia, ib).Do(t.Context())
 	require.NoError(t, err)
 	vi, err := inter.Volume()
 	require.NoError(t, err)
@@ -508,7 +508,7 @@ func TestSweepMitredTrunkSealedBore(t *testing.T) {
 	require.NoError(t, err)
 	boreOrigins := faceOrigins(bore)
 
-	hollow, err := decad.Cut(t.Context(), trunk, bore)
+	hollow, err := decad.Cut(trunk, bore).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, []*decad.Body{hollow}, doc.Bodies())
 	outer := requireSealedVoid(t, hollow, boreOrigins)
@@ -568,7 +568,7 @@ func TestSweepMitredHollowTrunkBranch(t *testing.T) {
 	boreOrigins := faceOrigins(bore)
 	vb, err := bore.Volume()
 	require.NoError(t, err)
-	hollow, err := decad.Cut(t.Context(), h.trunk(t, doc), bore)
+	hollow, err := decad.Cut(h.trunk(t, doc), bore).Do(t.Context())
 	require.NoError(t, err)
 	vh, err := hollow.Volume()
 	require.NoError(t, err)
@@ -583,14 +583,14 @@ func TestSweepMitredHollowTrunkBranch(t *testing.T) {
 	}
 	require.NotZero(t, branchStart)
 
-	tree, err := decad.Union(t.Context(), hollow, branch)
+	tree, err := decad.Union(hollow, branch).Do(t.Context())
 	require.NoError(t, err)
 	outer := requireSealedVoid(t, tree, boreOrigins)
 	require.NotContains(t, faceOrigins(tree), branchStart, `the branch's start cap is buried in the wall`)
 	require.Greater(t, len(outer.Faces()), 2+3*16)
 
 	idoc := decad.New()
-	inter, err := decad.Intersect(t.Context(), h.trunk(t, idoc), h.branch(t, idoc))
+	inter, err := decad.Intersect(h.trunk(t, idoc), h.branch(t, idoc)).Do(t.Context())
 	require.NoError(t, err)
 	vi, err := inter.Volume()
 	require.NoError(t, err)
@@ -652,7 +652,7 @@ func clusteredBranchUnion(t *testing.T, branches int) *decad.Body {
 		branchVol, err := branch.Volume()
 		require.NoError(t, err)
 		start := time.Now()
-		tree, err = decad.Union(t.Context(), tree, branch)
+		tree, err = decad.Union(tree, branch).Do(t.Context())
 		require.NoError(t, err, `union %d`, k+1)
 		t.Logf("union %2d: %v, %d faces", k+1, time.Since(start), len(tree.Faces()))
 		require.Len(t, tree.Lumps(), 1, `union %d is one lump`, k+1)

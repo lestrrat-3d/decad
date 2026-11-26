@@ -18,7 +18,7 @@ func TestSectionBlindPocketFeedsExtrude(t *testing.T) {
 	doc := decad.New()
 	cube := boxBodyAtZ(t, doc, 0, 0, 10, 10, 0, 10)
 	tool := boxBodyAtZ(t, doc, 3, 3, 7, 7, 6, 4)
-	pocketed, err := decad.Cut(t.Context(), cube, tool)
+	pocketed, err := decad.Cut(cube, tool).Do(t.Context())
 	require.NoError(t, err)
 
 	for _, tc := range []struct {
@@ -70,7 +70,7 @@ func TestSectionBlindPocketRefusesLevelsOffSlabInteriors(t *testing.T) {
 	doc := decad.New()
 	cube := boxBodyAtZ(t, doc, 0, 0, 10, 10, 0, 10)
 	tool := boxBodyAtZ(t, doc, 3, 3, 7, 7, 6, 4)
-	pocketed, err := decad.Cut(t.Context(), cube, tool)
+	pocketed, err := decad.Cut(cube, tool).Do(t.Context())
 	require.NoError(t, err)
 	for _, z := range []float64{0, 6, 10, 12} {
 		frame, frameErr := r3.NewFrame(r3.Vec{Z: z}, r3.Vec{X: 1}, r3.Vec{Y: 1})
@@ -85,7 +85,7 @@ func blindPocketBody(t *testing.T) *decad.Body {
 	doc := decad.New()
 	cube := boxBodyAtZ(t, doc, 0, 0, 10, 10, 0, 10)
 	tool := boxBodyAtZ(t, doc, 3, 3, 7, 7, 6, 4)
-	pocketed, err := decad.Cut(t.Context(), cube, tool)
+	pocketed, err := decad.Cut(cube, tool).Do(t.Context())
 	require.NoError(t, err)
 	return pocketed
 }

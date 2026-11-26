@@ -72,7 +72,7 @@ func externalThread(ctx context.Context) (*decad.Body, error) {
 	if err != nil {
 		return nil, fmt.Errorf("coil thread groove: %w", err)
 	}
-	thread, err := decad.Cut(ctx, cylinder, tool)
+	thread, err := decad.Cut(cylinder, tool).Do(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("cut external thread: %w", err)
 	}

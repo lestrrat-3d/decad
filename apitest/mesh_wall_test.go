@@ -23,7 +23,7 @@ func crossedPlates(t *testing.T, thickness float64) *decad.Document {
 	turned, err := decad.Copy(t.Context(), plate,
 		decad.WithCopyRotation(r3.NewVec(15, 15, thickness/2), r3.NewVec(1, 0, 0), units.Degrees(45)))
 	require.NoError(t, err)
-	joined, err := decad.Union(t.Context(), plate, turned)
+	joined, err := decad.Union(plate, turned).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, "decad.facetedPayload", decadtest.PayloadClass(joined), "the fixture takes the mesh path")
 	return doc
@@ -111,7 +111,7 @@ func TestFacetedUndercutSurveyClaimsNothingForAFreePull(t *testing.T) {
 	require.NoError(t, err)
 	placed, err := decad.Transform(t.Context(), turned, shift)
 	require.NoError(t, err)
-	bored, err := decad.Cut(t.Context(), plate, placed)
+	bored, err := decad.Cut(plate, placed).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, "decad.facetedPayload", decadtest.PayloadClass(bored))
 	axis := turn.ApplyDir(r3.NewVec(0, 0, 1))

@@ -15,7 +15,7 @@ func TestShellCenteredStackedBoss(t *testing.T) {
 	doc := decad.New()
 	plate := boxBody(t, doc, -10, -10, 10, 10, 5)
 	boss := boxBodyAtZ(t, doc, -5, -5, 5, 5, 5, 5)
-	stack, err := decad.Union(t.Context(), plate, boss)
+	stack, err := decad.Union(plate, boss).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, stack.Faces(), 11)
 
@@ -81,7 +81,7 @@ func TestShellStackedBossClearanceRefusal(t *testing.T) {
 			doc := decad.New()
 			plate := boxBody(t, doc, -10, -10, 10, 10, 5)
 			boss := boxBodyAtZ(t, doc, tc.bossX0, -5, tc.bossX1, 5, 5, 5)
-			stack, err := decad.Union(t.Context(), plate, boss)
+			stack, err := decad.Union(plate, boss).Do(t.Context())
 			require.NoError(t, err)
 			_, err = decad.Shell(t.Context(), stack, decad.Faces(decad.FaceCreatedBy(decad.CapEnd(stack))).Exactly(1),
 				units.Millimeters(tc.thickness))
@@ -97,7 +97,7 @@ func TestShellOffsetRectangularBoss(t *testing.T) {
 	doc := decad.New()
 	plate := boxBody(t, doc, -12, -10, 12, 10, 6)
 	boss := boxBodyAtZ(t, doc, -2, -4, 6, 2, 6, 4)
-	stack, err := decad.Union(t.Context(), plate, boss)
+	stack, err := decad.Union(plate, boss).Do(t.Context())
 	require.NoError(t, err)
 	shell, err := decad.Shell(t.Context(), stack, decad.Faces(decad.FaceCreatedBy(decad.CapEnd(stack))).Exactly(1),
 		units.Millimeters(1))
@@ -126,7 +126,7 @@ func TestShellOffsetRectangularBoss(t *testing.T) {
 	require.LessOrEqual(t, math.Abs(shellMeshSignedVolume(mesh)-v.Value.Base()),
 		1.0+v.Bound.Base())
 	tool := boxBodyAtZ(t, doc, 11.5, -1, 14, 1, -1, 12)
-	cut, err := decad.Cut(t.Context(), shell, tool)
+	cut, err := decad.Cut(shell, tool).Do(t.Context())
 	require.NoError(t, err)
 	cutVolume, err := cut.Volume()
 	require.NoError(t, err)
@@ -139,8 +139,7 @@ func TestShellOffsetRectangularBoss(t *testing.T) {
 func TestShellStackedBossOpenAtBottom(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
-	stack, err := decad.Union(t.Context(), boxBody(t, doc, -10, -10, 10, 10, 5),
-		boxBodyAtZ(t, doc, -5, -5, 5, 5, 5, 5))
+	stack, err := decad.Union(boxBody(t, doc, -10, -10, 10, 10, 5), boxBodyAtZ(t, doc, -5, -5, 5, 5, 5, 5)).Do(t.Context())
 	require.NoError(t, err)
 	shell, err := decad.Shell(t.Context(), stack, decad.Faces(decad.FaceCreatedBy(decad.CapStart(stack))).Exactly(1),
 		units.Millimeters(1))
@@ -193,8 +192,7 @@ func TestShellStackedBossOpenAtBottom(t *testing.T) {
 func TestShellStackedBossOpenAtBottomOffCentre(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
-	stack, err := decad.Union(t.Context(), boxBody(t, doc, -12, -10, 8, 10, 6),
-		boxBodyAtZ(t, doc, -2, -4, 6, 2, 6, 4))
+	stack, err := decad.Union(boxBody(t, doc, -12, -10, 8, 10, 6), boxBodyAtZ(t, doc, -2, -4, 6, 2, 6, 4)).Do(t.Context())
 	require.NoError(t, err)
 	shell, err := decad.Shell(t.Context(), stack, decad.Faces(decad.FaceCreatedBy(decad.CapStart(stack))).Exactly(1),
 		units.Millimeters(1))
@@ -232,9 +230,8 @@ func TestShellStackedBossOpenAtBottomRefusesCollapsedCavity(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			doc := decad.New()
-			stack, err := decad.Union(t.Context(), boxBody(t, doc, -10, -10, 10, 10, tc.plateHeight),
-				boxBodyAtZ(t, doc, -10+tc.bossOff, -10+tc.bossOff, 10-tc.bossOff, 10-tc.bossOff,
-					tc.plateHeight, tc.bossHeight))
+			stack, err := decad.Union(boxBody(t, doc, -10, -10, 10, 10, tc.plateHeight), boxBodyAtZ(t, doc, -10+tc.bossOff, -10+tc.bossOff, 10-tc.bossOff, 10-tc.bossOff,
+				tc.plateHeight, tc.bossHeight)).Do(t.Context())
 			require.NoError(t, err)
 			shell, err := decad.Shell(t.Context(), stack,
 				decad.Faces(decad.FaceCreatedBy(decad.CapStart(stack))).Exactly(1), units.Millimeters(1))
@@ -259,15 +256,14 @@ func TestShellStackedWrongCapRefuses(t *testing.T) {
 			return roundBossFromSketch(t, doc, 10, 10)
 		}},
 		{name: "blind pocket", build: func(t *testing.T, doc *decad.Document) *decad.Body {
-			pocket, err := decad.Cut(t.Context(), boxBodyAtZ(t, doc, 0, 0, 10, 10, 0, 10),
-				boxBodyAtZ(t, doc, 3, 3, 7, 7, 6, 4))
+			pocket, err := decad.Cut(boxBodyAtZ(t, doc, 0, 0, 10, 10, 0, 10), boxBodyAtZ(t, doc, 3, 3, 7, 7, 6, 4)).Do(t.Context())
 			require.NoError(t, err)
 			return pocket
 		}},
 		{name: "counterbore", build: func(t *testing.T, doc *decad.Document) *decad.Body {
-			part, err := decad.Cut(t.Context(), boxBody(t, doc, -10, -10, 10, 10, 10), circleBodyAtZ(t, doc, 0, 3, 0, 10))
+			part, err := decad.Cut(boxBody(t, doc, -10, -10, 10, 10, 10), circleBodyAtZ(t, doc, 0, 3, 0, 10)).Do(t.Context())
 			require.NoError(t, err)
-			part, err = decad.Cut(t.Context(), part, circleBodyAtZ(t, doc, 0, 5, 7, 3))
+			part, err = decad.Cut(part, circleBodyAtZ(t, doc, 0, 5, 7, 3)).Do(t.Context())
 			require.NoError(t, err)
 			return part
 		}},

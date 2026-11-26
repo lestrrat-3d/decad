@@ -16,8 +16,7 @@ func BenchmarkFacetedRetainedBlendFourSideFillet(b *testing.B) {
 		b.StopTimer()
 		sc := newRetentionScene()
 		plate := benchRetainedRect(b, sc, 0, 0, 80, 60, 10)
-		body, err := decad.Union(b.Context(), plate,
-			benchRetainedPlaced(b, benchRetainedRect(b, sc, 30, 20, 50, 40, 15), 10))
+		body, err := decad.Union(plate, benchRetainedPlaced(b, benchRetainedRect(b, sc, 30, 20, 50, 40, 15), 10)).Do(b.Context())
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -51,7 +50,7 @@ func BenchmarkFacetedRetainedBlendFourSideFillet(b *testing.B) {
 		if err != nil {
 			b.Fatal(err)
 		}
-		body, err = decad.Union(b.Context(), body, post)
+		body, err = decad.Union(body, post).Do(b.Context())
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -172,7 +171,7 @@ func benchRetainedLipSocket(b *testing.B, sc *retentionScene) *decad.Body {
 	if tool, err = decad.Transform(b.Context(), tool, tr); err != nil {
 		b.Fatal(err)
 	}
-	socket, err := decad.Cut(b.Context(), block, tool)
+	socket, err := decad.Cut(block, tool).Do(b.Context())
 	if err != nil {
 		b.Fatal(err)
 	}

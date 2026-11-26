@@ -54,7 +54,7 @@ func TestQuarterTurnedSolidsJoinExactly(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 2, len(doc.Bodies()))
 	// It now spans x -4..0 and y 0..10 against the bar's x 0..10, y 0..4: they touch along x = 0 over y 0..4.
-	joined, err := decad.Union(t.Context(), bar, turned)
+	joined, err := decad.Union(bar, turned).Do(t.Context())
 	require.NoError(t, err)
 	requireVolume(t, joined, 160+160)
 }

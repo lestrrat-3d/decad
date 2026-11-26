@@ -42,7 +42,7 @@ func groovedShaft(t *testing.T, doc *decad.Document) *decad.Body {
 	t.Helper()
 	shaft := revolveMeridian(t, doc, grooveShaftMeridian, decad.FullRevolution{})
 	ring := revolveMeridian(t, doc, grooveRingMeridian, decad.FullRevolution{})
-	grooved, err := decad.Cut(t.Context(), shaft, ring)
+	grooved, err := decad.Cut(shaft, ring).Do(t.Context())
 	require.NoError(t, err)
 	decadtest.MeasuresVolume(t, grooved, fullTurnVolume(groovedShaftQ))
 	return grooved
@@ -160,7 +160,7 @@ func TestRevolveGrooveDisplacedMeridianRefuses(t *testing.T) {
 			doc := decad.New()
 			base := revolveMeridian(t, doc, tc.base, decad.FullRevolution{})
 			ring := revolveMeridian(t, doc, tc.ring, decad.FullRevolution{})
-			grooved, err := decad.Cut(t.Context(), base, ring)
+			grooved, err := decad.Cut(base, ring).Do(t.Context())
 			require.NoError(t, err)
 			decadtest.MeasuresVolume(t, grooved, fullTurnVolume(tc.volQ))
 			const msg = `cannot integrate a region over a meridian carrying its own section displacement`

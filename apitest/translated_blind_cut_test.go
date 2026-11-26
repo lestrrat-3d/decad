@@ -36,14 +36,14 @@ func TestTranslatedBlindCutKeepsThinFloor(t *testing.T) {
 			require.NoError(t, err)
 			b, err := decad.Copy(t.Context(), tool)
 			require.NoError(t, err)
-			return decad.Intersect(t.Context(), a, b)
+			return decad.Intersect(a, b).Do(t.Context())
 		},
 		func() (*decad.Body, error) {
 			a, err := decad.Copy(t.Context(), target)
 			require.NoError(t, err)
 			b, err := decad.Copy(t.Context(), tool)
 			require.NoError(t, err)
-			return decad.Union(t.Context(), a, b)
+			return decad.Union(a, b).Do(t.Context())
 		},
 	} {
 		other, err := operation()
@@ -53,7 +53,7 @@ func TestTranslatedBlindCutKeepsThinFloor(t *testing.T) {
 		}
 		require.NotEqual(t, "decad.stackedPrismPayload", decadtest.PayloadClass(other))
 	}
-	result, err := decad.Cut(t.Context(), target, tool)
+	result, err := decad.Cut(target, tool).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, "decad.stackedPrismPayload", decadtest.PayloadClass(result))
 	volume, err := result.Volume()

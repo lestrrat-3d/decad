@@ -19,7 +19,7 @@ func circularUnionPair(t *testing.T, doc *decad.Document, centerX float64) (*dec
 	half, err := decad.Extrude(t.Context(), doc, s, profile, decad.Distance{D: units.Millimeters(2), Dir: decad.Along})
 	require.NoError(t, err)
 	rod := xCylinder(t, doc, -2, 4, .5, .5, .25)
-	target, err := decad.Union(t.Context(), half, rod)
+	target, err := decad.Union(half, rod).Do(t.Context())
 	require.NoError(t, err)
 	return target, historyZCylinder(t, doc, centerX, 0, 1, -.5, 2)
 }
@@ -48,7 +48,7 @@ func TestCircularUnionContact(t *testing.T) {
 			if tc.reverse {
 				a, b = b, a
 			}
-			joined, err := decad.Union(t.Context(), a, b)
+			joined, err := decad.Union(a, b).Do(t.Context())
 			require.NoError(t, err)
 			require.Len(t, joined.Lumps(), 1)
 			if tc.centerX == 0 {
@@ -83,7 +83,7 @@ func TestCircularUnionZeroGap(t *testing.T) {
 			if tc.reverse {
 				a, b = b, a
 			}
-			_, err := decad.Union(t.Context(), a, b)
+			_, err := decad.Union(a, b).Do(t.Context())
 			require.ErrorIs(t, err, decad.ErrUnsupported)
 		})
 	}
@@ -93,6 +93,6 @@ func TestCircularUnionCancellation(t *testing.T) {
 	a, b := circularUnionPair(t, decad.New(), 0)
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	_, err := decad.Union(ctx, a, b)
+	_, err := decad.Union(a, b).Do(ctx)
 	require.ErrorIs(t, err, context.Canceled)
 }

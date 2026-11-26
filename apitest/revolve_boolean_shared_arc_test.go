@@ -176,7 +176,7 @@ func TestCommonAxisRevolveSharedArcSpanEmpty(t *testing.T) {
 	doc := decad.New(decad.ExactOnly())
 	dome := sharedArcMeridian(t, doc, 10, true)
 	ball := sharedArcMeridian(t, doc, 10, false)
-	_, err := decad.Cut(t.Context(), dome, ball)
+	_, err := decad.Cut(dome, ball).Do(t.Context())
 	var be *decad.BooleanError
 	require.ErrorAs(t, err, &be)
 	require.Equal(t, decad.BooleanEmpty, be.Code)
@@ -213,7 +213,7 @@ func TestCommonAxisRevolveSharedArcSpanNearCarrier(t *testing.T) {
 	dome, err := decad.Revolve(t.Context(), doc, s, s.Profiles()[0], uAxis, decad.FullRevolution{})
 	require.NoError(t, err)
 	before := doc.Bodies()
-	_, err = decad.Intersect(t.Context(), ball, dome)
+	_, err = decad.Intersect(ball, dome).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.ErrorContains(t, err, "more than 65536 facets")
 	require.Equal(t, before, doc.Bodies())
@@ -242,11 +242,11 @@ const (
 func (op ulpOp) run(ctx context.Context, a, b *decad.Body) (*decad.Body, error) {
 	switch op {
 	case ulpIntersect:
-		return decad.Intersect(ctx, a, b)
+		return decad.Intersect(a, b).Do(ctx)
 	case ulpUnion:
-		return decad.Union(ctx, a, b)
+		return decad.Union(a, b).Do(ctx)
 	}
-	return decad.Cut(ctx, a, b)
+	return decad.Cut(a, b).Do(ctx)
 }
 
 func TestCommonAxisRevolveSharedArcSpanUlpRadii(t *testing.T) {

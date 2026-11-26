@@ -200,10 +200,10 @@ var strutOrders = []struct {
 		return b.joinPostFirst(t, func(j int) int { return j })
 	}},
 	{"plate first", func(t *testing.T, b strutBuilder) *decad.Body {
-		body, err := decad.Union(t.Context(), b.part(strutPlate), b.part(strutPost))
+		body, err := decad.Union(b.part(strutPlate), b.part(strutPost)).Do(t.Context())
 		require.NoError(t, err)
 		for i := range strutCount {
-			body, err = decad.Union(t.Context(), body, b.part(strutPart(i)))
+			body, err = decad.Union(body, b.part(strutPart(i))).Do(t.Context())
 			require.NoError(t, err, "strut %d", i)
 		}
 		return body
@@ -217,10 +217,10 @@ func (b strutBuilder) joinPostFirst(t *testing.T, strut func(int) int) *decad.Bo
 	post := b.part(strutPost)
 	var err error
 	for j := range strutCount {
-		post, err = decad.Union(t.Context(), post, b.part(strutPart(strut(j))))
+		post, err = decad.Union(post, b.part(strutPart(strut(j)))).Do(t.Context())
 		require.NoError(t, err, "strut %d", strut(j))
 	}
-	body, err := decad.Union(t.Context(), b.part(strutPlate), post)
+	body, err := decad.Union(b.part(strutPlate), post).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }

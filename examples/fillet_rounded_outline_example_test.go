@@ -71,7 +71,7 @@ func Example_fillet_rounded_outline() {
 		fmt.Printf("failed to move the tool: %s\n", err)
 		return
 	}
-	drilled, err := decad.Cut(ctx, rounded, tool)
+	drilled, err := decad.Cut(rounded, tool).Do(ctx)
 	if err != nil {
 		fmt.Printf("failed to drill: %s\n", err)
 		return

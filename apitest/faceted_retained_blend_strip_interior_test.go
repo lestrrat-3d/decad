@@ -177,7 +177,7 @@ func bossTop(t *testing.T, bossR float64) *decad.Body {
 	boss, err := decad.Extrude(t.Context(), sc.doc, s, s.Profiles()[0],
 		decad.Distance{D: units.Millimeters(10.5), Dir: decad.Against})
 	require.NoError(t, err)
-	joined, err := decad.Union(t.Context(), blendPlate(t, sc), translated(t, boss, 0, 0, 30.001))
+	joined, err := decad.Union(blendPlate(t, sc), translated(t, boss, 0, 0, 30.001)).Do(t.Context())
 	require.NoError(t, err)
 	return joined
 }
@@ -196,7 +196,7 @@ func TestFacetedRetainedBlendStripInterior(t *testing.T) {
 			gx := openBoxR - h
 			sc := newRetentionScene()
 			block := placed(t, rectBox(t, sc.w, sc.doc, -5, -5, gx, 25, 30), -5)
-			trimmed, err := decad.Cut(t.Context(), roundedCornerBox(t, sc), block)
+			trimmed, err := decad.Cut(roundedCornerBox(t, sc), block).Do(t.Context())
 			require.NoError(t, err)
 			seed := arcSeedAt(t, trimmed, 20)
 			old := originsOf(trimmed)
@@ -225,7 +225,7 @@ func TestFacetedRetainedBlendStripInterior(t *testing.T) {
 				const bore = 4.0
 				h := bore * math.Sqrt(1-c*c)
 				sc := newRetentionScene()
-				bored, err := decad.Cut(t.Context(), blendPlate(t, sc), zCylinderAt(t, sc, h, 10, bore, -30, 30))
+				bored, err := decad.Cut(blendPlate(t, sc), zCylinderAt(t, sc, h, 10, bore, -30, 30)).Do(t.Context())
 				require.NoError(t, err)
 				old := originsOf(bored)
 				out, err := decad.Fillet(t.Context(), bored, arcSeedAt(t, bored, 20), units.Millimeters(d))
@@ -267,7 +267,7 @@ func TestFacetedRetainedBlendStripInterior(t *testing.T) {
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "the blend's strip needs more than 4096 columns on a circle of radius 9 mm")
 		sc := newRetentionScene()
-		bored, err := decad.Cut(t.Context(), blendPlate(t, sc), zCylinderAt(t, sc, 20, 10, 9, -30, 30))
+		bored, err := decad.Cut(blendPlate(t, sc), zCylinderAt(t, sc, 20, 10, 9, -30, 30)).Do(t.Context())
 		require.NoError(t, err)
 		_, err = decad.Fillet(t.Context(), bored, rimAt(t, bored, 20), units.Millimeters(0.002))
 		require.ErrorIs(t, err, decad.ErrUnsupported)

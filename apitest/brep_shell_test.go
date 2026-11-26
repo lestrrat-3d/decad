@@ -42,7 +42,7 @@ func crossDrilledBar(t *testing.T) (*decad.Document, *decad.Body) {
 	require.NoError(t, err)
 	drill, err := decad.Extrude(t.Context(), doc, ds, ds.Profiles()[0], decad.Symmetric{D: units.Millimeters(11)})
 	require.NoError(t, err)
-	bar, err := decad.Cut(t.Context(), box, drill)
+	bar, err := decad.Cut(box, drill).Do(t.Context())
 	require.NoError(t, err)
 	return doc, bar
 }

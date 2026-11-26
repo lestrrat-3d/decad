@@ -23,7 +23,7 @@ func boredPlate(t *testing.T) (*retentionScene, *decad.Body) {
 	t.Helper()
 	sc := newRetentionScene()
 	plate := blendPlate(t, sc)
-	bored, err := decad.Cut(t.Context(), plate, zCylinder(t, sc, -30))
+	bored, err := decad.Cut(plate, zCylinder(t, sc, -30)).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, "decad.facetedPayload", decadtest.PayloadClass(bored))
 	return sc, bored
@@ -177,7 +177,7 @@ func TestFacetedRetainedBlend(t *testing.T) {
 			pin, err := decad.Extrude(t.Context(), sc.doc, s, s.Profiles()[0],
 				decad.Distance{D: units.Millimeters(60), Dir: decad.Along})
 			require.NoError(t, err)
-			bored, err := decad.Cut(t.Context(), blendPlate(t, sc), translated(t, pin, 0, 0, 0.1))
+			bored, err := decad.Cut(blendPlate(t, sc), translated(t, pin, 0, 0, 0.1)).Do(t.Context())
 			require.NoError(t, err)
 			return bored
 		}
@@ -272,7 +272,7 @@ func TestFacetedRetainedBlend(t *testing.T) {
 	t.Run("boss root fillet fills the corner", func(t *testing.T) {
 		t.Parallel()
 		sc := newRetentionScene()
-		joined, err := decad.Union(t.Context(), blendPlate(t, sc), zCylinder(t, sc, 15))
+		joined, err := decad.Union(blendPlate(t, sc), zCylinder(t, sc, 15)).Do(t.Context())
 		require.NoError(t, err)
 		before, err := joined.Volume()
 		require.NoError(t, err)
@@ -328,7 +328,7 @@ func TestFacetedRetainedBlend(t *testing.T) {
 			decad.Distance{D: units.Millimeters(20), Dir: decad.Against})
 		require.NoError(t, err)
 		shaft = translated(t, shaft, 0, 0, 20.001)
-		drilled, err := decad.Cut(t.Context(), shaft, hole)
+		drilled, err := decad.Cut(shaft, hole).Do(t.Context())
 		require.NoError(t, err)
 		before, err := drilled.Volume()
 		require.NoError(t, err)
@@ -344,7 +344,7 @@ func TestFacetedRetainedBlend(t *testing.T) {
 	t.Run("pocket floor fillet fills the corner", func(t *testing.T) {
 		t.Parallel()
 		sc := newRetentionScene()
-		pocketed, err := decad.Cut(t.Context(), blendPlate(t, sc), zCylinder(t, sc, 10))
+		pocketed, err := decad.Cut(blendPlate(t, sc), zCylinder(t, sc, 10)).Do(t.Context())
 		require.NoError(t, err)
 		before, err := pocketed.Volume()
 		require.NoError(t, err)
@@ -385,7 +385,7 @@ func TestFacetedRetainedBlend(t *testing.T) {
 		// A second blend on the other mouth, a Boolean and a placement all take it.
 		both, err := decad.Fillet(t.Context(), top, rimAt(t, top, 0), units.Millimeters(1))
 		require.NoError(t, err)
-		cut, err := decad.Cut(t.Context(), both, sc.tool(t, 33))
+		cut, err := decad.Cut(both, sc.tool(t, 33)).Do(t.Context())
 		require.NoError(t, err)
 		move, err := r3.Translation(r3.Vec{X: 5, Y: -2, Z: 7})
 		require.NoError(t, err)
@@ -461,7 +461,7 @@ func wedgedPlate(t *testing.T, sketchPlane func(*retentionScene) *sketch.Plane, 
 	require.NoError(t, err)
 	tool, err := decad.Extrude(t.Context(), sc.doc, s, s.Profiles()[0], decad.Symmetric{D: units.Millimeters(depth)})
 	require.NoError(t, err)
-	cut, err := decad.Cut(t.Context(), plate, translated(t, tool, move.X, move.Y, move.Z))
+	cut, err := decad.Cut(plate, translated(t, tool, move.X, move.Y, move.Z)).Do(t.Context())
 	require.NoError(t, err)
 	return cut
 }
@@ -568,7 +568,7 @@ func TestFacetedRetainedBlendStraight(t *testing.T) {
 			tool, err := decad.Extrude(t.Context(), sc.doc, s, s.Profiles()[0],
 				decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
 			require.NoError(t, err)
-			cut, err := decad.Cut(t.Context(), blendPlate(t, sc), translated(t, tool, 0, 0.1, 0))
+			cut, err := decad.Cut(blendPlate(t, sc), translated(t, tool, 0, 0.1, 0)).Do(t.Context())
 			require.NoError(t, err)
 			return cut
 		}
@@ -698,7 +698,7 @@ func TestFacetedRetainedBlendStraight(t *testing.T) {
 		require.NoError(t, err)
 		prism, err = decad.Transform(t.Context(), prism, shift)
 		require.NoError(t, err)
-		bored, err := decad.Cut(t.Context(), prism, zCylinder(t, sc, -30))
+		bored, err := decad.Cut(prism, zCylinder(t, sc, -30)).Do(t.Context())
 		require.NoError(t, err)
 		before, err := bored.Volume()
 		require.NoError(t, err)
@@ -749,7 +749,7 @@ func TestFacetedRetainedBlendStraight(t *testing.T) {
 			require.NoError(t, err)
 			wall, err = decad.Transform(t.Context(), wall, lift)
 			require.NoError(t, err)
-			joined, err := decad.Union(t.Context(), plate, wall)
+			joined, err := decad.Union(plate, wall).Do(t.Context())
 			require.NoError(t, err)
 			return joined
 		}
@@ -838,7 +838,7 @@ func TestFacetedRetainedBlendStraight(t *testing.T) {
 		second, err := decad.Fillet(t.Context(), first, straightEdge(t, first, r3.NewVec(40, 20, 0), r3.NewVec(0, 0, 1)),
 			units.Millimeters(2))
 		require.NoError(t, err)
-		cut, err := decad.Cut(t.Context(), second, sc.tool(t, 33))
+		cut, err := decad.Cut(second, sc.tool(t, 33)).Do(t.Context())
 		require.NoError(t, err)
 		move, err := r3.Translation(r3.Vec{X: 5, Y: -2, Z: 7})
 		require.NoError(t, err)
@@ -877,7 +877,7 @@ func groovedPlate(t *testing.T) *decad.Body {
 	require.NoError(t, err)
 	tool, err = decad.Transform(t.Context(), tool, shift)
 	require.NoError(t, err)
-	grooved, err := decad.Cut(t.Context(), plate, tool)
+	grooved, err := decad.Cut(plate, tool).Do(t.Context())
 	require.NoError(t, err)
 	return grooved
 }
@@ -911,7 +911,7 @@ func rodOnPlate(t *testing.T, sc *retentionScene) *decad.Body {
 	require.NoError(t, err)
 	rod, err = decad.Transform(t.Context(), rod, shift)
 	require.NoError(t, err)
-	joined, err := decad.Union(t.Context(), plate, rod)
+	joined, err := decad.Union(plate, rod).Do(t.Context())
 	require.NoError(t, err)
 	return joined
 }
@@ -1065,7 +1065,7 @@ func TestFacetedRetainedBlendCylinderLine(t *testing.T) {
 	t.Run("a solid crossing a cap the foot fillet gains is refused", func(t *testing.T) {
 		t.Parallel()
 		sc := newRetentionScene()
-		joined, err := decad.Union(t.Context(), rodOnPlate(t, sc), placed(t, rectBox(t, sc.w, sc.doc, 9, 6.3, 10.05, 6.4, 0.1), 20.05))
+		joined, err := decad.Union(rodOnPlate(t, sc), placed(t, rectBox(t, sc.w, sc.doc, 9, 6.3, 10.05, 6.4, 0.1), 20.05)).Do(t.Context())
 		require.NoError(t, err)
 		_, err = decad.Fillet(t.Context(), joined, straightEdge(t, joined, r3.NewVec(10, k[0], 20), r3.NewVec(1, 0, 0)),
 			units.Millimeters(1))
@@ -1076,7 +1076,7 @@ func TestFacetedRetainedBlendCylinderLine(t *testing.T) {
 	t.Run("a solid clear of a cap the foot fillet gains is kept", func(t *testing.T) {
 		t.Parallel()
 		sc := newRetentionScene()
-		joined, err := decad.Union(t.Context(), rodOnPlate(t, sc), placed(t, rectBox(t, sc.w, sc.doc, 8, 6.3, 9, 6.4, 0.1), 20.05))
+		joined, err := decad.Union(rodOnPlate(t, sc), placed(t, rectBox(t, sc.w, sc.doc, 8, 6.3, 9, 6.4, 0.1), 20.05)).Do(t.Context())
 		require.NoError(t, err)
 		filleted, err := decad.Fillet(t.Context(), joined, straightEdge(t, joined, r3.NewVec(10, k[0], 20), r3.NewVec(1, 0, 0)),
 			units.Millimeters(1))
@@ -1093,7 +1093,7 @@ func TestFacetedRetainedBlendArc(t *testing.T) {
 	broken := func(t *testing.T) *decad.Body {
 		t.Helper()
 		sc := newRetentionScene()
-		bored, err := decad.Cut(t.Context(), blendPlate(t, sc), zCylinderAt(t, sc, 2, 10, 4, -30, 30))
+		bored, err := decad.Cut(blendPlate(t, sc), zCylinderAt(t, sc, 2, 10, 4, -30, 30)).Do(t.Context())
 		require.NoError(t, err)
 		return bored
 	}
@@ -1208,7 +1208,7 @@ func TestFacetedRetainedBlendArc(t *testing.T) {
 		require.NoError(t, err)
 		slab, err = decad.Transform(t.Context(), slab, lift)
 		require.NoError(t, err)
-		flat, err := decad.Cut(t.Context(), rod, slab)
+		flat, err := decad.Cut(rod, slab).Do(t.Context())
 		require.NoError(t, err)
 		var sel decad.EdgeSelector
 		for _, e := range flat.Edges() {
@@ -1227,10 +1227,10 @@ func TestFacetedRetainedBlendArc(t *testing.T) {
 	cornerBore := func(t *testing.T, x0, x1 float64) (*decad.Body, decad.EdgeSelector) {
 		t.Helper()
 		sc := newRetentionScene()
-		b, err := decad.Cut(t.Context(), blendPlate(t, sc), zCylinderAt(t, sc, 2, 2, 4, 5, 30))
+		b, err := decad.Cut(blendPlate(t, sc), zCylinderAt(t, sc, 2, 2, 4, 5, 30)).Do(t.Context())
 		require.NoError(t, err)
 		if x1 > x0 {
-			b, err = decad.Union(t.Context(), b, placed(t, rectBox(t, sc.w, sc.doc, x0, 5, x1, 5.1, 0.1), 5.05))
+			b, err = decad.Union(b, placed(t, rectBox(t, sc.w, sc.doc, x0, 5, x1, 5.1, 0.1), 5.05)).Do(t.Context())
 			require.NoError(t, err)
 		}
 		for _, e := range b.Edges() {

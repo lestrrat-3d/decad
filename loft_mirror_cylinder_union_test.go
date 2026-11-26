@@ -42,7 +42,7 @@ func newTeethFixture(t *testing.T) teethFixture {
 	require.NoError(t, err)
 	upper, err := MirroredCopy(t.Context(), lower, MirrorFrame{Frame: middleFrame})
 	require.NoError(t, err)
-	pair, err := Union(t.Context(), lower, upper)
+	pair, err := Union(lower, upper).Do(t.Context())
 	require.NoError(t, err)
 	pairs := []*Body{pair}
 	for i := 1; i <= 2; i++ {

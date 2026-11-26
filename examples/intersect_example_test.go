@@ -61,7 +61,7 @@ func Example_intersect() {
 	}
 
 	// What remains is the shared space: 10 mm in X, 10 mm in Y and 10 mm tall.
-	common, err := decad.Intersect(context.Background(), a, b)
+	common, err := decad.Intersect(a, b).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to intersect: %s\n", err)
 		return

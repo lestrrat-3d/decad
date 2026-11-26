@@ -37,13 +37,13 @@ func TestClassBRootedPinBooleanVolumes(t *testing.T) {
 		want float64
 	}{
 		{name: "union_volume", op: func(t *testing.T, a, b *decad.Body) (*decad.Body, error) {
-			return decad.Union(t.Context(), a, b)
+			return decad.Union(a, b).Do(t.Context())
 		}, want: 8000 + 90*math.Pi},
 		{name: "cut_volume", op: func(t *testing.T, a, b *decad.Body) (*decad.Body, error) {
-			return decad.Cut(t.Context(), a, b)
+			return decad.Cut(a, b).Do(t.Context())
 		}, want: 8000 - 90*math.Pi},
 		{name: "intersection_volume", op: func(t *testing.T, a, b *decad.Body) (*decad.Body, error) {
-			return decad.Intersect(t.Context(), a, b)
+			return decad.Intersect(a, b).Do(t.Context())
 		}, want: 90 * math.Pi},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

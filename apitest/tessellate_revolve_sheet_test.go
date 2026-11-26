@@ -316,7 +316,7 @@ func TestSurfaceRevolveSheetReachesNoBoolean(t *testing.T) {
 	require.NoError(t, err)
 
 	before := doc.Bodies()
-	_, err = decad.Union(t.Context(), sheet, solid)
+	_, err = decad.Union(sheet, solid).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Equal(t, before, doc.Bodies())
 }

@@ -23,10 +23,10 @@ func opposedPockets(t *testing.T, doc *decad.Document, top, bottom [4]float64, t
 	if !topFirst {
 		first, second = bottomTool, topTool
 	}
-	part, err := decad.Cut(t.Context(), plate, first)
+	part, err := decad.Cut(plate, first).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, "decad.stackedPrismPayload", decadtest.PayloadClass(part))
-	return decad.Cut(t.Context(), part, second)
+	return decad.Cut(part, second).Do(t.Context())
 }
 
 // TestStackedOpposedOverlapPockets cuts pockets from opposite faces that
@@ -131,10 +131,10 @@ func TestStackedOpposedTangentPocketsCutFlush(t *testing.T) {
 			t.Parallel()
 			doc := decad.New(decad.ExactOnly())
 			plate := boxBody(t, doc, -10, -10, 10, 10, 10)
-			part, err := decad.Cut(t.Context(), plate, tc.top(t, doc))
+			part, err := decad.Cut(plate, tc.top(t, doc)).Do(t.Context())
 			require.NoError(t, err)
 			require.Equal(t, "decad.stackedPrismPayload", decadtest.PayloadClass(part))
-			out, err := decad.Cut(t.Context(), part, tc.bottom(t, doc))
+			out, err := decad.Cut(part, tc.bottom(t, doc)).Do(t.Context())
 			require.NoError(t, err)
 			require.Empty(t, out.OperationDiagnostics(), "no gap shift")
 			volume, err := out.Volume()
@@ -172,9 +172,9 @@ func TestStackedOpposedOverlapGates(t *testing.T) {
 			t.Parallel()
 			doc := decad.New(decad.ExactOnly())
 			plate := boxBody(t, doc, -10, -10, 10, 10, 10)
-			part, err := decad.Cut(t.Context(), plate, boxBodyAtZ(t, doc, -6, -2, -2, 2, 6, 4))
+			part, err := decad.Cut(plate, boxBodyAtZ(t, doc, -6, -2, -2, 2, 6, 4)).Do(t.Context())
 			require.NoError(t, err)
-			_, err = decad.Cut(t.Context(), part, tc.bottom(t, doc))
+			_, err = decad.Cut(part, tc.bottom(t, doc)).Do(t.Context())
 			require.ErrorIs(t, err, decad.ErrUnsupported)
 			var be *decad.BooleanError
 			require.ErrorAs(t, err, &be)
@@ -219,14 +219,14 @@ func TestStackedOpposedOverlapDisplacedLevelDeclines(t *testing.T) {
 			t.Parallel()
 			doc := decad.New(decad.ExactOnly())
 			plate := boxBody(t, doc, -10, -10, 10, 10, denotedTop)
-			part, err := decad.Cut(t.Context(), plate, pocketBelow(t, doc, -6, -2, -2, 2, down(units.Inches(0.125))))
+			part, err := decad.Cut(plate, pocketBelow(t, doc, -6, -2, -2, 2, down(units.Inches(0.125)))).Do(t.Context())
 			require.NoError(t, err)
 			require.Equal(t, "decad.stackedPrismPayload", decadtest.PayloadClass(part))
 			first, err := part.Volume()
 			require.NoError(t, err)
 			require.Positive(t, boundMM3(t, first), "the floor carries a level displacement")
 			bottom := boxBodyAtZ(t, doc, tc.bottom[0], tc.bottom[1], tc.bottom[2], tc.bottom[3], -3.175, denotedTop)
-			part, err = decad.Cut(t.Context(), part, bottom)
+			part, err = decad.Cut(part, bottom).Do(t.Context())
 			if !tc.refused {
 				require.NoError(t, err)
 				require.Equal(t, "decad.stackedPrismPayload", decadtest.PayloadClass(part),

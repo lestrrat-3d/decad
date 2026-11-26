@@ -12,10 +12,10 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// UnionRefined joins a straight-bevel sector join, a revolved blank and
+// RefineTo joins a straight-bevel sector join, a revolved blank and
 // copies of one point-Loft tooth, directly at the bound the caller wants.
 // Union builds such a join at 0.1 mm and Refine rebuilds it finer, so
-// UnionRefined builds it once. A set that is not a sector join is refused
+// Union(...).RefineTo builds it once. A set that is not a sector join is refused
 // before anything is built, and the caller falls back to Union then Refine.
 func Example_unionRefined() {
 	ctx := context.Background()
@@ -115,7 +115,7 @@ func Example_unionRefined() {
 		fmt.Printf("failed to build the toe cone: %s\n", err)
 		return
 	}
-	toeTrim, err := decad.Cut(ctx, lug, toeCone)
+	toeTrim, err := decad.Cut(lug, toeCone).Do(ctx)
 	if err != nil {
 		fmt.Printf("failed to trim the toe: %s\n", err)
 		return
@@ -125,7 +125,7 @@ func Example_unionRefined() {
 		fmt.Printf("failed to build the heel cone: %s\n", err)
 		return
 	}
-	trimmed, err := decad.Intersect(ctx, toeTrim, heelCone)
+	trimmed, err := decad.Intersect(toeTrim, heelCone).Do(ctx)
 	if err != nil {
 		fmt.Printf("failed to trim the heel: %s\n", err)
 		return
@@ -150,11 +150,11 @@ func Example_unionRefined() {
 
 	// A pair is no sector join: it is refused before anything is built, and
 	// both bodies stay live.
-	_, err = decad.UnionRefined(ctx, bodies[:2], units.Millimeters(0.03))
+	_, err = decad.Union(bodies[:2]...).RefineTo(units.Millimeters(0.03)).Do(ctx)
 	fmt.Println("a pair is refused:", errors.Is(err, decad.ErrUnsupported), "bodies live:", len(doc.Bodies()) == len(bodies))
 
 	// The join is built once at 0.03 mm.
-	joined, err := decad.UnionRefined(ctx, bodies, units.Millimeters(0.03))
+	joined, err := decad.Union(bodies...).RefineTo(units.Millimeters(0.03)).Do(ctx)
 	if err != nil {
 		fmt.Printf("failed to join the teeth: %s\n", err)
 		return

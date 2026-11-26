@@ -288,7 +288,7 @@ func BenchmarkModelingAnalyticUnion(b *testing.B) {
 		a := modelingBenchRect(b, doc, 0, 0, 10, 10, 10)
 		c := modelingBenchRect(b, doc, 5, 5, 15, 15, 10)
 		b.StartTimer()
-		got, err := decad.Union(b.Context(), a, c)
+		got, err := decad.Union(a, c).Do(b.Context())
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -311,7 +311,7 @@ func BenchmarkModelingAnalyticCut(b *testing.B) {
 		target := modelingBenchRect(b, doc, 0, 0, 10, 10, 5)
 		tool := modelingBenchRect(b, doc, 5, 5, 15, 15, 5)
 		b.StartTimer()
-		got, err := decad.Cut(b.Context(), target, tool)
+		got, err := decad.Cut(target, tool).Do(b.Context())
 		if err != nil {
 			b.Fatal(err)
 		}

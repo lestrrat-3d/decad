@@ -91,7 +91,7 @@ func TestChordedLoftUnionKeepsRimBoundOnLaterCut(t *testing.T) {
 		target := chordedFrustum(t, doc, 0, 10, 8, 20)
 		for k := 1; k <= unions; k++ {
 			var err error
-			target, err = decad.Union(t.Context(), target, chordedFrustum(t, doc, 40*float64(k), 10, 8, 20))
+			target, err = decad.Union(target, chordedFrustum(t, doc, 40*float64(k), 10, 8, 20)).Do(t.Context())
 			require.NoError(t, err)
 		}
 		if placedBy != 0 {
@@ -104,7 +104,7 @@ func TestChordedLoftUnionKeepsRimBoundOnLaterCut(t *testing.T) {
 	}
 
 	target, tool := build(t, 0, 0)
-	fresh, err := decad.Cut(t.Context(), target, tool)
+	fresh, err := decad.Cut(target, tool).Do(t.Context())
 	require.NoError(t, err)
 	freshClaimed, freshActual, freshCount := frustumRim(t, fresh, 0, 0, cutX)
 	require.Positive(t, freshCount)
@@ -127,7 +127,7 @@ func TestChordedLoftUnionKeepsRimBoundOnLaterCut(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			target, tool := build(t, tc.unions, tc.placedBy)
-			cut, err := decad.Cut(t.Context(), target, tool)
+			cut, err := decad.Cut(target, tool).Do(t.Context())
 			if tc.refusable && err != nil {
 				require.ErrorIs(t, err, decad.ErrUnsupported)
 				return

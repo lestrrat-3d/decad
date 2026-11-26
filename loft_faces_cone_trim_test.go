@@ -35,7 +35,7 @@ func TestLoftCapConeRecordDoesNotSurviveRoundTripPlacement(t *testing.T) {
 	require.NoError(t, err)
 	tool, err = Transform(t.Context(), tool, lift)
 	require.NoError(t, err)
-	drilled, err := Cut(t.Context(), plate, tool)
+	drilled, err := Cut(plate, tool).Do(t.Context())
 	require.NoError(t, err)
 	p := drilled.n.Payload.(facetedPayload)
 	p.LoftFacesCap = &loftFacesCapRecord{}

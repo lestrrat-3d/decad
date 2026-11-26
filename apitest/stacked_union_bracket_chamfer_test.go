@@ -30,7 +30,7 @@ func stackedLBracket(t *testing.T) (*decad.Document, *decad.Body) {
 	doc := decad.New()
 	base := boxBody(t, doc, 0, 0, 60, 40, 8)
 	upright := boxBody(t, doc, 0, 0, 8, 40, 50)
-	bracket, err := decad.Union(t.Context(), base, upright)
+	bracket, err := decad.Union(base, upright).Do(t.Context())
 	require.NoError(t, err)
 	decadtest.MeasuresVolume(t, bracket, units.CubicMillimeters(32640), decadtest.Exactly())
 	return doc, bracket

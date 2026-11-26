@@ -37,7 +37,7 @@ func TestPointLocationAcrossPocketsAndBores(t *testing.T) {
 	doc := decad.New()
 	plate := boxBody(t, doc, -10, -10, 10, 10, 10)
 	bore := circleBodyAtZ(t, doc, 0, 2, 0, 10)
-	part, err := decad.Cut(t.Context(), plate, bore)
+	part, err := decad.Cut(plate, bore).Do(t.Context())
 	require.NoError(t, err)
 	for _, tc := range []struct {
 		name string
@@ -56,7 +56,7 @@ func TestPointLocationAcrossPocketsAndBores(t *testing.T) {
 	}
 
 	pocket := boxBodyAtZ(t, doc, 5, -2, 8, 2, 6, 4)
-	stack, err := decad.Cut(t.Context(), part, pocket)
+	stack, err := decad.Cut(part, pocket).Do(t.Context())
 	require.NoError(t, err)
 	for _, tc := range []struct {
 		at   r3.Vec
@@ -76,7 +76,7 @@ func TestPointLocationOnFacetedAndPlacedBodies(t *testing.T) {
 	doc := decad.New()
 	plate := boxBody(t, doc, 0, 0, 20, 20, 8)
 	tool := translated(t, diskBody(t, doc, 10, 10, 2), 0, 0, -6)
-	part, err := decad.Cut(t.Context(), plate, tool)
+	part, err := decad.Cut(plate, tool).Do(t.Context())
 	require.NoError(t, err)
 	require.True(t, tookMeshPath(part))
 	for _, tc := range []struct {

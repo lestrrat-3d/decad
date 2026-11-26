@@ -48,7 +48,7 @@ func knobBody(t *testing.T, doc *decad.Document) (*decad.Body, float64) {
 	require.NoError(t, err)
 	disc, err = decad.Transform(t.Context(), disc, translation(t, r3.Vec{Z: 8}))
 	require.NoError(t, err)
-	union, err := decad.Union(t.Context(), base, disc)
+	union, err := decad.Union(base, disc).Do(t.Context())
 	require.NoError(t, err)
 	knob, err := decad.Transform(t.Context(), union, translation(t, r3.Vec{X: .125}))
 	require.NoError(t, err)

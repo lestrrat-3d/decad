@@ -87,7 +87,7 @@ func TestDraftOfAMeshSolidRefusesWhatIsNotAllWallsOfAPrism(t *testing.T) {
 	doc := decad.New()
 	a := blockIn(t, doc, r3.NewVec(0, 0, 0), r3.NewVec(20, 10, 8))
 	c := blockIn(t, doc, r3.NewVec(0, 0, 0), r3.NewVec(10, 10, 4))
-	stepped, err := decad.Union(t.Context(), a, c)
+	stepped, err := decad.Union(a, c).Do(t.Context())
 	require.NoError(t, err)
 	_, err = decad.Draft(t.Context(), stepped, meshWalls(),
 		decad.NeutralFace{Body: stepped, Face: decad.Faces(decad.Facing(r3.NewVec(0, 0, -1)))}, units.Degrees(5))

@@ -67,7 +67,7 @@ func TestCutFlatOnPerpendicularShaft(t *testing.T) {
 				tool, err = decad.Transform(t.Context(), tool, xf)
 				require.NoError(t, err)
 			}
-			out, err := decad.Cut(t.Context(), shaft, tool)
+			out, err := decad.Cut(shaft, tool).Do(t.Context())
 			require.NoError(t, err)
 			v, err := out.Volume()
 			require.NoError(t, err)

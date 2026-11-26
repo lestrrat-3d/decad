@@ -147,7 +147,7 @@ func TestCheckPinDeclaredAxisWithBound(t *testing.T) {
 func TestCheckPinInSlot(t *testing.T) {
 	build := func(pinR, cx float64) parts.JointResult {
 		doc := decad.New()
-		blk, err := decad.Cut(t.Context(), block(t, doc, 0, 0, 30, 20, 0, 10), block(t, doc, 12.8, 5, 17.2, 15, -1, 12))
+		blk, err := decad.Cut(block(t, doc, 0, 0, 30, 20, 0, 10), block(t, doc, 12.8, 5, 17.2, 15, -1, 12)).Do(t.Context())
 		require.NoError(t, err)
 		s := parts.NewSet(doc)
 		mustAdd(t, s, parts.Part{Name: nameBlock, Kind: parts.Manufactured, Body: blk},
@@ -215,7 +215,7 @@ func TestCheckFaceContact(t *testing.T) {
 	// An L-shaped plate and a block over its notch share a plane and their vertex boxes overlap,
 	// but their faces do not: no witness, so the joint is undecided and never confirmed.
 	doc := decad.New()
-	ell, err := decad.Cut(t.Context(), block(t, doc, 0, 0, 10, 10, 0, 5), block(t, doc, 5, 5, 11, 11, -1, 7))
+	ell, err := decad.Cut(block(t, doc, 0, 0, 10, 10, 0, 5), block(t, doc, 5, 5, 11, 11, -1, 7)).Do(t.Context())
 	require.NoError(t, err)
 	s := parts.NewSet(doc)
 	mustAdd(t, s, parts.Part{Name: "ell", Kind: parts.Manufactured, Body: ell},
@@ -292,7 +292,7 @@ func TestCheckLeavesTheDocumentAlone(t *testing.T) {
 
 	retired := decad.New()
 	rs := pinSet(t, retired, 3.2, 3, 10, parts.Joint{})
-	_, err = decad.Union(t.Context(), rs.Parts()[1].Body, block(t, retired, 9, 9, 12, 12, 0, 3))
+	_, err = decad.Union(rs.Parts()[1].Body, block(t, retired, 9, 9, 12, 12, 0, 3)).Do(t.Context())
 	require.NoError(t, err)
 	_, err = rs.Check(t.Context())
 	require.ErrorIs(t, err, decad.ErrRetiredBody)

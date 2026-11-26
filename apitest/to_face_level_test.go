@@ -173,7 +173,7 @@ func TestToFaceRefusesFacetedLoftCap(t *testing.T) {
 	require.NoError(t, err)
 	upper, err := decad.MirroredCopy(t.Context(), lower, decad.MirrorFrame{Frame: mirrorFrame})
 	require.NoError(t, err)
-	joined, err := decad.Union(t.Context(), upper, lower)
+	joined, err := decad.Union(upper, lower).Do(t.Context())
 	require.NoError(t, err)
 	require.True(t, joined.IsSolid())
 

@@ -53,7 +53,7 @@ func TestClassBCrossingVertexFarFromOrigin(t *testing.T) {
 	drill, err := decad.Extrude(t.Context(), doc, ts, ts.Profiles()[0], decad.Symmetric{D: units.Millimeters(11)})
 	require.NoError(t, err)
 
-	got, err := decad.Cut(t.Context(), box, drill)
+	got, err := decad.Cut(box, drill).Do(t.Context())
 	require.NoError(t, err)
 
 	d := new(big.Float).SetPrec(junctionPrec).Sub(jf(20), jf(cz))

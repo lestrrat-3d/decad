@@ -65,7 +65,7 @@ func facetedContextBody(t *testing.T) (*decad.Document, *decad.Body) {
 	doc := decad.New()
 	plate := boxBody(t, doc, 0, 0, 20, 20, 8)
 	tool := translated(t, diskBody(t, doc, 14, 6, 2), 0, 0, -6)
-	body, err := decad.Cut(t.Context(), plate, tool)
+	body, err := decad.Cut(plate, tool).Do(t.Context())
 	require.NoError(t, err)
 	return doc, body
 }
@@ -784,7 +784,7 @@ func TestCopyPreservesFacetedProvenance(t *testing.T) {
 	plate := boxBody(t, doc, 0, 0, 20, 20, 8)
 	tool := translated(t, diskBody(t, doc, 14, 6, 2), 0, 0, -6)
 
-	cut, err := decad.Cut(t.Context(), plate, tool)
+	cut, err := decad.Cut(plate, tool).Do(t.Context())
 	require.NoError(t, err)
 
 	// The cut result's faces carry each source's upstream FeatureRef origins.

@@ -25,7 +25,7 @@ func TestPatternUnionFoldsPolygonalPinsIntoAMeshPlate(t *testing.T) {
 	copies, err := decad.PatternCopies(t.Context(), hex,
 		decad.LinearPattern{Dir: r3.NewVec(0, 1, 0), Step: units.Millimeters(4), Count: 3})
 	require.NoError(t, err)
-	out, err := decad.Union(t.Context(), plate, append([]*decad.Body{hex}, copies...)...)
+	out, err := decad.Union(append([]*decad.Body{plate}, append([]*decad.Body{hex}, copies...)...)...).Do(t.Context())
 	require.NoError(t, err)
 	require.True(t, slices.Equal([]*decad.Body{out}, doc.Bodies()), "the plate, the pin and the copies are consumed")
 	volume, err := out.Volume()
@@ -46,7 +46,7 @@ func TestPatternUnionFoldsRoundPinsIntoAMeshPlate(t *testing.T) {
 	copies, err := decad.PatternCopies(t.Context(), pin,
 		decad.LinearPattern{Dir: r3.NewVec(0, 1, 0), Step: units.Millimeters(4), Count: 3})
 	require.NoError(t, err)
-	out, err := decad.Union(t.Context(), plate, append([]*decad.Body{pin}, copies...)...)
+	out, err := decad.Union(append([]*decad.Body{plate}, append([]*decad.Body{pin}, copies...)...)...).Do(t.Context())
 	require.NoError(t, err)
 	require.True(t, slices.Equal([]*decad.Body{out}, doc.Bodies()))
 	volume, err := out.Volume()
@@ -68,7 +68,7 @@ func TestPatternUnionFoldRefusalLeavesEveryBodyLive(t *testing.T) {
 	copies, err := decad.PatternCopies(t.Context(), pin,
 		decad.LinearPattern{Dir: r3.NewVec(0, 1, 0), Step: units.Millimeters(4), Count: 3})
 	require.NoError(t, err)
-	_, err = decad.Union(t.Context(), plate, append([]*decad.Body{pin}, copies...)...)
+	_, err = decad.Union(append([]*decad.Body{plate}, append([]*decad.Body{pin}, copies...)...)...).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.True(t, slices.Equal(append(slices.Clone(before), copies...), doc.Bodies()),
 		"a refused Union leaves the plate, the pin and every copy live")

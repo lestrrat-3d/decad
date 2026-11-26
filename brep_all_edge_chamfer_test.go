@@ -47,7 +47,7 @@ func allEdgeChamferBore(t *testing.T, length, cx, cz float64) (*topo.Body, brepP
 	require.NoError(t, err)
 	drill, err := Extrude(t.Context(), doc, ds, ds.Profiles()[0], Symmetric{D: units.Millimeters(11)})
 	require.NoError(t, err)
-	bar, err := Cut(t.Context(), box, drill)
+	bar, err := Cut(box, drill).Do(t.Context())
 	require.NoError(t, err)
 	bp, ok := bar.n.Payload.(brepPayload)
 	require.True(t, ok)

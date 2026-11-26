@@ -81,11 +81,11 @@ func TestVerifyHistoryCopyLiftTranslation(t *testing.T) {
 		drilled := on(slab(t, doc, 0, -5, 30, 5, 0, 10, r3.Identity()))
 		for _, x := range []float64{10, 20} {
 			var err error
-			drilled, err = decad.Cut(t.Context(), drilled, on(discAt(t, doc, x, 0, -1, 30, 1)))
+			drilled, err = decad.Cut(drilled, on(discAt(t, doc, x, 0, -1, 30, 1))).Do(t.Context())
 			require.NoError(t, err)
 		}
 		stem := on(discAt(t, doc, 10, 0, 2, 20, 1))
-		master, err := decad.Union(t.Context(), stem, on(hookRingSweep(t, doc, ringZ, 90)))
+		master, err := decad.Union(stem, on(hookRingSweep(t, doc, ringZ, 90))).Do(t.Context())
 		require.NoError(t, err)
 		require.True(t, tookMeshPath(master))
 		return scene{doc: doc, lift: lift, drilled: drilled, master: master}
@@ -140,7 +140,7 @@ func TestVerifyHistoryCopyLiftTranslation(t *testing.T) {
 			return copyOf(t, away, decad.WithCopyLiftTranslation(sc.lift, r3.Vec{X: 20, Y: 40}, second))
 		}, false, true},
 		{"exact move of a refined master", 11, func(t *testing.T, sc scene) *decad.Body {
-			refined, err := decad.Refine(t.Context(), sc.master, units.Millimeters(0.05))
+			refined, err := decad.Refine(sc.master, units.Millimeters(0.05)).Do(t.Context())
 			require.NoError(t, err)
 			return copyOf(t, refined, decad.WithCopyLiftTranslation(sc.lift, first, second))
 		}, true, true},
@@ -235,7 +235,7 @@ func TestVerifyHistoryCopyEndCap(t *testing.T) {
 			t.Parallel()
 			doc := decad.New()
 			spindle := collarSpindle(t, doc)
-			master, err := decad.Union(t.Context(), xScrew(t, doc, 4, from.Y, 0), hookRing(t, doc, 20))
+			master, err := decad.Union(xScrew(t, doc, 4, from.Y, 0), hookRing(t, doc, 20)).Do(t.Context())
 			require.NoError(t, err)
 			copied, err := decad.Copy(t.Context(), master, decad.WithCopyLiftTranslation(r3.Identity(), from, tc.to))
 			require.NoError(t, err)

@@ -61,7 +61,7 @@ func Example_cut_blind_pocket() {
 		return
 	}
 
-	pocketed, err := decad.Cut(context.Background(), cube, tool)
+	pocketed, err := decad.Cut(cube, tool).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to cut: %s\n", err)
 		return

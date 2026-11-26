@@ -33,7 +33,7 @@ func openChainBox(t *testing.T, z float64) (*decad.Body, decad.EdgeSelector) {
 // openCornerBox builds the open-corner box in sc.
 func openCornerBox(t *testing.T, sc *retentionScene) *decad.Body {
 	t.Helper()
-	drilled, err := decad.Cut(t.Context(), roundedCornerBox(t, sc), sc.tool(t, 20))
+	drilled, err := decad.Cut(roundedCornerBox(t, sc), sc.tool(t, 20)).Do(t.Context())
 	require.NoError(t, err)
 	return drilled
 }
@@ -138,7 +138,7 @@ func roundedPocketAt(t *testing.T, closed bool, floor float64) *decad.Body {
 	}
 	tool, err := decad.Fillet(t.Context(), tool, vertical, units.Millimeters(3))
 	require.NoError(t, err)
-	out, err := decad.Cut(t.Context(), plate, placed(t, tool, floor))
+	out, err := decad.Cut(plate, placed(t, tool, floor)).Do(t.Context())
 	require.NoError(t, err)
 	return out
 }
@@ -313,7 +313,7 @@ func TestFacetedRetainedBlendOpenChain(t *testing.T) {
 		rounded, err := decad.Fillet(t.Context(), box,
 			decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1))).Exactly(4), units.Millimeters(2.7))
 		require.NoError(t, err)
-		drilled, err := decad.Cut(t.Context(), rounded, sc.tool(t, 20))
+		drilled, err := decad.Cut(rounded, sc.tool(t, 20)).Do(t.Context())
 		require.NoError(t, err)
 		var outline *decad.EdgeQuery
 		named := 0

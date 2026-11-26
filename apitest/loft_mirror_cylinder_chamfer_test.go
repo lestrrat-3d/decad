@@ -24,7 +24,7 @@ func TestLoftMirrorCylinderBoreChamfersExteriorCaps(t *testing.T) {
 	require.NoError(t, err)
 	upper, err := decad.MirroredCopy(t.Context(), lower, decad.MirrorFrame{Frame: middleFrame})
 	require.NoError(t, err)
-	pair, err := decad.Union(t.Context(), lower, upper)
+	pair, err := decad.Union(lower, upper).Do(t.Context())
 	require.NoError(t, err)
 	pattern := []*decad.Body{pair}
 	// Feed copies in reverse angular order. The certified source Join sorts
@@ -44,10 +44,10 @@ func TestLoftMirrorCylinderBoreChamfersExteriorCaps(t *testing.T) {
 		pattern = append(pattern, turned)
 	}
 	blank := circleBodyAtZ(t, doc, 0, 4, 0, 2)
-	joined, err := decad.Union(t.Context(), blank, pattern...)
+	joined, err := decad.Union(append([]*decad.Body{blank}, pattern...)...).Do(t.Context())
 	require.NoError(t, err)
 	bore := circleBodyAtZ(t, doc, 0, 0.5, -1, 4)
-	cut, err := decad.Cut(t.Context(), joined, bore)
+	cut, err := decad.Cut(joined, bore).Do(t.Context())
 	require.NoError(t, err)
 	_, err = decad.Chamfer(t.Context(), cut, decad.Edges(decad.OuterLoopOf(decad.CapStart(cut))),
 		units.Millimeters(0.03))

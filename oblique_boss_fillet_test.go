@@ -81,7 +81,7 @@ func testObliqueBossJunctionFilletPublicWorkflow(t *testing.T, tiltAxis r3.Vec) 
 	t.Helper()
 	ctx := t.Context()
 	plate, boss := buildObliqueBossSources(t, r3.Vec{X: 10, Y: 10, Z: 3.5}, tiltAxis)
-	joined, err := Union(ctx, plate, boss)
+	joined, err := Union(plate, boss).Do(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}

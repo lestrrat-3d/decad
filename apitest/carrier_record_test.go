@@ -179,7 +179,7 @@ func wheelUnion(t *testing.T, windows, teeth int) *decad.Body {
 			decad.CircularPattern{Center: r3.Vec{}, Axis: r3.NewVec(0, 0, 1), Count: teeth})
 		require.NoError(t, err)
 	}
-	wheel, err := decad.Union(t.Context(), disc, append([]*decad.Body{tooth}, copies...)...)
+	wheel, err := decad.Union(append([]*decad.Body{disc}, append([]*decad.Body{tooth}, copies...)...)...).Do(t.Context())
 	require.NoError(t, err)
 	return wheel
 }
@@ -295,7 +295,7 @@ func TestCarrierRecordWheelUnionFilletAndBore(t *testing.T) {
 		wheelD(s)
 		return wheelExtrude(t, doc, s, 0, wheelHeight+1.5)
 	}()
-	bored, err := decad.Cut(t.Context(), filleted, tool)
+	bored, err := decad.Cut(filleted, tool).Do(t.Context())
 	require.NoError(t, err)
 	requireAnalyticEdges(t, bored)
 	bv, err := bored.Volume()
@@ -355,7 +355,7 @@ func TestCarrierRecordHoledPlateWithTranslatedBlocks(t *testing.T) {
 	copies, err := decad.PatternCopies(t.Context(), block,
 		decad.LinearPattern{Dir: r3.NewVec(1, 0, 0), Step: units.Millimeters(6.1), Count: blocks})
 	require.NoError(t, err)
-	joined, err := decad.Union(t.Context(), plate, append([]*decad.Body{block}, copies...)...)
+	joined, err := decad.Union(append([]*decad.Body{plate}, append([]*decad.Body{block}, copies...)...)...).Do(t.Context())
 	require.NoError(t, err)
 	requireAnalyticEdges(t, joined)
 	jv, err := joined.Volume()
@@ -418,7 +418,7 @@ func TestCarrierRecordArcHeavyPairReachesItsRoute(t *testing.T) {
 	fixedRect(ps, 5, -3, 15, 3)
 	plate, err := decad.Extrude(t.Context(), doc, ps, ps.Profiles()[0], decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
 	require.NoError(t, err)
-	joined, err := decad.Union(t.Context(), disc, plate)
+	joined, err := decad.Union(disc, plate).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, "decad.prismPayload", decadtest.PayloadClass(joined), "the pair route builds it analytically")
 	// The plate's part outside the circle: the integral of 15 - sqrt(r² - y²) over [-3, 3].

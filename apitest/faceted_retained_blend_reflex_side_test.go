@@ -48,7 +48,7 @@ func steppedArm(t *testing.T, outline [][2]float64) *decad.Body {
 	block, err := decad.Extrude(t.Context(), sc.doc, cs, cs.Profiles()[0],
 		decad.Distance{D: units.Millimeters(4), Dir: decad.Along})
 	require.NoError(t, err)
-	joined, err := decad.Union(t.Context(), arm, translated(t, block, 0, 0, 12))
+	joined, err := decad.Union(arm, translated(t, block, 0, 0, 12)).Do(t.Context())
 	require.NoError(t, err)
 	return joined
 }

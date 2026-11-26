@@ -33,10 +33,10 @@ func restingBossCases() []restingBossCase {
 			make: func(t *testing.T, doc *decad.Document) *decad.Body {
 				t.Helper()
 				plate := boxBody(t, doc, 0, 0, 100, 60, 10)
-				first, err := decad.Union(t.Context(), plate, circlePrismAtZ(t, doc, 20, 30, 6, 10, 8))
+				first, err := decad.Union(plate, circlePrismAtZ(t, doc, 20, 30, 6, 10, 8)).Do(t.Context())
 				require.NoError(t, err)
 				second := translated(t, circlePrismAtZ(t, doc, 20, 30, 6, 10, 8), 30, 0, 0)
-				joined, err := decad.Union(t.Context(), first, second)
+				joined, err := decad.Union(first, second).Do(t.Context())
 				require.NoError(t, err)
 				return joined
 			},

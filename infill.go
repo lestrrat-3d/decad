@@ -124,9 +124,9 @@ func infillWithSkin(ctx context.Context, b *Body, spec InfillSpec) (result *Body
 		return nil, err
 	}
 	temporaries = append(temporaries, fill)
-	joined, err := Union(ctx, skin, fill)
+	joined, err := union(ctx, []*Body{skin, fill})
 	if err != nil {
-		return nil, err
+		return nil, operationError(OperationUnion, err)
 	}
 	removeTools([]*Body{b})
 	return joined, nil
@@ -189,5 +189,6 @@ func infillInterior(ctx context.Context, b *Body, spec InfillSpec) (*Body, error
 	if err != nil {
 		return nil, fmt.Errorf("%w: the infill lattice is not a solid the evaluator can prove: %s", ErrUnsupported, err)
 	}
-	return Intersect(ctx, b, lattice)
+	body, err := intersect(ctx, b, lattice, booleanConfig{})
+	return body, operationError(OperationIntersect, err)
 }

@@ -74,7 +74,7 @@ func TestPatternUnionFlanksCrossTheBase(t *testing.T) {
 			copies, err := decad.PatternCopies(t.Context(), lobe,
 				decad.CircularPattern{Axis: r3.NewVec(0, 0, 1), Count: n})
 			require.NoError(t, err)
-			joined, err := decad.Union(t.Context(), disc, append([]*decad.Body{lobe}, copies...)...)
+			joined, err := decad.Union(append([]*decad.Body{disc}, append([]*decad.Body{lobe}, copies...)...)...).Do(t.Context())
 			require.NoError(t, err)
 			require.True(t, joined.IsSolid())
 
@@ -85,7 +85,7 @@ func TestPatternUnionFlanksCrossTheBase(t *testing.T) {
 			for k := range lobes {
 				lobes[k] = crossingLoftAt(t, ref, r, half, height, 2*math.Pi*float64(k)/float64(n))
 			}
-			drawn, err := decad.Union(t.Context(), rdisc, lobes...)
+			drawn, err := decad.Union(append([]*decad.Body{rdisc}, lobes...)...).Do(t.Context())
 			require.NoError(t, err)
 			gv, err := joined.Volume()
 			require.NoError(t, err)
@@ -108,7 +108,7 @@ func TestPatternUnionFlanksCrossTheBaseThenFilletBoreChamfer(t *testing.T) {
 	lobe := crossingLoft(t, doc, r, half, height)
 	copies, err := decad.PatternCopies(t.Context(), lobe, decad.CircularPattern{Axis: r3.NewVec(0, 0, 1), Count: n})
 	require.NoError(t, err)
-	joined, err := decad.Union(t.Context(), disc, append([]*decad.Body{lobe}, copies...)...)
+	joined, err := decad.Union(append([]*decad.Body{disc}, append([]*decad.Body{lobe}, copies...)...)...).Do(t.Context())
 	require.NoError(t, err)
 	v0, err := joined.Volume()
 	require.NoError(t, err)
@@ -122,7 +122,7 @@ func TestPatternUnionFlanksCrossTheBaseThenFilletBoreChamfer(t *testing.T) {
 	require.Greater(t, v1.Value.Base(), v0.Value.Base(), "a concave fillet adds material")
 
 	bore := circleBodyAtZ(t, doc, 0, 0.8, -1, height+2)
-	bored, err := decad.Cut(t.Context(), filleted, bore)
+	bored, err := decad.Cut(filleted, bore).Do(t.Context())
 	require.NoError(t, err)
 	caps := decad.Edges(decad.OuterLoopOf(decad.CapStart(bored))).Or(decad.OuterLoopOf(decad.CapEnd(bored)))
 	chamfered, err := decad.Chamfer(t.Context(), bored, caps, units.Millimeters(0.02))

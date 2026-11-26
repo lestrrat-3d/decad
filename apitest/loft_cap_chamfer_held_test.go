@@ -168,7 +168,7 @@ func TestLoftCapChamferKeepsTheBore(t *testing.T) {
 	rounded, err := decad.Fillet(t.Context(), body, rungQuery(bottom, top, height).Exactly(len(bottom)),
 		units.Millimeters(0.25))
 	require.NoError(t, err)
-	bored, err := decad.Cut(t.Context(), rounded, circleBodyAtZ(t, rounded.Document(), 0, r, -1, height+2))
+	bored, err := decad.Cut(rounded, circleBodyAtZ(t, rounded.Document(), 0, r, -1, height+2)).Do(t.Context())
 	require.NoError(t, err)
 	held := heldVolume(t, bored)
 	capsBefore, _ := capAreaTotal(t, bored)

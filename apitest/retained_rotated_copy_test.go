@@ -25,7 +25,7 @@ func rotatedRetentionCopy(t *testing.T, degrees float64) (*decad.Body, *decad.Bo
 func rotatedRetentionScene(t *testing.T, degrees float64) (*retentionScene, *decad.Body, *decad.Body, r3.Transform) {
 	t.Helper()
 	sc := newRetentionScene()
-	drilled, err := decad.Cut(t.Context(), sc.roundedBox(t), sc.tool(t, 20))
+	drilled, err := decad.Cut(sc.roundedBox(t), sc.tool(t, 20)).Do(t.Context())
 	require.NoError(t, err)
 	center, axis := r3.NewVec(20, 10, 0), r3.NewVec(0, 0, 1)
 	copied, err := decad.Copy(t.Context(), drilled, decad.WithCopyRotation(center, axis, units.Degrees(degrees)))
@@ -156,7 +156,7 @@ func TestRetainedRotatedCopy(t *testing.T) {
 	t.Run("a tilted rotation still refuses ToFace and MirrorFace", func(t *testing.T) {
 		t.Parallel()
 		sc := newRetentionScene()
-		drilled, err := decad.Cut(t.Context(), sc.roundedBox(t), sc.tool(t, 20))
+		drilled, err := decad.Cut(sc.roundedBox(t), sc.tool(t, 20)).Do(t.Context())
 		require.NoError(t, err)
 		copied, err := decad.Copy(t.Context(), drilled,
 			decad.WithCopyRotation(r3.NewVec(20, 10, 0), r3.NewVec(1, 0, 0), units.Degrees(20)))

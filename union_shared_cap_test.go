@@ -20,7 +20,7 @@ func TestUnionSharedCapObliqueLoftAndCone(t *testing.T) {
 		}
 		lower := sharedCapFrustum(t, doc, sharedCapObliqueBase(), 2.0, 0.9922)
 		cone := sharedCapCone(t, doc, [2]float64{}, 0.9922, 0.409, 4.15)
-		joined, err := Union(t.Context(), lower, cone)
+		joined, err := Union(lower, cone).Do(t.Context())
 		require.NoError(t, err, "exact only: %v", exact)
 		requireDisjointUnion(t, lower, cone, joined)
 		if !exact {
@@ -31,13 +31,13 @@ func TestUnionSharedCapObliqueLoftAndCone(t *testing.T) {
 		cone = sharedCapCone(t, doc, [2]float64{}, 0.9922, 0.409, 4.15)
 		lv, err := lower.Volume()
 		require.NoError(t, err)
-		_, err = Intersect(t.Context(), lower, cone)
+		_, err = Intersect(lower, cone).Do(t.Context())
 		var be *BooleanError
 		require.ErrorAs(t, err, &be)
 		require.Equal(t, BooleanEmpty, be.Code)
 		lower = sharedCapFrustum(t, doc, sharedCapObliqueBase(), 2.0, 0.9922)
 		cone = sharedCapCone(t, doc, [2]float64{}, 0.9922, 0.409, 4.15)
-		cut, err := Cut(t.Context(), lower, cone)
+		cut, err := Cut(lower, cone).Do(t.Context())
 		require.NoError(t, err)
 		cv, err := cut.Volume()
 		require.NoError(t, err)
@@ -50,7 +50,7 @@ func TestUnionSharedCapCylinderAndCone(t *testing.T) {
 	doc := New(ExactOnly())
 	lower := sharedCapFrustum(t, doc, [2]float64{}, 1.0, 1.0)
 	cone := sharedCapCone(t, doc, [2]float64{}, 1.0, 0.4, 3.0)
-	joined, err := Union(t.Context(), lower, cone)
+	joined, err := Union(lower, cone).Do(t.Context())
 	require.NoError(t, err)
 	requireDisjointUnion(t, lower, cone, joined)
 }
@@ -60,7 +60,7 @@ func TestUnionSharedCapPartialOverlap(t *testing.T) {
 	doc := New(ExactOnly())
 	lower := sharedCapFrustum(t, doc, [2]float64{}, 1.5, 1.0)
 	cone := sharedCapCone(t, doc, [2]float64{1.0, 0}, 1.0, 0.4, 3.0)
-	joined, err := Union(t.Context(), lower, cone)
+	joined, err := Union(lower, cone).Do(t.Context())
 	require.NoError(t, err)
 	requireDisjointUnion(t, lower, cone, joined)
 }
@@ -70,7 +70,7 @@ func TestUnionSharedCapTangentCapsRefused(t *testing.T) {
 	doc := New(ExactOnly())
 	lower := sharedCapFrustum(t, doc, [2]float64{}, 1.5, 1.0)
 	cone := sharedCapCone(t, doc, [2]float64{2.0, 0}, 1.0, 0.4, 3.0)
-	_, err := Union(t.Context(), lower, cone)
+	_, err := Union(lower, cone).Do(t.Context())
 	var be *BooleanError
 	require.ErrorAs(t, err, &be)
 	require.Equal(t, BooleanUnsupportedContact, be.Code)
@@ -85,7 +85,7 @@ func TestUnionSharedCapBossOnPlate(t *testing.T) {
 		}
 		plate := internalOffsetBox(t, doc, -5, -4, 5, 4, 0, Distance{D: units.Millimeters(sharedCapHeight), Dir: Along})
 		boss := sharedCapBoss(t, doc, [2]float64{1.5, -0.5}, 1.2, 2.0)
-		joined, err := Union(t.Context(), plate, boss)
+		joined, err := Union(plate, boss).Do(t.Context())
 		require.NoError(t, err, "exact only: %v", exact)
 		requireDisjointUnion(t, plate, boss, joined)
 	}

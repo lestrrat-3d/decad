@@ -62,7 +62,7 @@ func refineChain(t *testing.T, doc *decad.Document, pts []r3.Vec, r float64) (*d
 			continue
 		}
 		var err error
-		u, err = decad.Union(t.Context(), u, span)
+		u, err = decad.Union(u, span).Do(t.Context())
 		require.NoError(t, err)
 	}
 	return u, want
@@ -122,7 +122,7 @@ func TestRefineBentCylinderChains(t *testing.T) {
 			srcVol, err := chain.Volume()
 			require.NoError(t, err)
 
-			refined, err := decad.Refine(t.Context(), chain, units.Millimeters(tc.max))
+			refined, err := decad.Refine(chain, units.Millimeters(tc.max)).Do(t.Context())
 			require.NoError(t, err)
 			m, err := refined.Tessellate(t.Context(), units.Millimeters(tc.max))
 			require.NoError(t, err)
@@ -137,7 +137,7 @@ func TestRefineBentCylinderChains(t *testing.T) {
 			require.Equal(t, srcVol, gotVol)
 			requireVolumeContains(t, refined, want)
 
-			_, err = decad.Refine(t.Context(), chain, units.Millimeters(tc.max))
+			_, err = decad.Refine(chain, units.Millimeters(tc.max)).Do(t.Context())
 			require.ErrorIs(t, err, decad.ErrRetiredBody, "Refine retires its source")
 			ops := doc.OperationHistory().Operations()
 			require.Equal(t, decad.OperationRefine, ops[len(ops)-1].Kind())
@@ -151,7 +151,7 @@ func TestRefineLeaderLiftsTheTessellateRefusal(t *testing.T) {
 	chain, _ := refineChain(t, doc, leaderPoints(1), 0.35)
 	_, err := chain.Tessellate(t.Context(), units.Millimeters(0.12))
 	require.ErrorIs(t, err, decad.ErrUnsupported, "the held crossing bound refuses 0.12 mm before Refine")
-	refined, err := decad.Refine(t.Context(), chain, units.Millimeters(0.12))
+	refined, err := decad.Refine(chain, units.Millimeters(0.12)).Do(t.Context())
 	require.NoError(t, err)
 	m, err := refined.Tessellate(t.Context(), units.Millimeters(0.12))
 	require.NoError(t, err)
@@ -189,10 +189,10 @@ func TestRefineRefusals(t *testing.T) {
 			{units.Millimeters(math.Inf(1)), decad.ErrNotFinite},
 			{units.Degrees(1), decad.ErrUnitKind},
 		} {
-			_, err := decad.Refine(t.Context(), chain, tc.bound)
+			_, err := decad.Refine(chain, tc.bound).Do(t.Context())
 			require.ErrorIs(t, err, tc.want)
 		}
-		_, err := decad.Refine(t.Context(), nil, units.Millimeters(1))
+		_, err := decad.Refine(nil, units.Millimeters(1)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 	})
 
@@ -201,10 +201,10 @@ func TestRefineRefusals(t *testing.T) {
 		doc := decad.New()
 		chain, _ := refineChain(t, doc, pair, 0.35)
 		n := len(doc.OperationHistory().Operations())
-		_, err := decad.Refine(t.Context(), chain, units.Millimeters(1e-6))
+		_, err := decad.Refine(chain, units.Millimeters(1e-6)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.Len(t, doc.OperationHistory().Operations(), n)
-		_, err = decad.Refine(t.Context(), chain, units.Millimeters(0.05))
+		_, err = decad.Refine(chain, units.Millimeters(0.05)).Do(t.Context())
 		require.NoError(t, err, "the refused call left the source live")
 	})
 
@@ -213,7 +213,7 @@ func TestRefineRefusals(t *testing.T) {
 		doc := decad.New()
 		// A single cylinder holds no Union mesh to refine.
 		single := refineSpan(t, doc, r3.Vec{}, r3.Vec{X: 10}, 1)
-		_, err := decad.Refine(t.Context(), single, units.Millimeters(0.1))
+		_, err := decad.Refine(single, units.Millimeters(0.1)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 
 		// A placed Union result drops its record: the placement moved the held
@@ -223,7 +223,7 @@ func TestRefineRefusals(t *testing.T) {
 		require.NoError(t, err)
 		moved, err := decad.Transform(t.Context(), chain, turn)
 		require.NoError(t, err)
-		_, err = decad.Refine(t.Context(), moved, units.Millimeters(0.1))
+		_, err = decad.Refine(moved, units.Millimeters(0.1)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 	})
 }
@@ -289,14 +289,14 @@ func TestRefineTubeEyes(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			doc := decad.New(decad.WithChainTolerance(units.Millimeters(0.1)))
-			joined, err := decad.Union(t.Context(), tc.tool(t, doc), refineTorus(t, doc, 2.4, 0.6))
+			joined, err := decad.Union(tc.tool(t, doc), refineTorus(t, doc, 2.4, 0.6)).Do(t.Context())
 			require.NoError(t, err)
 			held, err := joined.Tessellate(t.Context(), units.Millimeters(1e3))
 			require.NoError(t, err)
 			before, err := held.Bound().In(units.Millimeter)
 			require.NoError(t, err)
 
-			refined, err := decad.Refine(t.Context(), joined, units.Millimeters(tc.bound))
+			refined, err := decad.Refine(joined, units.Millimeters(tc.bound)).Do(t.Context())
 			require.NoError(t, err)
 			m, err := refined.Tessellate(t.Context(), units.Millimeters(tc.bound))
 			require.NoError(t, err)
@@ -317,17 +317,15 @@ func TestRefineBoredBend(t *testing.T) {
 		doc := decad.New(decad.WithChainTolerance(units.Millimeters(0.1)))
 		toe := r3.Vec{X: 10.25, Y: -3.5, Z: 40.125}
 		up, _ := r3.Vec{X: 1, Y: 0.2, Z: 0.3}.Normalize()
-		legs, err := decad.Union(t.Context(),
-			refineSpan(t, doc, toe.Sub(r3.Vec{Z: 16}), toe, 3),
-			refineSpan(t, doc, toe, toe.Add(up.Scale(32)), 3))
+		legs, err := decad.Union(refineSpan(t, doc, toe.Sub(r3.Vec{Z: 16}), toe, 3), refineSpan(t, doc, toe, toe.Add(up.Scale(32)), 3)).Do(t.Context())
 		require.NoError(t, err)
 		across, _ := r3.Vec{X: 0.2, Y: 1}.Normalize()
 		lower := toe.Sub(r3.Vec{Z: 12})
-		body, err := decad.Cut(t.Context(), legs, refineSpan(t, doc, lower.Sub(across.Scale(14)), lower.Add(across.Scale(14)), 2.2))
+		body, err := decad.Cut(legs, refineSpan(t, doc, lower.Sub(across.Scale(14)), lower.Add(across.Scale(14)), 2.2)).Do(t.Context())
 		require.NoError(t, err)
 		side := up.Cross(across)
 		upper := toe.Add(up.Scale(26))
-		body, err = decad.Cut(t.Context(), body, refineSpan(t, doc, upper.Sub(side.Scale(14)), upper.Add(side.Scale(14)), 2.2))
+		body, err = decad.Cut(body, refineSpan(t, doc, upper.Sub(side.Scale(14)), upper.Add(side.Scale(14)), 2.2)).Do(t.Context())
 		require.NoError(t, err)
 		return body
 	}
@@ -335,7 +333,7 @@ func TestRefineBoredBend(t *testing.T) {
 	_, err := body.Tessellate(t.Context(), units.Millimeters(0.05))
 	require.ErrorIs(t, err, decad.ErrUnsupported, "the held crossing bound refuses 0.05 mm before Refine")
 	// Far below the held bound and below the bores' own chording.
-	refined, err := decad.Refine(t.Context(), body, units.Millimeters(0.01))
+	refined, err := decad.Refine(body, units.Millimeters(0.01)).Do(t.Context())
 	require.NoError(t, err)
 	m, err := refined.Tessellate(t.Context(), units.Millimeters(0.01))
 	require.NoError(t, err)
@@ -373,14 +371,14 @@ func TestRefineDrilledBar(t *testing.T) {
 	bar, err = decad.Transform(t.Context(), bar, turn)
 	require.NoError(t, err)
 	drill := refineSpan(t, doc, turn.Apply(r3.Vec{X: 30, Y: -5, Z: 5}), turn.Apply(r3.Vec{X: 30, Y: 15, Z: 5}), 1.5)
-	drilled, err := decad.Cut(t.Context(), bar, drill)
+	drilled, err := decad.Cut(bar, drill).Do(t.Context())
 	require.NoError(t, err)
 	held, err := drilled.Tessellate(t.Context(), units.Millimeters(1e3))
 	require.NoError(t, err)
 	before, err := held.Bound().In(units.Millimeter)
 	require.NoError(t, err)
 
-	refined, err := decad.Refine(t.Context(), drilled, units.Millimeters(0.01))
+	refined, err := decad.Refine(drilled, units.Millimeters(0.01)).Do(t.Context())
 	require.NoError(t, err)
 	m, err := refined.Tessellate(t.Context(), units.Millimeters(0.01))
 	require.NoError(t, err)
@@ -403,19 +401,19 @@ func TestRefineLetsAChainContinue(t *testing.T) {
 		doc := decad.New(decad.WithChainTolerance(units.Millimeters(chain)))
 		u := refineSpan(t, doc, pts[0], pts[1], 0.5)
 		for i := 1; i+1 < len(pts); i++ {
-			next, err := decad.Union(t.Context(), u, refineSpan(t, doc, pts[i], pts[i+1], 0.5))
+			next, err := decad.Union(u, refineSpan(t, doc, pts[i], pts[i+1], 0.5)).Do(t.Context())
 			if err != nil {
 				return err
 			}
 			u = next
 			if _, err := u.Tessellate(t.Context(), units.Millimeters(chain)); refine && err != nil {
-				u, err = decad.Refine(t.Context(), u, units.Millimeters(chain))
+				u, err = decad.Refine(u, units.Millimeters(chain)).Do(t.Context())
 				require.NoError(t, err)
 			}
 		}
 		m, err := u.Tessellate(t.Context(), units.Millimeters(0.12))
 		if err != nil {
-			u, err = decad.Refine(t.Context(), u, units.Millimeters(0.12))
+			u, err = decad.Refine(u, units.Millimeters(0.12)).Do(t.Context())
 			require.NoError(t, err)
 			m, err = u.Tessellate(t.Context(), units.Millimeters(0.12))
 			require.NoError(t, err)

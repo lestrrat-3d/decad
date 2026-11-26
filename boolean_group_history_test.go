@@ -74,7 +74,7 @@ func TestGroupUnionInputsUsesPublicHistory(t *testing.T) {
 		return placed
 	}
 	first, second, third := place(0), place(5), place(10)
-	group, err := Union(t.Context(), first, second, third)
+	group, err := Union(first, second, third).Do(t.Context())
 	require.NoError(t, err)
 	meter := proofbound.NewReplayTrialBudget()
 	source, ok, err := groupUnionSourceSnapshot(t.Context(), group, meter)
@@ -619,7 +619,7 @@ func TestGroupUnionInputsUsesPublicHistory(t *testing.T) {
 
 	// A two-body Union uses its own ordered public input role names.
 	binaryFirst, binarySecond := makeCircle(20), makeCircle(25)
-	binaryGroup, binaryErr := Union(t.Context(), binaryFirst, binarySecond)
+	binaryGroup, binaryErr := Union(binaryFirst, binarySecond).Do(t.Context())
 	require.NoError(t, binaryErr)
 	binaryInputs, binaryOK, binaryErr := groupUnionInputs(proofbound.NewReplayTrialBudget().WorkBudget(t.Context()), binaryGroup)
 	require.NoError(t, binaryErr)
@@ -1131,7 +1131,7 @@ func BenchmarkGroupUnionSourceSnapshotFourCircles(b *testing.B) {
 		require.NoError(b, err)
 		leaves = append(leaves, body)
 	}
-	group, err := Union(b.Context(), leaves[0], leaves[1:]...)
+	group, err := Union(append([]*Body{leaves[0]}, leaves[1:]...)...).Do(b.Context())
 	require.NoError(b, err)
 	b.ReportAllocs()
 	b.ResetTimer()

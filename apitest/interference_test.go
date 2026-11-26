@@ -127,10 +127,7 @@ func TestVerifyAdmittedDisplacedPrismPairCarriesItsOwnBound(t *testing.T) {
 	doc := decad.New()
 	const shift = 1e12
 	lo, hi := 2-shift, 8-shift
-	merged, err := decad.Union(t.Context(),
-		boxBody(t, doc, 0, 0, 10, 10, 10),
-		placedFar(t, boxBody(t, doc, lo, 2, hi, 8, 10), shift),
-	)
+	merged, err := decad.Union(boxBody(t, doc, 0, 0, 10, 10, 10), placedFar(t, boxBody(t, doc, lo, 2, hi, 8, 10), shift)).Do(t.Context())
 	require.NoError(t, err)
 	require.False(t, tookMeshPath(merged), "the analytic reduction must own the union")
 	own, err := merged.Volume()

@@ -29,7 +29,7 @@ func Example_parts_explode_stages() {
 			if err != nil {
 				return nil, err
 			}
-			if b, err = decad.Cut(context.Background(), b, tool); err != nil {
+			if b, err = decad.Cut(b, tool).Do(context.Background()); err != nil {
 				return nil, err
 			}
 		}
@@ -37,7 +37,7 @@ func Example_parts_explode_stages() {
 		if err != nil {
 			return nil, err
 		}
-		return decad.Cut(context.Background(), b, bore)
+		return decad.Cut(b, bore).Do(context.Background())
 	}
 	bottom, err := block(0, 0, 40, 20, -10, 10, [6]float64{10, 4, 30, 16, -6, 7}, -11, 12)
 	if err != nil {

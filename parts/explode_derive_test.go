@@ -37,12 +37,12 @@ func collarSet(t *testing.T) *parts.Set {
 	t.Helper()
 	doc := decad.New()
 	cut := func(b, tool *decad.Body) *decad.Body {
-		out, err := decad.Cut(t.Context(), b, tool)
+		out, err := decad.Cut(b, tool).Do(t.Context())
 		require.NoError(t, err)
 		return out
 	}
 	carrier := cut(block(t, doc, 0, 0, 20, 20, 16, 4), cylinder(t, doc, 10, 3, 15, 6))
-	shaft, err := decad.Union(t.Context(), cylinder(t, doc, 10, 2, 0, 30), cylinder(t, doc, 10, 5, 12, 2))
+	shaft, err := decad.Union(cylinder(t, doc, 10, 2, 0, 30), cylinder(t, doc, 10, 5, 12, 2)).Do(t.Context())
 	require.NoError(t, err)
 	bearing := cut(cylinder(t, doc, 10, 6, 8, 3), cylinder(t, doc, 10, 2.5, 7, 5))
 	s := parts.NewSet(doc)
@@ -121,7 +121,7 @@ func capturedSet(t *testing.T) *parts.Set {
 	t.Helper()
 	doc := decad.New()
 	cut := func(b, tool *decad.Body) *decad.Body {
-		out, err := decad.Cut(t.Context(), b, tool)
+		out, err := decad.Cut(b, tool).Do(t.Context())
 		require.NoError(t, err)
 		return out
 	}
@@ -154,10 +154,10 @@ func TestDerivedCapturedNutGroupsWithHousing(t *testing.T) {
 func tBoltSet(t *testing.T) *parts.Set {
 	t.Helper()
 	doc := decad.New()
-	cup := must(decad.Cut(t.Context(), block(t, doc, 0, 0, 20, 20, 0, 12), block(t, doc, 6, 6, 14, 14, 3, 5)))
-	cup = must(decad.Cut(t.Context(), cup, cylinder(t, doc, 10, 2, -1, 5)))
-	cup = must(decad.Cut(t.Context(), cup, cylinder(t, doc, 10, 2, 7, 6)))
-	bolt := must(decad.Union(t.Context(), block(t, doc, 7, 7, 13, 13, 4, 3), cylinder(t, doc, 10, 1, 0.5, 16.5)))
+	cup := must(decad.Cut(block(t, doc, 0, 0, 20, 20, 0, 12), block(t, doc, 6, 6, 14, 14, 3, 5)).Do(t.Context()))
+	cup = must(decad.Cut(cup, cylinder(t, doc, 10, 2, -1, 5)).Do(t.Context()))
+	cup = must(decad.Cut(cup, cylinder(t, doc, 10, 2, 7, 6)).Do(t.Context()))
+	bolt := must(decad.Union(block(t, doc, 7, 7, 13, 13, 4, 3), cylinder(t, doc, 10, 1, 0.5, 16.5)).Do(t.Context()))
 	s := parts.NewSet(doc)
 	mustAdd(t, s,
 		parts.Part{Name: nameFloor, Kind: parts.Manufactured, Body: block(t, doc, -5, -5, 25, 25, -6, 6)},

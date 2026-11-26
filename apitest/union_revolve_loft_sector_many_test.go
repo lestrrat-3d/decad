@@ -35,13 +35,13 @@ func TestUnionHubAndManyRadialLugs(t *testing.T) {
 	// The single-lug gain comes from a second, independent lug so that the
 	// first one stays live for the many-lug join.
 	singleDoc, singleHub, singleLug, _, _ := taperedHubAndRadialLugWidth(t, 9, 7.5, 4.3, 0.1, false)
-	single, err := decad.Union(t.Context(), singleHub, singleLug)
+	single, err := decad.Union(singleHub, singleLug).Do(t.Context())
 	require.Contains(t, singleDoc.Bodies(), single)
 	require.NoError(t, err)
 	singleVolume, err := single.Volume()
 	require.NoError(t, err)
 
-	joined, err := decad.Union(t.Context(), hub, append([]*decad.Body{lug}, placed...)...)
+	joined, err := decad.Union(append([]*decad.Body{hub}, append([]*decad.Body{lug}, placed...)...)...).Do(t.Context())
 	require.NoError(t, err)
 	mesh, err := joined.Tessellate(t.Context(), units.Millimeters(0.1),
 		decad.WithVerification(decad.VerifyAll))

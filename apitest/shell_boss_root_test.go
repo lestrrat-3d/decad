@@ -45,8 +45,7 @@ func TestShellStackedBossKeepsThicknessAtRoot(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			doc := decad.New()
-			stack, err := decad.Union(t.Context(), boxBody(t, doc, 0, 0, 60, 40, 20),
-				boxBodyAtZ(t, doc, 20, 10, 40, 30, 20, 10))
+			stack, err := decad.Union(boxBody(t, doc, 0, 0, 60, 40, 20), boxBodyAtZ(t, doc, 20, 10, 40, 30, 20, 10)).Do(t.Context())
 			require.NoError(t, err)
 			var shell *decad.Body
 			if tc.closed {
@@ -137,8 +136,7 @@ func TestShellStackedBossConcaveRadius(t *testing.T) {
 	t.Run("rectangular", func(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
-		stack, err := decad.Union(t.Context(), boxBody(t, doc, 0, 0, 60, 40, 20),
-			boxBodyAtZ(t, doc, 20, 10, 40, 30, 20, 10))
+		stack, err := decad.Union(boxBody(t, doc, 0, 0, 60, 40, 20), boxBodyAtZ(t, doc, 20, 10, 40, 30, 20, 10)).Do(t.Context())
 		require.NoError(t, err)
 		_, err = decad.Shell(t.Context(), stack, decad.Faces(decad.FaceCreatedBy(decad.CapStart(stack))).Exactly(1),
 			units.Millimeters(2))

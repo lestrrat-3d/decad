@@ -337,7 +337,7 @@ func TestLoftCircleSourceCapsRealDiscRefusesWithoutBoundaryProof(t *testing.T) {
 		require.Equal(t, 1, steps)
 	}
 	for _, pair := range [][2]*Body{{prism, loft}, {loft, prism}} {
-		result, unionErr := Union(t.Context(), pair[0], pair[1])
+		result, unionErr := Union(pair[0], pair[1]).Do(t.Context())
 		require.ErrorIs(t, unionErr, ErrUnsupported)
 		require.True(t, result == nil)
 	}

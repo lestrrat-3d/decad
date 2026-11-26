@@ -193,9 +193,9 @@ func TestOffsetPairCannotDoubleCount(t *testing.T) {
 		name string
 		call func() (*decad.Body, error)
 	}{
-		{"union", func() (*decad.Body, error) { return decad.Union(t.Context(), sheet, grown) }},
-		{"cut", func() (*decad.Body, error) { return decad.Cut(t.Context(), sheet, grown) }},
-		{"intersect", func() (*decad.Body, error) { return decad.Intersect(t.Context(), sheet, grown) }},
+		{"union", func() (*decad.Body, error) { return decad.Union(sheet, grown).Do(t.Context()) }},
+		{"cut", func() (*decad.Body, error) { return decad.Cut(sheet, grown).Do(t.Context()) }},
+		{"intersect", func() (*decad.Body, error) { return decad.Intersect(sheet, grown).Do(t.Context()) }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			_, err := tc.call()

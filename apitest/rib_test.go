@@ -39,7 +39,7 @@ func ribPart(tb testing.TB) (*decad.Document, *decad.Body) {
 	require.NoError(tb, err)
 	pocket, err := decad.Extrude(ctx, doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(15), Dir: decad.Along})
 	require.NoError(tb, err)
-	part, err := decad.Cut(ctx, block, pocket)
+	part, err := decad.Cut(block, pocket).Do(ctx)
 	require.NoError(tb, err)
 	decadtest.MeasuresVolume(tb, part, units.CubicMillimeters(ribPartVolume), decadtest.Exactly())
 	return doc, part

@@ -93,9 +93,9 @@ func fingerprintUnionRefined(t *testing.T, body *decad.Body) unionRefinedFingerp
 func unionThenRefine(t *testing.T, fitted bool, bound units.Value) (*decad.Document, *decad.Body, error) {
 	t.Helper()
 	doc, hub, lugs := unionRefinedSet(t, fitted)
-	joined, err := decad.Union(t.Context(), hub, lugs...)
+	joined, err := decad.Union(append([]*decad.Body{hub}, lugs...)...).Do(t.Context())
 	require.NoError(t, err)
-	refined, err := decad.Refine(t.Context(), joined, bound)
+	refined, err := decad.Refine(joined, bound).Do(t.Context())
 	return doc, refined, err
 }
 

@@ -35,7 +35,7 @@ func TestLoftCylinderChamfersBothOuterCaps(t *testing.T) {
 	tooth, err := decad.Loft(t.Context(), doc, bottomSketch, bottomProfile, topSketch, topProfile)
 	require.NoError(t, err)
 	blank := circleBodyAtZ(t, doc, 0, 4, 0, height)
-	joined, err := decad.Union(t.Context(), blank, tooth)
+	joined, err := decad.Union(blank, tooth).Do(t.Context())
 	require.NoError(t, err)
 
 	capFaces := func(b *decad.Body) [2]*decad.Face {

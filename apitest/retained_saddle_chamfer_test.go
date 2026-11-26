@@ -24,7 +24,7 @@ const saddleR = 10.0
 func saddleShaft(t *testing.T, r, y float64, opts ...decad.DocumentOption) (*decad.Body, *retentionScene) {
 	t.Helper()
 	sc := &retentionScene{w: sketch.NewWorld(), doc: decad.New(opts...)}
-	body, err := decad.Cut(t.Context(), saddleRevolve(t, sc), saddlePin(t, sc, r, y))
+	body, err := decad.Cut(saddleRevolve(t, sc), saddlePin(t, sc, r, y)).Do(t.Context())
 	require.NoError(t, err)
 	return body, sc
 }
@@ -71,7 +71,7 @@ func saddleShaftWithFlatBesideMouth(t *testing.T) *decad.Body {
 	require.NoError(t, err)
 	flat, err := decad.Transform(t.Context(), box, move)
 	require.NoError(t, err)
-	body, err = decad.Cut(t.Context(), body, flat)
+	body, err = decad.Cut(body, flat).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -374,7 +374,7 @@ func TestRetainedSaddleChamferRefusals(t *testing.T) {
 	t.Run("a pin joined through the shaft", func(t *testing.T) {
 		t.Parallel()
 		sc := newRetentionScene()
-		body, err := decad.Union(t.Context(), saddleRevolve(t, sc), saddlePin(t, sc, 3, 0))
+		body, err := decad.Union(saddleRevolve(t, sc), saddlePin(t, sc, 3, 0)).Do(t.Context())
 		require.NoError(t, err)
 		_, err = decad.Chamfer(t.Context(), body, saddleMouths(t, body, 3, 0), units.Millimeters(0.5))
 		require.ErrorIs(t, err, decad.ErrUnsupported)
@@ -424,9 +424,7 @@ func TestRetainedSaddleChamferExtrudeShaft(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			sc := newRetentionScene()
-			body, err := decad.Cut(t.Context(),
-				saddleExtrudedCylinder(t, sc, tc.shaft(sc.w), saddleR, 40, tc.move),
-				saddleExtrudedCylinder(t, sc, tc.bore(sc.w), r, 30, tc.move))
+			body, err := decad.Cut(saddleExtrudedCylinder(t, sc, tc.shaft(sc.w), saddleR, 40, tc.move), saddleExtrudedCylinder(t, sc, tc.bore(sc.w), r, 30, tc.move)).Do(t.Context())
 			require.NoError(t, err)
 			at := func(p r3.Vec, i int) float64 { return [3]float64{p.X, p.Y, p.Z}[i] }
 			var q *decad.EdgeQuery

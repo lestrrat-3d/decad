@@ -64,17 +64,17 @@ func (bf bossFoot) build(t *testing.T) *decad.Body {
 		tool, err := decad.Extrude(t.Context(), sc.doc, s, s.Profiles()[0],
 			decad.Distance{D: units.Millimeters(25), Dir: decad.Along})
 		require.NoError(t, err)
-		boss, err = decad.Cut(t.Context(), boss, placed(t, tool, 4))
+		boss, err = decad.Cut(boss, placed(t, tool, 4)).Do(t.Context())
 		require.NoError(t, err)
 	}
-	body, err := decad.Union(t.Context(), body, boss)
+	body, err := decad.Union(body, boss).Do(t.Context())
 	require.NoError(t, err)
 	if bf.roofed {
 		roof := rectBox(t, sc.w, sc.doc, 0, 0, 80, 60, 10)
-		body, err = decad.Union(t.Context(), body, placed(t, roof, 25))
+		body, err = decad.Union(body, placed(t, roof, 25)).Do(t.Context())
 		require.NoError(t, err)
 	}
-	body, err = decad.Cut(t.Context(), body, zCylinderAt(t, sc, bf.hole[0], bf.hole[1], bf.hole[2], -5, 40))
+	body, err = decad.Cut(body, zCylinderAt(t, sc, bf.hole[0], bf.hole[1], bf.hole[2], -5, 40)).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -295,7 +295,7 @@ func TestFacetedRetainedBlendBossFoot(t *testing.T) {
 		require.NoError(t, err)
 		prism, err = decad.Transform(t.Context(), prism, shift)
 		require.NoError(t, err)
-		stepped, err := decad.Cut(t.Context(), prism, zCylinderAt(t, sc, 30, 10, 3, -30, 30))
+		stepped, err := decad.Cut(prism, zCylinderAt(t, sc, 30, 10, 3, -30, 30)).Do(t.Context())
 		require.NoError(t, err)
 		before, err := stepped.Volume()
 		require.NoError(t, err)

@@ -140,7 +140,7 @@ func TestShellCupDenotedLevel(t *testing.T) {
 			}
 			cup := shellOf(t, doc, tc.up, tc.down, tc.sel, th, opts...)
 			plate := twoSidedRect(t, doc, 0, 0, 20, 20, plateUp, plateDown)
-			part, err := decad.Cut(t.Context(), plate, shellStop(t, doc, cup, tc.role, offset, tc.upStop))
+			part, err := decad.Cut(plate, shellStop(t, doc, cup, tc.role, offset, tc.upStop)).Do(t.Context())
 			require.NoError(t, err)
 			return part
 		}
@@ -220,7 +220,7 @@ func TestShellClosedDenotedLevel(t *testing.T) {
 			}
 			shell := shellOf(t, doc, up, units.Millimeters(0), nil, tc.th)
 			plate := twoSidedRect(t, doc, 0, 0, 20, 20, tc.plateUp, three)
-			part, err := decad.Cut(t.Context(), plate, shellStop(t, doc, shell, tc.role, tc.offset, true))
+			part, err := decad.Cut(plate, shellStop(t, doc, shell, tc.role, tc.offset, true)).Do(t.Context())
 			require.NoError(t, err)
 			if tc.analytic {
 				requireDenotedThroughHole(t, part, denotedSum(tc.plateUp, three))

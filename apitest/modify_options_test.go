@@ -651,7 +651,7 @@ func TestAsymmetricChamferOnBrepStraightEdge(t *testing.T) {
 				require.NoError(t, err)
 				return b
 			}
-			part, err := decad.Union(t.Context(), block(40, 0, 10), block(10, 10, 10))
+			part, err := decad.Union(block(40, 0, 10), block(10, 10, 10)).Do(t.Context())
 			require.NoError(t, err)
 			edge := decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)), decad.EndpointAt(r3.NewVec(40, 0, 0))).Exactly(1)
 			refFace := planeFacing(t, part, tc.normal, r3.NewVec(40, 0, 0))
@@ -686,7 +686,7 @@ func TestAsymmetricChamferOnBrepRestatedEndFaces(t *testing.T) {
 	doc := decad.New()
 	plate := boxBodyAtZ(t, doc, 0, 0, 40, 20, 0, 10)
 	boss := boxBodyAtZ(t, doc, 0, 0, 10, 20, 10, 10)
-	part, err := decad.Union(t.Context(), plate, boss)
+	part, err := decad.Union(plate, boss).Do(t.Context())
 	require.NoError(t, err)
 	// Both x-end faces are swept walls in the boolean record. Route E
 	// restates them as planes before assigning the bottom face's setback.
@@ -778,7 +778,7 @@ func TestAsymmetricChamferOnStackedLoop(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			doc := decad.New()
 			plate := boxBody(t, doc, 0, 0, 40, 40, 10)
-			pocket, err := decad.Cut(t.Context(), plate, boxBodyAtZ(t, doc, 10, 15, 30, 25, 5, 5))
+			pocket, err := decad.Cut(plate, boxBodyAtZ(t, doc, 10, 15, 30, 25, 5, 5)).Do(t.Context())
 			require.NoError(t, err)
 			top := planeFacing(t, pocket, r3.NewVec(0, 0, 1), r3.NewVec(0, 0, 10))
 			loop := top.Loops()[0]
@@ -817,7 +817,7 @@ func TestAsymmetricChamferOnStackedEdge(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	plate := boxBody(t, doc, 0, 0, 40, 40, 10)
-	pocket, err := decad.Cut(t.Context(), plate, boxBodyAtZ(t, doc, 10, 15, 30, 25, 5, 5))
+	pocket, err := decad.Cut(plate, boxBodyAtZ(t, doc, 10, 15, 30, 25, 5, 5)).Do(t.Context())
 	require.NoError(t, err)
 	edge := decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)),
 		decad.EndpointAt(r3.NewVec(0, 0, 0))).Exactly(1)

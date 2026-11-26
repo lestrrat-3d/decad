@@ -69,7 +69,7 @@ func lapSet(t *testing.T) *parts.Set {
 		b := block(t, doc, 0, 0, 20, 20, z0, 5)
 		for _, x := range []float64{5, 15} {
 			var err error
-			b, err = decad.Cut(t.Context(), b, cylinder(t, doc, x, 3.2, z0-1, 7))
+			b, err = decad.Cut(b, cylinder(t, doc, x, 3.2, z0-1, 7)).Do(t.Context())
 			require.NoError(t, err)
 		}
 		return b
@@ -202,7 +202,7 @@ func TestExplodeFacetedBoreFallsBack(t *testing.T) {
 func TestExplodePinInSlot(t *testing.T) {
 	// A Ø4 pin stands in a 4.4 mm wide slot cut through a 30 x 20 x 10 block.
 	doc := decad.New()
-	blk, err := decad.Cut(t.Context(), block(t, doc, 0, 0, 30, 20, 0, 10), block(t, doc, 12.8, 5, 17.2, 15, -1, 12))
+	blk, err := decad.Cut(block(t, doc, 0, 0, 30, 20, 0, 10), block(t, doc, 12.8, 5, 17.2, 15, -1, 12)).Do(t.Context())
 	require.NoError(t, err)
 	s := parts.NewSet(doc)
 	mustAdd(t, s,
@@ -291,7 +291,7 @@ func TestExplodeGuides(t *testing.T) {
 	// The top lifts 10 mm; the pin is joined to the top only, so its guide starts on the lifted top.
 	doc = decad.New()
 	bore := func(z0 float64) *decad.Body {
-		b, err := decad.Cut(t.Context(), block(t, doc, 0, 0, 20, 20, z0, 5), cylinder(t, doc, 5, 3.2, z0-1, 7))
+		b, err := decad.Cut(block(t, doc, 0, 0, 20, 20, z0, 5), cylinder(t, doc, 5, 3.2, z0-1, 7)).Do(t.Context())
 		require.NoError(t, err)
 		return b
 	}

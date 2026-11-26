@@ -104,7 +104,7 @@ func rampCutOf(t *testing.T, w *sketch.World, doc *decad.Document, body *decad.B
 	tool, err := decad.Extrude(t.Context(), doc, ts, ts.Profiles()[0],
 		decad.Distance{D: units.Millimeters(30), Dir: decad.Along})
 	require.NoError(t, err)
-	out, err := decad.Cut(t.Context(), body, tool)
+	out, err := decad.Cut(body, tool).Do(t.Context())
 	require.NoError(t, err)
 	return out
 }

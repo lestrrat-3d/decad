@@ -31,7 +31,7 @@ func TestFacetedRetainedBlendArcEndPlane(t *testing.T) {
 			const bore, r = 4.0, 4.0
 			h := bore * math.Sqrt(1-c*c)
 			sc := newRetentionScene()
-			bored, err := decad.Cut(t.Context(), blendPlate(t, sc), zCylinderAt(t, sc, h, 10, bore, -30, 30))
+			bored, err := decad.Cut(blendPlate(t, sc), zCylinderAt(t, sc, h, 10, bore, -30, 30)).Do(t.Context())
 			require.NoError(t, err)
 			out, err := decad.Fillet(t.Context(), bored, arcSeedAt(t, bored, 20), units.Millimeters(r))
 			require.NoError(t, err)
@@ -55,7 +55,7 @@ func TestFacetedRetainedBlendArcEndPlane(t *testing.T) {
 				const bore = 4.0
 				h := bore * math.Sqrt(1-c*c)
 				sc := newRetentionScene()
-				bored, err := decad.Cut(t.Context(), blendPlate(t, sc), zCylinderAt(t, sc, h, 10, bore, -30, 30))
+				bored, err := decad.Cut(blendPlate(t, sc), zCylinderAt(t, sc, h, 10, bore, -30, 30)).Do(t.Context())
 				require.NoError(t, err)
 				old := originsOf(bored)
 				out, err := decad.Chamfer(t.Context(), bored, arcSeedAt(t, bored, 20), units.Millimeters(d))
@@ -83,7 +83,7 @@ func TestFacetedRetainedBlendArcEndPlane(t *testing.T) {
 		gx := openBoxR - h
 		sc := newRetentionScene()
 		block := placed(t, rectBox(t, sc.w, sc.doc, -5, -5, gx, 25, 30), -5)
-		trimmed, err := decad.Cut(t.Context(), roundedCornerBox(t, sc), block)
+		trimmed, err := decad.Cut(roundedCornerBox(t, sc), block).Do(t.Context())
 		require.NoError(t, err)
 		out, err := decad.Fillet(t.Context(), trimmed, arcSeedAt(t, trimmed, 20), units.Millimeters(r),
 			decad.WithTangentChain())
@@ -131,7 +131,7 @@ func pocketMouth(t *testing.T, x1 float64) *decad.Body {
 		Or(up, decad.EndpointAt(r3.NewVec(x1, 30, 0))).Exactly(2)
 	tool, err := decad.Fillet(t.Context(), tool, corners, units.Millimeters(openBoxR))
 	require.NoError(t, err)
-	out, err := decad.Cut(t.Context(), plate, placed(t, tool, 5))
+	out, err := decad.Cut(plate, placed(t, tool, 5)).Do(t.Context())
 	require.NoError(t, err)
 	return out
 }

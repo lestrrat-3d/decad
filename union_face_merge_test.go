@@ -26,7 +26,7 @@ func mergeFlushPair(t *testing.T) *Body {
 	doc := New()
 	a := internalBoxBody(t, doc, 0, 0, 10, 10, 10)
 	b := mergeTranslated(t, internalBoxBody(t, doc, 0, 0, 10, 10, 10), 0.5, 0, 10)
-	joined, err := Union(t.Context(), a, b)
+	joined, err := Union(a, b).Do(t.Context())
 	require.NoError(t, err)
 	return joined
 }
@@ -107,7 +107,7 @@ func mergeDovetail(t *testing.T) *Body {
 	require.Len(t, s.Profiles(), 1)
 	tool, err := Extrude(t.Context(), doc, s, s.Profiles()[0], Distance{D: units.Millimeters(16), Dir: Against})
 	require.NoError(t, err)
-	joined, err := Union(t.Context(), host, tool)
+	joined, err := Union(host, tool).Do(t.Context())
 	require.NoError(t, err)
 	return joined
 }
@@ -209,7 +209,7 @@ func TestUnionFaceMergeKeepsRoundedFacesApart(t *testing.T) {
 		require.NoError(t, err)
 	}
 	b = mergeTranslated(t, b, 0.5, 0, 10)
-	joined, err := Union(t.Context(), a, b)
+	joined, err := Union(a, b).Do(t.Context())
 	require.NoError(t, err)
 	fp := mergeFaceted(t, joined)
 	shifted := false
@@ -340,7 +340,7 @@ func flushTongueUnion(t *testing.T, p flushPlacement, offset float64) *Body {
 	x, y, z := r3.Vec{X: 1}, r3.Vec{Y: 1}, r3.Vec{Z: 1}
 	host := flushPolygonPrism(t, doc, p, r3.Vec{}, x, y, z.Scale(-1), [][2]float64{{-10, 0}, {10, 0}, {10, 16}, {-10, 16}}, 10)
 	tongue := flushPolygonPrism(t, doc, p, r3.Vec{Y: offset}, x, z, y, chordRoundTongue(), 4)
-	joined, err := Union(t.Context(), host, tongue)
+	joined, err := Union(host, tongue).Do(t.Context())
 	require.NoError(t, err)
 	return joined
 }

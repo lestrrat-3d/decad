@@ -9,12 +9,12 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// WithMatchingFaces tells Cut or Intersect that faces of the two bodies are
+// MatchingFaces tells a Cut or Intersect command that faces of the two bodies are
 // meant to match where they meet. A cap drawn to touch a cone, or two faces
 // meant to coincide, can miss by a few last-place steps once the numbers are
-// rounded; with the option decad takes that miss as the match you intended. A
+// rounded; with the method decad takes that miss as the match you intended. A
 // real gap is still refused. Where the bodies' faces do not meet, as here, the
-// option changes nothing.
+// method changes nothing.
 func Example_intersect_matching_faces() {
 	w := sketch.NewWorld()
 	doc := decad.New()
@@ -41,7 +41,7 @@ func Example_intersect_matching_faces() {
 		fmt.Printf("failed to build box B: %s\n", err)
 		return
 	}
-	common, err := decad.Intersect(context.Background(), a, b, decad.WithMatchingFaces())
+	common, err := decad.Intersect(a, b).MatchingFaces().Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to intersect: %s\n", err)
 		return

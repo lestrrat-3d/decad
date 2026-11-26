@@ -36,7 +36,7 @@ func crossingHolePlate(t *testing.T, doc *decad.Document) *decad.Body {
 	t.Helper()
 	plate := boxBody(t, doc, -10, -10, 10, 10, 10)
 	through := boxBodyAtZ(t, doc, -4, -2, 0, 2, 0, 10)
-	part, err := decad.Cut(t.Context(), plate, through)
+	part, err := decad.Cut(plate, through).Do(t.Context())
 	require.NoError(t, err)
 	return part
 }
@@ -55,7 +55,7 @@ func crossingHolePlateOfHeight(t *testing.T, doc *decad.Document, height units.V
 	require.NoError(t, err)
 	plate, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: height, Dir: decad.Along})
 	require.NoError(t, err)
-	part, err := decad.Cut(t.Context(), plate, boxBodyAtZ(t, doc, -4, -2, 0, 2, -1, toolHeight))
+	part, err := decad.Cut(plate, boxBodyAtZ(t, doc, -4, -2, 0, 2, -1, toolHeight)).Do(t.Context())
 	require.NoError(t, err)
 	return part
 }
@@ -100,7 +100,7 @@ func TestCrossingBlindPocketExtensions(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			doc := decad.New()
-			part, err := decad.Cut(t.Context(), crossingHolePlate(t, doc), tc.build(t, doc))
+			part, err := decad.Cut(crossingHolePlate(t, doc), tc.build(t, doc)).Do(t.Context())
 			require.NoError(t, err)
 			require.False(t, tookMeshPath(part), "class %s", decadtest.PayloadClass(part))
 			requireEveryEdgeOnTwoFaces(t, part)
@@ -146,7 +146,7 @@ func TestCrossingBlindPocketOnDisplacedPlate(t *testing.T) {
 			doc := decad.New()
 			plate := crossingHolePlateOfHeight(t, doc, tc.plate, tc.height+2)
 			pocket := crossingPocketTool(t, doc, 6, units.Millimeters(tc.toolDepth), decad.Along)
-			part, err := decad.Cut(t.Context(), plate, pocket)
+			part, err := decad.Cut(plate, pocket).Do(t.Context())
 			require.NoError(t, err)
 			require.False(t, tookMeshPath(part), "class %s", decadtest.PayloadClass(part))
 			requireEveryEdgeOnTwoFaces(t, part)
@@ -196,7 +196,7 @@ func TestCrossingBlindPocketDeclinesUnprovenLevels(t *testing.T) {
 				depth = units.Inches((tc.height - 6) / 25.4)
 			}
 			pocket := crossingPocketTool(t, doc, 6, depth, decad.Along)
-			part, err := decad.Cut(t.Context(), plate, pocket)
+			part, err := decad.Cut(plate, pocket).Do(t.Context())
 			require.NoError(t, err)
 			require.True(t, tookMeshPath(part), "class %s", decadtest.PayloadClass(part))
 		})

@@ -40,7 +40,7 @@ func TestOffsetMitresAnLShapedSolidAtItsCorners(t *testing.T) {
 	doc := decad.New()
 	a := blockIn(t, doc, r3.NewVec(0, 0, 0), r3.NewVec(10, 4, 4))
 	b := blockIn(t, doc, r3.NewVec(0, 0, 0), r3.NewVec(4, 10, 4))
-	l, err := decad.Union(t.Context(), a, b)
+	l, err := decad.Union(a, b).Do(t.Context())
 	require.NoError(t, err)
 	// The L's plan is a 10 x 4 bar and a 4 x 10 bar. Grown by 1 mm each way, 12 x 6 and 6 x 12 overlapping in a
 	// 6 x 6 square: 108 mm² over a height of 6; the reflex corner stays sharp, at (5, 5).
@@ -64,7 +64,7 @@ func TestOffsetClosesANarrowSlotAndDropsAThinPart(t *testing.T) {
 	doc := decad.New()
 	plate := blockIn(t, doc, r3.NewVec(0, 0, 0), r3.NewVec(20, 10, 4))
 	slot := blockIn(t, doc, r3.NewVec(9, -1, -1), r3.NewVec(10, 11, 5))
-	slotted, err := decad.Cut(t.Context(), plate, slot)
+	slotted, err := decad.Cut(plate, slot).Do(t.Context())
 	require.NoError(t, err)
 	// The two halves grown by 1 mm each way meet and overlap across the 1 mm slot: one 22 x 12 x 6 block.
 	grown, err := decad.Offset(t.Context(), slotted, units.Millimeters(1))

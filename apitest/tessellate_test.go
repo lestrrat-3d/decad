@@ -92,7 +92,7 @@ func TestTessellateFacetedToleranceBoundary(t *testing.T) {
 	doc := decad.New()
 	plate := boxBody(t, doc, 0, 0, 20, 20, 8)
 	tool := translated(t, diskBody(t, doc, 10, 10, 2), 0, 0, -6)
-	body, err := decad.Cut(t.Context(), plate, tool)
+	body, err := decad.Cut(plate, tool).Do(t.Context())
 	require.NoError(t, err)
 
 	held, err := body.Tessellate(t.Context(), units.Millimeters(1))
@@ -146,7 +146,7 @@ func TestTessellatePayloadClasses(t *testing.T) {
 		doc := decad.New()
 		plate := boxBody(t, doc, 0, 0, 20, 20, 8)
 		tool := translated(t, diskBody(t, doc, 10, 10, 2), 0, 0, -6)
-		body, err := decad.Cut(t.Context(), plate, tool)
+		body, err := decad.Cut(plate, tool).Do(t.Context())
 		require.NoError(t, err)
 		mesh, err := body.Tessellate(t.Context(), units.Millimeters(1))
 		require.NoError(t, err)
@@ -493,7 +493,7 @@ func TestTessellateReservesSectionDisplacementFromTolerance(t *testing.T) {
 			doc := decad.New()
 			a := boxBody(t, doc, 0, 0, 10, 10, 10)
 			b := placedFar(t, boxBody(t, doc, 2-tc.shift, 2, 8-tc.shift, 8, 10), tc.shift)
-			got, err := decad.Union(t.Context(), a, b)
+			got, err := decad.Union(a, b).Do(t.Context())
 			require.NoError(t, err)
 			require.False(t, tookMeshPath(got), "the analytic reduction must own this pair")
 
@@ -612,7 +612,7 @@ func TestTessellateUnreservedAxialDisplacementCanExceedTolerance(t *testing.T) {
 		doc := decad.New()
 		a := inchPrismBody(t, doc, 0, 0, 10, 10, 1e6)
 		b := placedFar(t, inchPrismBody(t, doc, 2-shift, 2, 8-shift, 8, 1e6), shift)
-		got, err := decad.Union(t.Context(), a, b)
+		got, err := decad.Union(a, b).Do(t.Context())
 		require.NoError(t, err)
 		require.False(t, tookMeshPath(got), "the analytic reduction must own this pair")
 

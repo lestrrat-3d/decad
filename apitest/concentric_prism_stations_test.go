@@ -65,7 +65,7 @@ func TestConcentricPrismStations(t *testing.T) {
 		if reversed {
 			plate, pad = pad, plate
 		}
-		joined, e := decad.Union(ctx, plate, pad)
+		joined, e := decad.Union(plate, pad).Do(ctx)
 		require.NoError(t, e)
 		require.Empty(t, joined.OperationDiagnostics())
 		m, e := joined.Tessellate(ctx, units.Millimeters(.5), decad.WithVerification(decad.VerifyAll))

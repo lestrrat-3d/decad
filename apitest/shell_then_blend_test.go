@@ -35,8 +35,7 @@ func (o boxBossOpening) String() string {
 func shellBoxBoss(t *testing.T, opening boxBossOpening) (*decad.Document, *decad.Body, float64) {
 	t.Helper()
 	doc := decad.New()
-	stack, err := decad.Union(t.Context(), boxBody(t, doc, 0, 0, 60, 40, 20),
-		boxBodyAtZ(t, doc, 20, 10, 40, 30, 20, 10))
+	stack, err := decad.Union(boxBody(t, doc, 0, 0, 60, 40, 20), boxBodyAtZ(t, doc, 20, 10, 40, 30, 20, 10)).Do(t.Context())
 	require.NoError(t, err)
 	var shell *decad.Body
 	// The cavity is the 56×36 plate inset, the 16×16 boss inset and the band.
@@ -272,8 +271,7 @@ func TestShellBossThenFilletOpeningInnerRim(t *testing.T) {
 func TestShellPocketThenFilletOuterVerticals(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
-	pocket, err := decad.Cut(t.Context(), boxBodyAtZ(t, doc, 0, 0, 10, 10, 0, 10),
-		boxBodyAtZ(t, doc, 3, 3, 7, 7, 6, 4))
+	pocket, err := decad.Cut(boxBodyAtZ(t, doc, 0, 0, 10, 10, 0, 10), boxBodyAtZ(t, doc, 3, 3, 7, 7, 6, 4)).Do(t.Context())
 	require.NoError(t, err)
 	shell, err := decad.Shell(t.Context(), pocket,
 		decad.Faces(decad.FaceCreatedBy(decad.CapEnd(pocket))).Exactly(1), units.Millimeters(1))
@@ -350,9 +348,9 @@ func TestShellThenFilletOtherStackedShells(t *testing.T) {
 	t.Run("counterbore verticals", func(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
-		part, err := decad.Cut(t.Context(), boxBody(t, doc, -10, -10, 10, 10, 10), circleBodyAtZ(t, doc, 0, 3, 0, 10))
+		part, err := decad.Cut(boxBody(t, doc, -10, -10, 10, 10, 10), circleBodyAtZ(t, doc, 0, 3, 0, 10)).Do(t.Context())
 		require.NoError(t, err)
-		part, err = decad.Cut(t.Context(), part, circleBodyAtZ(t, doc, 0, 5, 7, 3))
+		part, err = decad.Cut(part, circleBodyAtZ(t, doc, 0, 5, 7, 3)).Do(t.Context())
 		require.NoError(t, err)
 		shell, err := decad.Shell(t.Context(), part, decad.Faces(decad.FaceCreatedBy(decad.CapEnd(part))).Exactly(1),
 			units.Millimeters(1))

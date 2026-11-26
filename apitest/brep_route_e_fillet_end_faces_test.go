@@ -135,7 +135,7 @@ func TestBrepRouteEFilletObliqueBossEdges(t *testing.T) {
 			for _, corner := range boss {
 				doc := decad.New()
 				plate := xyPrism(t, doc, 0, 10, [][2]float64{{-20, -20}, {20, -20}, {20, 20}, {-20, 20}})
-				body, err := decad.Union(t.Context(), plate, xyPrism(t, doc, 10, 15, boss))
+				body, err := decad.Union(plate, xyPrism(t, doc, 10, 15, boss)).Do(t.Context())
 				require.NoError(t, err)
 				before, err := body.Volume()
 				require.NoError(t, err)

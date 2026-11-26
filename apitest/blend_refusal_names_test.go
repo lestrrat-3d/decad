@@ -43,7 +43,7 @@ func turnedShaftWithCrossPin(t *testing.T) *decad.Body {
 	require.NoError(t, err)
 	pin, err := decad.Extrude(t.Context(), doc, hs, hs.Profiles()[0], decad.Distance{D: units.Millimeters(45), Dir: decad.Along})
 	require.NoError(t, err)
-	joined, err := decad.Union(t.Context(), shaft, pin)
+	joined, err := decad.Union(shaft, pin).Do(t.Context())
 	require.NoError(t, err)
 	return joined
 }

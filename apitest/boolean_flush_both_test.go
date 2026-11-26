@@ -53,7 +53,7 @@ func TestCutByAToolFlushWithBothFacesOfAMeshPlate(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	plate := slantedPlate(t, doc)
-	out, err := decad.Cut(t.Context(), plate, flushPin(t, doc))
+	out, err := decad.Cut(plate, flushPin(t, doc)).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := out.Volume()
 	require.NoError(t, err)
@@ -76,7 +76,7 @@ func TestCutByAToolFlushWithBothFacesOfAMeshPlate(t *testing.T) {
 func TestIntersectWithAToolFlushWithBothFacesOfAMeshPlate(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
-	out, err := decad.Intersect(t.Context(), slantedPlate(t, doc), flushPin(t, doc))
+	out, err := decad.Intersect(slantedPlate(t, doc), flushPin(t, doc)).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := out.Volume()
 	require.NoError(t, err)
@@ -86,7 +86,7 @@ func TestIntersectWithAToolFlushWithBothFacesOfAMeshPlate(t *testing.T) {
 func TestUnionWithAToolFlushWithBothFacesOfAMeshPlate(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
-	out, err := decad.Union(t.Context(), slantedPlate(t, doc), flushPin(t, doc))
+	out, err := decad.Union(slantedPlate(t, doc), flushPin(t, doc)).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := out.Volume()
 	require.NoError(t, err)

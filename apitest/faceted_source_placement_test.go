@@ -18,7 +18,7 @@ func TestFacetedSourcePlacement(t *testing.T) {
 	drill := func(t *testing.T) *decad.Body {
 		t.Helper()
 		sc := newRetentionScene()
-		drilled, err := decad.Cut(t.Context(), sc.roundedBox(t), sc.tool(t, 20))
+		drilled, err := decad.Cut(sc.roundedBox(t), sc.tool(t, 20)).Do(t.Context())
 		require.NoError(t, err)
 		return drilled
 	}

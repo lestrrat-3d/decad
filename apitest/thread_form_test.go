@@ -50,7 +50,7 @@ func TestThreadFormCutsATrapezoidalGrooveOutOfABore(t *testing.T) {
 	doc := decad.New()
 	block := boxBody(t, doc, -10, -10, 10, 10, 10)
 	bore := circleBodyAtZ(t, doc, 0, 4.2, -1, 12)
-	part, err := decad.Cut(t.Context(), block, bore)
+	part, err := decad.Cut(block, bore).Do(t.Context())
 	require.NoError(t, err)
 	form := decad.ThreadForm{Angle: units.Degrees(30), Depth: units.Millimeters(1), Flat: units.Millimeters(0.6)}
 	out, err := decad.Thread(t.Context(), part, decad.ThreadSpec{

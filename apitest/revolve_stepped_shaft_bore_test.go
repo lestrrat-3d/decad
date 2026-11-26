@@ -125,7 +125,7 @@ func TestSteppedRevolveAxialThroughBores(t *testing.T) {
 				tool, err = decad.Transform(t.Context(), tool, move)
 				require.NoError(t, err)
 			}
-			result, err := decad.Cut(t.Context(), host, tool)
+			result, err := decad.Cut(host, tool).Do(t.Context())
 			require.NoError(t, err)
 			require.Equal(t, tc.cylinders, countSurface[decad.Cylinder](result))
 			require.Zero(t, countSurface[decad.Faceted](result))

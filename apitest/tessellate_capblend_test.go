@@ -418,10 +418,10 @@ func TestCapBlendBooleanAdmitsPlanarBand(t *testing.T) {
 		exactness decad.Exactness
 		run       func(chamfered, tool *decad.Body) (*decad.Body, error)
 	}{
-		{"intersect", planarBandOverlap, decad.Exact, func(a, b *decad.Body) (*decad.Body, error) { return decad.Intersect(t.Context(), a, b) }},
-		{"cut", chamferedPlateVolume - planarBandOverlap, decad.Approximate, func(a, b *decad.Body) (*decad.Body, error) { return decad.Cut(t.Context(), a, b) }},
-		{"union", chamferedPlateVolume + 8000 - planarBandOverlap, decad.Approximate, func(a, b *decad.Body) (*decad.Body, error) { return decad.Union(t.Context(), a, b) }},
-		{"union as second operand", chamferedPlateVolume + 8000 - planarBandOverlap, decad.Approximate, func(a, b *decad.Body) (*decad.Body, error) { return decad.Union(t.Context(), b, a) }},
+		{"intersect", planarBandOverlap, decad.Exact, func(a, b *decad.Body) (*decad.Body, error) { return decad.Intersect(a, b).Do(t.Context()) }},
+		{"cut", chamferedPlateVolume - planarBandOverlap, decad.Approximate, func(a, b *decad.Body) (*decad.Body, error) { return decad.Cut(a, b).Do(t.Context()) }},
+		{"union", chamferedPlateVolume + 8000 - planarBandOverlap, decad.Approximate, func(a, b *decad.Body) (*decad.Body, error) { return decad.Union(a, b).Do(t.Context()) }},
+		{"union as second operand", chamferedPlateVolume + 8000 - planarBandOverlap, decad.Approximate, func(a, b *decad.Body) (*decad.Body, error) { return decad.Union(b, a).Do(t.Context()) }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -448,10 +448,10 @@ func requireCapBlendBooleanRefused(t *testing.T, build func(*testing.T) *decad.B
 		name string
 		run  func(body, tool *decad.Body) (*decad.Body, error)
 	}{
-		{"union", func(a, b *decad.Body) (*decad.Body, error) { return decad.Union(t.Context(), a, b) }},
-		{"cut", func(a, b *decad.Body) (*decad.Body, error) { return decad.Cut(t.Context(), a, b) }},
-		{"intersect", func(a, b *decad.Body) (*decad.Body, error) { return decad.Intersect(t.Context(), a, b) }},
-		{"tool first", func(a, b *decad.Body) (*decad.Body, error) { return decad.Union(t.Context(), b, a) }},
+		{"union", func(a, b *decad.Body) (*decad.Body, error) { return decad.Union(a, b).Do(t.Context()) }},
+		{"cut", func(a, b *decad.Body) (*decad.Body, error) { return decad.Cut(a, b).Do(t.Context()) }},
+		{"intersect", func(a, b *decad.Body) (*decad.Body, error) { return decad.Intersect(a, b).Do(t.Context()) }},
+		{"tool first", func(a, b *decad.Body) (*decad.Body, error) { return decad.Union(b, a).Do(t.Context()) }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -544,7 +544,7 @@ func chamferedFlangeBody(t *testing.T) (*sketch.World, *decad.Body) {
 	require.NoError(t, err)
 	plate, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(16), Dir: decad.Along})
 	require.NoError(t, err)
-	drilled, err := decad.Cut(t.Context(), plate, cylinderAt(t, w, doc, 0, 18))
+	drilled, err := decad.Cut(plate, cylinderAt(t, w, doc, 0, 18)).Do(t.Context())
 	require.NoError(t, err)
 	filleted, err := decad.Fillet(t.Context(), drilled, decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1))), units.Millimeters(12))
 	require.NoError(t, err)
@@ -578,7 +578,7 @@ func cylinderAt(t *testing.T, w *sketch.World, doc *decad.Document, x, r float64
 func TestCapBlendFlangeCutAfterChamfer(t *testing.T) {
 	t.Parallel()
 	w, flange := chamferedFlangeBody(t)
-	got, err := decad.Cut(t.Context(), flange, cylinderAt(t, w, flange.Document(), 36, 7))
+	got, err := decad.Cut(flange, cylinderAt(t, w, flange.Document(), 36, 7)).Do(t.Context())
 	require.NoError(t, err)
 	vol, err := got.Volume()
 	require.NoError(t, err)
@@ -614,7 +614,7 @@ func TestCapBlendChamferedPinAsTool(t *testing.T) {
 	pin, err = decad.Chamfer(t.Context(), pin, capLoopEdges(pin), units.Millimeters(1))
 	require.NoError(t, err)
 
-	got, err := decad.Cut(t.Context(), plate, pin)
+	got, err := decad.Cut(plate, pin).Do(t.Context())
 	require.NoError(t, err)
 	vol, err := got.Volume()
 	require.NoError(t, err)
@@ -634,7 +634,7 @@ func TestCapBlendDiskIntersectBandDominated(t *testing.T) {
 	chamfered, err := decad.Chamfer(t.Context(), body, capLoopEdges(body), units.Millimeters(3))
 	require.NoError(t, err)
 	box := boxBodyAtZ(t, chamfered.Document(), -20, -20, 20, 20, -5, 15)
-	got, err := decad.Intersect(t.Context(), chamfered, box)
+	got, err := decad.Intersect(chamfered, box).Do(t.Context())
 	require.NoError(t, err)
 	vol, err := got.Volume()
 	require.NoError(t, err)
@@ -655,7 +655,7 @@ func TestCapBlendBooleanChargesTheMiterDisplacement(t *testing.T) {
 	before, err := chamfered.Volume()
 	require.NoError(t, err)
 	pocket := boxBodyAtZ(t, doc, -10, -10, 10, 10, -5, 30)
-	got, err := decad.Cut(t.Context(), chamfered, pocket)
+	got, err := decad.Cut(chamfered, pocket).Do(t.Context())
 	require.NoError(t, err)
 	vol, err := got.Volume()
 	require.NoError(t, err)

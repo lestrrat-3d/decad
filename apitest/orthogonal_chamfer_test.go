@@ -74,7 +74,7 @@ func lShape(t *testing.T, doc *decad.Document) *decad.Body {
 	t.Helper()
 	a := blockIn(t, doc, r3.NewVec(0, 0, 0), r3.NewVec(20, 10, 10))
 	c := blockIn(t, doc, r3.NewVec(0, 0, 0), r3.NewVec(10, 20, 10))
-	l, err := decad.Union(t.Context(), a, c)
+	l, err := decad.Union(a, c).Do(t.Context())
 	require.NoError(t, err)
 	return l
 }
@@ -102,7 +102,7 @@ func TestChamferOfEdgesMeetingAtAReflexCornerRefusesALugInTheirBand(t *testing.T
 	t.Parallel()
 	doc := decad.New()
 	lug := blockIn(t, doc, r3.NewVec(13, 10, 8.5), r3.NewVec(15, 12, 9.5))
-	joined, err := decad.Union(t.Context(), lShape(t, doc), lug)
+	joined, err := decad.Union(lShape(t, doc), lug).Do(t.Context())
 	require.NoError(t, err)
 	sel := decad.Edges(decad.Convex(), decad.EndpointAt(r3.NewVec(10, 10, 10)))
 	_, err = decad.Chamfer(t.Context(), joined, sel, units.Millimeters(1))
@@ -114,7 +114,7 @@ func pocketSlab(t *testing.T, doc *decad.Document) *decad.Body {
 	t.Helper()
 	slab := blockIn(t, doc, r3.NewVec(0, 0, 0), r3.NewVec(30, 30, 10))
 	tool := blockIn(t, doc, r3.NewVec(10, 10, 5), r3.NewVec(20, 20, 12))
-	out, err := decad.Cut(t.Context(), slab, tool)
+	out, err := decad.Cut(slab, tool).Do(t.Context())
 	require.NoError(t, err)
 	return out
 }
@@ -170,7 +170,7 @@ func TestChamferOfAGrooveRunsFlushOutOfBothEnds(t *testing.T) {
 	doc := decad.New()
 	slab := blockIn(t, doc, r3.NewVec(0, 0, 0), r3.NewVec(30, 30, 10))
 	tool := blockIn(t, doc, r3.NewVec(-1, 10, 5), r3.NewVec(31, 20, 12))
-	groove, err := decad.Cut(t.Context(), slab, tool)
+	groove, err := decad.Cut(slab, tool).Do(t.Context())
 	require.NoError(t, err)
 	out, err := decad.Chamfer(t.Context(), groove, decad.Edges(decad.Concave(), decad.LongerThan(units.Millimeters(20))),
 		units.Millimeters(1))

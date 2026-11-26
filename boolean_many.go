@@ -154,7 +154,7 @@ func unionFold(ctx context.Context, bodies []*Body) (*Body, error) {
 func foldPairs(ctx context.Context, bodies []*Body) (*Body, error) {
 	acc := bodies[0]
 	for _, next := range bodies[1:] {
-		joined, err := performBoolean(ctx, meshbool.OpUnion, acc, next)
+		joined, err := performBoolean(ctx, meshbool.OpUnion, acc, next, booleanConfig{})
 		if err != nil {
 			return acc, operationError(OperationUnion, err)
 		}

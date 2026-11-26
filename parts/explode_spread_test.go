@@ -38,8 +38,8 @@ func mvScrewY(k int) float64 { return float64(3-2*k) * 15 }
 func movementSet(t *testing.T, tail float64, pressed bool) (*parts.Set, map[string]*decad.Body) {
 	t.Helper()
 	doc := decad.New()
-	cut := func(b, tool *decad.Body) *decad.Body { return must(decad.Cut(t.Context(), b, tool)) }
-	union := func(b, o *decad.Body) *decad.Body { return must(decad.Union(t.Context(), b, o)) }
+	cut := func(b, tool *decad.Body) *decad.Body { return must(decad.Cut(b, tool).Do(t.Context())) }
+	union := func(b, o *decad.Body) *decad.Body { return must(decad.Union(b, o).Do(t.Context())) }
 	cyl := func(x, y, r, z0, h float64) *decad.Body { return cylinderAt(t, doc, x, y, r, z0, h) }
 
 	plate := block(t, doc, -60, -40, 60, 40, 0, 6)

@@ -220,7 +220,7 @@ func positiveBoundFacetedFixture(t *testing.T, reverse bool) (*Document, *Body, 
 	if reverse {
 		base, upper = upper, base
 	}
-	union, err := Union(t.Context(), base, upper)
+	union, err := Union(base, upper).Do(t.Context())
 	require.NoError(t, err)
 	pp, ok := union.n.Payload.(facetedPayload)
 	require.True(t, ok)
@@ -281,7 +281,7 @@ func TestPositiveBoundFacetedUnionRefusesToolBelowLowerFace(t *testing.T) {
 	require.NoError(t, err)
 	upper, err = Transform(t.Context(), upper, shift)
 	require.NoError(t, err)
-	union, err := Union(t.Context(), base, upper)
+	union, err := Union(base, upper).Do(t.Context())
 	require.NoError(t, err)
 	pp := union.n.Payload.(facetedPayload)
 	require.Positive(t, pp.MeshBound)
@@ -322,7 +322,7 @@ func facetedFloorSweepFixture(t *testing.T) (*Document, *Body, *Body) {
 	doc := New()
 	a := internalBoxBody(t, doc, 0, 0, 10, 10, 10)
 	b := internalCrossingFramedBox(t, doc)
-	union, err := Union(t.Context(), a, b)
+	union, err := Union(a, b).Do(t.Context())
 	require.NoError(t, err)
 	_, faceted := union.n.Payload.(facetedPayload)
 	require.True(t, faceted)

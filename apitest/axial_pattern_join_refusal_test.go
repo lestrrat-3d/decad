@@ -29,7 +29,7 @@ func TestPatternUnionRefusesCopiesItCannotCertify(t *testing.T) {
 			copies, err := decad.PatternCopies(t.Context(), tongue,
 				decad.LinearPattern{Dir: r3.NewVec(1, 0, 0), Step: units.Millimeters(step), Count: 3})
 			require.NoError(t, err)
-			_, err = decad.Union(t.Context(), plate, append([]*decad.Body{tongue}, copies...)...)
+			_, err = decad.Union(append([]*decad.Body{plate}, append([]*decad.Body{tongue}, copies...)...)...).Do(t.Context())
 			require.ErrorIs(t, err, decad.ErrUnsupported)
 			require.True(t, slices.Equal(append(slices.Clone(before), copies...), doc.Bodies()),
 				"a refused Union leaves the target, the feature and every copy live")
@@ -55,7 +55,7 @@ func TestPatternUnionJoinsCopiesThatShareWholeSides(t *testing.T) {
 	copies, err := decad.PatternCopies(t.Context(), tongue,
 		decad.LinearPattern{Dir: r3.NewVec(1, 0, 0), Step: units.Millimeters(4), Count: 3})
 	require.NoError(t, err)
-	joined, err := decad.Union(t.Context(), plate, append([]*decad.Body{tongue}, copies...)...)
+	joined, err := decad.Union(append([]*decad.Body{plate}, append([]*decad.Body{tongue}, copies...)...)...).Do(t.Context())
 	require.NoError(t, err)
 	v, err := joined.Volume()
 	require.NoError(t, err)
@@ -77,7 +77,7 @@ func TestPatternUnionRefusesLobesThatOnlyTouchTheBase(t *testing.T) {
 	copies, err := decad.PatternCopies(t.Context(), lobe,
 		decad.CircularPattern{Axis: r3.NewVec(0, 0, 1), Count: n})
 	require.NoError(t, err)
-	_, err = decad.Union(t.Context(), disc, append([]*decad.Body{lobe}, copies...)...)
+	_, err = decad.Union(append([]*decad.Body{disc}, append([]*decad.Body{lobe}, copies...)...)...).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.True(t, slices.Equal(append(slices.Clone(before), copies...), doc.Bodies()),
 		"a refused Union leaves the target, the feature and every copy live")
@@ -104,7 +104,7 @@ func TestPatternUnionKeepsLobesThatMissTheBaseByAMicronApart(t *testing.T) {
 	copies, err := decad.PatternCopies(t.Context(), lobe,
 		decad.CircularPattern{Axis: r3.NewVec(0, 0, 1), Count: n})
 	require.NoError(t, err)
-	out, err := decad.Union(t.Context(), disc, append([]*decad.Body{lobe}, copies...)...)
+	out, err := decad.Union(append([]*decad.Body{disc}, append([]*decad.Body{lobe}, copies...)...)...).Do(t.Context())
 	require.NoError(t, err)
 	require.True(t, slices.Equal([]*decad.Body{out}, doc.Bodies()))
 	require.Len(t, out.Lumps(), n+1, "the lobes stay clear of the disc")

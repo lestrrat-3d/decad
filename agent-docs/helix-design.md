@@ -732,13 +732,13 @@ axis, draw the groove profile — a V or trapezoid whose root lies at radius
 `R − depth` and whose mouth opens past `R` — beside a construction line on
 the axis. `Coil` it with the thread's pitch over `turns` chosen so the coil
 starts and ends INSIDE the cylinder's height: the coil's two caps then meet
-the cylinder wall transversally and nothing is coplanar. `doc.Cut(ctx,
-cylinder, coil)`.
+the cylinder wall transversally and nothing is coplanar. `decad.Cut(cylinder,
+coil).Do(ctx)`.
 
 ```go
 coil, err := decad.Coil(ctx, doc, s, s.Profiles()[0], decad.SketchLine{Start: a, End: b},
     units.Millimeters(1.5), units.Scalar(8))
-threaded, err := doc.Cut(ctx, cylinder, coil)
+threaded, err := decad.Cut(cylinder, coil).Do(ctx)
 ```
 
 A thread that runs out of the cylinder's end is a coil that crosses the end

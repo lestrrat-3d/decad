@@ -220,7 +220,7 @@ func TestLoftCylinderUnionCommonPlacement(t *testing.T) {
 				tooth, err = Transform(t.Context(), tooth, motion)
 				require.NoError(t, err)
 			}
-			joined, err := Union(t.Context(), blank, tooth)
+			joined, err := Union(blank, tooth).Do(t.Context())
 			require.NoError(t, err)
 			loftCylinderCheckPlacedResult(t, joined, blank, tooth, tc.placed)
 			if tc.placed {
@@ -260,10 +260,10 @@ func TestLoftCylinderCommonPlacementConsumers(t *testing.T) {
 	require.NoError(t, err)
 	second, err = Transform(ctx, second, move)
 	require.NoError(t, err)
-	firstJoin, err := Union(ctx, blank, tooth)
+	firstJoin, err := Union(blank, tooth).Do(ctx)
 	require.NoError(t, err)
 	loftCylinderCheckPlacedResult(t, firstJoin, blank, tooth, true)
-	joined, err := Union(ctx, firstJoin, second)
+	joined, err := Union(firstJoin, second).Do(ctx)
 	require.NoError(t, err)
 	fp, ok := joined.n.Payload.(facetedPayload)
 	require.True(t, ok)
@@ -311,7 +311,7 @@ func TestLoftCylinderCommonPlacementConsumers(t *testing.T) {
 	require.True(t, admitted)
 	tool, err = Transform(ctx, tool, move)
 	require.NoError(t, err)
-	bored, err := Cut(ctx, joined, tool)
+	bored, err := Cut(joined, tool).Do(ctx)
 	require.NoError(t, err)
 	require.True(t, bored.IsSolid())
 	cut, ok := bored.n.Payload.(facetedPayload)
@@ -363,7 +363,7 @@ func TestLoftCylinderCommonPlacementDifferentLoftSourceFallsBack(t *testing.T) {
 	require.NoError(t, err)
 	other, err = Transform(ctx, other, move)
 	require.NoError(t, err)
-	joined, err := Union(ctx, blank, tooth)
+	joined, err := Union(blank, tooth).Do(ctx)
 	require.NoError(t, err)
 	loftCylinderCheckPlacedResult(t, joined, blank, tooth, true)
 
@@ -376,7 +376,7 @@ func TestLoftCylinderCommonPlacementDifferentLoftSourceFallsBack(t *testing.T) {
 	require.NotNil(t, joinedPayload.LoftCylinderJoin.Placement,
 		"fallback must leave the existing placed certificate intact")
 
-	result, err := Union(ctx, joined, other)
+	result, err := Union(joined, other).Do(ctx)
 	if err != nil {
 		require.True(t, errors.Is(err, ErrUnsupported) || errors.Is(err, ErrBooleanFailed),
 			"generic route returned an unexpected error: %s", loftCylinderErrorText(err))
@@ -398,7 +398,7 @@ func TestLoftCylinderCommonPlacementBoreEligibilityPrecedesRebuild(t *testing.T)
 	require.NoError(t, err)
 	tooth, err = Transform(ctx, tooth, move)
 	require.NoError(t, err)
-	joined, err := Union(ctx, blank, tooth)
+	joined, err := Union(blank, tooth).Do(ctx)
 	require.NoError(t, err)
 	loftCylinderCheckPlacedResult(t, joined, blank, tooth, true)
 
@@ -458,10 +458,10 @@ func TestLoftCylinderCommonPlacementNativeYZConsumers(t *testing.T) {
 	require.NoError(t, err)
 	second, err := Copy(ctx, tooth, WithCopyPlacement(turn))
 	require.NoError(t, err)
-	firstJoin, err := Union(ctx, blank, tooth)
+	firstJoin, err := Union(blank, tooth).Do(ctx)
 	require.NoError(t, err)
 	loftCylinderCheckPlacedResult(t, firstJoin, blank, tooth, true)
-	joined, err := Union(ctx, firstJoin, second)
+	joined, err := Union(firstJoin, second).Do(ctx)
 	require.NoError(t, err)
 	fp, ok := joined.n.Payload.(facetedPayload)
 	require.True(t, ok)
@@ -489,7 +489,7 @@ func TestLoftCylinderCommonPlacementNativeYZConsumers(t *testing.T) {
 	require.Equal(t, 1, len(s.Profiles()))
 	tool, err := Extrude(ctx, doc, s, s.Profiles()[0], Distance{D: units.Millimeters(4), Dir: Along})
 	require.NoError(t, err)
-	bored, err := Cut(ctx, joined, tool)
+	bored, err := Cut(joined, tool).Do(ctx)
 	require.NoError(t, err)
 	require.True(t, bored.IsSolid())
 	box, err := bored.Bounds()
@@ -519,7 +519,7 @@ func TestLoftCylinderCommonPlacementRefusesUnequalPoses(t *testing.T) {
 		blank.originProducer(), blank, tooth)
 	require.NoError(t, err)
 	require.False(t, admitted, "unequal source poses must miss the structural certificate")
-	_, err = Union(t.Context(), blank, tooth)
+	_, err = Union(blank, tooth).Do(t.Context())
 	require.True(t, errors.Is(err, ErrUnsupported),
 		"generic route should still refuse this near-contact pair: %s", loftCylinderErrorText(err))
 }
@@ -538,7 +538,7 @@ func TestLoftCylinderCommonPlacementLeavesArbitraryAngleGeneric(t *testing.T) {
 		blank.originProducer(), blank, tooth)
 	require.NoError(t, err)
 	require.False(t, admitted, "an arbitrary-angle pose needs its own source-map proof")
-	joined, err := Union(t.Context(), blank, tooth)
+	joined, err := Union(blank, tooth).Do(t.Context())
 	if err != nil {
 		require.True(t, errors.Is(err, ErrUnsupported),
 			"generic route returned an unexpected error: %s", loftCylinderErrorText(err))
@@ -576,7 +576,7 @@ func TestLoftCylinderCommonPlacementRejectsRoundedComposition(t *testing.T) {
 		blank.originProducer(), blank, tooth)
 	require.NoError(t, err)
 	require.False(t, admitted, "rounded source-map composition must miss the structural path")
-	joined, err := Union(t.Context(), blank, tooth)
+	joined, err := Union(blank, tooth).Do(t.Context())
 	if err != nil {
 		require.True(t, errors.Is(err, ErrUnsupported),
 			"generic route returned an unexpected error: %s", loftCylinderErrorText(err))
@@ -598,7 +598,7 @@ func TestLoftCylinderCommonPlacementLeavesOtherPrismsGeneric(t *testing.T) {
 		blank.originProducer(), blank, other)
 	require.NoError(t, err)
 	require.False(t, admitted, "a prism pair must miss the cylinder/Loft path")
-	joined, err := Union(t.Context(), blank, other)
+	joined, err := Union(blank, other).Do(t.Context())
 	if err != nil {
 		require.True(t, errors.Is(err, ErrUnsupported) || errors.Is(err, ErrBooleanFailed),
 			"other prism route returned an unexpected error: %s", loftCylinderErrorText(err))
@@ -621,7 +621,7 @@ func TestLoftCylinderCommonPlacementLargeRepeatedShift(t *testing.T) {
 		tooth, err = Transform(t.Context(), tooth, move)
 		require.NoError(t, err)
 	}
-	joined, err := Union(t.Context(), blank, tooth)
+	joined, err := Union(blank, tooth).Do(t.Context())
 	require.NoError(t, err)
 	loftCylinderCheckPlacedResult(t, joined, blank, tooth, true)
 	box, err := joined.Bounds()

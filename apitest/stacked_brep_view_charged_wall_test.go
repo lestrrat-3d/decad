@@ -193,7 +193,7 @@ func TestStackedBrepViewFilletChargedWall(t *testing.T) {
 	t.Run("a mesh Cut away from the hole keeps the wall and the rim chamfers", func(t *testing.T) {
 		doc := copies[1].Document()
 		tool := translated(t, boxBody(t, doc, 0, 0, 4, 4, 7), 10, 10, -1)
-		cut, err := decad.Cut(t.Context(), copies[1], tool)
+		cut, err := decad.Cut(copies[1], tool).Do(t.Context())
 		require.NoError(t, err)
 		require.Equal(t, "decad.facetedPayload", decadtest.PayloadClass(cut))
 		var kept bool

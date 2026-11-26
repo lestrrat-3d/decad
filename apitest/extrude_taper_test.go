@@ -370,7 +370,7 @@ func TestTaperTwoSidedCut(t *testing.T) {
 	}, decad.WithTaper(units.Degrees(5)))
 	require.NoError(t, err)
 	post := boxBodyAtZ(t, doc, -2, -2, 2, 2, -5, 20)
-	cut, err := decad.Cut(t.Context(), drafted, post)
+	cut, err := decad.Cut(drafted, post).Do(t.Context())
 	require.NoError(t, err)
 	want := bfSub(bfAdd(
 		taperBoxVolume(4, bfMul(bf(4), taperTan(5))),

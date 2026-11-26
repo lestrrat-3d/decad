@@ -14,7 +14,7 @@ func TestVerifyCutAgainstCopiedTool(t *testing.T) {
 			target, original := sc.roundedBox(t), sc.tool(t, 20)
 			tool, err := decad.Copy(t.Context(), original)
 			require.NoError(t, err)
-			cut, err := decad.Cut(t.Context(), target, tool)
+			cut, err := decad.Cut(target, tool).Do(t.Context())
 			require.NoError(t, err)
 			require.True(t, tookMeshPath(cut))
 			if changed {

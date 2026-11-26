@@ -177,7 +177,7 @@ func Example_orthogonal_union() {
 			return
 		}
 	}
-	bar, err := decad.Union(context.Background(), solids[0], solids[1])
+	bar, err := decad.Union(solids[0], solids[1]).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to join: %s\n", err)
 		return

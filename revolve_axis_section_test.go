@@ -117,9 +117,9 @@ func axisLug(t *testing.T, doc *Document, origin, u, v r3.Vec, fitted bool, toe,
 	require.Len(t, profiles, 1)
 	lug, err := LoftFromPoint(t.Context(), doc, r3.Vec{}, s, profiles[0])
 	require.NoError(t, err)
-	cut, err := Cut(t.Context(), lug, toe)
+	cut, err := Cut(lug, toe).Do(t.Context())
 	require.NoError(t, err)
-	trimmed, err := Intersect(t.Context(), cut, heel)
+	trimmed, err := Intersect(cut, heel).Do(t.Context())
 	require.NoError(t, err)
 	return trimmed
 }
@@ -588,17 +588,17 @@ func TestSectorUnionAcceptsGeneralCertificate(t *testing.T) {
 		if swapped {
 			a, b = b, a
 		}
-		joined, err := Union(t.Context(), a, b)
+		joined, err := Union(a, b).Do(t.Context())
 		require.NoError(t, err)
 		requireGeneralJoin(f, hubVolume, joined, 0)
-		serial, err := Union(t.Context(), joined, second)
+		serial, err := Union(joined, second).Do(t.Context())
 		require.NoError(t, err)
 		requireGeneralJoin(f, hubVolume, serial, 1)
 	}
 	f, second := fixture()
 	hubVolume, err := f.hub.Volume()
 	require.NoError(t, err)
-	variadic, err := Union(t.Context(), second, f.hub, f.lug)
+	variadic, err := Union(second, f.hub, f.lug).Do(t.Context())
 	require.NoError(t, err)
 	requireGeneralJoin(f, hubVolume, variadic, 1)
 }
@@ -631,7 +631,7 @@ func TestSectorTraceRefusesToothStraddlingBranchCut(t *testing.T) {
 		}
 		require.ErrorIs(t, err, ErrUnsupported)
 		before := doc.Bodies()
-		_, err = Union(t.Context(), f.hub, f.lug)
+		_, err = Union(f.hub, f.lug).Do(t.Context())
 		require.ErrorIs(t, err, ErrUnsupported)
 		require.Equal(t, before, doc.Bodies())
 	}

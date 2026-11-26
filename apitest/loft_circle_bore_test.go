@@ -63,7 +63,7 @@ func TestLoftCircleBoreRoundedAxisDoesNotPublishCylinder(t *testing.T) {
 	tool, err := decad.Extrude(t.Context(), doc, toolSketch, toolSketch.Profiles()[0],
 		decad.Distance{D: units.Millimeters(6), Dir: decad.Along})
 	require.NoError(t, err)
-	cut, err := decad.Cut(t.Context(), blank, tool)
+	cut, err := decad.Cut(blank, tool).Do(t.Context())
 	require.NoError(t, err)
 	requireLoftBoreFaceted(t, cut, 3.125)
 }
@@ -130,7 +130,7 @@ func TestLoftCircleBoreRoundedAdmissionRefusals(t *testing.T) {
 			tool, err := decad.Extrude(t.Context(), doc, toolSketch, toolSketch.Profiles()[0],
 				decad.Distance{D: units.Millimeters(tc.height + 2), Dir: decad.Along})
 			require.NoError(t, err)
-			cut, err := decad.Cut(t.Context(), blank, tool)
+			cut, err := decad.Cut(blank, tool).Do(t.Context())
 			if err != nil {
 				// An unproved tool-center lift takes the general boolean path,
 				// which can refuse near-coincident held facets.
@@ -182,7 +182,7 @@ func TestLoftThroughBoreCutPublishesCircularTopology(t *testing.T) {
 	tool, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0],
 		decad.Distance{D: units.Millimeters(4), Dir: decad.Along})
 	require.NoError(t, err)
-	cut, err := decad.Cut(t.Context(), blank, tool)
+	cut, err := decad.Cut(blank, tool).Do(t.Context())
 	require.NoError(t, err)
 	requireManifold(t, cut)
 
@@ -264,7 +264,7 @@ func TestLoftThroughBoreCutPublishesCircularTopology(t *testing.T) {
 		bores := []struct{ x, y, radius float64 }{{1, 0.5, 1}, {-2, 1, 0.75}, {0, -2, 0.5}}
 		for i, bore := range bores[1:] {
 			tool := circlePrismAtZ(t, doc, bore.x, bore.y, bore.radius, 0, 2)
-			body, err = decad.Cut(t.Context(), body, tool)
+			body, err = decad.Cut(body, tool).Do(t.Context())
 			require.NoError(t, err)
 			materialArea -= math.Pi * bore.radius * bore.radius
 			_, err := decad.Faces(decad.Cylindrical()).Exactly(i + 2).SelectFaces(body)
@@ -422,7 +422,7 @@ func TestExtrudedBoxThroughBoreCutPublishesCircularTopology(t *testing.T) {
 	tool, err := decad.Extrude(t.Context(), doc, toolSketch, toolSketch.Profiles()[0],
 		decad.Distance{D: units.Millimeters(4), Dir: decad.Along})
 	require.NoError(t, err)
-	cut, err := decad.Cut(t.Context(), box, tool)
+	cut, err := decad.Cut(box, tool).Do(t.Context())
 	require.NoError(t, err)
 	for _, role := range []decad.FeatureRef{decad.CapStart(cut), decad.CapEnd(cut)} {
 		faces, err := decad.Faces(decad.FaceCreatedBy(role)).Exactly(1).SelectFaces(cut)

@@ -93,7 +93,7 @@ func benchCut() *decad.Body {
 	hs.CreateCircle(center, 8)
 	must(hs.Solve(context.Background()))
 	tool := must(decad.Extrude(context.Background(), doc, hs, hs.Profiles()[0], decad.Distance{D: units.Millimeters(20), Dir: decad.Along}))
-	return must(decad.Cut(context.Background(), pb, tool))
+	return must(decad.Cut(pb, tool).Do(context.Background()))
 }
 
 // runTess is the shared benchmark body: the body is built once, outside the

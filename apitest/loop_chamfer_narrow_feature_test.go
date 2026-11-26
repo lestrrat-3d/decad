@@ -35,7 +35,7 @@ func forkMeshResult(t *testing.T) *decad.Body {
 	require.NoError(t, err)
 	bore, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: mm(8.5), Dir: decad.Along})
 	require.NoError(t, err)
-	out, err := decad.Cut(t.Context(), fork, bore)
+	out, err := decad.Cut(fork, bore).Do(t.Context())
 	require.NoError(t, err)
 	require.True(t, tookMeshPath(out), "class %s", decadtest.PayloadClass(out))
 	return out

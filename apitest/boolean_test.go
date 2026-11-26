@@ -47,7 +47,7 @@ func booleanRimBody(t *testing.T, doc *decad.Document) *decad.Body {
 	t.Helper()
 	disc := diskBody(t, doc, 0, 0, 10)
 	bar := translated(t, boxBody(t, doc, 5, -4, 25, 4, 10), 0, 0, 5)
-	union, err := decad.Union(t.Context(), disc, bar)
+	union, err := decad.Union(disc, bar).Do(t.Context())
 	require.NoError(t, err)
 	return union
 }
@@ -139,15 +139,15 @@ func volumeMM(t *testing.T, m decad.Measurement) float64 {
 }
 
 func pairUnion(ctx context.Context, a, b *decad.Body) (*decad.Body, error) {
-	return decad.Union(ctx, a, b)
+	return decad.Union(a, b).Do(ctx)
 }
 
 func pairCut(ctx context.Context, a, b *decad.Body) (*decad.Body, error) {
-	return decad.Cut(ctx, a, b)
+	return decad.Cut(a, b).Do(ctx)
 }
 
 func pairIntersect(ctx context.Context, a, b *decad.Body) (*decad.Body, error) {
-	return decad.Intersect(ctx, a, b)
+	return decad.Intersect(a, b).Do(ctx)
 }
 
 func TestBooleanContextCancellationLeavesDocumentUnchanged(t *testing.T) {
@@ -233,7 +233,7 @@ func TestUnionOverlappingCubes(t *testing.T) {
 	a := boxBody(t, doc, 0, 0, 10, 10, 10)
 	b := translated(t, boxBody(t, doc, 0, 0, 10, 10, 10), 5, 5, 5)
 
-	got, err := decad.Union(t.Context(), a, b)
+	got, err := decad.Union(a, b).Do(t.Context())
 	require.NoError(t, err)
 
 	// 1000 + 1000 − 5³ overlap: the pair is all-planar and every contact
@@ -261,7 +261,7 @@ func TestUnionDisjointCubes(t *testing.T) {
 	a := boxBody(t, doc, 0, 0, 10, 10, 10)
 	b := boxBody(t, doc, 20, 0, 30, 10, 10)
 
-	got, err := decad.Union(t.Context(), a, b)
+	got, err := decad.Union(a, b).Do(t.Context())
 	require.NoError(t, err)
 
 	// Disjoint: the union is exactly the sum, two lumps, nothing chorded,
@@ -290,7 +290,7 @@ func TestUnionCoplanarCapsBuildAnalyticPrismUnion(t *testing.T) {
 		a := boxBody(t, doc, 0, 0, 10, 10, 10)
 		b := boxBody(t, doc, 20, 0, 30, 10, 10)
 
-		got, err := decad.Union(t.Context(), a, b)
+		got, err := decad.Union(a, b).Do(t.Context())
 		require.NoError(t, err, `coplanar caps sharing no area are not a contact`)
 		vol, err := got.Volume()
 		require.NoError(t, err)
@@ -302,7 +302,7 @@ func TestUnionCoplanarCapsBuildAnalyticPrismUnion(t *testing.T) {
 		a := boxBody(t, doc, 0, 0, 10, 10, 10)
 		b := boxBody(t, doc, 5, 5, 15, 15, 10)
 
-		got, err := decad.Union(t.Context(), a, b)
+		got, err := decad.Union(a, b).Do(t.Context())
 		require.NoError(t, err)
 		vol, err := got.Volume()
 		require.NoError(t, err)
@@ -320,7 +320,7 @@ func TestUnionCoplanarCapsBuildAnalyticPrismUnion(t *testing.T) {
 		a := boxBody(t, doc, 0, 0, 10, 10, 10)
 		b := boxBody(t, doc, 2, 2, 8, 8, 10)
 
-		got, err := decad.Union(t.Context(), a, b)
+		got, err := decad.Union(a, b).Do(t.Context())
 		require.NoError(t, err)
 		vol, err := got.Volume()
 		require.NoError(t, err)
@@ -339,7 +339,7 @@ func TestUnionSweepDisplacementChangesEnclosedSolid(t *testing.T) {
 		beforeDoc := decad.New()
 		beforeA := boxBody(t, beforeDoc, 0, 0, 10, 10, 10)
 		beforeB := translated(t, boxBody(t, beforeDoc, 2, 2, 8, 8, 10), 0, 0, 5)
-		before, err := decad.Union(t.Context(), beforeA, beforeB)
+		before, err := decad.Union(beforeA, beforeB).Do(t.Context())
 		require.NoError(t, err)
 		beforeVolume, err := before.Volume()
 		require.NoError(t, err)
@@ -373,7 +373,7 @@ func TestUnionSweepDisplacementChangesEnclosedSolid(t *testing.T) {
 		require.Equal(t, 1000.0, volumeMM(t, containedVolume))
 
 		moved := translated(t, inside, 0, 0, 5)
-		got, err := decad.Union(t.Context(), a, moved)
+		got, err := decad.Union(a, moved).Do(t.Context())
 		require.NoError(t, err)
 		gotVolume, err := got.Volume()
 		require.NoError(t, err)
@@ -387,7 +387,7 @@ func TestIntersectOverlappingCubes(t *testing.T) {
 	a := boxBody(t, doc, 0, 0, 10, 10, 10)
 	b := translated(t, boxBody(t, doc, 0, 0, 10, 10, 10), 5, 5, 5)
 
-	got, err := decad.Intersect(t.Context(), a, b)
+	got, err := decad.Intersect(a, b).Do(t.Context())
 	require.NoError(t, err)
 	vol, err := got.Volume()
 	require.NoError(t, err)
@@ -402,7 +402,7 @@ func TestIntersectDisjointIsEmpty(t *testing.T) {
 	a := boxBody(t, doc, 0, 0, 10, 10, 10)
 	b := boxBody(t, doc, 20, 0, 30, 10, 10)
 
-	_, err := decad.Intersect(t.Context(), a, b)
+	_, err := decad.Intersect(a, b).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrBooleanFailed)
 
 	// An empty result is a normal geometric outcome: BooleanEmpty, wrapping
@@ -430,7 +430,7 @@ func TestCutDrillsHole(t *testing.T) {
 		}
 	}
 
-	got, err := decad.Cut(t.Context(), plate, tool)
+	got, err := decad.Cut(plate, tool).Do(t.Context())
 	require.NoError(t, err)
 
 	// 20×20×8 minus a full-height r=2 hole.
@@ -485,7 +485,7 @@ func TestBooleanUnionRodThroughPlateGeometryUnchanged(t *testing.T) {
 	plate := boxBody(t, doc, 0, 0, 20, 20, 8)
 	rod := translated(t, diskBody(t, doc, 12, 10, 6), 0, 0, -6)
 
-	got, err := decad.Union(t.Context(), plate, rod)
+	got, err := decad.Union(plate, rod).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, got.Lumps(), 1)
 	requireBodyWatertight(t, got)
@@ -507,7 +507,7 @@ func TestCutEmbeddedToolMakesVoid(t *testing.T) {
 	plate := boxBody(t, doc, 0, 0, 20, 20, 8)
 	tool := translated(t, boxBody(t, doc, 8, 8, 12, 12, 4), 0, 0, 2)
 
-	got, err := decad.Cut(t.Context(), plate, tool)
+	got, err := decad.Cut(plate, tool).Do(t.Context())
 	require.NoError(t, err)
 	vol, err := got.Volume()
 	require.NoError(t, err)
@@ -532,7 +532,7 @@ func TestCutRemovingEverythingIsEmpty(t *testing.T) {
 	target := translated(t, boxBody(t, doc, 5, 5, 8, 8, 3), 0, 0, 2)
 	tool := boxBody(t, doc, 0, 0, 20, 20, 10)
 
-	_, err := decad.Cut(t.Context(), target, tool)
+	_, err := decad.Cut(target, tool).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrBooleanFailed)
 	var be *decad.BooleanError
 	require.ErrorAs(t, err, &be)
@@ -546,7 +546,7 @@ func TestCutDisjointKeepsTarget(t *testing.T) {
 	target := boxBody(t, doc, 0, 0, 10, 10, 10)
 	tool := boxBody(t, doc, 20, 0, 30, 10, 10)
 
-	got, err := decad.Cut(t.Context(), target, tool)
+	got, err := decad.Cut(target, tool).Do(t.Context())
 	require.NoError(t, err)
 	vol, err := got.Volume()
 	require.NoError(t, err)
@@ -559,15 +559,15 @@ func TestBooleanRejections(t *testing.T) {
 	t.Run("NilOperand", func(t *testing.T) {
 		doc := decad.New(decad.ExactOnly())
 		a := boxBody(t, doc, 0, 0, 10, 10, 10)
-		_, err := decad.Union(t.Context(), nil, a)
+		_, err := decad.Union(nil, a).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrDegenerate)
-		_, err = decad.Union(t.Context(), a, nil)
+		_, err = decad.Union(a, nil).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 	})
 	t.Run("SameBody", func(t *testing.T) {
 		doc := decad.New(decad.ExactOnly())
 		a := boxBody(t, doc, 0, 0, 10, 10, 10)
-		_, err := decad.Union(t.Context(), a, a)
+		_, err := decad.Union(a, a).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 	})
 	t.Run("ForeignBody", func(t *testing.T) {
@@ -575,17 +575,17 @@ func TestBooleanRejections(t *testing.T) {
 		docB := decad.New(decad.ExactOnly())
 		a := boxBody(t, docA, 0, 0, 10, 10, 10)
 		b := boxBody(t, docB, 5, 5, 15, 15, 10)
-		_, err := decad.Union(t.Context(), a, b)
+		_, err := decad.Union(a, b).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrForeignBody)
 	})
 	t.Run("RetiredBody", func(t *testing.T) {
 		doc := decad.New(decad.ExactOnly())
 		a := boxBody(t, doc, 0, 0, 10, 10, 10)
 		b := translated(t, boxBody(t, doc, 0, 0, 10, 10, 10), 5, 5, 5)
-		got, err := decad.Union(t.Context(), a, b)
+		got, err := decad.Union(a, b).Do(t.Context())
 		require.NoError(t, err)
 		c := boxBody(t, doc, 0, 0, 4, 4, 4)
-		_, err = decad.Union(t.Context(), a, c)
+		_, err = decad.Union(a, c).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrRetiredBody)
 		_ = got
 	})
@@ -596,7 +596,7 @@ func TestBooleanRejections(t *testing.T) {
 		doc := decad.New(decad.ExactOnly())
 		a := boxBody(t, doc, 0, 0, 10, 10, 10)
 		b := translated(t, roundTrip(t, boxBody(t, doc, 0, 0, 10, 10, 10)), 0.5, 0, 10)
-		_, err := decad.Union(t.Context(), a, b)
+		_, err := decad.Union(a, b).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.NotErrorIs(t, err, decad.ErrDegenerate)
 		var be *decad.BooleanError
@@ -611,7 +611,7 @@ func TestBooleanBoundComposition(t *testing.T) {
 	doc := decad.New()
 	plate := boxBody(t, doc, 0, 0, 20, 20, 8)
 	tool := translated(t, diskBody(t, doc, 14, 6, 2), 0, 0, -6)
-	first, err := decad.Cut(t.Context(), plate, tool)
+	first, err := decad.Cut(plate, tool).Do(t.Context())
 	require.NoError(t, err)
 	firstMesh, err := first.Tessellate(t.Context(), units.Millimeters(1000))
 	require.NoError(t, err)
@@ -619,7 +619,7 @@ func TestBooleanBoundComposition(t *testing.T) {
 
 	secondPlate := translated(t, boxBody(t, doc, 0, 0, 20, 20, 8), 40, 0, 0)
 	secondTool := translated(t, diskBody(t, doc, 14, 6, 2), 40, 0, -6)
-	second, err := decad.Cut(t.Context(), secondPlate, secondTool)
+	second, err := decad.Cut(secondPlate, secondTool).Do(t.Context())
 	require.NoError(t, err)
 	secondMesh, err := second.Tessellate(t.Context(), units.Millimeters(1000))
 	require.NoError(t, err)
@@ -630,7 +630,7 @@ func TestBooleanBoundComposition(t *testing.T) {
 	// The operands are disjoint, so no rim forms and no vertex moves: the
 	// result's bound is the larger operand bound exactly, never one operand's
 	// alone and never their sum.
-	both, err := decad.Union(t.Context(), first, second)
+	both, err := decad.Union(first, second).Do(t.Context())
 	require.NoError(t, err)
 	bothMesh, err := both.Tessellate(t.Context(), units.Millimeters(1000))
 	require.NoError(t, err)
@@ -650,17 +650,17 @@ func TestBooleanChainsWithinHeldBound(t *testing.T) {
 	doc := decad.New()
 	plate := boxBody(t, doc, 0, 0, 20, 20, 8)
 	tool := translated(t, diskBody(t, doc, 14, 6, 2), 0, 0, -6)
-	drilled, err := decad.Cut(t.Context(), plate, tool)
+	drilled, err := decad.Cut(plate, tool).Do(t.Context())
 	require.NoError(t, err)
 	drilledVol, err := drilled.Volume()
 	require.NoError(t, err)
 
 	first := translated(t, boxBody(t, doc, 0, 0, 5, 5, 5), 30, 0, 0)
-	once, err := decad.Union(t.Context(), drilled, first)
+	once, err := decad.Union(drilled, first).Do(t.Context())
 	require.NoError(t, err)
 
 	second := translated(t, boxBody(t, doc, 0, 0, 5, 5, 5), 60, 0, 0)
-	twice, err := decad.Union(t.Context(), once, second)
+	twice, err := decad.Union(once, second).Do(t.Context())
 	require.NoError(t, err, `a boolean result whose held bound fits the next pair's tolerance is an ordinary operand`)
 
 	twiceVol, err := twice.Volume()
@@ -693,7 +693,7 @@ func TestBooleanChainDepthGateReadsOnlyTheTouchedRims(t *testing.T) {
 		plate := boxBody(t, doc, -48, -34, 48, 34, 16)
 		for i, tool := range []struct{ cx, r float64 }{{0, 18}, {-36, 7}} {
 			var err error
-			plate, err = decad.Cut(t.Context(), plate, translated(t, discBody(t, doc, tool.cx, tool.r, 48), 0.125, 0, -16))
+			plate, err = decad.Cut(plate, translated(t, discBody(t, doc, tool.cx, tool.r, 48), 0.125, 0, -16)).Do(t.Context())
 			require.NoError(t, err, "cut %d", i+1)
 			require.True(t, tookMeshPath(plate), "cut %d takes the mesh path", i+1)
 		}
@@ -703,7 +703,7 @@ func TestBooleanChainDepthGateReadsOnlyTheTouchedRims(t *testing.T) {
 	t.Run("a contact clear of the coarse rims cuts", func(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
-		got, err := decad.Cut(t.Context(), drilled(t, doc), translated(t, discBody(t, doc, 36, 7, 48), 0.125, 0, -16))
+		got, err := decad.Cut(drilled(t, doc), translated(t, discBody(t, doc, 36, 7, 48), 0.125, 0, -16)).Do(t.Context())
 		require.NoError(t, err, "geometry the pair does not touch is never the reason for a refusal")
 		vol, err := got.Volume()
 		require.NoError(t, err)
@@ -717,7 +717,7 @@ func TestBooleanChainDepthGateReadsOnlyTheTouchedRims(t *testing.T) {
 	t.Run("a contact on a coarse planar rim cuts", func(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
-		got, err := decad.Cut(t.Context(), drilled(t, doc), translated(t, discBody(t, doc, -29, 1, 48), 0.125, 0, -16))
+		got, err := decad.Cut(drilled(t, doc), translated(t, discBody(t, doc, -29, 1, 48), 0.125, 0, -16)).Do(t.Context())
 		require.NoError(t, err, "the plate's planar faces state a slab thinner than the pair's chord tolerance")
 		vol, err := got.Volume()
 		require.NoError(t, err)
@@ -806,7 +806,7 @@ func TestBooleanChainOfConesContinuesPastEachJoint(t *testing.T) {
 			chain = seg
 			continue
 		}
-		chain, err = decad.Union(t.Context(), chain, seg)
+		chain, err = decad.Union(chain, seg).Do(t.Context())
 		require.NoError(t, err, "union of segment %d onto the chain", i+1)
 	}
 
@@ -855,7 +855,7 @@ func TestUnionCupOperand(t *testing.T) {
 	extraVol, err := extra.Volume()
 	require.NoError(t, err)
 
-	got, err := decad.Union(t.Context(), cup, extra)
+	got, err := decad.Union(cup, extra).Do(t.Context())
 	require.NoError(t, err)
 	gotVol, err := got.Volume()
 	require.NoError(t, err)
@@ -869,7 +869,7 @@ func TestFacetedPlaced(t *testing.T) {
 	doc := decad.New()
 	plate := boxBody(t, doc, 0, 0, 20, 20, 8)
 	tool := translated(t, diskBody(t, doc, 14, 6, 2), 0, 0, -6)
-	drilled, err := decad.Cut(t.Context(), plate, tool)
+	drilled, err := decad.Cut(plate, tool).Do(t.Context())
 	require.NoError(t, err)
 	before, err := drilled.Volume()
 	require.NoError(t, err)
@@ -895,7 +895,7 @@ func TestBooleanVerifyUsesProvenToleranceBound(t *testing.T) {
 	doc := decad.New()
 	plate := boxBody(t, doc, 0, 0, 20, 20, 8)
 	tool := translated(t, diskBody(t, doc, 14, 6, 2), 0, 0, -6)
-	got, err := decad.Cut(t.Context(), plate, tool)
+	got, err := decad.Cut(plate, tool).Do(t.Context())
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context())
@@ -926,7 +926,7 @@ func TestFacetedTessellateAndExport(t *testing.T) {
 	// A centered hole: the tool circle crosses the cap facets' shared
 	// diagonal, exercising the open-chain subdivision path.
 	tool := translated(t, diskBody(t, doc, 10, 10, 2), 0, 0, -6)
-	got, err := decad.Cut(t.Context(), plate, tool)
+	got, err := decad.Cut(plate, tool).Do(t.Context())
 	require.NoError(t, err)
 
 	mesh, err := got.Tessellate(t.Context(), units.Millimeters(1))
@@ -959,7 +959,7 @@ func TestCurvedRimLengthRefuses(t *testing.T) {
 	doc := decad.New()
 	plate := boxBody(t, doc, 0, 0, 20, 20, 8)
 	tool := translated(t, diskBody(t, doc, 14, 6, 2), 0, 0, -6)
-	got, err := decad.Cut(t.Context(), plate, tool)
+	got, err := decad.Cut(plate, tool).Do(t.Context())
 	require.NoError(t, err)
 
 	var curvedRefused, straightAnswered int
@@ -988,7 +988,7 @@ func TestUnionOfAdmittedCapBlendBodies(t *testing.T) {
 
 	blendedVolume, err := blended.Volume()
 	require.NoError(t, err)
-	got, err := decad.Union(t.Context(), blended, other)
+	got, err := decad.Union(blended, other).Do(t.Context())
 	require.NoError(t, err)
 	vol, err := got.Volume()
 	require.NoError(t, err)
@@ -1006,7 +1006,7 @@ func TestUnionRejectsVertexTangentContact(t *testing.T) {
 	doc := decad.New(decad.ExactOnly())
 	a := boxBody(t, doc, 0, 0, 10, 10, 10)
 	b := translated(t, boxBody(t, doc, 0, 0, 10, 10, 10), 10, 10, 10)
-	_, err := decad.Union(t.Context(), a, b)
+	_, err := decad.Union(a, b).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	var be *decad.BooleanError
 	require.ErrorAs(t, err, &be)
@@ -1021,7 +1021,7 @@ func TestPlanarUnionAreaBoundIsTiny(t *testing.T) {
 	doc := decad.New()
 	a := boxBody(t, doc, 0, 0, 20, 20, 8)
 	b := translated(t, boxBody(t, doc, 0, 0, 20, 20, 8), 15, 15, -4)
-	got, err := decad.Union(t.Context(), a, b)
+	got, err := decad.Union(a, b).Do(t.Context())
 	require.NoError(t, err)
 	area, err := got.Area()
 	require.NoError(t, err)
@@ -1037,7 +1037,7 @@ func TestPlanarUnionCentroidBoundCoversRounding(t *testing.T) {
 	doc := decad.New()
 	a := boxBody(t, doc, 0, 0, 7, 5, 3)
 	b := translated(t, boxBody(t, doc, 0, 0, 7, 5, 3), 5, 3, -1)
-	got, err := decad.Union(t.Context(), a, b)
+	got, err := decad.Union(a, b).Do(t.Context())
 	require.NoError(t, err)
 	cen, err := got.Centroid()
 	require.NoError(t, err)
@@ -1090,7 +1090,7 @@ func TestUnionRejectsEdgeEdgePointTouch(t *testing.T) {
 
 	// The model is valid, so the refusal is BooleanUnsupportedContact wrapping
 	// ErrUnsupported.
-	_, err := decad.Union(t.Context(), a, b)
+	_, err := decad.Union(a, b).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	var be *decad.BooleanError
 	require.ErrorAs(t, err, &be)
@@ -1129,7 +1129,7 @@ func TestUnionRefusesTangentCylinder(t *testing.T) {
 	plate := boxBody(t, doc, 0, 0, 20, 20, 8)
 	cyl := diskBody(t, doc, 30, 10, 10)
 
-	_, err := decad.Union(t.Context(), plate, cyl)
+	_, err := decad.Union(plate, cyl).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	var be *decad.BooleanError
 	require.ErrorAs(t, err, &be)
@@ -1143,7 +1143,7 @@ func TestUnionRefusesTangentCylinder(t *testing.T) {
 	doc2 := decad.New(decad.ExactOnly())
 	plate2 := boxBody(t, doc2, 0, 0, 20, 20, 8)
 	apart := diskBody(t, doc2, 31, 10, 10)
-	got, err := decad.Union(t.Context(), plate2, apart)
+	got, err := decad.Union(plate2, apart).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, got.Lumps(), 2)
 }
@@ -1160,7 +1160,7 @@ func TestUnionCrossingApexEdgeBuilds(t *testing.T) {
 	plate := boxBody(t, doc, 0, 0, 10, 10, 2)
 	prism := polyPrism(t, doc, w, w.XZ(), [][2]float64{{5, 2}, {7, 3}, {9, 2}, {7, 1}}, 5)
 
-	got, err := decad.Union(t.Context(), plate, prism)
+	got, err := decad.Union(plate, prism).Do(t.Context())
 	require.NoError(t, err)
 
 	// 10×10×2 plate = 200; the diamond (diagonals 4 and 2) swept ±5 = 40; the
@@ -1178,7 +1178,7 @@ func TestUnionCrossingApexEdgeBuilds(t *testing.T) {
 	w2 := sketch.NewWorld()
 	plate2 := boxBody(t, doc2, 0, 0, 10, 10, 2)
 	lifted := polyPrism(t, doc2, w2, w2.XZ(), [][2]float64{{5, 2.25}, {7, 3.25}, {9, 2.25}, {7, 1.25}}, 5)
-	got2, err := decad.Union(t.Context(), plate2, lifted)
+	got2, err := decad.Union(plate2, lifted).Do(t.Context())
 	require.NoError(t, err)
 	vol2, err := got2.Volume()
 	require.NoError(t, err)
@@ -1200,7 +1200,7 @@ func TestUnionRejectsKnifeEdgeGraze(t *testing.T) {
 	a := wedgePrism(t, doc, w, w.XY(), [3][2]float64{{0, 0}, {12, -4}, {12, 6}}, 5)
 	b := translated(t, wedgePrism(t, doc, w, w.XY(), [3][2]float64{{0, 0}, {8, -1}, {8, 2}}, 3), 0, 0, 1)
 
-	_, err := decad.Union(t.Context(), a, b)
+	_, err := decad.Union(a, b).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.NotErrorIs(t, err, decad.ErrDegenerate)
 	var be *decad.BooleanError
@@ -1218,7 +1218,7 @@ func TestBooleanRimVertexBoundCoversTrimAmplification(t *testing.T) {
 	doc := decad.New()
 	a := diskBody(t, doc, 0, 0, 5)
 	b := translated(t, diskBody(t, doc, 9.9, 0, 5), 0, 0, 5)
-	got, err := decad.Union(t.Context(), a, b)
+	got, err := decad.Union(a, b).Do(t.Context())
 	require.NoError(t, err)
 
 	// The true rim: the vertical lines through the two circles' intersections.
@@ -1251,7 +1251,7 @@ func TestBooleanAreaBoundsCoverShallowCrossing(t *testing.T) {
 	const d, r, h = 9.99, 5.0, 15.0
 	a := diskBody(t, doc, 0, 0, r)
 	b := translated(t, diskBody(t, doc, d, 0, r), 0, 0, 5)
-	got, err := decad.Intersect(t.Context(), a, b)
+	got, err := decad.Intersect(a, b).Do(t.Context())
 	require.NoError(t, err)
 
 	th := math.Acos(d / 2 / r)
@@ -1295,7 +1295,7 @@ func TestFacetedPlacedFarFromOriginBoundHolds(t *testing.T) {
 	doc := decad.New()
 	a := boxBody(t, doc, 1e7, 0, 1e7+10, 10, 10)
 	b := translated(t, boxBody(t, doc, 1e7, 0, 1e7+10, 10, 10), 5, 5, 5)
-	got, err := decad.Union(t.Context(), a, b)
+	got, err := decad.Union(a, b).Do(t.Context())
 	require.NoError(t, err)
 	volBefore, err := got.Volume()
 	require.NoError(t, err)
@@ -1333,7 +1333,7 @@ func TestFacetedBoxBoundIsA3DRadius(t *testing.T) {
 	doc := decad.New()
 	disk := diskBody(t, doc, 0, 0, 5)
 	box := translated(t, boxBody(t, doc, 0, 0, 8, 8, 20), 0, 0, 3)
-	got, err := decad.Union(t.Context(), disk, box)
+	got, err := decad.Union(disk, box).Do(t.Context())
 	require.NoError(t, err)
 
 	bounds, err := got.Bounds()
@@ -1367,7 +1367,7 @@ func facetedEdgeLengths(t *testing.T, model string) {
 	} else {
 		b = translated(t, boxBody(t, doc, 0, 0, 10, 10, 10), 5, 5, 5)
 	}
-	got, err := decad.Union(t.Context(), a, b)
+	got, err := decad.Union(a, b).Do(t.Context())
 	require.NoError(t, err)
 
 	answered := 0
@@ -1408,11 +1408,11 @@ func TestSecondGenerationPlanarRimsAnswer(t *testing.T) {
 	w := sketch.NewWorld()
 	a := boxBody(t, doc, 0, 0, 10, 10, 10)
 	b := wedgePrism(t, doc, w, w.XZ(), [3][2]float64{{3, 5}, {9, 13}, {13, 4}}, 12)
-	first, err := decad.Union(t.Context(), a, b)
+	first, err := decad.Union(a, b).Do(t.Context())
 	require.NoError(t, err)
 
 	c := translated(t, boxBody(t, doc, 0, 0, 4, 4, 4), 6, 2, 8)
-	second, err := decad.Union(t.Context(), first, c)
+	second, err := decad.Union(first, c).Do(t.Context())
 	require.NoError(t, err)
 
 	refused := 0
@@ -1495,7 +1495,7 @@ func TestCutBlindTrenchSplitsCapIntoTwoFaces(t *testing.T) {
 	plate := boxBody(t, doc, 0, 0, 20, 20, 10)
 	tool := translated(t, boxBody(t, doc, -5, 8, 25, 12, 10), 0, 0, 5)
 
-	got, err := decad.Cut(t.Context(), plate, tool)
+	got, err := decad.Cut(plate, tool).Do(t.Context())
 	require.NoError(t, err)
 
 	// 20×20×10 minus the 20×4×5 trench.
@@ -1542,7 +1542,7 @@ func TestCutThroughHoleKeepsInnerLoopNonOuter(t *testing.T) {
 	plate := boxBody(t, doc, 0, 0, 20, 20, 10)
 	tool := translated(t, boxBody(t, doc, 8, 8, 12, 12, 20), 0, 0, -5)
 
-	got, err := decad.Cut(t.Context(), plate, tool)
+	got, err := decad.Cut(plate, tool).Do(t.Context())
 	require.NoError(t, err)
 
 	// 20×20×10 minus the 4×4 through-hole.
@@ -1625,7 +1625,7 @@ func TestCutStarHoleOuterLoopIsNotTheLongest(t *testing.T) {
 	// The star is cut clean through: the prism spans z −20..20, the plate 0..10.
 	tool := polyPrism(t, doc, w, w.XY(), pts, 20)
 
-	got, err := decad.Cut(t.Context(), plate, tool)
+	got, err := decad.Cut(plate, tool).Do(t.Context())
 	require.NoError(t, err)
 
 	// Shoelace: the star's own area, which the cap loses and the plate's
@@ -1691,7 +1691,7 @@ func TestBooleanCutWasherThroughDiscKeepsStandingPost(t *testing.T) {
 	target := discBody(t, doc, 0, outerTarget, h)
 	tool := washerBodySymmetric(t, doc, outerTool, innerTool, half)
 
-	got, err := decad.Cut(t.Context(), target, tool)
+	got, err := decad.Cut(target, tool).Do(t.Context())
 	require.NoError(t, err)
 	require.True(t, tookMeshPath(got), `mismatched cap planes force the pair onto the mesh path`)
 
@@ -1720,7 +1720,7 @@ func BenchmarkCutCircularWasher(b *testing.B) {
 		tool := washerBodySymmetric(b, doc, 8, 3, 11)
 		b.StartTimer()
 
-		if _, err := decad.Cut(b.Context(), target, tool); err != nil {
+		if _, err := decad.Cut(target, tool).Do(b.Context()); err != nil {
 			b.Fatal(err)
 		}
 	}
@@ -1742,7 +1742,7 @@ func BenchmarkUnionCircularMeshPath(b *testing.B) {
 		tool := discBodySymmetric(b, doc, 10, 7, 11)
 		b.StartTimer()
 
-		got, err := decad.Union(b.Context(), base, tool)
+		got, err := decad.Union(base, tool).Do(b.Context())
 		if err != nil {
 			b.Fatal(err)
 		}

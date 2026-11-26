@@ -16,16 +16,16 @@ func TestCoaxialPocketAfterFacetedCuts(t *testing.T) {
 	for _, center := range [][2]float64{{0, -3}, {2, -2}, {2, 2}} {
 		tool := circlePrismAtZ(t, doc, center[0], center[1], .3, -.5, 5)
 		var err error
-		part, err = decad.Cut(ctx, part, tool)
+		part, err = decad.Cut(part, tool).Do(ctx)
 		require.NoError(t, err)
 	}
 	hole := circlePrismAtZ(t, doc, 0, 3, .6, -.5, 12)
-	drilled, err := decad.Cut(ctx, part, hole)
+	drilled, err := decad.Cut(part, hole).Do(ctx)
 	require.NoError(t, err)
 	before, err := drilled.Volume()
 	require.NoError(t, err)
 	pocket := circlePrismAtZ(t, doc, 0, 3, 1, -.5, 1.25)
-	result, err := decad.Cut(ctx, drilled, pocket)
+	result, err := decad.Cut(drilled, pocket).Do(ctx)
 	require.NoError(t, err)
 	require.Empty(t, result.OperationDiagnostics())
 	after, err := result.Volume()

@@ -133,7 +133,7 @@ func TestRegroupSurfacesInvariantBreaks(t *testing.T) {
 		d := New()
 		left := internalBoxBody(t, d, 0, 0, 2, 2, 2)
 		right := internalBoxBody(t, d, 1, 0, 3, 2, 2)
-		target, err := Union(t.Context(), left, right)
+		target, err := Union(left, right).Do(t.Context())
 		require.NoError(t, err)
 		tool := internalBoxBody(t, d, 0.5, 0.5, 2.5, 1.5, 2)
 		originalPayload := target.n.Payload
@@ -246,7 +246,7 @@ func TestRegroupSurfacesInvariantBreaks(t *testing.T) {
 		_, ok = pairedCutSources(private, d, target, tool)
 		require.False(t, ok)
 		target.n.Payload = originalPayload
-		cut, err := Cut(t.Context(), target, tool)
+		cut, err := Cut(target, tool).Do(t.Context())
 		require.NoError(t, err)
 		nextTool := internalBoxBody(t, d, 0.25, 0.25, 2.75, 0.4, 2)
 		target.n.Payload = facetedrecord.Payload{}
@@ -277,7 +277,7 @@ func TestExactShiftProducerGate(t *testing.T) {
 	require.NoError(t, err)
 	disc, err := Transform(t.Context(), internalDiscBody(t, doc, 1, 6), turn)
 	require.NoError(t, err)
-	source, err := Union(t.Context(), internalBoxBody(t, doc, 0, -2, 4, 2, 2), disc)
+	source, err := Union(internalBoxBody(t, doc, 0, -2, 4, 2, 2), disc).Do(t.Context())
 	require.NoError(t, err)
 	_, faceted := source.n.Payload.(facetedPayload)
 	require.True(t, faceted, "the source must be faceted for an exact copy record")

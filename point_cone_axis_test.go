@@ -174,14 +174,16 @@ func TestPointConeTrimAboutPermutedAxisMatchesX(t *testing.T) {
 			build := func(tooth *Body, tool func(float64) *Body) *Body {
 				if tc.ordered {
 					var err error
-					tooth, err = Cut(t.Context(), tooth, tool(5))
+					tooth, err = Cut(tooth, tool(5)).Do(t.Context())
 					require.NoError(t, err)
 				}
-				op := Intersect
+				var got *Body
+				var err error
 				if tc.cut {
-					op = Cut
+					got, err = Cut(tooth, tool(tc.apex)).Do(t.Context())
+				} else {
+					got, err = Intersect(tooth, tool(tc.apex)).Do(t.Context())
 				}
-				got, err := op(t.Context(), tooth, tool(tc.apex))
 				require.NoError(t, err)
 				return got
 			}
@@ -215,9 +217,9 @@ func TestPointConeTrimAboutTiltedAxis(t *testing.T) {
 	t.Parallel()
 	doc := New()
 	toeTool := tiltedToe(t, doc)
-	toe, err := Cut(t.Context(), tiltedTooth(t, doc), toeTool)
+	toe, err := Cut(tiltedTooth(t, doc), toeTool).Do(t.Context())
 	require.NoError(t, err)
-	band, err := Intersect(t.Context(), toe, tiltedHeel(t, doc))
+	band, err := Intersect(toe, tiltedHeel(t, doc)).Do(t.Context())
 	require.NoError(t, err)
 	axis := r3.Vec{X: 1, Y: 2}
 	for _, body := range []*Body{toe, band} {

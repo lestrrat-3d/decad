@@ -45,7 +45,7 @@ func keywayShaft(t *testing.T, x0, x1 float64) *decad.Body {
 	shaft, err := decad.Revolve(t.Context(), sc.doc, s, s.Profiles()[0], axis, decad.FullRevolution{})
 	require.NoError(t, err)
 	tool := placed(t, rectBox(t, sc.w, sc.doc, x0, -keywayW, x1, keywayW, 6), 6.5)
-	cut, err := decad.Cut(t.Context(), shaft, tool)
+	cut, err := decad.Cut(shaft, tool).Do(t.Context())
 	require.NoError(t, err)
 	return cut
 }
@@ -305,7 +305,7 @@ func TestFacetedRetainedBlendKeyway(t *testing.T) {
 		// vertex is not read against the setback line and the volume falls by
 		// the keyway's corners alone.
 		body := keywayShaft(t, keywayX0, 60)
-		holed, err := decad.Cut(t.Context(), body, keywayCrossHole(t, body, 70))
+		holed, err := decad.Cut(body, keywayCrossHole(t, body, 70)).Do(t.Context())
 		require.NoError(t, err)
 		filleted, err := decad.Fillet(t.Context(), holed, keywayEdges(t, holed, keywayR, keywayX0, keywayW, -keywayW),
 			units.Millimeters(keywayRho))
@@ -348,7 +348,7 @@ func TestFacetedRetainedBlendKeyway(t *testing.T) {
 		// on the end wall.
 		body := keywayShaft(t, keywayX0, 60)
 		pin := xCylinderAt(t, body.Document(), 2.4, 9, 0.3, 55, 65)
-		holed, err := decad.Cut(t.Context(), body, pin)
+		holed, err := decad.Cut(body, pin).Do(t.Context())
 		require.NoError(t, err)
 		_, err = decad.Fillet(t.Context(), holed, keywayEdges(t, holed, keywayR, keywayX0, keywayW),
 			units.Millimeters(0.5))
@@ -358,7 +358,7 @@ func TestFacetedRetainedBlendKeyway(t *testing.T) {
 		// The cross hole of the subtest above, moved to x = 40 inside the
 		// keyway's run: its rim's vertex lies on the setback line in the band.
 		body = keywayShaft(t, keywayX0, 60)
-		holed, err = decad.Cut(t.Context(), body, keywayCrossHole(t, body, 40))
+		holed, err = decad.Cut(body, keywayCrossHole(t, body, 40)).Do(t.Context())
 		require.NoError(t, err)
 		_, err = decad.Fillet(t.Context(), holed, keywayEdges(t, holed, keywayR, keywayX0, keywayW, -keywayW),
 			units.Millimeters(keywayRho))
@@ -391,7 +391,7 @@ func TestFacetedRetainedBlendKeyway(t *testing.T) {
 		require.NoError(t, err)
 		tool, err = decad.Transform(t.Context(), tool, shift)
 		require.NoError(t, err)
-		grooved, err := decad.Cut(t.Context(), blendPlate(t, sc), tool)
+		grooved, err := decad.Cut(blendPlate(t, sc), tool).Do(t.Context())
 		require.NoError(t, err)
 		_, err = decad.Fillet(t.Context(), grooved,
 			straightEdge(t, grooved, r3.NewVec(10, 10-math.Sqrt(12), 20), r3.NewVec(1, 0, 0)), units.Millimeters(1))
@@ -431,7 +431,7 @@ func hubKeyway(t *testing.T) *decad.Body {
 	hub, err := decad.Revolve(t.Context(), sc.doc, s, s.Profiles()[0], axis, decad.FullRevolution{})
 	require.NoError(t, err)
 	tool := placed(t, rectBox(t, sc.w, sc.doc, 10, -hubW, 30, hubW, 7.5), 0.25)
-	cut, err := decad.Cut(t.Context(), hub, tool)
+	cut, err := decad.Cut(hub, tool).Do(t.Context())
 	require.NoError(t, err)
 	return cut
 }

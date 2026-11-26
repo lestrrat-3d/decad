@@ -92,7 +92,7 @@ func resolvePatternSpec(spec PatternSpec) (patternrecord.Spec, error) {
 // readings carry the motion's rounding as a section displacement.
 //
 // To join the instances to a base, pass the base, b and the result to one
-// [Union]: Union(ctx, base, append([]*Body{b}, copies...)...). A refused
+// [Union]: Union(append([]*Body{base, b}, copies...)...).Do(ctx). A refused
 // Union leaves every operand live, the copies included; [Remove] them.
 func PatternCopies(ctx context.Context, b *Body, spec PatternSpec) ([]*Body, error) {
 	d, rp, keeping, err := b.patternReceiver(ctx, spec)

@@ -234,7 +234,7 @@ func TestLoftFilletTwistedGearMirrorJoin(t *testing.T) {
 	require.NoError(t, err)
 	mirrored, err := decad.MirroredCopy(t.Context(), half, decad.MirrorFrame{Frame: end})
 	require.NoError(t, err)
-	joined, err := decad.Union(t.Context(), half, mirrored)
+	joined, err := decad.Union(half, mirrored).Do(t.Context())
 	require.NoError(t, err)
 	got, err := joined.Volume()
 	require.NoError(t, err)

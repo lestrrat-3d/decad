@@ -92,9 +92,9 @@ func slotWithCube(t *testing.T, x0, x1, y0 float64) *decad.Body {
 		decad.Edges(up, decad.EndpointAt(r3.NewVec(30, 10, 0))).Or(up, decad.EndpointAt(r3.NewVec(30, 30, 0))).Exactly(2),
 		units.Millimeters(concaveR))
 	require.NoError(t, err)
-	pocket, err := decad.Cut(t.Context(), plate, placed(t, tool, 5))
+	pocket, err := decad.Cut(plate, placed(t, tool, 5)).Do(t.Context())
 	require.NoError(t, err)
-	joined, err := decad.Union(t.Context(), pocket, placed(t, rectBox(t, w, doc, x0, y0, x1, y0+0.1, 0.1), 5.05))
+	joined, err := decad.Union(pocket, placed(t, rectBox(t, w, doc, x0, y0, x1, y0+0.1, 0.1), 5.05)).Do(t.Context())
 	require.NoError(t, err)
 	return joined
 }
@@ -106,9 +106,9 @@ func runOutSlot(t *testing.T, x0, x1 float64) *decad.Body {
 	t.Helper()
 	w, doc := sketch.NewWorld(), decad.New()
 	plate := rectBox(t, w, doc, 0, 0, 40, 40, 10)
-	slot, err := decad.Cut(t.Context(), plate, placed(t, rectBox(t, w, doc, -10, 10, 50, 30, 20), 5))
+	slot, err := decad.Cut(plate, placed(t, rectBox(t, w, doc, -10, 10, 50, 30, 20), 5)).Do(t.Context())
 	require.NoError(t, err)
-	joined, err := decad.Union(t.Context(), slot, placed(t, rectBox(t, w, doc, x0, 10.05, x1, 10.15, 0.1), 5.05))
+	joined, err := decad.Union(slot, placed(t, rectBox(t, w, doc, x0, 10.05, x1, 10.15, 0.1), 5.05)).Do(t.Context())
 	require.NoError(t, err)
 	return joined
 }
@@ -122,7 +122,7 @@ func ledgeWithCavity(t *testing.T, y0 float64) *decad.Body {
 	t.Helper()
 	w, doc := sketch.NewWorld(), decad.New()
 	joined := ledgeOnWallIn(t, w, doc, 5, 2)
-	out, err := decad.Cut(t.Context(), joined, placed(t, rectBox(t, w, doc, 9.9, y0, 10.9, y0+0.1, 0.1), 9.85))
+	out, err := decad.Cut(joined, placed(t, rectBox(t, w, doc, 9.9, y0, 10.9, y0+0.1, 0.1), 9.85)).Do(t.Context())
 	require.NoError(t, err)
 	return out
 }
@@ -145,7 +145,7 @@ func blindPocket(t *testing.T) *decad.Body {
 		decad.Edges(up, decad.EndpointAt(r3.NewVec(30, 10, 0))).Or(up, decad.EndpointAt(r3.NewVec(30, 30, 0))).Exactly(2),
 		units.Millimeters(concaveR))
 	require.NoError(t, err)
-	out, err := decad.Cut(t.Context(), plate, placed(t, tool, 5))
+	out, err := decad.Cut(plate, placed(t, tool, 5)).Do(t.Context())
 	require.NoError(t, err)
 	return out
 }
@@ -171,7 +171,7 @@ func ledgeOnWallIn(t *testing.T, w *sketch.World, doc *decad.Document, x0 float6
 	ledge, err := decad.Fillet(t.Context(), rectBox(t, w, doc, x0, 10, 30, 30, 6), vertical.Exactly(corners),
 		units.Millimeters(concaveR))
 	require.NoError(t, err)
-	out, err := decad.Union(t.Context(), wall, placed(t, ledge, 4))
+	out, err := decad.Union(wall, placed(t, ledge, 4)).Do(t.Context())
 	require.NoError(t, err)
 	return out
 }
@@ -188,7 +188,7 @@ func tongueBox(t *testing.T) *decad.Body {
 		decad.Edges(up, decad.EndpointAt(r3.NewVec(40, 0, 0))).Or(up, decad.EndpointAt(r3.NewVec(40, 20, 0))).Exactly(2),
 		units.Millimeters(concaveR))
 	require.NoError(t, err)
-	out, err := decad.Cut(t.Context(), box, sc.tool(t, 20))
+	out, err := decad.Cut(box, sc.tool(t, 20)).Do(t.Context())
 	require.NoError(t, err)
 	return out
 }
@@ -204,7 +204,7 @@ func stepBlock(t *testing.T) *decad.Body {
 		decad.Edges(up, decad.EndpointAt(r3.NewVec(40, 0, 0))).Or(up, decad.EndpointAt(r3.NewVec(40, 20, 0))).Exactly(2),
 		units.Millimeters(concaveR))
 	require.NoError(t, err)
-	out, err := decad.Cut(t.Context(), block, placed(t, rectBox(t, w, doc, 10, -5, 50, 25, 30), 10))
+	out, err := decad.Cut(block, placed(t, rectBox(t, w, doc, 10, -5, 50, 25, 30), 10)).Do(t.Context())
 	require.NoError(t, err)
 	return out
 }
@@ -224,7 +224,7 @@ func arcEndSlotIn(t *testing.T, w *sketch.World, doc *decad.Document) *decad.Bod
 	tool, err := decad.Fillet(t.Context(), rectBox(t, w, doc, -2, 10, 30, 30, 20),
 		decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1))).Exactly(4), units.Millimeters(concaveR))
 	require.NoError(t, err)
-	out, err := decad.Cut(t.Context(), plate, placed(t, tool, 5))
+	out, err := decad.Cut(plate, placed(t, tool, 5)).Do(t.Context())
 	require.NoError(t, err)
 	return out
 }

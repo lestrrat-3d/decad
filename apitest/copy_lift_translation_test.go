@@ -57,7 +57,7 @@ func TestCopyLiftTranslationFaceted(t *testing.T) {
 	require.NoError(t, err)
 	b, err = decad.Transform(t.Context(), b, above)
 	require.NoError(t, err)
-	source, err := decad.Union(t.Context(), a, b)
+	source, err := decad.Union(a, b).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, "decad.facetedPayload", decadtest.PayloadClass(source))
 

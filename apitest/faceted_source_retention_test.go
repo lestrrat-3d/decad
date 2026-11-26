@@ -138,7 +138,7 @@ func TestFacetedSourceRetention(t *testing.T) {
 	t.Run("mesh Cut keeps every operand surface", func(t *testing.T) {
 		t.Parallel()
 		sc := newRetentionScene()
-		drilled, err := decad.Cut(t.Context(), sc.roundedBox(t), sc.tool(t, 20))
+		drilled, err := decad.Cut(sc.roundedBox(t), sc.tool(t, 20)).Do(t.Context())
 		require.NoError(t, err)
 		kinds := retentionKinds(drilled)
 		require.Zero(t, kinds["faceted"], "kinds %v", kinds)
@@ -152,7 +152,7 @@ func TestFacetedSourceRetention(t *testing.T) {
 	t.Run("normals point out of the material", func(t *testing.T) {
 		t.Parallel()
 		sc := newRetentionScene()
-		drilled, err := decad.Cut(t.Context(), sc.roundedBox(t), sc.tool(t, 20))
+		drilled, err := decad.Cut(sc.roundedBox(t), sc.tool(t, 20)).Do(t.Context())
 		require.NoError(t, err)
 		center := r3.NewVec(20, 10, 10)
 		for _, f := range drilled.Faces() {
@@ -182,7 +182,7 @@ func TestFacetedSourceRetention(t *testing.T) {
 	t.Run("plane normal is exact and cylinder normal carries its displacement", func(t *testing.T) {
 		t.Parallel()
 		sc := newRetentionScene()
-		drilled, err := decad.Cut(t.Context(), sc.roundedBox(t), sc.tool(t, 20))
+		drilled, err := decad.Cut(sc.roundedBox(t), sc.tool(t, 20)).Do(t.Context())
 		require.NoError(t, err)
 		for _, f := range drilled.Faces() {
 			n, err := f.NormalAt(firstVertex(t, f))
@@ -196,9 +196,9 @@ func TestFacetedSourceRetention(t *testing.T) {
 	t.Run("a second Boolean keeps the surfaces", func(t *testing.T) {
 		t.Parallel()
 		sc := newRetentionScene()
-		once, err := decad.Cut(t.Context(), sc.roundedBox(t), sc.tool(t, 12))
+		once, err := decad.Cut(sc.roundedBox(t), sc.tool(t, 12)).Do(t.Context())
 		require.NoError(t, err)
-		twice, err := decad.Cut(t.Context(), once, sc.tool(t, 28))
+		twice, err := decad.Cut(once, sc.tool(t, 28)).Do(t.Context())
 		require.NoError(t, err)
 		kinds := retentionKinds(twice)
 		require.Zero(t, kinds["faceted"], "kinds %v", kinds)
@@ -225,7 +225,7 @@ func TestFacetedSourceRetention(t *testing.T) {
 		require.NoError(t, err)
 		placed, err := decad.Transform(t.Context(), pin, move)
 		require.NoError(t, err)
-		joined, err := decad.Union(t.Context(), plate, placed)
+		joined, err := decad.Union(plate, placed).Do(t.Context())
 		require.NoError(t, err)
 		center := r3.NewVec(20, 10, 10)
 		for _, f := range joined.Faces() {
@@ -249,7 +249,7 @@ func TestFacetedSourceRetention(t *testing.T) {
 	t.Run("ScaledAt of a retained result still builds", func(t *testing.T) {
 		t.Parallel()
 		sc := newRetentionScene()
-		drilled, err := decad.Cut(t.Context(), sc.roundedBox(t), sc.tool(t, 20))
+		drilled, err := decad.Cut(sc.roundedBox(t), sc.tool(t, 20)).Do(t.Context())
 		require.NoError(t, err)
 		scaled, err := decad.ScaledAt(t.Context(), drilled, r3.Vec{}, units.Scalar(2))
 		require.NoError(t, err)
@@ -264,7 +264,7 @@ func TestFacetedSourceRetention(t *testing.T) {
 	t.Run("ToFace stops at a retained cap", func(t *testing.T) {
 		t.Parallel()
 		sc := newRetentionScene()
-		drilled, err := decad.Cut(t.Context(), sc.roundedBox(t), sc.tool(t, 20))
+		drilled, err := decad.Cut(sc.roundedBox(t), sc.tool(t, 20)).Do(t.Context())
 		require.NoError(t, err)
 		top := decad.Faces(decad.Planar(), decad.Facing(r3.NewVec(0, 0, 1)))
 		faces, err := top.SelectFaces(drilled)
@@ -290,7 +290,7 @@ func TestFacetedSourceRetention(t *testing.T) {
 	t.Run("MirrorFace mirrors across a retained wall", func(t *testing.T) {
 		t.Parallel()
 		sc := newRetentionScene()
-		drilled, err := decad.Cut(t.Context(), sc.roundedBox(t), sc.tool(t, 20))
+		drilled, err := decad.Cut(sc.roundedBox(t), sc.tool(t, 20)).Do(t.Context())
 		require.NoError(t, err)
 		wall := decad.Faces(decad.Planar(), decad.Facing(r3.NewVec(1, 0, 0)))
 		mirrored, err := decad.MirroredCopy(t.Context(), drilled, decad.MirrorFace{Body: drilled, Face: wall})
@@ -334,7 +334,7 @@ func TestFacetedSourceRetention(t *testing.T) {
 		require.NoError(t, err)
 		tool, err := decad.Transform(t.Context(), pin, move)
 		require.NoError(t, err)
-		cut, err := decad.Cut(t.Context(), shaft, tool)
+		cut, err := decad.Cut(shaft, tool).Do(t.Context())
 		require.NoError(t, err)
 
 		kinds := map[string]int{}
@@ -363,7 +363,7 @@ func TestFacetedSourceRetention(t *testing.T) {
 	t.Run("rims between retained faces publish their curves", func(t *testing.T) {
 		t.Parallel()
 		sc := newRetentionScene()
-		drilled, err := decad.Cut(t.Context(), sc.roundedBox(t), sc.tool(t, 20))
+		drilled, err := decad.Cut(sc.roundedBox(t), sc.tool(t, 20)).Do(t.Context())
 		require.NoError(t, err)
 		lines, arcs, circles := 0, 0, 0
 		for _, e := range drilled.Edges() {
@@ -421,7 +421,7 @@ func TestFacetedSourceRetention(t *testing.T) {
 		require.NoError(t, err)
 		tool, err := decad.Transform(t.Context(), pin, turn)
 		require.NoError(t, err)
-		bored, err := decad.Cut(t.Context(), plate, tool)
+		bored, err := decad.Cut(plate, tool).Do(t.Context())
 		require.NoError(t, err)
 
 		bores, chains := 0, 0
@@ -471,7 +471,7 @@ func TestFacetedSourceRetention(t *testing.T) {
 			t.Run(tc.name, func(t *testing.T) {
 				t.Parallel()
 				sc := newRetentionScene()
-				drilled, err := decad.Cut(t.Context(), sc.roundedBox(t), tc.make(sc, t))
+				drilled, err := decad.Cut(sc.roundedBox(t), tc.make(sc, t)).Do(t.Context())
 				require.NoError(t, err)
 				// rims returns the curves of the bore wall's edges after the move.
 				rims := func(dx float64) (circles []decad.Circle3, chains int) {
@@ -542,7 +542,7 @@ func TestFacetedSourceRetention(t *testing.T) {
 				bore := func(dx float64) (decad.Cylinder, []decad.Curve) {
 					sc := newRetentionScene()
 					box := translated(t, sc.roundedBox(t), 36, 0, 0)
-					drilled, err := decad.Cut(t.Context(), box, translated(t, tc.make(sc, t), dx, 0, 0))
+					drilled, err := decad.Cut(box, translated(t, tc.make(sc, t), dx, 0, 0)).Do(t.Context())
 					require.NoError(t, err)
 					var walls []*decad.Face
 					for _, f := range drilled.Faces() {
@@ -605,7 +605,7 @@ func TestFacetedSourceRetention(t *testing.T) {
 		axis := decad.SketchLine{Start: decad.Point2{U: a.X, V: a.Y}, End: decad.Point2{U: a.X + dir.X, V: a.Y + dir.Y}}
 		pin, err := decad.Revolve(t.Context(), sc.doc, s, s.Profiles()[0], axis, decad.FullRevolution{})
 		require.NoError(t, err)
-		bored, err := decad.Cut(t.Context(), sc.roundedBox(t), translated(t, pin, 0, 0, 10))
+		bored, err := decad.Cut(sc.roundedBox(t), translated(t, pin, 0, 0, 10)).Do(t.Context())
 		require.NoError(t, err)
 		bores, chains := 0, 0
 		for _, f := range bored.Faces() {

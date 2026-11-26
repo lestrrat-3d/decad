@@ -62,7 +62,7 @@ func tongueOnBase(t *testing.T, width, height float64, faceted bool) (*decad.Bod
 		s1, p1 := circle(6, 0.7)
 		hole, err := decad.Loft(t.Context(), doc, s0, p0, s1, p1)
 		require.NoError(t, err)
-		body, err = decad.Cut(t.Context(), body, hole)
+		body, err = decad.Cut(body, hole).Do(t.Context())
 		require.NoError(t, err)
 	}
 	return body, topEdges(lineEdge(1, vR, tR), lineEdge(1, tR, tL), lineEdge(1, tL, vL))

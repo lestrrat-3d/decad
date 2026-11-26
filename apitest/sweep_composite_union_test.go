@@ -90,7 +90,7 @@ func TestSweepCompositeTubeUnionAuditsCandidates(t *testing.T) {
 			box, err = decad.Transform(t.Context(), box, move)
 			require.NoError(t, err)
 
-			joined, err := decad.Union(t.Context(), tube, box)
+			joined, err := decad.Union(tube, box).Do(t.Context())
 			require.NoError(t, err)
 			require.True(t, joined.IsSolid())
 			volume, err := joined.Volume()

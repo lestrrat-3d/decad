@@ -86,7 +86,7 @@ func TestPatternedNHoleCut(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, tool.Lumps(), 6)
 
-	got, err := decad.Cut(t.Context(), plate, tool)
+	got, err := decad.Cut(plate, tool).Do(t.Context())
 	require.NoError(t, err)
 	require.False(t, tookMeshPath(got))
 	require.Len(t, got.Lumps(), 1)
@@ -172,7 +172,7 @@ func TestPatternedFallsBackToUnion(t *testing.T) {
 			copies, err := decad.PatternCopies(t.Context(), a, tc.Spec)
 			require.NoError(t, err)
 			require.Len(t, copies, 1)
-			union, err := decad.Union(t.Context(), a, copies[0])
+			union, err := decad.Union(a, copies[0]).Do(t.Context())
 			want := outcomeOf(t, union, err)
 
 			sc := newMirrorScene()
@@ -205,7 +205,7 @@ func TestPatternedRefusesDisjointStacks(t *testing.T) {
 	top, err := sc.w.CreateOffsetPlane(sc.w.XY(), 6)
 	require.NoError(t, err)
 	pocket := sc.box(t, top, 3, 3, 7, 7, mirrorAlong(4))
-	part, err := decad.Cut(t.Context(), plate, pocket)
+	part, err := decad.Cut(plate, pocket).Do(t.Context())
 	require.NoError(t, err)
 	_, err = decad.Patterned(t.Context(), part, decad.LinearPattern{Dir: patternX, Step: units.Millimeters(20), Count: 3})
 	require.ErrorIs(t, err, decad.ErrUnsupported)

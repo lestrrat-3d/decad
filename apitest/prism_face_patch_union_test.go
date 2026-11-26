@@ -60,7 +60,7 @@ func TestUnionRectangularFacePatchFromPerpendicularExtrudes(t *testing.T) {
 			if tc.swap {
 				plate, lug = lug, plate
 			}
-			joined, err := decad.Union(t.Context(), plate, lug)
+			joined, err := decad.Union(plate, lug).Do(t.Context())
 			require.NoError(t, err)
 			require.Len(t, joined.Lumps(), 1)
 			volume, err := joined.Volume()
@@ -86,7 +86,7 @@ func TestUnionRectangularFacePatchFromPerpendicularExtrudes(t *testing.T) {
 func TestUnionRectangularFacePatchRefusesEdgeContact(t *testing.T) {
 	t.Parallel()
 	plate, lug := prismFacePatchPair(t, 20, 20, 25, decad.Along, decad.ExactOnly())
-	joined, err := decad.Union(t.Context(), plate, lug)
+	joined, err := decad.Union(plate, lug).Do(t.Context())
 	require.Nil(t, joined)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	var booleanErr *decad.BooleanError
@@ -108,7 +108,7 @@ func TestUnionRectangularFacePatchAcrossOtherAxis(t *testing.T) {
 	lug, err := decad.Extrude(t.Context(), doc, lugSketch, lugProfile,
 		decad.Distance{D: units.Millimeters(5), Dir: decad.Against})
 	require.NoError(t, err)
-	joined, err := decad.Union(t.Context(), plate, lug)
+	joined, err := decad.Union(plate, lug).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, joined.Lumps(), 1)
 	volume, err := joined.Volume()
@@ -135,7 +135,7 @@ func TestUnionRectangularFacePatchUsesOtherSlabAxis(t *testing.T) {
 	lug, err := decad.Extrude(t.Context(), doc, lugSketch, lugProfile,
 		decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
-	joined, err := decad.Union(t.Context(), plate, lug)
+	joined, err := decad.Union(plate, lug).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, joined.Lumps(), 1)
 	volume, err := joined.Volume()
@@ -166,7 +166,7 @@ func TestUnionRectangularFacePatchRefusesTaperedSource(t *testing.T) {
 	lug, err := decad.Extrude(t.Context(), doc, lugSketch, lugProfile,
 		decad.Distance{D: units.Millimeters(5), Dir: decad.Along}, decad.WithTaper(units.Degrees(5)))
 	require.NoError(t, err)
-	joined, err := decad.Union(t.Context(), plate, lug)
+	joined, err := decad.Union(plate, lug).Do(t.Context())
 	require.Nil(t, joined)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 }

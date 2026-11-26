@@ -16,7 +16,7 @@ func squareBossOnPlate(t *testing.T) *decad.Body {
 	doc := decad.New()
 	plate := boxBody(t, doc, -10, -10, 10, 10, 5)
 	boss := boxBodyAtZ(t, doc, -5, -5, 5, 5, 5, 5)
-	joined, err := decad.Union(t.Context(), plate, boss)
+	joined, err := decad.Union(plate, boss).Do(t.Context())
 	require.NoError(t, err)
 	return joined
 }

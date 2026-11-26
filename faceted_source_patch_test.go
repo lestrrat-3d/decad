@@ -63,13 +63,13 @@ func (sc *slabScene) yTool(ctx context.Context, t *testing.T, cx, r float64) *Bo
 func slabRun(t *testing.T, ctx context.Context, cx, r float64) (*Body, error) {
 	t.Helper()
 	sc := &slabScene{w: sketch.NewWorld(), doc: New()}
-	built, err := Cut(ctx, sc.roundedBox(ctx, t), sc.yTool(ctx, t, 20, 4))
+	built, err := Cut(sc.roundedBox(ctx, t), sc.yTool(ctx, t, 20, 4)).Do(ctx)
 	require.NoError(t, err)
 	// A Copy ends the operation history's Boolean chain, so the control's refusal is
 	// the sequential gate, not a chain the regroup rebuilds.
 	first, err := Copy(ctx, built)
 	require.NoError(t, err)
-	return Cut(ctx, first, sc.yTool(ctx, t, cx, r))
+	return Cut(first, sc.yTool(ctx, t, cx, r)).Do(ctx)
 }
 
 // TestFacetedSourcePatchSlabControl measures retention §11's retained-plane

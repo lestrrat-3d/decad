@@ -42,8 +42,8 @@ func planetStack(t *testing.T) (*parts.Set, map[string]*decad.Body) {
 	t.Helper()
 	doc := decad.New()
 	cyl := func(r, z0, h float64) *decad.Body { return cylinderAt(t, doc, 0, 0, r, z0, h) }
-	cut := func(b, tool *decad.Body) *decad.Body { return must(decad.Cut(t.Context(), b, tool)) }
-	union := func(b, o *decad.Body) *decad.Body { return must(decad.Union(t.Context(), b, o)) }
+	cut := func(b, tool *decad.Body) *decad.Body { return must(decad.Cut(b, tool).Do(t.Context())) }
+	union := func(b, o *decad.Body) *decad.Body { return must(decad.Union(b, o).Do(t.Context())) }
 	at := func(k int, radius, offset float64) (float64, float64) {
 		a := offset + 2*math.Pi*float64(k)/3
 		return radius * math.Cos(a), radius * math.Sin(a)
@@ -176,8 +176,8 @@ func TestDerivedPinsBesideCarrier(t *testing.T) {
 	pin := func(k int) string { return fmt.Sprintf("pin %d", k+1) }
 	doc := decad.New()
 	cyl := func(x, y, r, z0, h float64) *decad.Body { return cylinderAt(t, doc, x, y, r, z0, h) }
-	cut := func(b, tool *decad.Body) *decad.Body { return must(decad.Cut(t.Context(), b, tool)) }
-	union := func(b, o *decad.Body) *decad.Body { return must(decad.Union(t.Context(), b, o)) }
+	cut := func(b, tool *decad.Body) *decad.Body { return must(decad.Cut(b, tool).Do(t.Context())) }
+	union := func(b, o *decad.Body) *decad.Body { return must(decad.Union(b, o).Do(t.Context())) }
 
 	bodies := map[string]*decad.Body{
 		ring:    cut(cut(cut(cyl(0, 0, 30, 0, 30), cyl(0, 0, 20, 9, 22)), cyl(0, 0, 17, -1, 11)), cyl(25, 0, 1.6, -1, 32)),
@@ -240,7 +240,7 @@ func TestDerivedCopiesAroundHubTravelEqually(t *testing.T) {
 	ring := func(k int) string { return fmt.Sprintf("ring %d", k+1) }
 	doc := decad.New()
 	cyl := func(x, y, r, z0, h float64) *decad.Body { return cylinderAt(t, doc, x, y, r, z0, h) }
-	cut := func(b, tool *decad.Body) *decad.Body { return must(decad.Cut(t.Context(), b, tool)) }
+	cut := func(b, tool *decad.Body) *decad.Body { return must(decad.Cut(b, tool).Do(t.Context())) }
 	bodies := map[string]*decad.Body{namePlate: cyl(0, 0, 30, -5, 5), "hub": cyl(0, 0, 6, 0, 8)}
 	for k := range 3 {
 		a := 2 * math.Pi * float64(k) / 3

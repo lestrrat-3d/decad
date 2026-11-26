@@ -86,7 +86,7 @@ func TestCylinderWallChainKeepsEachRimBound(t *testing.T) {
 	body := post
 	var first float64
 	for i := range slabStrutCount {
-		body, err = decad.Union(t.Context(), body, slabStrut(t, doc, slabStrutTop-float64(i)*slabStrutPitch))
+		body, err = decad.Union(body, slabStrut(t, doc, slabStrutTop-float64(i)*slabStrutPitch)).Do(t.Context())
 		require.NoError(t, err, "strut %d", i)
 		if i == 0 {
 			first = slabMeshFloor(t, body)

@@ -23,7 +23,7 @@ import (
 func withCavity(t *testing.T, b *decad.Body, x0, y0, x1, y1, z0, z1 float64) *decad.Body {
 	t.Helper()
 	box := rectBox(t, sketch.NewWorld(), b.Document(), x0, y0, x1, y1, z1-z0)
-	out, err := decad.Cut(t.Context(), b, placed(t, box, z0))
+	out, err := decad.Cut(b, placed(t, box, z0)).Do(t.Context())
 	require.NoError(t, err)
 	return out
 }
@@ -116,7 +116,7 @@ func TestFacetedRetainedBlendStripClear(t *testing.T) {
 		// A Ø8 bore at x = 2 breaks out of the x = 0 face, so its top rim is
 		// an arc; the cavity sits against it as the hole mouth's does.
 		sc := newRetentionScene()
-		bored, err := decad.Cut(t.Context(), blendPlate(t, sc), zCylinderAt(t, sc, 2, 10, 4, -30, 30))
+		bored, err := decad.Cut(blendPlate(t, sc), zCylinderAt(t, sc, 2, 10, 4, -30, 30)).Do(t.Context())
 		require.NoError(t, err)
 		cav := withCavity(t, bored, 6.25, 9.5, 7.25, 10.5, 18.75, 19.75)
 		var arc decad.EdgeSelector

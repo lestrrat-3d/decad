@@ -47,7 +47,7 @@ func TestFacetedUnionKeepsUntouchedVertexAndFaceBounds(t *testing.T) {
 		require.NoError(t, err)
 		branch, err = decad.Transform(t.Context(), branch, placement)
 		require.NoError(t, err)
-		result, err = decad.Union(t.Context(), result, branch)
+		result, err = decad.Union(result, branch).Do(t.Context())
 		require.NoError(t, err)
 	}
 
@@ -127,7 +127,7 @@ func TestFacetedPlacementKeepsNearOriginVertexBoundTight(t *testing.T) {
 	doc := decad.New()
 	plate := boxBody(t, doc, 0, 0, 20, 20, 8)
 	tool := translated(t, diskBody(t, doc, 0, 0, 2), 10, 10, -10)
-	drilled, err := decad.Cut(t.Context(), plate, tool)
+	drilled, err := decad.Cut(plate, tool).Do(t.Context())
 	require.NoError(t, err)
 	origin, far := r3.NewVec(0, 0, 0), r3.NewVec(20, 20, 8)
 	sourceBounds := make(map[r3.Vec]units.Value)

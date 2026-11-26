@@ -130,7 +130,7 @@ func TestCutTwistedOffAxisSweepThroughTubeWall(t *testing.T) {
 	tube, tool := setup()
 	tubeVolume, err := tube.Volume()
 	require.NoError(t, err)
-	out, err := decad.Cut(t.Context(), tube, tool)
+	out, err := decad.Cut(tube, tool).Do(t.Context())
 	require.NoError(t, err)
 	require.True(t, out.IsSolid())
 	volume, err := out.Volume()

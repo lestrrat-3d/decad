@@ -21,7 +21,7 @@ func TestShellWindingRefusesAnInsideOutCavity(t *testing.T) {
 	doc := New()
 	box := internalBoxBodyAtZ(t, doc, -10, -10, 10, 10, 0, 10)
 	rod := internalCircleBody(t, doc, 0, 3, -1, Distance{D: units.Millimeters(12), Dir: Along})
-	drilled, err := Cut(t.Context(), box, rod)
+	drilled, err := Cut(box, rod).Do(t.Context())
 	require.NoError(t, err)
 	closed, err := Shell(t.Context(), drilled, nil, units.Millimeters(1), WithNoOpenings())
 	require.NoError(t, err)

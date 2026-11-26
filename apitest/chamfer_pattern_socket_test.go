@@ -132,13 +132,13 @@ func TestChamferPlateAfterPatternSocketCut(t *testing.T) {
 			require.Len(t, copies, 2)
 			carrier := plate
 			if tc.join {
-				tool, err := decad.Union(t.Context(), socket, copies...)
+				tool, err := decad.Union(append([]*decad.Body{socket}, copies...)...).Do(t.Context())
 				require.NoError(t, err)
-				carrier, err = decad.Cut(t.Context(), plate, tool)
+				carrier, err = decad.Cut(plate, tool).Do(t.Context())
 				require.NoError(t, err)
 			} else {
 				for _, tool := range append([]*decad.Body{socket}, copies...) {
-					carrier, err = decad.Cut(t.Context(), carrier, tool)
+					carrier, err = decad.Cut(carrier, tool).Do(t.Context())
 					require.NoError(t, err)
 				}
 			}

@@ -389,7 +389,7 @@ func TestSectionDirectLoftRefusesCutSource(t *testing.T) {
 	blank, err := decad.Loft(t.Context(), doc, bottom, bottomProfile, top, topProfile)
 	require.NoError(t, err)
 	tool := verticalCylinder(t, doc, 0, 0, 1)
-	cut, err := decad.Cut(t.Context(), blank, tool)
+	cut, err := decad.Cut(blank, tool).Do(t.Context())
 	require.NoError(t, err)
 	faces, err := decad.Faces(decad.FaceCreatedBy(decad.CapStart(cut))).Exactly(1).SelectFaces(cut)
 	require.NoError(t, err)

@@ -17,7 +17,7 @@ func TestShellBlindRectangularPocket(t *testing.T) {
 	doc := decad.New()
 	outer := boxBodyAtZ(t, doc, 0, 0, 10, 10, 0, 10)
 	tool := boxBodyAtZ(t, doc, 3, 3, 7, 7, 6, 4)
-	pocket, err := decad.Cut(t.Context(), outer, tool)
+	pocket, err := decad.Cut(outer, tool).Do(t.Context())
 	require.NoError(t, err)
 	requireVolumeNear(t, pocket, 936)
 
@@ -72,7 +72,7 @@ func TestShellBlindRectangularPocketClearance(t *testing.T) {
 	doc := decad.New()
 	outer := boxBodyAtZ(t, doc, 0, 0, 10, 10, 0, 10)
 	tool := boxBodyAtZ(t, doc, 2, 3, 6, 7, 6, 4)
-	pocket, err := decad.Cut(t.Context(), outer, tool)
+	pocket, err := decad.Cut(outer, tool).Do(t.Context())
 	require.NoError(t, err)
 	_, err = decad.Shell(t.Context(), pocket, decad.Faces(decad.FaceCreatedBy(decad.CapEnd(pocket))).Exactly(1),
 		units.Millimeters(1))
@@ -85,7 +85,7 @@ func TestShellBlindRectangularPocketOffsetMoments(t *testing.T) {
 	doc := decad.New()
 	outer := boxBodyAtZ(t, doc, -12, -10, 12, 10, 0, 12)
 	tool := boxBodyAtZ(t, doc, -4, -1, 2, 3, 7, 5)
-	pocket, err := decad.Cut(t.Context(), outer, tool)
+	pocket, err := decad.Cut(outer, tool).Do(t.Context())
 	require.NoError(t, err)
 	shell, err := decad.Shell(t.Context(), pocket, decad.Faces(decad.FaceCreatedBy(decad.CapEnd(pocket))).Exactly(1),
 		units.Millimeters(1))

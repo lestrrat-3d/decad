@@ -6,7 +6,7 @@ Boolean files and modify operations. The rules for rows live in `agent-docs/layo
 
 | Path | Responsibility |
 |---|---|
-| `boolean.go` | Public `Union`/`Cut`/`Intersect`, error mapping, scale-source marking, and the mesh Boolean over two bodies (`internal/booleaneval`). Routes: `internal/booleandispatch`, `internal/massdispatch`. See evaluator §9, operation-history-design. |
+| `boolean.go` | Public `Union`/`Cut`/`Intersect` commands and their `Do` over `union`/`cut`/`intersect`, error mapping, scale-source marking, and the mesh Boolean over two bodies (`internal/booleaneval`). Routes: `internal/booleandispatch`, `internal/massdispatch`. See evaluator §9, operation-history-design. |
 | `boolean_group_blind.go` | Binds root history and handles for bounded blind group Cuts and commits their result. `internal/prismboolean` owns cap selection and geometry proofs. See prism-boolean design. |
 | `boolean_group_cache.go` | Replays and compares a cached blind Cut mesh before returning it. See tessellation design. |
 | `boolean_group_history.go` | Authenticates ordered public source bodies for a prism group Union; `internal/prismboolean` replays their region and cap proofs. |
@@ -23,8 +23,8 @@ Boolean files and modify operations. The rules for rows live in `agent-docs/layo
 | `point_cap_extremes.go` | Resolves Split cap faces and selects the ends using facetedrecord's centroid-order proof. See loft-point design. |
 | `internal/boolupstream/` | Attributes an analytic Boolean result's planar faces to the one operand face exact plane identity proves each lies inside, and stores the roles in the payload's `Upstream`. See prism-boolean §11. |
 | `internal/capplane/` | Reads a `CapRecord` plane, a sweep axis and plane identity as exact rationals for Loft cap levels and Boolean attribution. See prism-boolean §11, loft §18. |
-| `union_refined.go` | Public `UnionRefined`: builds a straight-bevel sector join of a blank and its teeth once, at the refinement bound, or refuses before building. See body-refine §7.1. |
-| `refine.go` | Public `Refine`: re-certifies a held mesh Boolean result under a surface bound; it unwraps the faceted payload, whose `RefinedSurfaceBounds` (`internal/facetedrecord`) runs the `internal/occupancy` certificate. See body-refine §7. |
+| `union_refined.go` | `Union(...).RefineTo` implementation: builds a straight-bevel sector join of a blank and its teeth once, at the refinement bound, or refuses before building. See body-refine §7.1. |
+| `refine.go` | Public `Refine` command and its `refine` implementation: re-certifies a held mesh Boolean result under a surface bound; it unwraps the faceted payload, whose `RefinedSurfaceBounds` (`internal/facetedrecord`) runs the `internal/occupancy` certificate. See body-refine §7. |
 | `internal/occupancyleaf/` | Reads a Boolean operand payload (circle prism, coaxial stack, recorded Union result) as an occupancy record. See body-refine §4, §6. |
 
 ### Modify

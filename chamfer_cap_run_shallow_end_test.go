@@ -111,7 +111,7 @@ func bladeBody(t *testing.T, joined bool) *decad.Body {
 	if !joined {
 		return body
 	}
-	out, err := decad.Union(t.Context(), body, box(t, doc, [3]float64{20, 2, 43}, [3]float64{22, 4, 46}))
+	out, err := decad.Union(body, box(t, doc, [3]float64{20, 2, 43}, [3]float64{22, 4, 46})).Do(t.Context())
 	require.NoError(t, err)
 	return out
 }

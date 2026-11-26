@@ -60,7 +60,7 @@ func TestBrepLoopFilletPublicPlateTopLoop(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	plate := boxBody(t, doc, 0, 0, 40, 40, 10)
-	pocket, err := decad.Cut(t.Context(), plate, boxBodyAtZ(t, doc, 10, 15, 30, 25, 5, 5))
+	pocket, err := decad.Cut(plate, boxBodyAtZ(t, doc, 10, 15, 30, 25, 5, 5)).Do(t.Context())
 	require.NoError(t, err)
 	top := planeFacing(t, pocket, r3.NewVec(0, 0, 1), r3.NewVec(0, 0, 10))
 	got, err := decad.Fillet(t.Context(), pocket, loopEdgeQuery(top.Loops()[0]), units.Millimeters(1.5))
@@ -174,7 +174,7 @@ func TestBrepLoopFilletTessellateWithinTolerance(t *testing.T) {
 func TestBrepLoopFilletCornerCutVerifiesSound(t *testing.T) {
 	t.Parallel()
 	doc, got := boxTopLoopFillet(t)
-	cut, err := decad.Cut(t.Context(), got, boxBodyAtZ(t, doc, 55, 35, 65, 45, 15, 10))
+	cut, err := decad.Cut(got, boxBodyAtZ(t, doc, 55, 35, 65, 45, 15, 10)).Do(t.Context())
 	require.NoError(t, err)
 	report, err := doc.Verify(t.Context())
 	require.NoError(t, err)
@@ -355,7 +355,7 @@ func pocketMouthPlate(t *testing.T) (*decad.Body, *decad.Face) {
 	t.Helper()
 	doc := decad.New()
 	plate := boxBody(t, doc, 0, 0, 40, 40, 10)
-	pocket, err := decad.Cut(t.Context(), plate, boxBodyAtZ(t, doc, 10, 15, 30, 25, 5, 5))
+	pocket, err := decad.Cut(plate, boxBodyAtZ(t, doc, 10, 15, 30, 25, 5, 5)).Do(t.Context())
 	require.NoError(t, err)
 	return pocket, planeFacing(t, pocket, r3.NewVec(0, 0, 1), r3.NewVec(0, 0, 10))
 }

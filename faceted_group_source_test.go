@@ -64,7 +64,7 @@ func facetedGroups(t *testing.T, b *Body) []facetedrecord.Group {
 func TestBooleanGroupsRecordSource(t *testing.T) {
 	sc := newSourceScene(t)
 	tool := sc.tool(t, 20)
-	bored, err := Cut(t.Context(), sc.plate, tool)
+	bored, err := Cut(sc.plate, tool).Do(t.Context())
 	require.NoError(t, err)
 
 	plateFaces := len(topobuild.Faces(&sc.plate.n))
@@ -86,7 +86,7 @@ func TestBooleanGroupsRecordSource(t *testing.T) {
 
 	// A later Cut of the faceted result names the first result's records as
 	// parents of the plate-side groups.
-	second, err := Cut(t.Context(), bored, sc.tool(t, 30))
+	second, err := Cut(bored, sc.tool(t, 30)).Do(t.Context())
 	require.NoError(t, err)
 	boredFaces := topobuild.Faces(&bored.n)
 	for i, g := range facetedGroups(t, second)[:len(boredFaces)] {
@@ -99,7 +99,7 @@ func TestBooleanGroupsRecordSource(t *testing.T) {
 
 func TestRetainedBlendGroupsRecordSource(t *testing.T) {
 	sc := newSourceScene(t)
-	bored, err := Cut(t.Context(), sc.plate, sc.tool(t, 20))
+	bored, err := Cut(sc.plate, sc.tool(t, 20)).Do(t.Context())
 	require.NoError(t, err)
 	var sel EdgeSelector
 	for _, e := range bored.Edges() {

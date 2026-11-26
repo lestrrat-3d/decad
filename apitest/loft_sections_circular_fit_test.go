@@ -680,7 +680,7 @@ func TestLoftSectionsCircularFitTransverseHole(t *testing.T) {
 	tool, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0],
 		decad.Distance{D: units.Millimeters(4), Dir: decad.Along})
 	require.NoError(t, err)
-	bored, err := decad.Cut(t.Context(), body, tool)
+	bored, err := decad.Cut(body, tool).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, decad.BodySolid, bored.Kind())
 	cutMesh, err := bored.Tessellate(t.Context(), units.Millimeters(0.05), decad.WithVerification(decad.VerifyAll))
@@ -708,7 +708,7 @@ func TestLoftSectionsCircularFitTransverseHole(t *testing.T) {
 	secondTool, err := decad.Extrude(t.Context(), doc, second, second.Profiles()[0],
 		decad.Distance{D: units.Millimeters(4), Dir: decad.Along})
 	require.NoError(t, err)
-	chained, err := decad.Cut(t.Context(), bored, secondTool)
+	chained, err := decad.Cut(bored, secondTool).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, decad.BodySolid, chained.Kind())
 	chainedMesh, err := chained.Tessellate(t.Context(), units.Millimeters(0.05), decad.WithVerification(decad.VerifyAll))

@@ -74,9 +74,9 @@ func blindArcEndPocket(t *testing.T) *decad.Body {
 	tool, err := decad.Fillet(t.Context(), rectBox(t, w, doc, 8, 10, 30, 30, 20),
 		decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1))).Exactly(4), units.Millimeters(concaveR))
 	require.NoError(t, err)
-	cropped, err := decad.Cut(t.Context(), tool, rectBox(t, w, doc, 7, 9, 10, 31, 20))
+	cropped, err := decad.Cut(tool, rectBox(t, w, doc, 7, 9, 10, 31, 20)).Do(t.Context())
 	require.NoError(t, err)
-	out, err := decad.Cut(t.Context(), plate, placed(t, cropped, 5))
+	out, err := decad.Cut(plate, placed(t, cropped, 5)).Do(t.Context())
 	require.NoError(t, err)
 	return out
 }
@@ -90,12 +90,12 @@ func blindArcEndPocket(t *testing.T) *decad.Body {
 func bossArcEnd(t *testing.T) *decad.Body {
 	t.Helper()
 	w, doc := sketch.NewWorld(), decad.New()
-	plate, err := decad.Union(t.Context(), rectBox(t, w, doc, 0, 0, 40, 40, 10), rectBox(t, w, doc, -10, 0, 0, 40, 30))
+	plate, err := decad.Union(rectBox(t, w, doc, 0, 0, 40, 40, 10), rectBox(t, w, doc, -10, 0, 0, 40, 30)).Do(t.Context())
 	require.NoError(t, err)
 	boss, err := decad.Fillet(t.Context(), rectBox(t, w, doc, -2, 10, 30, 30, 12),
 		decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1))).Exactly(4), units.Millimeters(concaveR))
 	require.NoError(t, err)
-	out, err := decad.Union(t.Context(), plate, placed(t, boss, 8))
+	out, err := decad.Union(plate, placed(t, boss, 8)).Do(t.Context())
 	require.NoError(t, err)
 	return out
 }
@@ -192,8 +192,7 @@ func TestFacetedRetainedBlendConcaveArcEnd(t *testing.T) {
 		// The box floats 0.05 above the floor and crosses x = 0 inside the cap
 		// at the slot's corner (0,10.17,5), clear of the blend's strip.
 		w, doc := sketch.NewWorld(), decad.New()
-		joined, err := decad.Union(t.Context(), arcEndSlotIn(t, w, doc),
-			placed(t, rectBox(t, w, doc, -0.9, 10.2, 0.1, 10.3, 0.1), 5.05))
+		joined, err := decad.Union(arcEndSlotIn(t, w, doc), placed(t, rectBox(t, w, doc, -0.9, 10.2, 0.1, 10.3, 0.1), 5.05)).Do(t.Context())
 		require.NoError(t, err)
 		_, err = decad.Fillet(t.Context(), joined, xEdgeAt(r3.NewVec(27, 10, 5)), units.Millimeters(concaveFilletR),
 			decad.WithTangentChain())

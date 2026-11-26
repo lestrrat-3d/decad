@@ -46,7 +46,7 @@ func TestContainedCutUsesCertifiedSourceVolumeAndRecordsHistory(t *testing.T) {
 	tool, err = Transform(t.Context(), tool, placement)
 	require.NoError(t, err)
 
-	result, err := Cut(t.Context(), target, tool)
+	result, err := Cut(target, tool).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, "facetedPayload", result.n.Payload.(facetedPayload).SurveyClass())
 	require.Len(t, result.Lumps(), 1)

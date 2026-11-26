@@ -31,7 +31,7 @@ func earBody(t *testing.T) *decad.Body {
 	sc := newRetentionScene()
 	bar := xCylinderAt(t, sc.doc, 0, 0, 3, -15, 15)
 	box := placed(t, rectBox(t, sc.w, sc.doc, 0, -earHalf, earLen, earHalf, 4), -5)
-	body, err := decad.Union(t.Context(), bar, box)
+	body, err := decad.Union(bar, box).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -65,7 +65,7 @@ func earTube(t *testing.T) *decad.Body {
 	tube, err := decad.Transform(t.Context(), pipe, move)
 	require.NoError(t, err)
 	rib := placed(t, rectBox(t, sc.w, sc.doc, 0, -earHalf, earLen, earHalf, 3), -4)
-	body, err := decad.Union(t.Context(), tube, rib)
+	body, err := decad.Union(tube, rib).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -135,7 +135,7 @@ func earRegion(radius, kappa, size float64, fillet bool, f func(rho float64) flo
 func earCornerRod(t *testing.T) *decad.Body {
 	t.Helper()
 	sc := newRetentionScene()
-	body, err := decad.Union(t.Context(), blendPlate(t, sc), zCylinderAt(t, sc, -1, -1, 5, 10, 40))
+	body, err := decad.Union(blendPlate(t, sc), zCylinderAt(t, sc, -1, -1, 5, 10, 40)).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -272,9 +272,9 @@ func TestFacetedRetainedBlendArcExtends(t *testing.T) {
 		sc := newRetentionScene()
 		bar := xCylinderAt(t, sc.doc, 0, 0, 3, -15, 15)
 		box := placed(t, rectBox(t, sc.w, sc.doc, 0, -earHalf, earLen, earHalf, 4), -5)
-		body, err := decad.Union(t.Context(), bar, box)
+		body, err := decad.Union(bar, box).Do(t.Context())
 		require.NoError(t, err)
-		body, err = decad.Cut(t.Context(), body, zCylinderAt(t, sc, -0.5, 0, 0.25, -10, 10))
+		body, err = decad.Cut(body, zCylinderAt(t, sc, -0.5, 0, 0.25, -10, 10)).Do(t.Context())
 		require.NoError(t, err)
 		_, err = decad.Fillet(t.Context(), body, earArc(t, body), units.Millimeters(1))
 		require.ErrorContains(t, err, "another part of the wall lies within the blend's reach of the edge")
@@ -296,9 +296,9 @@ func TestFacetedRetainedBlendArcExtends(t *testing.T) {
 		// face takes the cap, inside the fillet's corner region and clear of its
 		// strip.
 		cube := placed(t, rectBox(t, sc.w, sc.doc, -0.15, 0.95, -0.05, 1.05, 0.1), -3.05)
-		feet, err := decad.Union(t.Context(), box, cube)
+		feet, err := decad.Union(box, cube).Do(t.Context())
 		require.NoError(t, err)
-		body, err := decad.Union(t.Context(), bar, feet)
+		body, err := decad.Union(bar, feet).Do(t.Context())
 		require.NoError(t, err)
 		var seed decad.EdgeSelector
 		for _, e := range body.Edges() {

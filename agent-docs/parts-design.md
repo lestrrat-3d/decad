@@ -438,7 +438,7 @@ func Example_parts_explode() {
         fmt.Printf("failed to build the bore tool: %s\n", err)
         return
     }
-    if plate, err = decad.Cut(ctx, plate, bore); err != nil {
+    if plate, err = decad.Cut(plate, bore).Do(ctx); err != nil {
         fmt.Printf("failed to bore the plate: %s\n", err)
         return
     }
@@ -531,7 +531,7 @@ func Example_parts_explode_stages() {
             if err != nil {
                 return nil, err
             }
-            if b, err = decad.Cut(ctx, b, tool); err != nil {
+            if b, err = decad.Cut(b, tool).Do(ctx); err != nil {
                 return nil, err
             }
         }
@@ -539,7 +539,7 @@ func Example_parts_explode_stages() {
         if err != nil {
             return nil, err
         }
-        return decad.Cut(ctx, b, bore)
+        return decad.Cut(b, bore).Do(ctx)
     }
     bottom, err := block(0, 0, 40, 20, -10, 10, [6]float64{10, 4, 30, 16, -6, 7}, -11, 12)
     if err != nil {

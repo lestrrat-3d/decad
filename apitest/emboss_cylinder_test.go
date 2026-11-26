@@ -108,7 +108,7 @@ func TestEmbossRaisesAReliefInABore(t *testing.T) {
 	const Rb, h, halfY, halfZ = 8.0, 3.0, 3.0, 2.0
 	doc := decad.New()
 	block := boxBody(t, doc, -20, -20, 20, 20, 10)
-	part, err := decad.Cut(t.Context(), block, circleBodyAtZ(t, doc, 0, Rb, -1, 12))
+	part, err := decad.Cut(block, circleBodyAtZ(t, doc, 0, Rb, -1, 12)).Do(t.Context())
 	require.NoError(t, err)
 	// The bore's wall looks toward the axis, so a relief on the plane tangent at x = 8 grows
 	// into the bore, toward −x, from the wall x = √(Rb² − y²) to the plane's x = Rb − h. The sketch

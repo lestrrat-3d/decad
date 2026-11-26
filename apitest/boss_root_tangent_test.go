@@ -202,7 +202,7 @@ func TestBossRootTangentFork(t *testing.T) {
 	doc := decad.New()
 	fork := forkBody(t, doc, 0, mm(6.5), 0, leverForkSketch(false, forkOptions{}))
 	notch := forkBody(t, doc, 2.5, mm(5), 0, leverForkSketch(true, forkOptions{}))
-	cut, err := decad.Cut(t.Context(), fork, notch)
+	cut, err := decad.Cut(fork, notch).Do(t.Context())
 	require.NoError(t, err)
 	vc, bc := volumeAndBound(t, cut)
 

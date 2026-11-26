@@ -144,7 +144,7 @@ func roundBossFromSketch(t *testing.T, doc *decad.Document, cx, cy float64) *dec
 	require.NoError(t, err)
 	boss, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
 	require.NoError(t, err)
-	stack, err := decad.Union(t.Context(), plate, boss)
+	stack, err := decad.Union(plate, boss).Do(t.Context())
 	require.NoError(t, err)
 	return stack
 }

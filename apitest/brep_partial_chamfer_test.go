@@ -311,7 +311,7 @@ func TestBrepPartialChamferBlindPocket(t *testing.T) {
 	doc := decad.New()
 	plate := boxBody(t, doc, 0, 0, 30, 18, 12)
 	tool := boxBodyAtZ(t, doc, 11, 6, 19, 11, 9, 4)
-	pocket, err := decad.Cut(t.Context(), plate, tool)
+	pocket, err := decad.Cut(plate, tool).Do(t.Context())
 	require.NoError(t, err)
 	baseMesh, err := pocket.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
 	require.NoError(t, err)

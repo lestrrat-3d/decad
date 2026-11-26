@@ -78,7 +78,7 @@ func spreadOverlap(z float64) float64 {
 
 func spreadCut(t *testing.T, doc *decad.Document, body *decad.Body, z float64) (*decad.Body, error) {
 	t.Helper()
-	return decad.Cut(t.Context(), body, spreadTool(t, doc, z))
+	return decad.Cut(body, spreadTool(t, doc, z)).Do(t.Context())
 }
 
 func spreadBound(t *testing.T, body *decad.Body) float64 {

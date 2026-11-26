@@ -24,7 +24,7 @@ func TestOrthogonalConcaveRadiusIsAbsentFromABlockAndZeroFromAnL(t *testing.T) {
 	lDoc := decad.New()
 	a := blockIn(t, lDoc, r3.NewVec(0, 0, 0), r3.NewVec(10, 4, 4))
 	b := blockIn(t, lDoc, r3.NewVec(0, 0, 0), r3.NewVec(4, 10, 4))
-	_, err = decad.Union(t.Context(), a, b)
+	_, err = decad.Union(a, b).Do(t.Context())
 	require.NoError(t, err)
 	report, err = lDoc.Verify(t.Context(), decad.WithConcaveRadius())
 	require.NoError(t, err)

@@ -111,7 +111,7 @@ func TestSectionMatchingLoftRefusesFacetedCutHole(t *testing.T) {
 	tool, err := decad.Extrude(t.Context(), doc, toolSketch, toolSketch.Profiles()[0],
 		decad.Distance{D: units.Millimeters(3), Dir: decad.Along})
 	require.NoError(t, err)
-	cut, err := decad.Cut(t.Context(), blank, tool)
+	cut, err := decad.Cut(blank, tool).Do(t.Context())
 	require.NoError(t, err)
 	sectionFrame, err := r3.NewFrame(r3.NewVec(0, 0, 1), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	require.NoError(t, err)

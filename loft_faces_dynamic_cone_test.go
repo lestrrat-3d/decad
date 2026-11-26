@@ -76,10 +76,10 @@ func TestLoftFacesThreeCapConeContinuationKeepsSource(t *testing.T) {
 		require.NoError(t, e)
 		return body
 	}
-	cut, err := Cut(t.Context(), loft, cone(7.5))
+	cut, err := Cut(loft, cone(7.5)).Do(t.Context())
 	require.NoError(t, err)
 	require.NotNil(t, cut.n.Payload.(facetedPayload).LoftFacesToe)
-	trim, err := Intersect(t.Context(), cut, cone(8))
+	trim, err := Intersect(cut, cone(8)).Do(t.Context())
 	require.NoError(t, err)
 	trimRecord := trim.n.Payload.(facetedPayload).LoftFacesTrim
 	require.NotNil(t, trimRecord)

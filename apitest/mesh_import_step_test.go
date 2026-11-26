@@ -83,7 +83,7 @@ func TestReadSTEPRoundTripsALumpWithACavityBesideALump(t *testing.T) {
 		units.Millimeters(3), decad.WithNoOpenings())
 	require.NoError(t, err)
 	beside := decadtest.NewBlock(t, doc, 40, 0, 50, 10, units.Millimeters(10))
-	both, err := decad.Union(t.Context(), closed, beside)
+	both, err := decad.Union(closed, beside).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, both.Lumps(), 2)
 	require.Len(t, both.Shells(), 3)
@@ -108,7 +108,7 @@ func TestSTEPWritesACavityThatTouchesTheOuterShell(t *testing.T) {
 	require.NoError(t, err)
 	prism, err = decad.Transform(t.Context(), prism, mustTranslation(t, 0, 0, 5))
 	require.NoError(t, err)
-	edgeTouch, err := decad.Cut(t.Context(), box, prism)
+	edgeTouch, err := decad.Cut(box, prism).Do(t.Context())
 	require.NoError(t, err)
 
 	vertexDoc := decad.New()
@@ -128,7 +128,7 @@ func TestSTEPWritesACavityThatTouchesTheOuterShell(t *testing.T) {
 	require.NoError(t, err)
 	cone, err = decad.Transform(t.Context(), cone, mustTranslation(t, 0, 0, 10))
 	require.NoError(t, err)
-	vertexTouch, err := decad.Cut(t.Context(), vbox, cone)
+	vertexTouch, err := decad.Cut(vbox, cone).Do(t.Context())
 	require.NoError(t, err)
 
 	for name, body := range map[string]*decad.Body{"edge": edgeTouch, "vertex": vertexTouch} {

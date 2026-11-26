@@ -46,7 +46,7 @@ func TestPlacedCopiesOfAMeshSolidJoinExactly(t *testing.T) {
 	shifted, err := decad.Transform(t.Context(), copyOf, move)
 	require.NoError(t, err)
 	// The copy, moved one bar's length along, touches the original at a face: the grid joins them into one bar.
-	joined, err := decad.Union(t.Context(), bar, shifted)
+	joined, err := decad.Union(bar, shifted).Do(t.Context())
 	require.NoError(t, err)
 	requireVolume(t, joined, 320)
 	require.Len(t, joined.Faces(), 6)

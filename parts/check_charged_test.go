@@ -93,7 +93,7 @@ func TestCheckChargedWallUnread(t *testing.T) {
 	}
 
 	doc := decad.New()
-	plain, err := decad.Cut(t.Context(), mustBlock(t, doc), cylinderAt(t, doc, -14, -14, 2, -1, 7))
+	plain, err := decad.Cut(mustBlock(t, doc), cylinderAt(t, doc, -14, -14, 2, -1, 7)).Do(t.Context())
 	require.NoError(t, err)
 	twin := check(t, plain, doc)
 	require.Equal(t, parts.Confirmed, twin.Status, twin.Reason)

@@ -41,7 +41,7 @@ func borePlate(t *testing.T, doc *decad.Document, cut bool) *decad.Body {
 	if cut {
 		plate := boxBodyAtZ(t, doc, 0, 0, 20, 20, 0, 10)
 		tool := circlePrismAtZ(t, doc, 10, 10, 3.2, -1, 12)
-		body, err := decad.Cut(t.Context(), plate, tool)
+		body, err := decad.Cut(plate, tool).Do(t.Context())
 		require.NoError(t, err)
 		return body
 	}

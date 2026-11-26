@@ -18,7 +18,7 @@ func wedgePlateRectBoss(t *testing.T) *decad.Body {
 	doc := decad.New()
 	plate := boxBodyAtZ(t, doc, 0, 0, 80, 60, 0, 10)
 	boss := boxBodyAtZ(t, doc, 30, 20, 50, 40, 10, 15)
-	u, err := decad.Union(t.Context(), plate, boss)
+	u, err := decad.Union(plate, boss).Do(t.Context())
 	require.NoError(t, err)
 	return u
 }
@@ -91,7 +91,7 @@ func TestEdgeWedgeLBracketInsideCorner(t *testing.T) {
 	doc := decad.New()
 	base := boxBodyAtZ(t, doc, 0, 0, 60, 40, 0, 8)
 	up := boxBodyAtZ(t, doc, 0, 0, 8, 40, 0, 50)
-	u, err := decad.Union(t.Context(), base, up)
+	u, err := decad.Union(base, up).Do(t.Context())
 	require.NoError(t, err)
 
 	corner := wedgeSelect(t, u, decad.Reflex())
@@ -109,7 +109,7 @@ func TestEdgeWedgeHoleRimSalientAndConcave(t *testing.T) {
 	doc := decad.New()
 	plate := boxBodyAtZ(t, doc, 0, 0, 80, 60, 0, 10)
 	tool := circlePrismAtZ(t, doc, 20, 30, 5, -1, 12)
-	drilled, err := decad.Cut(t.Context(), plate, tool)
+	drilled, err := decad.Cut(plate, tool).Do(t.Context())
 	require.NoError(t, err)
 
 	rims := wedgeSelect(t, drilled, decad.Circular())
@@ -133,7 +133,7 @@ func TestEdgeWedgeRoundBoss(t *testing.T) {
 	doc := decad.New()
 	plate := boxBodyAtZ(t, doc, 0, 0, 80, 60, 0, 10)
 	boss := circlePrismAtZ(t, doc, 40, 30, 10, 10, 15)
-	u, err := decad.Union(t.Context(), plate, boss)
+	u, err := decad.Union(plate, boss).Do(t.Context())
 	require.NoError(t, err)
 
 	root := wedgeSelect(t, u, decad.Circular(), decad.Reflex())
@@ -159,7 +159,7 @@ func TestEdgeWedgeTangentJunctionUndecided(t *testing.T) {
 	doc := decad.New()
 	plate := boxBodyAtZ(t, doc, 0, 0, 80, 60, 0, 10)
 	boss := wedgeRoundedRectAtZ(t, doc, 25, 15, 55, 45, 5, 10, 10)
-	u, err := decad.Union(t.Context(), plate, boss)
+	u, err := decad.Union(plate, boss).Do(t.Context())
 	require.NoError(t, err)
 
 	var undecided []*decad.Edge
@@ -252,7 +252,7 @@ func TestEdgeWedgeMeshUnionUnprovenEdges(t *testing.T) {
 	require.NoError(t, err)
 	post, err = decad.Transform(t.Context(), post, tilt)
 	require.NoError(t, err)
-	u, err := decad.Union(t.Context(), box, post)
+	u, err := decad.Union(box, post).Do(t.Context())
 	require.NoError(t, err)
 	require.True(t, tookMeshPath(u))
 

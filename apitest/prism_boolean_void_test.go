@@ -32,7 +32,7 @@ func TestPrismUnionEnclosedVoidTakesMeshPath(t *testing.T) {
 	doc := decad.New(decad.ExactOnly())
 	a := polyPrismBody(t, doc, voidCShapeA, 1)
 	b := polyPrismBody(t, doc, voidCShapeB, 1)
-	got, err := decad.Union(t.Context(), a, b)
+	got, err := decad.Union(a, b).Do(t.Context())
 	if err == nil {
 		volume, verr := got.Volume()
 		require.NoError(t, verr)
@@ -48,11 +48,11 @@ func TestStackedUnionEnclosedVoidTakesMeshPath(t *testing.T) {
 	doc := decad.New(decad.ExactOnly())
 	plate := polyPrismBody(t, doc, voidCShapeA, 10)
 	block := boxBodyAtZ(t, doc, 0.5, 4, 2.5, 6, 10, 5)
-	stack, err := decad.Union(t.Context(), plate, block)
+	stack, err := decad.Union(plate, block).Do(t.Context())
 	require.NoError(t, err)
 	require.False(t, tookMeshPath(stack))
 	other := polyPrismBody(t, doc, voidCShapeB, 10)
-	got, err := decad.Union(t.Context(), stack, other)
+	got, err := decad.Union(stack, other).Do(t.Context())
 	if err == nil {
 		volume, verr := got.Volume()
 		require.NoError(t, verr)

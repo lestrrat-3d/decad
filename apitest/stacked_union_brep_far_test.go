@@ -63,7 +63,7 @@ func TestStackedUnionCrossingBossFarFromOrigin(t *testing.T) {
 			boss, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(15), Dir: decad.Along})
 			require.NoError(t, err)
 
-			got, err := decad.Union(t.Context(), plate, boss)
+			got, err := decad.Union(plate, boss).Do(t.Context())
 			require.NoError(t, err)
 			require.False(t, tookMeshPath(got), `the A1 brep, not the mesh path, builds the union`)
 			require.Len(t, got.Faces(), 10)

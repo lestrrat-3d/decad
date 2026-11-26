@@ -441,8 +441,7 @@ func tumbleTrayBox(t *testing.T, doc *decad.Document, x0, y0, x1, y1, z0, h floa
 // the Cut is a zero-bound Boolean (§9).
 func tumbleTray(t *testing.T, doc *decad.Document) *decad.Body {
 	t.Helper()
-	tray, err := decad.Cut(t.Context(), tumbleTrayBox(t, doc, -90, -90, 90, 90, -10, 50),
-		tumbleTrayBox(t, doc, -80, -80, 80, 80, 0, 50))
+	tray, err := decad.Cut(tumbleTrayBox(t, doc, -90, -90, 90, 90, -10, 50), tumbleTrayBox(t, doc, -80, -80, 80, 80, 0, 50)).Do(t.Context())
 	require.NoError(t, err)
 	return tray
 }

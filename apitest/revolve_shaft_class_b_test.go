@@ -130,16 +130,14 @@ func TestRevolvedShaftClassBCut(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			sc := newRetentionScene()
-			got, err := decad.Cut(t.Context(), revolvedShaft(t, sc),
-				shaftTool(t, sc, flatPlane(t, sc), -5, tc.v0, shaftL+5, tc.v1))
+			got, err := decad.Cut(revolvedShaft(t, sc), shaftTool(t, sc, flatPlane(t, sc), -5, tc.v0, shaftL+5, tc.v1)).Do(t.Context())
 			require.NoError(t, err)
 			volume := requireClassBShaft(t, got, tc.planes, shaftLess(tc.removed()))
 
 			// The Extrude twin is the same prism record, so it measures the
 			// same value and bound bit for bit.
 			tsc := newRetentionScene()
-			twin, err := decad.Cut(t.Context(), extrudedShaft(t, tsc),
-				shaftTool(t, tsc, flatPlane(t, tsc), -5, tc.v0, shaftL+5, tc.v1))
+			twin, err := decad.Cut(extrudedShaft(t, tsc), shaftTool(t, tsc, flatPlane(t, tsc), -5, tc.v0, shaftL+5, tc.v1)).Do(t.Context())
 			require.NoError(t, err)
 			twinVolume, err := twin.Volume()
 			require.NoError(t, err)
@@ -165,7 +163,7 @@ func TestRevolvedShaftClassBCut(t *testing.T) {
 		require.NoError(t, err)
 		plane, err := sc.w.CreateOffsetPlane(sc.w.YZ(), flatZ)
 		require.NoError(t, err)
-		got, err := decad.Cut(t.Context(), shaft, shaftTool(t, sc, plane, -5, -20, shaftL+5, 20))
+		got, err := decad.Cut(shaft, shaftTool(t, sc, plane, -5, -20, shaftL+5, 20)).Do(t.Context())
 		require.NoError(t, err)
 		requireClassBShaft(t, got, 3, shaftLess(flatSegment()))
 	})
@@ -176,8 +174,7 @@ func TestRevolvedShaftClassBCut(t *testing.T) {
 		// twin's. A coarse pitch keeps the thread to five turns.
 		threaded := func(shaft func(*testing.T, *retentionScene) *decad.Body) (float64, decad.Measurement) {
 			sc := newRetentionScene()
-			cut, err := decad.Cut(t.Context(), shaft(t, sc),
-				shaftTool(t, sc, flatPlane(t, sc), -5, -20, shaftL+5, 20))
+			cut, err := decad.Cut(shaft(t, sc), shaftTool(t, sc, flatPlane(t, sc), -5, -20, shaftL+5, 20)).Do(t.Context())
 			require.NoError(t, err)
 			before, err := cut.Volume()
 			require.NoError(t, err)
@@ -220,8 +217,7 @@ func TestRevolvedShaftClassBMisses(t *testing.T) {
 	t.Run("keyseat ending inside the shaft", func(t *testing.T) {
 		t.Parallel()
 		sc := newRetentionScene()
-		got, err := decad.Cut(t.Context(), revolvedShaft(t, sc),
-			shaftTool(t, sc, flatPlane(t, sc), 15, -3, 25, 3))
+		got, err := decad.Cut(revolvedShaft(t, sc), shaftTool(t, sc, flatPlane(t, sc), 15, -3, 25, 3)).Do(t.Context())
 		requireShaftMeshPath(t, got, err)
 	})
 
@@ -235,7 +231,7 @@ func TestRevolvedShaftClassBMisses(t *testing.T) {
 		require.NoError(t, err)
 		plane, err := sc.w.CreatePlaneFromFrame(frame)
 		require.NoError(t, err)
-		got, err := decad.Cut(t.Context(), revolvedShaft(t, sc), shaftTool(t, sc, plane, -25, -3, -15, 3))
+		got, err := decad.Cut(revolvedShaft(t, sc), shaftTool(t, sc, plane, -25, -3, -15, 3)).Do(t.Context())
 		requireShaftMeshPath(t, got, err)
 	})
 
@@ -244,8 +240,7 @@ func TestRevolvedShaftClassBMisses(t *testing.T) {
 		// The tool's x = 0 wall lies in the shaft's end cap plane. B8, not the
 		// tool-wall gate, misses this pair: the gate never sees it.
 		sc := newRetentionScene()
-		got, err := decad.Cut(t.Context(), revolvedShaft(t, sc),
-			shaftTool(t, sc, flatPlane(t, sc), 0, -20, shaftL+5, 20))
+		got, err := decad.Cut(revolvedShaft(t, sc), shaftTool(t, sc, flatPlane(t, sc), 0, -20, shaftL+5, 20)).Do(t.Context())
 		requireShaftMeshPath(t, got, err)
 	})
 
@@ -258,14 +253,14 @@ func TestRevolvedShaftClassBMisses(t *testing.T) {
 		require.NoError(t, err)
 		plane, err := sc.w.CreatePlaneFromFrame(frame)
 		require.NoError(t, err)
-		got, err := decad.Cut(t.Context(), revolvedShaft(t, sc), shaftTool(t, sc, plane, -10, -20, 60, 20))
+		got, err := decad.Cut(revolvedShaft(t, sc), shaftTool(t, sc, plane, -10, -20, 60, 20)).Do(t.Context())
 		requireShaftMeshPath(t, got, err)
 	})
 
 	t.Run("Transform-placed tool", func(t *testing.T) {
 		t.Parallel()
 		sc := newRetentionScene()
-		got, err := decad.Cut(t.Context(), revolvedShaft(t, sc), flatTool(t, sc))
+		got, err := decad.Cut(revolvedShaft(t, sc), flatTool(t, sc)).Do(t.Context())
 		requireShaftMeshPath(t, got, err)
 	})
 
@@ -275,7 +270,7 @@ func TestRevolvedShaftClassBMisses(t *testing.T) {
 		sc := newRetentionScene()
 		tube, err := decad.Revolve(t.Context(), sc.doc, s, profile, uAxis, decad.FullRevolution{})
 		require.NoError(t, err)
-		got, err := decad.Cut(t.Context(), tube, shaftTool(t, sc, flatPlane(t, sc), -5, -20, shaftL+5, 20))
+		got, err := decad.Cut(tube, shaftTool(t, sc, flatPlane(t, sc), -5, -20, shaftL+5, 20)).Do(t.Context())
 		requireShaftMeshPath(t, got, err)
 	})
 }

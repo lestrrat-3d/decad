@@ -48,7 +48,7 @@ func Example_selectReflexEdges() {
 		fmt.Printf("failed to build the boss: %s\n", err)
 		return
 	}
-	part, err := decad.Union(ctx, plate, boss)
+	part, err := decad.Union(plate, boss).Do(ctx)
 	if err != nil {
 		fmt.Printf("failed to join: %s\n", err)
 		return

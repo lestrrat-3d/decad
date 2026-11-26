@@ -34,7 +34,7 @@ func unionBossShellFixture(t *testing.T, plateZ0, plateHeight, bossZ0, bossHeigh
 	require.NoError(t, err)
 	boss, err = Transform(t.Context(), boss, turn)
 	require.NoError(t, err)
-	joined, err := Union(t.Context(), plate, boss)
+	joined, err := Union(plate, boss).Do(t.Context())
 	require.NoError(t, err)
 	fp, ok := joined.n.Payload.(facetedPayload)
 	require.True(t, ok)

@@ -104,7 +104,7 @@ func TestCircularFitPrimitiveEligibility(t *testing.T) {
 	require.NoError(t, err)
 	tool, err := Extrude(t.Context(), doc, s, s.Profiles()[0], Distance{D: units.Millimeters(4), Dir: Along})
 	require.NoError(t, err)
-	cut, err := Cut(t.Context(), body, tool)
+	cut, err := Cut(body, tool).Do(t.Context())
 	require.NoError(t, err)
 	result, ok := cut.n.Payload.(facetedPayload)
 	require.True(t, ok)

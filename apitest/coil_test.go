@@ -89,7 +89,7 @@ func TestCoilThreadCutAndCoreUnionPreserveVolume(t *testing.T) {
 		groove, err := decad.Coil(t.Context(), doc, grooveSketch, grooveProfile, axis,
 			units.Millimeters(1.5), units.Scalar(1))
 		require.NoError(t, err)
-		cut, err := decad.Cut(t.Context(), cylinder, groove)
+		cut, err := decad.Cut(cylinder, groove).Do(t.Context())
 		require.NoError(t, err)
 		require.Len(t, cut.Lumps(), 1)
 
@@ -117,7 +117,7 @@ func TestCoilThreadCutAndCoreUnionPreserveVolume(t *testing.T) {
 		groove, err := decad.Coil(t.Context(), doc, grooveSketch, grooveProfile, axis,
 			units.Millimeters(1.5), units.Scalar(1))
 		require.NoError(t, err)
-		cut, err := decad.Cut(t.Context(), block, groove)
+		cut, err := decad.Cut(block, groove).Do(t.Context())
 		require.NoError(t, err)
 		require.Len(t, cut.Lumps(), 1)
 
@@ -242,7 +242,7 @@ func TestCoilThreadEndClippedVolume(t *testing.T) {
 	groove, err := decad.Coil(t.Context(), doc, grooveSketch, grooveProfile, coilAxis(),
 		units.Millimeters(1.5), units.Scalar(turns))
 	require.NoError(t, err)
-	cut, err := decad.Cut(t.Context(), cylinder, groove)
+	cut, err := decad.Cut(cylinder, groove).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, cut.Lumps(), 1)
 

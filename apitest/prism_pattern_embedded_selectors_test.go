@@ -52,7 +52,7 @@ func TestPrismPatternEmbeddedJoinKeepsAxialRootsAndCapLoops(t *testing.T) {
 	copies, err := decad.PatternCopies(t.Context(), tooth,
 		decad.CircularPattern{Axis: r3.Vec{Z: 1}, Count: teeth})
 	require.NoError(t, err)
-	joined, err := decad.Union(t.Context(), disc, append([]*decad.Body{tooth}, copies...)...)
+	joined, err := decad.Union(append([]*decad.Body{disc}, append([]*decad.Body{tooth}, copies...)...)...).Do(t.Context())
 	require.NoError(t, err)
 	require.False(t, tookMeshPath(joined), "the freeform axial-section join must run before the generic prism fold")
 

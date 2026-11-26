@@ -60,7 +60,7 @@ func TestLoftMirrorJoinCapChamfer(t *testing.T) {
 func TestLoftMirrorJoinCapChamferKeepsTheBore(t *testing.T) {
 	const half, r, d = 1.5, 0.5, 0.1
 	joined := roundedMirrorJoin(t, half, -10*math.Pi/180)
-	bored, err := decad.Cut(t.Context(), joined, circleBodyAtZ(t, joined.Document(), 0, r, -1, 2*half+2))
+	bored, err := decad.Cut(joined, circleBodyAtZ(t, joined.Document(), 0, r, -1, 2*half+2)).Do(t.Context())
 	require.NoError(t, err)
 	held := heldVolume(t, bored)
 	capsBefore, _ := capAreaTotal(t, bored)

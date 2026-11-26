@@ -73,7 +73,7 @@ func TestBossStandsOnTheWallOfABore(t *testing.T) {
 	const Ri, r, h = 5.0, 1.5, 3.0
 	doc := decad.New()
 	block := boxBody(t, doc, -20, -20, 20, 20, 10)
-	part, err := decad.Cut(t.Context(), block, circleBodyAtZ(t, doc, 0, Ri, -1, 12))
+	part, err := decad.Cut(block, circleBodyAtZ(t, doc, 0, Ri, -1, 12)).Do(t.Context())
 	require.NoError(t, err)
 	// The bore's wall looks toward the axis, so the boss grows from the wall into the bore.
 	out, err := decad.Boss(t.Context(), part, decad.BossSpec{

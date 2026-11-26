@@ -69,7 +69,7 @@ func TestDocumentRemoveTakesBodyOutOfTheModel(t *testing.T) {
 	require.Same(t, doc, intruder.Document(), `removal changes membership, not ownership`)
 
 	// ...and no operation takes it, so nothing returns it to the model.
-	_, err = decad.Union(t.Context(), keep, intruder)
+	_, err = decad.Union(keep, intruder).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrRetiredBody)
 	_, err = decad.Copy(t.Context(), intruder)
 	require.ErrorIs(t, err, decad.ErrRetiredBody)
@@ -137,7 +137,7 @@ func TestDocumentRemoveLeavesDerivedBodiesUnaffected(t *testing.T) {
 	instance, err := decad.Copy(t.Context(), source, decad.WithCopyPlacement(shift))
 	require.NoError(t, err)
 	partner := translated(t, boxBody(t, doc, 0, 0, 10, 10, 10), 35, 5, 5)
-	merged, err := decad.Union(t.Context(), instance, partner)
+	merged, err := decad.Union(instance, partner).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, []*decad.Body{source, merged}, doc.Bodies())
 
@@ -171,7 +171,7 @@ func TestDocumentRemoveLeavesDerivedBodiesUnaffected(t *testing.T) {
 
 	// The derived body is still an operand: removal touched only the source.
 	far := boxBody(t, doc, 100, 0, 110, 10, 10)
-	grown, err := decad.Union(t.Context(), merged, far)
+	grown, err := decad.Union(merged, far).Do(t.Context())
 	require.NoError(t, err)
 	grownVol, err := grown.Volume()
 	require.NoError(t, err)

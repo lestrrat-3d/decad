@@ -25,7 +25,7 @@ func housing(t *testing.T) *parts.Set {
 	t.Helper()
 	doc := decad.New()
 	cut := func(b *decad.Body, tool *decad.Body) *decad.Body {
-		out, err := decad.Cut(t.Context(), b, tool)
+		out, err := decad.Cut(b, tool).Do(t.Context())
 		require.NoError(t, err)
 		return out
 	}

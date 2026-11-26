@@ -74,11 +74,11 @@ func blendRun(ctx context.Context, t *testing.T, blend func(*Body) (*Body, error
 	cx, cy, r float64) (bored, blended, out *Body, err error) {
 	t.Helper()
 	sc := &blendScene{w: sketch.NewWorld(), doc: New()}
-	bored, err = Cut(ctx, sc.plate(ctx, t), sc.zTool(ctx, t, 20, 10, 4))
+	bored, err = Cut(sc.plate(ctx, t), sc.zTool(ctx, t, 20, 10, 4)).Do(ctx)
 	require.NoError(t, err)
 	blended, err = blend(bored)
 	require.NoError(t, err)
-	out, err = Cut(ctx, blended, sc.zTool(ctx, t, cx, cy, r))
+	out, err = Cut(blended, sc.zTool(ctx, t, cx, cy, r)).Do(ctx)
 	return bored, blended, out, err
 }
 

@@ -30,7 +30,7 @@ func twoBlocks(t *testing.T, gap float64, j parts.Joint) *parts.Set {
 func notched(t *testing.T, gap float64, j parts.Joint) *parts.Set {
 	t.Helper()
 	doc := decad.New()
-	ell, err := decad.Cut(t.Context(), block(t, doc, 0, 0, 10, 10, 0, 5), block(t, doc, 5, 5, 11, 11, -1, 7))
+	ell, err := decad.Cut(block(t, doc, 0, 0, 10, 10, 0, 5), block(t, doc, 5, 5, 11, 11, -1, 7)).Do(t.Context())
 	require.NoError(t, err)
 	s := parts.NewSet(doc)
 	mustAdd(t, s,

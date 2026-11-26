@@ -527,7 +527,7 @@ func verifyShot(ctx context.Context, chord units.Value) ([]solidlens.Model, erro
 	if err != nil {
 		return nil, err
 	}
-	housing, err := decad.Cut(ctx, plate, bore)
+	housing, err := decad.Cut(plate, bore).Do(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("bore the housing: %w", err)
 	}

@@ -44,7 +44,7 @@ func Example_boolean_errors() {
 		cubes = append(cubes, cube)
 	}
 
-	_, err = decad.Intersect(context.Background(), cubes[0], cubes[1])
+	_, err = decad.Intersect(cubes[0], cubes[1]).Do(context.Background())
 
 	// errors.As finds the typed error, and Code says which case it is.
 	var boolErr *decad.BooleanError

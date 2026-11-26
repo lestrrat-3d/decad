@@ -178,7 +178,7 @@ func TestMirroredCopyEveryPayload(t *testing.T) {
 			top, err := sc.w.CreateOffsetPlane(sc.w.XY(), 6)
 			require.NoError(t, err)
 			pocket := sc.box(t, top, 5, 5, 15, 15, mirrorAlong(4))
-			body, err := decad.Cut(t.Context(), plate, pocket)
+			body, err := decad.Cut(plate, pocket).Do(t.Context())
 			require.NoError(t, err)
 			return body
 		}},
@@ -195,7 +195,7 @@ func TestMirroredCopyEveryPayload(t *testing.T) {
 			// §2 M9: a 20 mm cube cross-drilled along y, which takes the mesh path.
 			plate := sc.box(t, sc.w.XY(), 0, 0, 20, 20, mirrorAlong(20))
 			drill := sc.cylinder(t, sc.w.XZ(), 10, 10, 3, decad.Symmetric{D: units.Millimeters(30)})
-			body, err := decad.Cut(t.Context(), plate, drill)
+			body, err := decad.Cut(plate, drill).Do(t.Context())
 			require.NoError(t, err)
 			return body
 		}},
@@ -404,7 +404,7 @@ func TestMirrorFaceResolvesAPlane(t *testing.T) {
 		plane, err := sc.w.CreatePlaneFromFrame(tilted)
 		require.NoError(t, err)
 		drill := sc.cylinder(t, plane, 0, 0, 3, decad.Symmetric{D: units.Millimeters(30)})
-		drilled, err := decad.Cut(t.Context(), plate, drill)
+		drilled, err := decad.Cut(plate, drill).Do(t.Context())
 		require.NoError(t, err)
 		// The mesh path keeps the plate's wall role on the flat face that
 		// descends from it, and while the body is unplaced its retained Plane

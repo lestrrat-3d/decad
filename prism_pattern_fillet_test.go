@@ -15,7 +15,7 @@ import (
 
 func TestPrismPatternFilletOfCopiedExtrudes(t *testing.T) {
 	doc, blank, section, rotated := prismPatternTabBodies(t, prismPatternInsetBlank)
-	joined, err := Union(t.Context(), blank, section, rotated)
+	joined, err := Union(blank, section, rotated).Do(t.Context())
 	require.NoError(t, err)
 	before, err := joined.Volume()
 	require.NoError(t, err)
@@ -35,7 +35,7 @@ func TestPrismPatternFilletOfCopiedExtrudes(t *testing.T) {
 
 func TestPrismPatternFilletAcrossCircularWallStations(t *testing.T) {
 	doc, blank, section, rotated := prismPatternTabBodies(t, prismPatternInsetBlank)
-	joined, err := Union(t.Context(), blank, section, rotated)
+	joined, err := Union(blank, section, rotated).Do(t.Context())
 	require.NoError(t, err)
 	selection := prismPatternRootSelection(t, joined)
 	edges, err := selection.SelectEdges(joined)
@@ -64,7 +64,7 @@ func TestPrismPatternFilletAcrossCircularWallStations(t *testing.T) {
 
 func TestPrismPatternFilletSectorBeyondRootDisk(t *testing.T) {
 	doc, blank, section, rotated := prismPatternNarrowTabBodies(t)
-	joined, err := Union(t.Context(), blank, section, rotated)
+	joined, err := Union(blank, section, rotated).Do(t.Context())
 	require.NoError(t, err)
 	// The old 3r disk reaches the fitted flank. The analytic arc and its
 	// connector cutback stay inside a narrower radial and angular envelope.
@@ -166,7 +166,7 @@ func TestPrismPatternFilletPastShortRadialLine(t *testing.T) {
 				tc.half, tc.inset, 2)
 			copies, err := PatternCopies(t.Context(), tooth, CircularPattern{Axis: r3.Vec{Z: 1}, Count: tc.teeth})
 			require.NoError(t, err)
-			joined, err := Union(t.Context(), blank, append([]*Body{tooth}, copies...)...)
+			joined, err := Union(append([]*Body{blank}, append([]*Body{tooth}, copies...)...)...).Do(t.Context())
 			require.NoError(t, err)
 			require.NotNil(t, joined.n.Payload.(facetedPayload).PrismPatternJoin, "the copied-prism route joins")
 			before, err := joined.Volume()
@@ -273,7 +273,7 @@ func prismPatternGearToothBodies(t *testing.T, teeth int, root, base, tip, half,
 
 func TestPrismPatternFilletRefusesUnprovedCornerAndLargeRadius(t *testing.T) {
 	doc, blank, section, rotated := prismPatternTabBodies(t, prismPatternInsetBlank)
-	joined, err := Union(t.Context(), blank, section, rotated)
+	joined, err := Union(blank, section, rotated).Do(t.Context())
 	require.NoError(t, err)
 	axial, err := Edges(ParallelTo(r3.Vec{Z: 1})).SelectEdges(joined)
 	require.NoError(t, err)
@@ -321,7 +321,7 @@ func rimToothFillet(t *testing.T, tc rimToothCase, height float64) (*Body, bool)
 	doc, blank, tooth := prismPatternGearToothBodies(t, tc.teeth, root, n/2*math.Cos(pressure), (n+2)/2, half, 0, height)
 	copies, err := PatternCopies(t.Context(), tooth, CircularPattern{Axis: r3.Vec{Z: 1}, Count: tc.teeth})
 	require.NoError(t, err)
-	joined, err := Union(t.Context(), blank, append([]*Body{tooth}, copies...)...)
+	joined, err := Union(append([]*Body{blank}, append([]*Body{tooth}, copies...)...)...).Do(t.Context())
 	require.NoError(t, err)
 	_, bySections := joined.n.Payload.(loftPayload)
 

@@ -36,7 +36,7 @@ func cavityCube(t *testing.T) *decad.Body {
 	require.NoError(t, err)
 	inner, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
-	part, err := decad.Cut(t.Context(), outer, inner)
+	part, err := decad.Cut(outer, inner).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, part.Shells(), 2)
 	return part
@@ -195,7 +195,7 @@ func TestNewSTEPFilePairsACavityWithItsOwnLump(t *testing.T) {
 		units.Millimeters(3), decad.WithNoOpenings())
 	require.NoError(t, err)
 	beside := decadtest.NewBlock(t, doc, 40, 0, 50, 10, units.Millimeters(10))
-	both, err := decad.Union(t.Context(), closed, beside)
+	both, err := decad.Union(closed, beside).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, both.Lumps(), 2)
 

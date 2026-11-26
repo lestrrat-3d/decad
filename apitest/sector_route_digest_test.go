@@ -136,7 +136,7 @@ func sectorDigestCopy(t *testing.T, body *decad.Body, degrees float64) *decad.Bo
 
 func sectorDigestUnion(t *testing.T, first *decad.Body, rest ...*decad.Body) *decad.Body {
 	t.Helper()
-	joined, err := decad.Union(t.Context(), first, rest...)
+	joined, err := decad.Union(append([]*decad.Body{first}, rest...)...).Do(t.Context())
 	require.NoError(t, err)
 	return joined
 }
@@ -177,7 +177,7 @@ func sectorDigestCylinderCut(t *testing.T, radius float64, copies int) []*decad.
 		joined = sectorDigestUnion(t, hub, lug)
 	}
 	tool := revolveSectorCylinderTool(t, doc, radius, 4, 6, 0)
-	cut, err := decad.Cut(t.Context(), joined, tool)
+	cut, err := decad.Cut(joined, tool).Do(t.Context())
 	require.NoError(t, err)
 	return []*decad.Body{cut}
 }
@@ -188,16 +188,16 @@ func sectorDigestPointCone(t *testing.T, apex float64, cut, ordered bool) []*dec
 	tooth := pointConeTooth(t, doc)
 	if ordered {
 		var err error
-		tooth, err = decad.Cut(t.Context(), tooth, pointConeTool(t, doc, 5))
+		tooth, err = decad.Cut(tooth, pointConeTool(t, doc, 5)).Do(t.Context())
 		require.NoError(t, err)
 	}
 	tool := pointConeTool(t, doc, apex)
 	var got *decad.Body
 	var err error
 	if cut {
-		got, err = decad.Cut(t.Context(), tooth, tool)
+		got, err = decad.Cut(tooth, tool).Do(t.Context())
 	} else {
-		got, err = decad.Intersect(t.Context(), tooth, tool)
+		got, err = decad.Intersect(tooth, tool).Do(t.Context())
 	}
 	require.NoError(t, err)
 	return []*decad.Body{got}
@@ -310,12 +310,12 @@ func TestSectorRouteDigestBevel(t *testing.T) {
 	}
 	runSectorDigest(t, "bevel", []sectorDigestFixture{
 		{"BevelBlankAndEmbeddedRootTeeth", func(t *testing.T) []*decad.Body {
-			_, joined, err := bevel32.join(t, 3)
+			_, joined, err := bevel32.join(t, 3, false)
 			require.NoError(t, err)
 			return []*decad.Body{joined}
 		}},
 		{"BevelTipTouchingHeelConeMatchingFaces", func(t *testing.T) []*decad.Body {
-			_, joined, err := bevel16.join(t, 2, decad.WithMatchingFaces())
+			_, joined, err := bevel16.join(t, 2, true)
 			require.NoError(t, err)
 			return []*decad.Body{joined}
 		}},
@@ -348,7 +348,7 @@ func TestSectorRouteDigestPointCone(t *testing.T) {
 		{"PointConeNormalAndCopyPlacement", func(t *testing.T) []*decad.Body {
 			doc := decad.New()
 			tooth := pointConeTooth(t, doc)
-			cut, err := decad.Cut(t.Context(), tooth, pointConeTool(t, doc, 5))
+			cut, err := decad.Cut(tooth, pointConeTool(t, doc, 5)).Do(t.Context())
 			require.NoError(t, err)
 			move, err := r3.Translation(r3.NewVec(1, 2, 3))
 			require.NoError(t, err)

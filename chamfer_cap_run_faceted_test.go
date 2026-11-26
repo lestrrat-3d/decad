@@ -83,7 +83,7 @@ func (k keyhole) facetedBodyIn(t *testing.T, slotFirst bool) (*decad.Body, *deca
 	out := plate
 	for _, tool := range tools {
 		var err error
-		out, err = decad.Cut(t.Context(), out, tool)
+		out, err = decad.Cut(out, tool).Do(t.Context())
 		require.NoError(t, err)
 	}
 	return out, doc
@@ -173,7 +173,7 @@ func TestChamferKeyholeRimRunThenCut(t *testing.T) {
 	body, doc := k.facetedBodyIn(t, true)
 	out, err := decad.Chamfer(t.Context(), body, k.rimOf(t, body), units.Millimeters(d))
 	require.NoError(t, err)
-	cut, err := decad.Cut(t.Context(), out, box(t, doc, [3]float64{-3, -6, -1}, [3]float64{3, -5, 6}))
+	cut, err := decad.Cut(out, box(t, doc, [3]float64{-3, -6, -1}, [3]float64{3, -5, 6})).Do(t.Context())
 	require.NoError(t, err)
 	mc, err := cut.Volume()
 	require.NoError(t, err)
@@ -204,9 +204,9 @@ func TestChamferKeyholeRimRunRefusesAnotherFaceInReach(t *testing.T) {
 			body, doc := k.facetedBodyIn(t, true)
 			var err error
 			if tool.union {
-				body, err = decad.Union(t.Context(), body, box(t, doc, tool.lo, tool.hi))
+				body, err = decad.Union(body, box(t, doc, tool.lo, tool.hi)).Do(t.Context())
 			} else {
-				body, err = decad.Cut(t.Context(), body, box(t, doc, tool.lo, tool.hi))
+				body, err = decad.Cut(body, box(t, doc, tool.lo, tool.hi)).Do(t.Context())
 			}
 			require.NoError(t, err)
 			_, err = decad.Chamfer(t.Context(), body, k.rimOf(t, body), units.Millimeters(0.5))

@@ -58,7 +58,7 @@ func Example_containers() {
 	}
 
 	// The two bodies sit in different containers, so a cut refuses.
-	if _, err := decad.Cut(ctx, plate, pin); err != nil {
+	if _, err := decad.Cut(plate, pin).Do(ctx); err != nil {
 		fmt.Println("cut across containers refuses:", err)
 	}
 
@@ -67,7 +67,7 @@ func Example_containers() {
 		fmt.Printf("failed to add:%s\n", err)
 		return
 	}
-	cut, err := decad.Cut(ctx, plate, pin)
+	cut, err := decad.Cut(plate, pin).Do(ctx)
 	if err != nil {
 		fmt.Printf("failed to cut: %s\n", err)
 		return

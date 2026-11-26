@@ -54,6 +54,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `reader_install.go` | Installs the readers behind `internal/facedeparture` (step-export design) and `decadtest.PayloadClass` (faceted-source-retention §10). |
 | `_gallery/` | Nested module for README images, landing and linkage clips, dynamics scenes; excludes SolidLens. See `main.go`. |
 | `_shardgen/` | Nested module packing root and `apitest` tests into race shards. See `main.go`. |
+| `_cmdrewrite/` | Nested module rewriting call sites of function-plus-options operations to the command form (`agent-docs/command-api-design.md` §14). Stdlib only. See `main.go`. |
 | `_proofs/` | Nested Lake project and Go module: Lean proofs, `trace.json`, trace checker. See `agent-docs/proofs-design.md`. |
 | `.github/workflows/proofs.yml` | Path-filtered Lean build, axiom audit and trace check. See `agent-docs/proofs-design.md`. |
 | `.github/workflows/` | `ci.yml`: lint, tests, tidy, vulnerability; `docs.yml`: daily regeneration of `docs/reference/`, committed to the default branch; `focused-go-test.yml`: capped named test; `refresh-gallery-images.yml`: image refresh branches; `codeql.yml`: CodeQL; `test-shards*.txt`: race shards. |

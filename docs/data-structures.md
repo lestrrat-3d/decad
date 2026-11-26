@@ -301,6 +301,18 @@ configuration option.
 | `decad.SweepDeparture` | struct | Certified separation after an initial touch. | `SweepReport` |
 | `decad.SweptBox` | struct | A box enclosing every point a body occupies along a path. | `Document.SweptBox` |
 
+### Commands
+
+A command is built by a package function, configured by chained methods and run once by `Do(ctx)`. A second `Do`
+returns `decad.ErrConsumed`.
+
+| Type | Kind | Holds | Obtained from |
+|---|---|---|---|
+| `decad.UnionCommand` | struct | The bodies to join and the optional refinement bound set by `UnionCommand.RefineTo`. `Do` returns `*decad.Body`. | `decad.Union` |
+| `decad.CutCommand` | struct | The target, the tool and the `CutCommand.MatchingFaces` declaration. `Do` returns `*decad.Body`. | `decad.Cut` |
+| `decad.IntersectCommand` | struct | The two operands and the `IntersectCommand.MatchingFaces` declaration. `Do` returns `*decad.Body`. | `decad.Intersect` |
+| `decad.RefineCommand` | struct | The source body and the refinement bound. `Do` returns `*decad.Body`. | `decad.Refine` |
+
 ### Options
 
 Option types configure one feature each. The `With...` constructors in [Building bodies](api.md#building-bodies) and the
@@ -319,7 +331,6 @@ other sections return them.
 | `decad.DraftOption` | `decad.Draft` |
 | `decad.OffsetOption`, `decad.ThickenOption` | `decad.Offset`, `decad.Thicken` |
 | `decad.RibOption` | `decad.WebPath` |
-| `decad.BooleanOption` | `decad.Cut`, `decad.Intersect` |
 | `decad.CopyOption`, `decad.MirrorOption` | `decad.Copy`, `decad.Mirrored` |
 | `decad.SurfaceResultOption` | Every feature that `decad.WithSurfaceResult` reaches. |
 | `decad.TessellateOption` | `Body.Tessellate` |

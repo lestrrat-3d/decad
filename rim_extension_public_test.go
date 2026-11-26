@@ -47,13 +47,13 @@ func TestChamferStraightRunAtCircularSupport(t *testing.T) {
 	plate, err := Extrude(ctx, doc, flange, solve(flange), Distance{D: units.Millimeters(1), Dir: Against})
 	require.NoError(t, err)
 	// A transverse web makes the input a mesh Boolean, as required by this operation.
-	plate, err = Union(ctx, plate, internalBoxBodyAtZ(t, doc, -7.5, .75, -6.5, 2, -.5, 1))
+	plate, err = Union(plate, internalBoxBodyAtZ(t, doc, -7.5, .75, -6.5, 2, -.5, 1)).Do(ctx)
 	require.NoError(t, err)
 	disk := section(-1)
 	disk.AddConstraint(sketch.NewRadius(disk.CreateCircle(disk.Origin(), 5), 5))
 	boss, err := Extrude(ctx, doc, disk, solve(disk), Distance{D: units.Millimeters(1.75), Dir: Against})
 	require.NoError(t, err)
-	stock, err := Union(ctx, plate, boss)
+	stock, err := Union(plate, boss).Do(ctx)
 	require.NoError(t, err)
 	var ss [2]*sketch.Sketch
 	var pp [2]*sketch.Profile
@@ -67,7 +67,7 @@ func TestChamferStraightRunAtCircularSupport(t *testing.T) {
 	}
 	tool, err := Loft(ctx, doc, ss[0], pp[0], ss[1], pp[1])
 	require.NoError(t, err)
-	cut, err := Cut(ctx, stock, tool)
+	cut, err := Cut(stock, tool).Do(ctx)
 	require.NoError(t, err)
 	sel := Edges(EndpointAt(r3.Vec{X: -4.25, Z: 3.0625}), EndpointAt(r3.Vec{X: -3, Z: 4})).Exactly(1)
 	_, err = Chamfer(ctx, cut, sel, units.Millimeters(.05))

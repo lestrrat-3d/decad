@@ -55,7 +55,7 @@ func TestBooleanGapTolerance(t *testing.T) {
 	t.Run("a Union of boxes touching face on face is one body", func(t *testing.T) {
 		t.Parallel()
 		a, b := touching()
-		joined, err := decad.Union(t.Context(), a, b)
+		joined, err := decad.Union(a, b).Do(t.Context())
 		require.NoError(t, err)
 		require.Len(t, joined.Lumps(), 1)
 		requireVolumeWithin(t, joined, 2000)
@@ -84,7 +84,7 @@ func TestBooleanGapTolerance(t *testing.T) {
 	t.Run("a Cut of a box touching the target leaves the target", func(t *testing.T) {
 		t.Parallel()
 		a, b := touching()
-		cut, err := decad.Cut(t.Context(), a, b)
+		cut, err := decad.Cut(a, b).Do(t.Context())
 		require.NoError(t, err)
 		requireVolumeWithin(t, cut, 1000)
 	})
@@ -96,7 +96,7 @@ func TestBooleanGapTolerance(t *testing.T) {
 		a, b := gapBoxes(t, 0.5, 2, 10, 10, 10, 10)
 		doc := a.Document()
 		before := doc.OperationHistory().Operations()
-		common, err := decad.Intersect(t.Context(), a, b)
+		common, err := decad.Intersect(a, b).Do(t.Context())
 		require.Nil(t, common)
 		wrapped := fmt.Errorf("checking the common volume: %w", err)
 		require.ErrorIs(t, wrapped, decad.ErrBooleanFailed)
@@ -152,7 +152,7 @@ func TestBooleanGapTolerance(t *testing.T) {
 	t.Run("a Cut with a tool flush with the wall opens the pocket", func(t *testing.T) {
 		t.Parallel()
 		a, b := flush()
-		cut, err := decad.Cut(t.Context(), a, b)
+		cut, err := decad.Cut(a, b).Do(t.Context())
 		require.NoError(t, err)
 		require.Len(t, cut.Lumps(), 1)
 		requireVolumeWithin(t, cut, 1000-180)
@@ -161,7 +161,7 @@ func TestBooleanGapTolerance(t *testing.T) {
 	t.Run("an Intersect with a block flush with the wall is the block", func(t *testing.T) {
 		t.Parallel()
 		a, b := flush()
-		common, err := decad.Intersect(t.Context(), a, b)
+		common, err := decad.Intersect(a, b).Do(t.Context())
 		require.NoError(t, err)
 		requireVolumeWithin(t, common, 180)
 	})
@@ -169,7 +169,7 @@ func TestBooleanGapTolerance(t *testing.T) {
 	t.Run("a Union with a block flush with the wall is the box", func(t *testing.T) {
 		t.Parallel()
 		a, b := flush()
-		joined, err := decad.Union(t.Context(), a, b)
+		joined, err := decad.Union(a, b).Do(t.Context())
 		require.NoError(t, err)
 		requireVolumeWithin(t, joined, 1000)
 	})
@@ -177,12 +177,12 @@ func TestBooleanGapTolerance(t *testing.T) {
 	t.Run("a smaller tolerance gives a tighter bound", func(t *testing.T) {
 		t.Parallel()
 		a, b := touching()
-		wide, err := decad.Union(t.Context(), a, b)
+		wide, err := decad.Union(a, b).Do(t.Context())
 		require.NoError(t, err)
 		wideVol := requireVolumeWithin(t, wide, 2000)
 
 		a, b = touching(decad.WithGapTolerance(units.Millimeters(0.0005)))
-		narrow, err := decad.Union(t.Context(), a, b)
+		narrow, err := decad.Union(a, b).Do(t.Context())
 		require.NoError(t, err)
 		narrowVol := requireVolumeWithin(t, narrow, 2000)
 		require.Less(t, narrowVol.Bound.Base(), wideVol.Bound.Base())
@@ -191,11 +191,11 @@ func TestBooleanGapTolerance(t *testing.T) {
 	t.Run("ExactOnly refuses the coplanar contact", func(t *testing.T) {
 		t.Parallel()
 		a, b := touching(decad.ExactOnly())
-		_, err := decad.Union(t.Context(), a, b)
+		_, err := decad.Union(a, b).Do(t.Context())
 		requireRoundedContactRefusal(t, err)
 
 		a, b = touching(decad.WithGapTolerance(units.Millimeters(0)))
-		_, err = decad.Cut(t.Context(), a, b)
+		_, err = decad.Cut(a, b).Do(t.Context())
 		requireRoundedContactRefusal(t, err)
 	})
 
@@ -206,7 +206,7 @@ func TestBooleanGapTolerance(t *testing.T) {
 		doc := decad.New()
 		a := boxBody(t, doc, 0, 0, 10, 10, 10)
 		slot := translated(t, roundTrip(t, boxBody(t, doc, 0, 0, 4, 10, 4)), 3, 0, 6)
-		out, err := decad.Cut(t.Context(), a, slot)
+		out, err := decad.Cut(a, slot).Do(t.Context())
 		require.NoError(t, err)
 		volume, err := out.Volume()
 		require.NoError(t, err)
@@ -219,7 +219,7 @@ func TestBooleanGapTolerance(t *testing.T) {
 		doc := decad.New(decad.ExactOnly())
 		a := boxBody(t, doc, 0, 0, 10, 10, 10)
 		slot := translated(t, roundTrip(t, boxBody(t, doc, 0, 0, 4, 10, 4)), 3, 0, 6)
-		_, err := decad.Cut(t.Context(), a, slot)
+		_, err := decad.Cut(a, slot).Do(t.Context())
 		requireRoundedContactRefusal(t, err)
 		require.Len(t, doc.Bodies(), 2, "a refusal leaves the operands live")
 	})
@@ -233,7 +233,7 @@ func TestBooleanGapToleranceStaysExactForCurvedContact(t *testing.T) {
 	doc := decad.New(decad.ExactOnly())
 	plate := boxBody(t, doc, 0, 0, 20, 20, 8)
 	cyl := diskBody(t, doc, 30, 10, 10)
-	_, err := decad.Union(t.Context(), plate, cyl)
+	_, err := decad.Union(plate, cyl).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 }
 
@@ -248,10 +248,10 @@ func TestBooleanGapToleranceStaysExactForCurvedContact(t *testing.T) {
 func TestBooleanGapToleranceRestingBossJoinsPlate(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
-	plate, err := decad.Union(t.Context(), boxBody(t, doc, 0, 0, 100, 60, 10), circlePrismAtZ(t, doc, 20, 30, 6, 10, 4))
+	plate, err := decad.Union(boxBody(t, doc, 0, 0, 100, 60, 10), circlePrismAtZ(t, doc, 20, 30, 6, 10, 4)).Do(t.Context())
 	require.NoError(t, err)
 	boss := translated(t, circlePrismAtZ(t, doc, 20, 30, 6, 10, 8), 30, 0, 0)
-	joined, err := decad.Union(t.Context(), plate, boss)
+	joined, err := decad.Union(plate, boss).Do(t.Context())
 	require.NoError(t, err)
 	require.True(t, joined.IsSolid())
 	require.Len(t, joined.Lumps(), 1, "the boss rests on the plate, so the union is one piece")
@@ -325,14 +325,14 @@ func TestBooleanGapToleranceEdgeAndPointTouches(t *testing.T) {
 			t.Parallel()
 			doc := decad.New()
 			a, b := tc.make(doc)
-			joined, err := decad.Union(t.Context(), a, b)
+			joined, err := decad.Union(a, b).Do(t.Context())
 			require.NoError(t, err)
 			require.Len(t, joined.Lumps(), 1)
 			requireVolumeWithin(t, joined, tc.union)
 
 			doc = decad.New()
 			a, b = tc.make(doc)
-			cut, err := decad.Cut(t.Context(), a, b)
+			cut, err := decad.Cut(a, b).Do(t.Context())
 			require.NoError(t, err)
 			if tc.cutExact {
 				// A shared corner of exact boxes leaves the target untouched, so its
@@ -348,7 +348,7 @@ func TestBooleanGapToleranceEdgeAndPointTouches(t *testing.T) {
 
 			doc = decad.New()
 			a, b = tc.make(doc)
-			common, err := decad.Intersect(t.Context(), a, b)
+			common, err := decad.Intersect(a, b).Do(t.Context())
 			if tc.empty {
 				require.ErrorIs(t, err, decad.ErrBooleanFailed)
 				return
@@ -361,7 +361,7 @@ func TestBooleanGapToleranceEdgeAndPointTouches(t *testing.T) {
 			t.Parallel()
 			doc := decad.New(decad.ExactOnly())
 			a, b := tc.make(doc)
-			_, err := decad.Union(t.Context(), a, b)
+			_, err := decad.Union(a, b).Do(t.Context())
 			require.ErrorIs(t, err, decad.ErrUnsupported)
 			var be *decad.BooleanError
 			require.ErrorAs(t, err, &be)

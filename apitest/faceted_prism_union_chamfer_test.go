@@ -19,7 +19,7 @@ func TestFacetedPrismUnionUntouchedOuterEdgeChamfer(t *testing.T) {
 	require.NoError(t, err)
 	lug, err = decad.Transform(t.Context(), lug, turn)
 	require.NoError(t, err)
-	joined, err := decad.Union(t.Context(), base, lug)
+	joined, err := decad.Union(base, lug).Do(t.Context())
 	require.NoError(t, err)
 	selector := decad.Edges(
 		decad.EndpointAt(r3.Vec{X: -10, Y: -10, Z: 0}),
@@ -51,7 +51,7 @@ func TestFacetedPrismUnionChamferReversedSources(t *testing.T) {
 	require.NoError(t, err)
 	lug, err = decad.Transform(t.Context(), lug, turn)
 	require.NoError(t, err)
-	joined, err := decad.Union(t.Context(), lug, base)
+	joined, err := decad.Union(lug, base).Do(t.Context())
 	require.NoError(t, err)
 	selector := decad.Edges(
 		decad.EndpointAt(r3.Vec{X: -10, Y: 10, Z: 0}),
@@ -80,7 +80,7 @@ func TestFacetedPrismUnionChamferRefusesToolInCornerBand(t *testing.T) {
 	require.NoError(t, err)
 	tool, err = decad.Transform(t.Context(), tool, turn)
 	require.NoError(t, err)
-	joined, err := decad.Union(t.Context(), base, tool)
+	joined, err := decad.Union(base, tool).Do(t.Context())
 	require.NoError(t, err)
 	selector := decad.Edges(
 		decad.EndpointAt(r3.Vec{X: -10, Y: -10, Z: 0}),
@@ -100,7 +100,7 @@ func TestFacetedPrismUnionChamferOfPlacedUnionTakesTheRetainedRoute(t *testing.T
 	require.NoError(t, err)
 	lug, err = decad.Transform(t.Context(), lug, turn)
 	require.NoError(t, err)
-	joined, err := decad.Union(t.Context(), base, lug)
+	joined, err := decad.Union(base, lug).Do(t.Context())
 	require.NoError(t, err)
 	move, err := r3.Translation(r3.Vec{Z: 1})
 	require.NoError(t, err)
@@ -133,7 +133,7 @@ func TestFacetedPrismUnionChamferOfEdgeBesideFarLugBuilds(t *testing.T) {
 	require.NoError(t, err)
 	lug, err = decad.Transform(t.Context(), lug, turn)
 	require.NoError(t, err)
-	joined, err := decad.Union(t.Context(), base, lug)
+	joined, err := decad.Union(base, lug).Do(t.Context())
 	require.NoError(t, err)
 	selector := decad.Edges(
 		decad.EndpointAt(r3.Vec{X: -10, Y: -10, Z: 0}),

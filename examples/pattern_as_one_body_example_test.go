@@ -66,7 +66,7 @@ func Example_pattern_as_one_body() {
 	}
 
 	// One Cut drills all six holes.
-	drilled, err := decad.Cut(context.Background(), plate, pins)
+	drilled, err := decad.Cut(plate, pins).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to cut: %s\n", err)
 		return

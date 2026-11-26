@@ -326,9 +326,9 @@ func TestFacetedRetainedBlendChain(t *testing.T) {
 		// lies between the sharp edge and the fillet's arc, and the rest of the
 		// cavity lies in the material below it.
 		sc := newRetentionScene()
-		drilled, err := decad.Cut(t.Context(), sc.roundedBox(t), sc.tool(t, 20))
+		drilled, err := decad.Cut(sc.roundedBox(t), sc.tool(t, 20)).Do(t.Context())
 		require.NoError(t, err)
-		cavity, err := decad.Cut(t.Context(), drilled, placed(t, rectBox(t, sc.w, sc.doc, 15, 0.25, 17, 1.25, 1), 18.75))
+		cavity, err := decad.Cut(drilled, placed(t, rectBox(t, sc.w, sc.doc, 15, 0.25, 17, 1.25, 1), 18.75)).Do(t.Context())
 		require.NoError(t, err)
 		_, err = decad.Fillet(t.Context(), cavity, topFront(), units.Millimeters(1), decad.WithTangentChain())
 		require.ErrorIs(t, err, decad.ErrUnsupported)

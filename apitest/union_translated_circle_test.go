@@ -21,7 +21,7 @@ func TestUnionTranslatedEqualCirclePrisms(t *testing.T) {
 	b, err = decad.Transform(ctx, b, shift)
 	require.NoError(t, err)
 	before := len(doc.OperationHistory().Operations())
-	result, err := decad.Union(ctx, a, b)
+	result, err := decad.Union(a, b).Do(ctx)
 	require.NoError(t, err)
 	require.Empty(t, result.OperationDiagnostics())
 	for _, face := range result.Faces() {

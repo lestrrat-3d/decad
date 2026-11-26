@@ -277,7 +277,7 @@ func chainBored(t *testing.T, doc *decad.Document, tube *decad.Body) *decad.Body
 	body := tube
 	for i, c := range chainBoreSpecs() {
 		var err error
-		body, err = decad.Cut(t.Context(), body, chainBoreTool(t, doc, c))
+		body, err = decad.Cut(body, chainBoreTool(t, doc, c)).Do(t.Context())
 		require.NoError(t, err, "bore cut %d", i)
 		require.True(t, body.IsSolid(), "bore cut %d", i)
 	}
@@ -320,7 +320,7 @@ func TestCutChainedTwistedBoresAndWindows(t *testing.T) {
 	body := chainBored(t, doc, tube)
 	windows := 0.0
 	for i, turn := range []float64{0, 180} {
-		body, err = decad.Cut(t.Context(), body, chainWindow(t, doc, chainWindowSection, turn))
+		body, err = decad.Cut(body, chainWindow(t, doc, chainWindowSection, turn)).Do(t.Context())
 		require.NoError(t, err, "window cut %d", i)
 		require.True(t, body.IsSolid(), "window cut %d", i)
 		windows += chainWindowVolume(chainWindowSection, turn)
@@ -346,7 +346,7 @@ func TestCutChainedWindowOnBoreRims(t *testing.T) {
 
 	doc := decad.New()
 	bored := chainBored(t, doc, chainTube(t, doc))
-	_, err := decad.Cut(t.Context(), bored, chainWindow(t, doc, chainWideWindowSection, 0))
+	_, err := decad.Cut(bored, chainWindow(t, doc, chainWideWindowSection, 0)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.ErrorContains(t, err, "holds its mesh")
 
@@ -354,7 +354,7 @@ func TestCutChainedWindowOnBoreRims(t *testing.T) {
 	tube := chainTube(t, doc)
 	tubeVolume, err := tube.Volume()
 	require.NoError(t, err)
-	body, err := decad.Cut(t.Context(), chainBored(t, doc, tube), chainWindow(t, doc, chainWideWindowSection, 0))
+	body, err := decad.Cut(chainBored(t, doc, tube), chainWindow(t, doc, chainWideWindowSection, 0)).Do(t.Context())
 	require.NoError(t, err)
 	require.True(t, body.IsSolid())
 	chainRequireVolume(t, body, tubeVolume, windowVolume)
