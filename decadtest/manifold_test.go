@@ -57,7 +57,7 @@ func TestIsManifoldAcceptsHolePlate(t *testing.T) {
 	require.NotNil(t, prof)
 
 	doc := decad.New()
-	body, err := decad.Extrude(t.Context(), doc, s, prof, decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, prof, decad.Distance{D: units.Millimeters(8), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 
 	var wall *decad.Face
@@ -89,7 +89,7 @@ func TestIsManifoldAcceptsTorus(t *testing.T) {
 	require.NoError(t, err)
 
 	doc := decad.New()
-	body, err := decad.Revolve(t.Context(), doc, s, s.Profiles()[0], manifoldUAxis, decad.FullRevolution{})
+	body, err := decad.Revolve(doc, s, s.Profiles()[0], manifoldUAxis, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 
 	require.Len(t, body.Faces(), 1)

@@ -30,8 +30,8 @@ func Example_arrange() {
 			fmt.Printf("failed to solve: %s\n", err)
 			return
 		}
-		part, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
-			decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+		part, err := decad.Extrude(doc, s, s.Profiles()[0],
+			decad.Distance{D: units.Millimeters(5), Dir: decad.Along}).Do(context.Background())
 		if err != nil {
 			fmt.Printf("failed to extrude: %s\n", err)
 			return
@@ -84,8 +84,8 @@ func Example_arrange_turns() {
 			fmt.Printf("failed to solve: %s\n", err)
 			return
 		}
-		bar, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
-			decad.Distance{D: units.Millimeters(3), Dir: decad.Along})
+		bar, err := decad.Extrude(doc, s, s.Profiles()[0],
+			decad.Distance{D: units.Millimeters(3), Dir: decad.Along}).Do(context.Background())
 		if err != nil {
 			fmt.Printf("failed to extrude: %s\n", err)
 			return
@@ -134,8 +134,8 @@ func Example_arrange_angle() {
 		fmt.Printf("failed to solve: %s\n", err)
 		return
 	}
-	bar, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(3), Dir: decad.Along})
+	bar, err := decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(3), Dir: decad.Along}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return
@@ -189,8 +189,8 @@ func Example_arrange_layers() {
 			fmt.Printf("failed to solve: %s\n", err)
 			return
 		}
-		part, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
-			decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
+		part, err := decad.Extrude(doc, s, s.Profiles()[0],
+			decad.Distance{D: units.Millimeters(height), Dir: decad.Along}).Do(context.Background())
 		if err != nil {
 			fmt.Printf("failed to extrude: %s\n", err)
 			return

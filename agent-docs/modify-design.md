@@ -28,7 +28,7 @@ mean the same part. The parts keep their own section numbers.
 | Part M | Retained modify reach | `retained-modify-reach` | Modify and placement reach on retained mesh Boolean results |
 | Part O | Shell opening | `shell-opening` | Shell side openings on a prism and a revolve; Tables RO/SO/BO/DO |
 | Part S | Shell variants | `shell-variants` | `Shell` of a faceted body with bosses and of a twisted sweep |
-| Part D | Draft | `draft` | `WithTaper` and `Draft`: the sharp offset family; Tables RD/SD/BD/DD |
+| Part D | Draft | `draft` | `Taper` and `Draft`: the sharp offset family; Tables RD/SD/BD/DD |
 | Part T | Tangent side notch | `tangent-notch` | Blind side-notch `Cut` meeting the outer wall tangentially, and its floor-arc fillet |
 | Part X | Perpendicular cylinder bore-mouth chamfer | `cross-cylinder-bore-chamfer` | Source-backed perpendicular cylinder bore-mouth chamfer and mesh proof |
 
@@ -11234,7 +11234,7 @@ and within 1e-8 mm³ of it, and a mesh bound within 1e-8 mm of its mesh bound.
 ## Part D — Draft
 
 How decad builds a drafted body: a tapered extrude (`Extrude` with a nonzero
-`WithTaper`) and a face draft of an existing prism (`Draft`). Both
+`Taper`) and a face draft of an existing prism (`Draft`). Both
 produce a `draftPayload` for one-sided extents or a `twoSidedDraftPayload`
 for extents that cross the sketch plane. Their walls lean at a stated angle
 to the sweep axis so that a molded part releases along that axis.
@@ -11261,7 +11261,7 @@ Question router (navigation, not authority):
 |---|---|
 | What is a draft, and which offset family defines it | §1, §2 |
 | Why the far section is decad's own geometry, not a `sketch` answer | §3 |
-| What `WithTaper` admits | §4 Table RD |
+| What `Taper` admits | §4 Table RD |
 | What `Draft` admits, and its signature | §4, §10 |
 | Why a call refused, and in which order the gates run | §5 Table SD |
 | What faces, edges and roles come out | §6 Table BD |
@@ -11313,7 +11313,7 @@ sewn rim, not an internal cap.
 
 **The sign.** A positive `α` narrows the body with distance from the sketch
 plane: every wall's carrier moves `t(z)` into the material. A negative `α`
-widens it. `WithTaper` keeps its existing meaning (core §12: a signed
+widens it. `Taper` keeps its existing meaning (core §12: a signed
 displacement, outside `ErrNegativeMagnitude`), and `Draft` (§10) reads
 its angle the same way about its neutral plane.
 
@@ -11389,7 +11389,7 @@ file is written.
 
 | RD | Entry point | Admits | Result |
 |---|---|---|---|
-| **RD1** | `Extrude` with nonzero `WithTaper` | analytic walks with G1 circular joins; `Distance`, `ToFace`, `ThroughAll`, `Symmetric` or `TwoSided`; `|α| < 90°`; no `WithSurfaceResult` | a one- or two-slab draft solid (Table BD) |
+| **RD1** | `Extrude` with nonzero `Taper` | analytic walks with G1 circular joins; `Distance`, `ToFace`, `ThroughAll`, `Symmetric` or `TwoSided`; `|α| < 90°`; no `SurfaceResult` | a one- or two-slab draft solid (Table BD) |
 | **RD2** | `Draft` | a live `prismPayload` operand (an extrude, a filleted or chamfered body, a tube, or any of these after `Transform`) whose section carries no displacement; a `NeutralFace` naming one cap of the operand; a selection resolving to exactly the operand's complete wall set; `0 < |α| < 90°` | a `draftPayload` solid over the operand's section, the operand retired |
 | **RD3** | `Draft` | as RD2 with a selection naming a **subset** of the walls, where every corner between a selected and an unselected wall is a line–line corner | a `draftPayload` whose far section moves the selected walls only (§10.2) |
 
@@ -11413,7 +11413,7 @@ any evaluator?) and the sentinel that follows from it.
 | **SD9** | far loops whose nesting the containment classifier cannot decide (modify S9) | undecidable here | `ErrUnsupported` |
 | **SD10** | a far section that passes every audit at the held `d` and fails at the top of `d`'s span (§8.1; modify-reach §8.3.1's second audit) | undecidable here | `ErrUnsupported` |
 | **SD11** | not used: `Symmetric` and `TwoSided` build one draft slab per side (BD4) | — | — |
-| **SD12** | a nonzero taper with `WithSurfaceResult` | yes | `ErrUnsupported` (staged, §14) |
+| **SD12** | a nonzero taper with `SurfaceResult` | yes | `ErrUnsupported` (staged, §14) |
 | **SD13** | a `d` that rounds to zero, a far vertex bit-identical to its near vertex, or a far radius bit-identical to its near radius (`capband.BandRadius`) | yes — float64 cannot name the far section at this scale | `ErrUnsupported` (modify-reach SX13) |
 | **SD14** | a far corner whose displacement enclosure cannot be built (`offset2d.ErrUnbounded`) | yes | `ErrUnsupported` (SX14) |
 | **SD15** | a corner whose two moved carriers have no intersection — a cusp (`|cross| ≤ tol`, `dot ≤ 0`) between two lines | yes | `ErrUnsupported` (`offset2d.ErrTopology`, modify S11's row) |
@@ -11436,7 +11436,7 @@ between two lines, and a cusp at a circular walk is SD4 first, so Extrude never
 reaches SD15; `internal/offset2d/sharp_test.go` pins it.
 
 **A chain section never reaches this build.** `Extrude` over an open
-`*sketch.Chain` returns `ErrUnsupported` for `WithTaper` at any angle, zero
+`*sketch.Chain` returns `ErrUnsupported` for `Taper` at any angle, zero
 included, after the chain's seam gates and before extent resolution
 (`agent-docs/surface-design.md` §13.2), so none of Table SD applies to a chain.
 `Extrude` threads its `ctx` through the extent resolution and both slab builds
@@ -12007,7 +12007,7 @@ func Walls(b *Body) FacePredicate
 `sel` against the live operand, returns a new body and retires the operand,
 and leaves the document unchanged on any error, including `ctx.Err()`.
 `angle` is a signed `units.Value` of `Kind` Angle (core §12 lists it with
-`ToFace.Offset` and `WithTaper` as the signed displacements outside
+`ToFace.Offset` and `Taper` as the signed displacements outside
 `ErrNegativeMagnitude`); a positive angle narrows the body with distance from
 the neutral plane. `DraftCommand` has no method.
 
@@ -12038,7 +12038,7 @@ complete wall set is the operand's faces carrying such a role, fillet and
 chamfer rounds included.
 
 The body `Draft` builds equals the body `Extrude` would build from the same
-sketch with `WithTaper(angle)` and a `Distance` extent toward the far end,
+sketch with `Taper(angle)` and a `Distance` extent toward the far end,
 bit for bit when the operand is unplaced. §11 asserts it.
 
 #### 10.2 The subset case (RD3)
@@ -12440,7 +12440,7 @@ the function doc comments, and the layout rows of the root files.
 
 | Increment | Provides | Files | Pinned by | Builds on |
 |---|---|---|---|---|
-| **1** | `Extrude` + `WithTaper` over Table RD1: `offset2d.BuildSharpLoop`; `draftPayload` with `Transform`/`Placed`; the build (§7); the measurement (§8 over `internal/capband`); `d` and its span (§8.1) with a certified tangent in `internal/proofbound`; `extrude.go` dispatches a nonzero taper to the draft build and refuses SD11/SD12; DD6's gate arm; DD12; the modify refusal messages naming the class | `internal/offset2d/sharp.go`, `internal/proofbound/interval_trig.go` (tangent), `internal/draftrecord/` (`payload.go`, `build.go`, `measure.go`), `draft.go`, `extrude.go`, `internal/clearance/pairkernel/gate.go`, `internal/gatediameter/body_gate.go`, `fillet.go`/`chamfer.go`/`shell.go` (messages), `apitest/extrude_taper_test.go`, `internal/draftrecord/build_test.go`, `internal/offset2d/sharp_test.go`, `examples/extrude_taper_example_test.go` | F1–F10 and the SD refusals of §11; the fail-first legs | — |
+| **1** | `Extrude` + `Taper` over Table RD1: `offset2d.BuildSharpLoop`; `draftPayload` with `Transform`/`Placed`; the build (§7); the measurement (§8 over `internal/capband`); `d` and its span (§8.1) with a certified tangent in `internal/proofbound`; `extrude.go` dispatches a nonzero taper to the draft build and refuses SD11/SD12; DD6's gate arm; DD12; the modify refusal messages naming the class | `internal/offset2d/sharp.go`, `internal/proofbound/interval_trig.go` (tangent), `internal/draftrecord/` (`payload.go`, `build.go`, `measure.go`), `draft.go`, `extrude.go`, `internal/clearance/pairkernel/gate.go`, `internal/gatediameter/body_gate.go`, `fillet.go`/`chamfer.go`/`shell.go` (messages), `apitest/extrude_taper_test.go`, `internal/draftrecord/build_test.go`, `internal/offset2d/sharp_test.go`, `examples/extrude_taper_example_test.go` | F1–F10 and the SD refusals of §11; the fail-first legs | — |
 | **2** | tessellation and the mesh volume proof (DD1), which serves DD2, DD3, DD4, DD10, DD11, DD13, DD17 | `internal/draftrecord/tessellate.go`, `internal/tessdispatch/dispatch.go` (dispatch), `internal/capblend/admit.go` (§9.1's three differences), `internal/draftrecord/payload.go`/`build.go` (`Patches`, `BandDelta`), `internal/booloperand/volume_proof.go` (the admission arm), `internal/massdispatch/dispatch.go` (the mesh path needs no arm), `internal/motionengine/recordradius.go`, `apitest/draft_mesh_test.go`, `internal/draftrecord/tessellate_test.go` | the mesh fixtures | 1 |
 | **3** | `Draft` over RD2: `NeutralPlane`, `NeutralFace`, `NeutralFrame` (refusing), `Walls(b)`; §10.1's resolution; SD17–SD23; core §8's pointer to this document and core §12's signed-displacement list | `draft.go`, `selector.go` (`Walls`), `internal/selectorquery/predicate.go`, `agent-docs/api-design.md` §8/§12, `apitest/draft_test.go`, `examples/draft_example_test.go` | D1–D5 | 1 |
 | **4** | DD7: the undercut survey over draft bodies | `internal/capblendsurvey/draft.go`, `internal/capblendsurvey/undercut.go`, `internal/verifyrun/survey.go` (dispatch), `apitest/draft_verify_test.go` | the survey fixtures; the `−e` pull lists every wall | 2 |

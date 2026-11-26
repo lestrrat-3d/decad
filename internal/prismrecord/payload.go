@@ -28,7 +28,7 @@ import (
 // record so a copy or placement re-mints its own blend roles from its own record
 // (the modify §9 role rule) — a plain extrude leaves them empty (no-op).
 //
-// SurfaceResult is WithSurfaceResult's own flag (agent-docs/surface-design.md §4):
+// SurfaceResult is SurfaceResult's own flag (agent-docs/surface-design.md §4):
 // true when the build must omit its closing caps and publish a sheet instead
 // of a solid. It is part of the re-evaluable record for the same reason the
 // blend descriptors are, so Transform and Copy reproduce the

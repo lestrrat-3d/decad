@@ -52,8 +52,8 @@ func TestLoftContactDirectShellUnionVaryingRectangleBothOrders(t *testing.T) {
 				sections[i], profiles[i] = s, s.Profiles()[0]
 			}
 			d := New()
-			loft, err := Loft(t.Context(), d, sections[0], profiles[0],
-				sections[1], profiles[1])
+			loft, err := Loft(d, sections[0], profiles[0],
+				sections[1], profiles[1]).Do(t.Context())
 			require.NoError(t, err)
 			prismSketch, err := world.CreateSketch(base)
 			require.NoError(t, err)
@@ -61,8 +61,8 @@ func TestLoftContactDirectShellUnionVaryingRectangleBothOrders(t *testing.T) {
 			prismSketch.Fix(rect.A)
 			_, err = prismSketch.Solve(t.Context())
 			require.NoError(t, err)
-			prism, err := Extrude(t.Context(), d, prismSketch,
-				prismSketch.Profiles()[0], Distance{D: units.Millimeters(5), Dir: Along})
+			prism, err := Extrude(d, prismSketch,
+				prismSketch.Profiles()[0], Distance{D: units.Millimeters(5), Dir: Along}).Do(t.Context())
 			require.NoError(t, err)
 			first, second := prism, loft
 			if reverse {
@@ -271,10 +271,10 @@ func TestLoftContactDirectShellUnionVaryingRectangleBothOrders(t *testing.T) {
 				require.NoError(t, err)
 				prismProfiles := prismSketch.Profiles()
 				require.Equal(t, 1, len(prismProfiles))
-				prism, err := Extrude(t.Context(), d, prismSketch, prismProfiles[0],
-					Distance{D: units.Millimeters(5), Dir: Along})
+				prism, err := Extrude(d, prismSketch, prismProfiles[0],
+					Distance{D: units.Millimeters(5), Dir: Along}).Do(t.Context())
 				require.NoError(t, err)
-				loft, err := Loft(t.Context(), d, sections[0], profiles[0], sections[1], profiles[1])
+				loft, err := Loft(d, sections[0], profiles[0], sections[1], profiles[1]).Do(t.Context())
 				require.NoError(t, err)
 				first, second := prism, loft
 				if reverse {
@@ -329,8 +329,8 @@ func TestLoftContactDirectShellUnionVaryingRectangleBothOrders(t *testing.T) {
 						require.NoError(t, createErr)
 						thirdProfiles := thirdSketch.Profiles()
 						require.Equal(t, 1, len(thirdProfiles))
-						third, createErr := Extrude(t.Context(), d, thirdSketch, thirdProfiles[0],
-							Distance{D: units.Millimeters(1), Dir: Along})
+						third, createErr := Extrude(d, thirdSketch, thirdProfiles[0],
+							Distance{D: units.Millimeters(1), Dir: Along}).Do(t.Context())
 						require.NoError(t, createErr)
 
 						before := append([]*Body(nil), d.Bodies()...)
@@ -423,7 +423,7 @@ func TestLoftContactDirectShellUnionRealVaryingTab(t *testing.T) {
 		sections[i], profiles[i] = s, s.Profiles()[0]
 	}
 	d := New()
-	loft, err := Loft(ctx, d, sections[0], profiles[0], sections[1], profiles[1])
+	loft, err := Loft(d, sections[0], profiles[0], sections[1], profiles[1]).Do(ctx)
 	require.NoError(t, err)
 	s, err := world.CreateSketch(base)
 	require.NoError(t, err)
@@ -431,8 +431,8 @@ func TestLoftContactDirectShellUnionRealVaryingTab(t *testing.T) {
 	s.Fix(rect.A)
 	_, err = s.Solve(ctx)
 	require.NoError(t, err)
-	prism, err := Extrude(ctx, d, s, s.Profiles()[0],
-		Distance{D: units.Millimeters(5), Dir: Along})
+	prism, err := Extrude(d, s, s.Profiles()[0],
+		Distance{D: units.Millimeters(5), Dir: Along}).Do(ctx)
 	require.NoError(t, err)
 	pp, lp, boundary, operation := loftVolumeRealCertificates(t, prism, loft)
 	proof, admitted, err := loftcontact.VolumeCompose(ctx, operation, pp, lp, boundary)

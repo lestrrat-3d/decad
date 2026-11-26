@@ -59,8 +59,8 @@ func axisRevolve(t *testing.T, doc *Document, u, v r3.Vec, end planePoint, outli
 	require.NoError(t, err)
 	profiles := s.Profiles()
 	require.Len(t, profiles, 1)
-	body, err := Revolve(t.Context(), doc, s, profiles[0], SketchLine{Start: planePoint{}, End: end},
-		FullRevolution{})
+	body, err := Revolve(doc, s, profiles[0], SketchLine{Start: planePoint{}, End: end},
+		FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -115,7 +115,7 @@ func axisLug(t *testing.T, doc *Document, origin, u, v r3.Vec, fitted bool, toe,
 	require.NoError(t, err)
 	profiles := s.Profiles()
 	require.Len(t, profiles, 1)
-	lug, err := LoftFromPoint(t.Context(), doc, r3.Vec{}, s, profiles[0])
+	lug, err := LoftFromPoint(doc, r3.Vec{}, s, profiles[0]).Do(t.Context())
 	require.NoError(t, err)
 	cut, err := Cut(lug, toe).Do(t.Context())
 	require.NoError(t, err)

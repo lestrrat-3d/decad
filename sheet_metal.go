@@ -201,7 +201,7 @@ func SheetMetal(ctx context.Context, d *Document, spec SheetMetalSpec) (*Body, S
 	if outline == nil {
 		return nil, SheetMetalReport{}, fmt.Errorf(`%w: the strip's outline is not one simple loop`, ErrDegenerate)
 	}
-	body, err := Extrude(ctx, d, s, outline, Distance{D: units.Millimeters(width), Dir: Along})
+	body, err := extrudeTool(ctx, d, s, outline, Distance{D: units.Millimeters(width), Dir: Along}, extrudeSettings{})
 	if err != nil {
 		return nil, SheetMetalReport{}, err
 	}

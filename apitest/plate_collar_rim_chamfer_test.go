@@ -31,7 +31,7 @@ func annulusAt(t *testing.T, doc *decad.Document, rIn, rOut, z0, h float64) *dec
 		if !pr.Valid || len(pr.Holes) != 1 {
 			continue
 		}
-		b, err := decad.Extrude(t.Context(), doc, s, pr, decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+		b, err := decad.Extrude(doc, s, pr, decad.Distance{D: units.Millimeters(h), Dir: decad.Along}).Do(t.Context())
 		require.NoError(t, err)
 		return b
 	}

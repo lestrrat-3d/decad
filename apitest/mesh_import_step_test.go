@@ -102,7 +102,7 @@ func TestSTEPWritesACavityThatTouchesTheOuterShell(t *testing.T) {
 	edgeDoc := decad.New()
 	box := decadtest.NewBlock(t, edgeDoc, 0, 0, 20, 20, units.Millimeters(20))
 	s, p := polygonSketch(t, [][2]float64{{0, 10}, {5, 5}, {10, 10}, {5, 15}})
-	prism, err := decad.Extrude(t.Context(), edgeDoc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	prism, err := decad.Extrude(edgeDoc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	prism, err = decad.Transform(t.Context(), prism, mustTranslation(t, 0, 0, 5))
 	require.NoError(t, err)
@@ -122,7 +122,7 @@ func TestSTEPWritesACavityThatTouchesTheOuterShell(t *testing.T) {
 	_, err = cs.Solve(t.Context())
 	require.NoError(t, err)
 	axis := decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}}
-	cone, err := decad.Revolve(t.Context(), vertexDoc, cs, cs.Profiles()[0], axis, decad.FullRevolution{})
+	cone, err := decad.Revolve(vertexDoc, cs, cs.Profiles()[0], axis, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	cone, err = decad.Transform(t.Context(), cone, mustTranslation(t, 0, 0, 10))
 	require.NoError(t, err)
@@ -175,7 +175,7 @@ func TestReadSTEPRoundTripsAFacetedCone(t *testing.T) {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	axis := decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}}
-	cone, err := decad.Revolve(t.Context(), decad.New(), s, s.Profiles()[0], axis, decad.FullRevolution{})
+	cone, err := decad.Revolve(decad.New(), s, s.Profiles()[0], axis, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	var out bytes.Buffer
 	require.NoError(t, export.STEP(t.Context(), &out, cone, units.Millimeters(0.5),
@@ -270,7 +270,7 @@ func TestReadSTEPReadsPartialCylinderWalls(t *testing.T) {
 	s.CreateArc(left, d, a)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	slot, err := decad.Extrude(t.Context(), decad.New(), s, s.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	slot, err := decad.Extrude(decad.New(), s, s.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	data := writeSTEP(t, slot)
 	require.Contains(t, string(data), "CYLINDRICAL_SURFACE")

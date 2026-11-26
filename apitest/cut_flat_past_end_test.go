@@ -42,8 +42,8 @@ func TestCutFlatOnPerpendicularShaft(t *testing.T) {
 			s.CreateCircle(centre, radius)
 			_, err = s.Solve(t.Context())
 			require.NoError(t, err)
-			shaft, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0],
-				decad.Distance{D: units.Millimeters(length), Dir: decad.Along})
+			shaft, err := decad.Extrude(doc, s, s.Profiles()[0],
+				decad.Distance{D: units.Millimeters(length), Dir: decad.Along}).Do(t.Context())
 			require.NoError(t, err)
 
 			w2 := sketch.NewWorld()
@@ -55,8 +55,8 @@ func TestCutFlatOnPerpendicularShaft(t *testing.T) {
 			s2.CreateRectangle(x+flat, -75-tc.over, x+3, -75+toolLen)
 			_, err = s2.Solve(t.Context())
 			require.NoError(t, err)
-			tool, err := decad.Extrude(t.Context(), doc, s2, s2.Profiles()[0],
-				decad.Distance{D: units.Millimeters(6), Dir: decad.Along})
+			tool, err := decad.Extrude(doc, s2, s2.Profiles()[0],
+				decad.Distance{D: units.Millimeters(6), Dir: decad.Along}).Do(t.Context())
 			require.NoError(t, err)
 
 			if tc.lift != 0 {

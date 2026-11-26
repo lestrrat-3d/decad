@@ -32,8 +32,8 @@ func (sc *retentionScene) roundedBox(t *testing.T) *decad.Body {
 	s.Fix(r.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	box, err := decad.Extrude(t.Context(), sc.doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	box, err := decad.Extrude(sc.doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(20), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	rounded, err := decad.Fillet(box,
 		decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1))).Exactly(4), units.Millimeters(3)).Do(t.Context())
@@ -52,8 +52,8 @@ func (sc *retentionScene) tool(t *testing.T, cx float64) *decad.Body {
 	s.CreateCircle(c, 4)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	cyl, err := decad.Extrude(t.Context(), sc.doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(60), Dir: decad.Along})
+	cyl, err := decad.Extrude(sc.doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(60), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	move, err := r3.Translation(r3.Vec{Y: 30})
 	require.NoError(t, err)
@@ -74,7 +74,7 @@ func (sc *retentionScene) revolvedTool(t *testing.T, cx float64) *decad.Body {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	axis := decad.SketchLine{Start: decad.Point2{U: cx, V: 0}, End: decad.Point2{U: cx, V: 1}}
-	pin, err := decad.Revolve(t.Context(), sc.doc, s, s.Profiles()[0], axis, decad.FullRevolution{})
+	pin, err := decad.Revolve(sc.doc, s, s.Profiles()[0], axis, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	return translated(t, pin, 0, 0, 10)
 }
@@ -101,7 +101,7 @@ func (sc *retentionScene) taperedTool(t *testing.T) *decad.Body {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	axis := decad.SketchLine{Start: decad.Point2{U: cx, V: 0}, End: decad.Point2{U: cx, V: 1}}
-	pin, err := decad.Revolve(t.Context(), sc.doc, s, s.Profiles()[0], axis, decad.FullRevolution{})
+	pin, err := decad.Revolve(sc.doc, s, s.Profiles()[0], axis, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	return translated(t, pin, 0, 0, 10)
 }
@@ -218,8 +218,8 @@ func TestFacetedSourceRetention(t *testing.T) {
 		s.CreateCircle(c, 4)
 		_, err = s.Solve(t.Context())
 		require.NoError(t, err)
-		pin, err := decad.Extrude(t.Context(), sc.doc, s, s.Profiles()[0],
-			decad.Distance{D: units.Millimeters(60), Dir: decad.Along})
+		pin, err := decad.Extrude(sc.doc, s, s.Profiles()[0],
+			decad.Distance{D: units.Millimeters(60), Dir: decad.Along}).Do(t.Context())
 		require.NoError(t, err)
 		move, err := r3.Translation(r3.Vec{Y: 30})
 		require.NoError(t, err)
@@ -278,8 +278,8 @@ func TestFacetedSourceRetention(t *testing.T) {
 		s.Fix(r.A)
 		_, err = s.Solve(t.Context())
 		require.NoError(t, err)
-		pin, err := decad.Extrude(t.Context(), sc.doc, s, s.Profiles()[0],
-			decad.ToFace{Body: drilled, Face: top})
+		pin, err := decad.Extrude(sc.doc, s, s.Profiles()[0],
+			decad.ToFace{Body: drilled, Face: top}).Do(t.Context())
 		require.NoError(t, err)
 		box, err := pin.Bounds()
 		require.NoError(t, err)
@@ -318,7 +318,7 @@ func TestFacetedSourceRetention(t *testing.T) {
 		_, err = s.Solve(t.Context())
 		require.NoError(t, err)
 		axis := decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}}
-		shaft, err := decad.Revolve(t.Context(), sc.doc, s, s.Profiles()[0], axis, decad.FullRevolution{})
+		shaft, err := decad.Revolve(sc.doc, s, s.Profiles()[0], axis, decad.FullRevolution{}).Do(t.Context())
 		require.NoError(t, err)
 
 		ts, err := sc.w.CreateSketch(sc.w.XY())
@@ -328,7 +328,7 @@ func TestFacetedSourceRetention(t *testing.T) {
 		ts.CreateCircle(c, 2)
 		_, err = ts.Solve(t.Context())
 		require.NoError(t, err)
-		pin, err := decad.Extrude(t.Context(), sc.doc, ts, ts.Profiles()[0], decad.Symmetric{D: units.Millimeters(30)})
+		pin, err := decad.Extrude(sc.doc, ts, ts.Profiles()[0], decad.Symmetric{D: units.Millimeters(30)}).Do(t.Context())
 		require.NoError(t, err)
 		move, err := r3.Translation(r3.Vec{Z: 0.001})
 		require.NoError(t, err)
@@ -405,8 +405,8 @@ func TestFacetedSourceRetention(t *testing.T) {
 		s.Fix(r.A)
 		_, err = s.Solve(t.Context())
 		require.NoError(t, err)
-		plate, err := decad.Extrude(t.Context(), sc.doc, s, s.Profiles()[0],
-			decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+		plate, err := decad.Extrude(sc.doc, s, s.Profiles()[0],
+			decad.Distance{D: units.Millimeters(20), Dir: decad.Along}).Do(t.Context())
 		require.NoError(t, err)
 		ts, err := sc.w.CreateSketch(sc.w.XY())
 		require.NoError(t, err)
@@ -415,7 +415,7 @@ func TestFacetedSourceRetention(t *testing.T) {
 		ts.CreateCircle(c, 4)
 		_, err = ts.Solve(t.Context())
 		require.NoError(t, err)
-		pin, err := decad.Extrude(t.Context(), sc.doc, ts, ts.Profiles()[0], decad.Symmetric{D: units.Millimeters(60)})
+		pin, err := decad.Extrude(sc.doc, ts, ts.Profiles()[0], decad.Symmetric{D: units.Millimeters(60)}).Do(t.Context())
 		require.NoError(t, err)
 		turn, err := r3.RotationAround(r3.NewVec(20, 10, 10), r3.NewVec(0, 1, 0), units.Radians(30*math.Pi/180))
 		require.NoError(t, err)
@@ -603,7 +603,7 @@ func TestFacetedSourceRetention(t *testing.T) {
 		_, err = s.Solve(t.Context())
 		require.NoError(t, err)
 		axis := decad.SketchLine{Start: decad.Point2{U: a.X, V: a.Y}, End: decad.Point2{U: a.X + dir.X, V: a.Y + dir.Y}}
-		pin, err := decad.Revolve(t.Context(), sc.doc, s, s.Profiles()[0], axis, decad.FullRevolution{})
+		pin, err := decad.Revolve(sc.doc, s, s.Profiles()[0], axis, decad.FullRevolution{}).Do(t.Context())
 		require.NoError(t, err)
 		bored, err := decad.Cut(sc.roundedBox(t), translated(t, pin, 0, 0, 10)).Do(t.Context())
 		require.NoError(t, err)

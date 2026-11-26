@@ -35,8 +35,8 @@ func embeddingReachSource(t *testing.T, doc *decad.Document) *decad.Body {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	require.Len(t, s.Profiles(), 1)
-	solid, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	solid, err := decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	// Public similarity construction supplies the held mesh that placement
 	// repairs; no private payload or handwritten warning enters the fixture.

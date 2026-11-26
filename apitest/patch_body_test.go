@@ -32,20 +32,20 @@ func circleSheet(t *testing.T, doc *decad.Document, r float64) *decad.Body {
 	s.Fix(c)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	sheet, err := decad.PatchProfile(t.Context(), doc, s, s.Profiles()[0])
+	sheet, err := decad.PatchProfile(doc, s, s.Profiles()[0]).Do(t.Context())
 	require.NoError(t, err)
 	return sheet
 }
 
 // surfaceTube builds a 100x60 mm rectangle surface-extruded 10 mm Along, with
-// WithSurfaceResult: a sheet with no caps and 8 free edges, two congruent
+// SurfaceResult: a sheet with no caps and 8 free edges, two congruent
 // four-edge rims — agent-docs/surface-design.md's own motivating case for the
 // one-or-more-chains amendment, since no edge predicate tells the two rims
 // apart.
 func surfaceTube(t *testing.T, doc *decad.Document) *decad.Body {
 	t.Helper()
 	s, p := plateSketch(t)
-	tube, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}, decad.WithSurfaceResult())
+	tube, err := decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).SurfaceResult().Do(t.Context())
 	require.NoError(t, err)
 	return tube
 }
@@ -61,7 +61,7 @@ func TestBodyPatchDoublesAFlatSheetWithANegatedNormal(t *testing.T) {
 	t.Parallel()
 	s, p := plateSketch(t)
 	doc := decad.New()
-	sheet, err := decad.PatchProfile(t.Context(), doc, s, p)
+	sheet, err := decad.PatchProfile(doc, s, p).Do(t.Context())
 	require.NoError(t, err)
 
 	faces, err := decad.Faces(decad.Planar()).Exactly(1).SelectFaces(sheet)
@@ -134,7 +134,7 @@ func TestBodyPatchFillsAHoleWithTheSameNormal(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	s, p := rectWithHoleSketch(t)
-	sheet, err := decad.PatchProfile(t.Context(), doc, s, p)
+	sheet, err := decad.PatchProfile(doc, s, p).Do(t.Context())
 	require.NoError(t, err)
 
 	faces, err := decad.Faces(decad.Planar()).Exactly(1).SelectFaces(sheet)
@@ -223,7 +223,7 @@ func TestBodyPatchClosesASheetsLastFreeEdgeStaysASheet(t *testing.T) {
 	tube := surfaceTube(t, doc)
 
 	bs, bp := plateSketch(t)
-	bottom, err := decad.PatchProfile(t.Context(), doc, bs, bp)
+	bottom, err := decad.PatchProfile(doc, bs, bp).Do(t.Context())
 	require.NoError(t, err)
 
 	open, err := decad.Stitch(t.Context(), tube, bottom)
@@ -301,7 +301,7 @@ func TestBodyPatchAdmitsASingleBoundedRimAlongsideAnExactOne(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	s, p := plateSketch(t)
-	tube, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Inches(5), Dir: decad.Along}, decad.WithSurfaceResult())
+	tube, err := decad.Extrude(doc, s, p, decad.Distance{D: units.Inches(5), Dir: decad.Along}).SurfaceResult().Do(t.Context())
 	require.NoError(t, err)
 
 	// No predicate tells the two congruent rims apart (agent-docs/surface-design.md
@@ -342,7 +342,7 @@ func TestBodyPatchCapsBothBoundedRimsOfASymmetricSurfaceExtrudedWall(t *testing.
 	t.Parallel()
 	doc := decad.New()
 	s, p := plateSketch(t)
-	wall, err := decad.Extrude(t.Context(), doc, s, p, decad.Symmetric{D: units.Inches(2.5)}, decad.WithSurfaceResult())
+	wall, err := decad.Extrude(doc, s, p, decad.Symmetric{D: units.Inches(2.5)}).SurfaceResult().Do(t.Context())
 	require.NoError(t, err)
 
 	rim, err := decad.Edges(decad.Free()).Exactly(8).SelectEdges(wall)
@@ -400,7 +400,7 @@ func TestBodyPatchCapsBothBoundedRimsOnARotatedSketchPlane(t *testing.T) {
 	require.NoError(t, err)
 
 	doc := decad.New()
-	wall, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Symmetric{D: units.Inches(2.5)}, decad.WithSurfaceResult())
+	wall, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Symmetric{D: units.Inches(2.5)}).SurfaceResult().Do(t.Context())
 	require.NoError(t, err)
 
 	rim, err := decad.Edges(decad.Free()).Exactly(8).SelectEdges(wall)
@@ -457,7 +457,7 @@ func TestBodyPatchTableR(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
 		s, p := plateSketch(t)
-		solid, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+		solid, err := decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 		require.NoError(t, err)
 
 		before := doc.Bodies()
@@ -470,7 +470,7 @@ func TestBodyPatchTableR(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
 		s, p := plateSketch(t)
-		sheet, err := decad.PatchProfile(t.Context(), doc, s, p)
+		sheet, err := decad.PatchProfile(doc, s, p).Do(t.Context())
 		require.NoError(t, err)
 
 		// The rectangle's two 100 mm edges are opposite, non-adjacent sides:
@@ -486,7 +486,7 @@ func TestBodyPatchTableR(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
 		s, p := plateSketch(t)
-		solid, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+		solid, err := decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 		require.NoError(t, err)
 
 		before := doc.Bodies()
@@ -591,7 +591,7 @@ func TestBodyPatchCopyKeepsCapAxialDelta(t *testing.T) {
 	t.Parallel()
 	s, plateProf, pinProf := plateAndPin(t)
 	doc := decad.New()
-	plate, err := decad.Extrude(t.Context(), doc, s, plateProf, decad.Distance{D: units.Inches(3), Dir: decad.Along})
+	plate, err := decad.Extrude(doc, s, plateProf, decad.Distance{D: units.Inches(3), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	capSelector := capEndFace(plate)
 	startSelector := capStartFace(plate)
@@ -610,7 +610,7 @@ func TestBodyPatchCopyKeepsCapAxialDelta(t *testing.T) {
 	}
 	require.NotNil(t, capSheet)
 	require.Len(t, box, 5)
-	want, err := decad.Extrude(t.Context(), doc, s, pinProf, decad.ToFace{Body: capSheet, Face: decad.Faces()})
+	want, err := decad.Extrude(doc, s, pinProf, decad.ToFace{Body: capSheet, Face: decad.Faces()}).Do(t.Context())
 	require.NoError(t, err)
 	wantBox, err := want.Bounds()
 	require.NoError(t, err)
@@ -619,7 +619,7 @@ func TestBodyPatchCopyKeepsCapAxialDelta(t *testing.T) {
 	require.NoError(t, err)
 	patched, err := decad.PatchEdges(t.Context(), open, decad.Edges(decad.Free()))
 	require.NoError(t, err)
-	pin, err := decad.Extrude(t.Context(), doc, s, pinProf, decad.ToFace{Body: patched, Face: capSelector})
+	pin, err := decad.Extrude(doc, s, pinProf, decad.ToFace{Body: patched, Face: capSelector}).Do(t.Context())
 	require.NoError(t, err)
 	got, err := pin.Bounds()
 	require.NoError(t, err)
@@ -645,7 +645,7 @@ func TestBodyPatchFillsARevolvedDiskRim(t *testing.T) {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	axis := decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}}
-	disk, err := decad.Revolve(t.Context(), decad.New(), s, s.Chains()[0], axis, decad.FullRevolution{})
+	disk, err := decad.Revolve(decad.New(), s, s.Chains()[0], axis, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	free, err := decad.Edges(decad.Free()).Exactly(1).SelectEdges(disk)
 	require.NoError(t, err)

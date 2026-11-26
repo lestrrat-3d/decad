@@ -17,7 +17,7 @@ func TestToFaceStopsAtAMeshSolidFace(t *testing.T) {
 	plate := blockIn(t, doc, r3.NewVec(0, 0, 5), r3.NewVec(40, 30, 10))
 	s, profiles := embossSketch(t, 0, [4]float64{10, 10, 20, 16})
 	top := decad.Faces(decad.Facing(r3.NewVec(0, 0, 1)))
-	tool, err := decad.Extrude(t.Context(), doc, s, profiles[0], decad.ToFace{Body: plate, Face: top})
+	tool, err := decad.Extrude(doc, s, profiles[0], decad.ToFace{Body: plate, Face: top}).Do(t.Context())
 	require.NoError(t, err)
 	box, err := tool.Bounds()
 	require.NoError(t, err)
@@ -39,8 +39,8 @@ func TestToFaceRefusesAMeshSolidFaceSquareToAnotherAxis(t *testing.T) {
 	doc := decad.New()
 	plate := blockIn(t, doc, r3.NewVec(0, 0, 5), r3.NewVec(40, 30, 10))
 	s, profiles := embossSketch(t, 0, [4]float64{10, 10, 20, 16})
-	_, err := decad.Extrude(t.Context(), doc, s, profiles[0],
-		decad.ToFace{Body: plate, Face: decad.Faces(decad.Facing(r3.NewVec(1, 0, 0)))})
+	_, err := decad.Extrude(doc, s, profiles[0],
+		decad.ToFace{Body: plate, Face: decad.Faces(decad.Facing(r3.NewVec(1, 0, 0)))}).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported, "a side face is no perpendicular cap for a sweep along z")
 	require.Equal(t, []*decad.Body{plate}, doc.Bodies(), "a refusal leaves the document as it was")
 }
@@ -50,7 +50,7 @@ func TestThroughAllMeetsAMeshSolid(t *testing.T) {
 	doc := decad.New()
 	_ = blockIn(t, doc, r3.NewVec(0, 0, 5), r3.NewVec(40, 30, 10))
 	s, profiles := embossSketch(t, 0, [4]float64{10, 10, 20, 16})
-	tool, err := decad.Extrude(t.Context(), doc, s, profiles[0], decad.ThroughAll{Dir: decad.Along})
+	tool, err := decad.Extrude(doc, s, profiles[0], decad.ThroughAll{Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	box, err := tool.Bounds()
 	require.NoError(t, err)

@@ -94,7 +94,7 @@ func TestUnstitchVoidRevolveMakesNonVoidSheets(t *testing.T) {
 	t.Parallel()
 	s, p := holedSketch(t)
 	doc := decad.New()
-	body, err := decad.Revolve(t.Context(), doc, s, p, uAxis, decad.FullRevolution{})
+	body, err := decad.Revolve(doc, s, p, uAxis, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, body.Shells(), 2)
 	require.True(t, body.Shells()[1].IsVoid())
@@ -179,7 +179,7 @@ func TestUnstitchRestitchRoundTripClosesABoundedBox(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	s, p := offAxisPlateSketch(t)
-	wall, err := decad.Extrude(t.Context(), doc, s, p, decad.Symmetric{D: units.Inches(2.5)}, decad.WithSurfaceResult())
+	wall, err := decad.Extrude(doc, s, p, decad.Symmetric{D: units.Inches(2.5)}).SurfaceResult().Do(t.Context())
 	require.NoError(t, err)
 	capped, err := decad.PatchEdges(t.Context(), wall, decad.Edges(decad.Free()).Exactly(8))
 	require.NoError(t, err)
@@ -221,7 +221,7 @@ func TestUnstitchRevolveRoundTripStaysASheet(t *testing.T) {
 	t.Parallel()
 	s, p := annularSketch(t)
 	doc := decad.New()
-	sheet, err := decad.Revolve(t.Context(), doc, s, p, uAxis, quarterTurn, decad.WithSurfaceResult())
+	sheet, err := decad.Revolve(doc, s, p, uAxis, quarterTurn).SurfaceResult().Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, decad.BodySheet, sheet.Kind())
 
@@ -497,9 +497,9 @@ func TestUnstitchedCapToFaceStopMatchesUnUnstitchedCap(t *testing.T) {
 	s, plateProf, pinProf := plateAndPin(t)
 
 	doc1 := decad.New()
-	plate, err := decad.Extrude(t.Context(), doc1, s, plateProf, decad.Distance{D: units.Inches(10), Dir: decad.Along})
+	plate, err := decad.Extrude(doc1, s, plateProf, decad.Distance{D: units.Inches(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
-	pin, err := decad.Extrude(t.Context(), doc1, s, pinProf, decad.ToFace{Body: plate, Face: capEndFace(plate)})
+	pin, err := decad.Extrude(doc1, s, pinProf, decad.ToFace{Body: plate, Face: capEndFace(plate)}).Do(t.Context())
 	require.NoError(t, err)
 	want, err := pin.Bounds()
 	require.NoError(t, err)
@@ -507,7 +507,7 @@ func TestUnstitchedCapToFaceStopMatchesUnUnstitchedCap(t *testing.T) {
 		"the inch-stated depth's own unit-conversion rounding must actually reach the stop")
 
 	doc2 := decad.New()
-	plate2, err := decad.Extrude(t.Context(), doc2, s, plateProf, decad.Distance{D: units.Inches(10), Dir: decad.Along})
+	plate2, err := decad.Extrude(doc2, s, plateProf, decad.Distance{D: units.Inches(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	capSelector := capEndFace(plate2)
 	sheets, err := decad.Unstitch(t.Context(), plate2)
@@ -521,7 +521,7 @@ func TestUnstitchedCapToFaceStopMatchesUnUnstitchedCap(t *testing.T) {
 	}
 	require.NotNil(t, capSheet, "one of the six unstitched sheets must be the cap")
 
-	pin2, err := decad.Extrude(t.Context(), doc2, s, pinProf, decad.ToFace{Body: capSheet, Face: decad.Faces()})
+	pin2, err := decad.Extrude(doc2, s, pinProf, decad.ToFace{Body: capSheet, Face: decad.Faces()}).Do(t.Context())
 	require.NoError(t, err)
 	got, err := pin2.Bounds()
 	require.NoError(t, err)

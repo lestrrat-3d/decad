@@ -115,7 +115,7 @@ func curvedDuct(ctx context.Context, rise, firstTurn, run, secondTurn float64) (
 	if err != nil {
 		return nil, fmt.Errorf("record duct path: %w", err)
 	}
-	body, err := decad.Sweep(ctx, decad.New(), s, profile, path, decad.WithMitredJoins())
+	body, err := decad.Sweep(decad.New(), s, profile, path).MitredJoins().Do(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("sweep duct: %w", err)
 	}
@@ -145,13 +145,13 @@ func ductSpans(ctx context.Context) ([]*decad.Body, error) {
 	if err != nil {
 		return nil, fmt.Errorf("record the sweep path: %w", err)
 	}
-	if _, err := decad.Sweep(ctx, decad.New(), s, profile, path); err != nil {
+	if _, err := decad.Sweep(decad.New(), s, profile, path).Do(ctx); err != nil {
 		return nil, fmt.Errorf("sweep the spatial path: %w", err)
 	}
 
-	first, err := decad.Revolve(ctx, decad.New(), s, profile,
+	first, err := decad.Revolve(decad.New(), s, profile,
 		decad.SketchLine{Start: decad.Point2{U: -20, V: -1}, End: decad.Point2{U: -20, V: 1}},
-		decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
+		decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along}).Do(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("build the first render span: %w", err)
 	}
@@ -172,8 +172,8 @@ func ductSpans(ctx context.Context) ([]*decad.Body, error) {
 	if err != nil {
 		return nil, err
 	}
-	middle, err := decad.Extrude(ctx, decad.New(), middleSketch, middleProfile,
-		decad.Distance{D: units.Millimeters(40), Dir: decad.Along})
+	middle, err := decad.Extrude(decad.New(), middleSketch, middleProfile,
+		decad.Distance{D: units.Millimeters(40), Dir: decad.Along}).Do(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("build the straight render span: %w", err)
 	}
@@ -194,9 +194,9 @@ func ductSpans(ctx context.Context) ([]*decad.Body, error) {
 	if err != nil {
 		return nil, err
 	}
-	last, err := decad.Revolve(ctx, decad.New(), lastSketch, lastProfile,
+	last, err := decad.Revolve(decad.New(), lastSketch, lastProfile,
 		decad.SketchLine{Start: decad.Point2{U: -39, V: 20}, End: decad.Point2{U: -41, V: 20}},
-		decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
+		decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along}).Do(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("build the second render span: %w", err)
 	}
@@ -256,7 +256,7 @@ func ringBodyAtAngle(ctx context.Context, angle float64) (*decad.Body, error) {
 	if angle == 360 {
 		extent = decad.FullRevolution{}
 	}
-	ring, err := decad.Revolve(ctx, decad.New(), s, profile, axis, extent)
+	ring, err := decad.Revolve(decad.New(), s, profile, axis, extent).Do(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("revolve the ring: %w", err)
 	}
@@ -297,7 +297,7 @@ func loftDuctAtHeight(ctx context.Context, height float64) (*decad.Body, error) 
 	if err != nil {
 		return nil, err
 	}
-	duct, err := decad.Loft(ctx, decad.New(), bottom, bottomProfile, top, topProfile)
+	duct, err := decad.Loft(decad.New(), bottom, bottomProfile, top, topProfile).Do(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("loft the duct: %w", err)
 	}
@@ -426,8 +426,8 @@ func bladeBodyAtShape(ctx context.Context, height, profileScale float64) (*decad
 		return nil, err
 	}
 	// Extrude has no context-aware variant; Solve above is the cancellable phase.
-	blade, err := decad.Extrude(ctx, decad.New(), s, profile,
-		decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
+	blade, err := decad.Extrude(decad.New(), s, profile,
+		decad.Distance{D: units.Millimeters(height), Dir: decad.Along}).Do(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("extrude the blade: %w", err)
 	}
@@ -487,9 +487,8 @@ func dishBodyAtAngle(ctx context.Context, angle float64) (*decad.Body, error) {
 	}
 	axis := decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 0, V: 1}}
 	// Revolve has no context-aware variant; Solve above is the cancellable phase.
-	dish, err := decad.Revolve(ctx, decad.New(), s, profile, axis,
-		decad.AngleExtent{A: units.Degrees(angle), Dir: decad.Along},
-		decad.WithSurfaceResult())
+	dish, err := decad.Revolve(decad.New(), s, profile, axis,
+		decad.AngleExtent{A: units.Degrees(angle), Dir: decad.Along}).SurfaceResult().Do(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("revolve the dish: %w", err)
 	}
@@ -599,7 +598,7 @@ func cylinder(
 		return nil, err
 	}
 	// Extrude has no context-aware variant; Solve above is the cancellable phase.
-	return decad.Extrude(ctx, doc, s, profile, extent)
+	return decad.Extrude(doc, s, profile, extent).Do(ctx)
 }
 
 // prism sweeps the given plane-local loops straight along the plane normal.
@@ -609,7 +608,7 @@ func prism(ctx context.Context, doc *decad.Document, w *sketch.World, plane *ske
 		return nil, err
 	}
 	// Extrude has no context-aware variant; the sketch solve is the cancellable phase.
-	return decad.Extrude(ctx, doc, s, profile, decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
+	return decad.Extrude(doc, s, profile, decad.Distance{D: units.Millimeters(height), Dir: decad.Along}).Do(ctx)
 }
 
 func sketchLoops(ctx context.Context, w *sketch.World, plane *sketch.Plane, loops ...[]point) (*sketch.Sketch, *sketch.Profile, error) {

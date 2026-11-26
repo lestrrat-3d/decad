@@ -37,7 +37,7 @@ func TestRevolveBoreBoundaryBothSweepDirections(t *testing.T) {
 			}
 			_, err = s.Solve(t.Context())
 			require.NoError(t, err)
-			host, err := Revolve(t.Context(), doc, s, s.Profiles()[0], ConstructionAxis{Dir: r3.Vec{Z: 1}}, FullRevolution{})
+			host, err := Revolve(doc, s, s.Profiles()[0], ConstructionAxis{Dir: r3.Vec{Z: 1}}, FullRevolution{}).Do(t.Context())
 			require.NoError(t, err)
 			plane := w.XY()
 			if tc.against {
@@ -63,7 +63,7 @@ func TestRevolveBoreBoundaryBothSweepDirections(t *testing.T) {
 			if tc.against {
 				direction = Against
 			}
-			tool, err := Extrude(t.Context(), doc, ts, ts.Profiles()[0], Distance{D: units.Millimeters(32), Dir: direction})
+			tool, err := Extrude(doc, ts, ts.Profiles()[0], Distance{D: units.Millimeters(32), Dir: direction}).Do(t.Context())
 			require.NoError(t, err)
 			candidate, ok, err := revolvebore.Prepare(t.Context(), &host.n, &tool.n)
 			require.NoError(t, err)
@@ -172,7 +172,7 @@ func requireRevolveBoreRepeatedPlacement(t *testing.T, outline string, toolArea 
 	}
 	_, err = hs.Solve(t.Context())
 	require.NoError(t, err)
-	host, err := Revolve(t.Context(), doc, hs, hs.Profiles()[0], ConstructionAxis{Dir: r3.Vec{Z: 1}}, FullRevolution{})
+	host, err := Revolve(doc, hs, hs.Profiles()[0], ConstructionAxis{Dir: r3.Vec{Z: 1}}, FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	ts, err := w.CreateSketch(w.XY())
 	require.NoError(t, err)
@@ -194,7 +194,7 @@ func requireRevolveBoreRepeatedPlacement(t *testing.T, outline string, toolArea 
 	_, err = ts.Solve(t.Context())
 	require.NoError(t, err)
 	require.Len(t, ts.Profiles(), 1)
-	tool, err := Extrude(t.Context(), doc, ts, ts.Profiles()[0], Distance{D: units.Millimeters(32), Dir: Along})
+	tool, err := Extrude(doc, ts, ts.Profiles()[0], Distance{D: units.Millimeters(32), Dir: Along}).Do(t.Context())
 	require.NoError(t, err)
 	result, err := Cut(host, tool).Do(t.Context())
 	require.NoError(t, err)

@@ -42,7 +42,7 @@ func requireSplitVolumeSumEncloses(t *testing.T, a, b decad.Measurement, want *b
 func splitBlock(t testing.TB, d *decad.Document) *decad.Body {
 	t.Helper()
 	s, p := plateSketch(t)
-	b, err := decad.Extrude(t.Context(), d, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	b, err := decad.Extrude(d, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return b
 }
@@ -58,10 +58,10 @@ func splitRibbon(t testing.TB, d *decad.Document, endU float64) *decad.Body {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	require.Len(t, s.Chains(), 1)
-	b, err := decad.Extrude(t.Context(), d, s, s.Chains()[0], decad.TwoSided{
+	b, err := decad.Extrude(d, s, s.Chains()[0], decad.TwoSided{
 		One: decad.DistanceSide{D: units.Millimeters(15)},
 		Two: decad.DistanceSide{D: units.Millimeters(5)},
-	})
+	}).Do(t.Context())
 	require.NoError(t, err)
 	return b
 }
@@ -125,10 +125,10 @@ func TestSurfaceSplitCirclePartitionsBlock(t *testing.T) {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	require.Len(t, s.Profiles(), 1)
-	tool, err := decad.Extrude(t.Context(), d, s, s.Profiles()[0], decad.TwoSided{
+	tool, err := decad.Extrude(d, s, s.Profiles()[0], decad.TwoSided{
 		One: decad.DistanceSide{D: units.Millimeters(15)},
 		Two: decad.DistanceSide{D: units.Millimeters(5)},
-	}, decad.WithSurfaceResult())
+	}).SurfaceResult().Do(t.Context())
 	require.NoError(t, err)
 	pieces, err := decad.Split(t.Context(), target, tool)
 	require.NoError(t, err)
@@ -207,10 +207,10 @@ func TestSurfaceSplitCoincidentBoundarySeparatesNothing(t *testing.T) {
 	s.CreateLine(a, s.CreatePoint(100, 0))
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	tool, err := decad.Extrude(t.Context(), d, s, s.Chains()[0], decad.TwoSided{
+	tool, err := decad.Extrude(d, s, s.Chains()[0], decad.TwoSided{
 		One: decad.DistanceSide{D: units.Millimeters(15)},
 		Two: decad.DistanceSide{D: units.Millimeters(5)},
-	})
+	}).Do(t.Context())
 	require.NoError(t, err)
 	before := d.Bodies()
 	pieces, err := decad.Split(t.Context(), target, tool)

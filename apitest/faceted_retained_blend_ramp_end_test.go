@@ -54,8 +54,8 @@ func rampArm(t *testing.T, riser, capChamfer bool, skew float64) *decad.Body {
 	s.CreateLine(pts[3], pts[0])
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(rampArmTop), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(rampArmTop), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	if capChamfer {
 		loops := decad.Edges(decad.OuterLoopOf(decad.CapStart(body))).Or(decad.OuterLoopOf(decad.CapEnd(body)))
@@ -101,8 +101,8 @@ func rampCutOf(t *testing.T, w *sketch.World, doc *decad.Document, body *decad.B
 	}
 	_, err = ts.Solve(t.Context())
 	require.NoError(t, err)
-	tool, err := decad.Extrude(t.Context(), doc, ts, ts.Profiles()[0],
-		decad.Distance{D: units.Millimeters(30), Dir: decad.Along})
+	tool, err := decad.Extrude(doc, ts, ts.Profiles()[0],
+		decad.Distance{D: units.Millimeters(30), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	out, err := decad.Cut(body, tool).Do(t.Context())
 	require.NoError(t, err)

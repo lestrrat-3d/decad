@@ -46,8 +46,8 @@ func Example_gap_tolerance() {
 		{"exact only", []decad.DocumentOption{decad.ExactOnly()}},
 	} {
 		doc := decad.New(tc.opts...)
-		peg, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
-			decad.Distance{D: units.Millimeters(4), Dir: decad.Along})
+		peg, err := decad.Extrude(doc, s, s.Profiles()[0],
+			decad.Distance{D: units.Millimeters(4), Dir: decad.Along}).Do(context.Background())
 		if err != nil {
 			fmt.Printf("failed to extrude: %s\n", err)
 			return
@@ -68,8 +68,8 @@ func Example_gap_tolerance() {
 	// A tolerance that is not a non-negative length is refused when an
 	// operation reads it.
 	doc := decad.New(decad.WithGapTolerance(units.Millimeters(-1)))
-	peg, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(4), Dir: decad.Along})
+	peg, err := decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(4), Dir: decad.Along}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return

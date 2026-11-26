@@ -23,9 +23,8 @@ func BenchmarkStitchPatchCappedTube(b *testing.B) {
 		_, err = s.Solve(b.Context())
 		require.NoError(b, err)
 		doc := decad.New()
-		sheet, err := decad.Extrude(b.Context(), doc, s, s.Profiles()[0],
-			decad.Distance{D: units.Millimeters(10), Dir: decad.Along},
-			decad.WithSurfaceResult())
+		sheet, err := decad.Extrude(doc, s, s.Profiles()[0],
+			decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).SurfaceResult().Do(b.Context())
 		require.NoError(b, err)
 		capped, err := decad.PatchEdges(b.Context(), sheet, decad.Edges(decad.Free()).Exactly(2))
 		require.NoError(b, err)
@@ -61,8 +60,8 @@ func BenchmarkStitchTorusRevolveSheet(b *testing.B) {
 		_, err = s.Solve(b.Context())
 		require.NoError(b, err)
 		doc := decad.New()
-		sheet, err := decad.Revolve(b.Context(), doc, s, s.Profiles()[0], uAxis,
-			decad.FullRevolution{}, decad.WithSurfaceResult())
+		sheet, err := decad.Revolve(doc, s, s.Profiles()[0], uAxis,
+			decad.FullRevolution{}).SurfaceResult().Do(b.Context())
 		require.NoError(b, err)
 		b.StartTimer()
 		solid, err := decad.Stitch(b.Context(), sheet)

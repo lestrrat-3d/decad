@@ -357,13 +357,10 @@ func buildThreadCoil(ctx context.Context, d *Document, frame r3.Frame, plan thre
 		return nil, err
 	}
 	axis := SketchLine{Start: Point2{U: 0, V: 0}, End: Point2{U: 0, V: 1}}
-	opts := []CoilOption{wholeLinesOption{}}
-	if leftHand {
-		opts = append(opts, WithLeftHand())
-	}
+	cfg := coilConfig{leftHand: leftHand, stationsPerTurn: int64(coilshell.StationsPerTurn), wholeLines: true}
 	stations := threadplan.StationsPerTurn(plan, pitch, coilshell.StationsPerTurn)
 	if allowReduced && stations < coilshell.StationsPerTurn {
-		opts = append(opts, stationsPerTurnOption(stations))
+		cfg.stationsPerTurn = stations
 	}
-	return Coil(ctx, d, s, s.Profiles()[0], axis, units.Millimeters(pitch), units.Scalar(plan.Turns), opts...)
+	return coilBody(ctx, d, s, s.Profiles()[0], axis, units.Millimeters(pitch), units.Scalar(plan.Turns), cfg)
 }

@@ -49,7 +49,7 @@ func sliverPrism(t *testing.T, doc *decad.Document, origin, u, v r3.Vec, poly []
 		}
 	}
 	require.NotNil(t, chosen)
-	body, err := decad.Extrude(t.Context(), doc, s, chosen, decad.Distance{D: units.Millimeters(length), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, chosen, decad.Distance{D: units.Millimeters(length), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }

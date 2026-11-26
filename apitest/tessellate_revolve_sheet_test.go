@@ -14,7 +14,7 @@ import (
 )
 
 // This file is agent-docs/surface-design.md §10's T10, run against the REVOLVE
-// sheet path: WithSurfaceResult()'s own manifold-with-boundary mesh and
+// sheet path: SurfaceResult's own manifold-with-boundary mesh and
 // export, one test per Table W row (a partial sweep clear of the axis, a
 // partial sweep meeting it, and a full turn clear of it) plus the design's
 // T6 half-disc sphere. Every fixture reuses annularSketch/solidSketch/
@@ -107,14 +107,14 @@ func TestSurfaceRevolvePartialClearOfAxisSheetMeshMatchesSolid(t *testing.T) {
 
 	solidDoc := decad.New()
 	s1, p1 := annularSketch(t)
-	solid, err := decad.Revolve(t.Context(), solidDoc, s1, p1, uAxis, quarterTurn)
+	solid, err := decad.Revolve(solidDoc, s1, p1, uAxis, quarterTurn).Do(t.Context())
 	require.NoError(t, err)
 	solidMesh, err := solid.Tessellate(t.Context(), tol)
 	require.NoError(t, err)
 
 	sheetDoc := decad.New()
 	s2, p2 := annularSketch(t)
-	sheet, err := decad.Revolve(t.Context(), sheetDoc, s2, p2, uAxis, quarterTurn, decad.WithSurfaceResult())
+	sheet, err := decad.Revolve(sheetDoc, s2, p2, uAxis, quarterTurn).SurfaceResult().Do(t.Context())
 	require.NoError(t, err)
 	sheetMesh, err := sheet.Tessellate(t.Context(), tol)
 	require.NoError(t, err)
@@ -174,7 +174,7 @@ func TestSurfaceRevolvePartialMeetingAxisSheetFreeBoundaryIsOneCycle(t *testing.
 	t.Parallel()
 	s, p := solidSketch(t)
 	doc := decad.New()
-	sheet, err := decad.Revolve(t.Context(), doc, s, p, uAxis, quarterTurn, decad.WithSurfaceResult())
+	sheet, err := decad.Revolve(doc, s, p, uAxis, quarterTurn).SurfaceResult().Do(t.Context())
 	require.NoError(t, err)
 
 	mesh, err := sheet.Tessellate(t.Context(), units.Millimeters(0.5))
@@ -196,14 +196,14 @@ func TestSurfaceRevolveFullTurnClearOfAxisSheetMeshBitEqualsSolid(t *testing.T) 
 
 	solidDoc := decad.New()
 	s1, p1 := annularSketch(t)
-	solid, err := decad.Revolve(t.Context(), solidDoc, s1, p1, uAxis, decad.FullRevolution{})
+	solid, err := decad.Revolve(solidDoc, s1, p1, uAxis, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	solidMesh, err := solid.Tessellate(t.Context(), tol)
 	require.NoError(t, err)
 
 	sheetDoc := decad.New()
 	s2, p2 := annularSketch(t)
-	sheet, err := decad.Revolve(t.Context(), sheetDoc, s2, p2, uAxis, decad.FullRevolution{}, decad.WithSurfaceResult())
+	sheet, err := decad.Revolve(sheetDoc, s2, p2, uAxis, decad.FullRevolution{}).SurfaceResult().Do(t.Context())
 	require.NoError(t, err)
 	sheetMesh, err := sheet.Tessellate(t.Context(), tol)
 	require.NoError(t, err)
@@ -224,14 +224,14 @@ func TestSurfaceRevolveHalfDiscFullTurnSheetMeshMatchesSolid(t *testing.T) {
 
 	solidDoc := decad.New()
 	s1, p1 := semicircleSketch(t)
-	solid, err := decad.Revolve(t.Context(), solidDoc, s1, p1, uAxis, decad.FullRevolution{})
+	solid, err := decad.Revolve(solidDoc, s1, p1, uAxis, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	solidMesh, err := solid.Tessellate(t.Context(), tol)
 	require.NoError(t, err)
 
 	sheetDoc := decad.New()
 	s2, p2 := semicircleSketch(t)
-	sheet, err := decad.Revolve(t.Context(), sheetDoc, s2, p2, uAxis, decad.FullRevolution{}, decad.WithSurfaceResult())
+	sheet, err := decad.Revolve(sheetDoc, s2, p2, uAxis, decad.FullRevolution{}).SurfaceResult().Do(t.Context())
 	require.NoError(t, err)
 	sheetMesh, err := sheet.Tessellate(t.Context(), tol)
 	require.NoError(t, err)
@@ -265,7 +265,7 @@ func TestSurfaceRevolveSheetTessellationDeterminism(t *testing.T) {
 		t.Helper()
 		s, p := annularSketch(t)
 		doc := decad.New()
-		sheet, err := decad.Revolve(t.Context(), doc, s, p, uAxis, quarterTurn, decad.WithSurfaceResult())
+		sheet, err := decad.Revolve(doc, s, p, uAxis, quarterTurn).SurfaceResult().Do(t.Context())
 		require.NoError(t, err)
 		return sheet
 	}
@@ -308,11 +308,11 @@ func TestSurfaceRevolveSheetReachesNoBoolean(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	s1, p1 := annularSketch(t)
-	sheet, err := decad.Revolve(t.Context(), doc, s1, p1, uAxis, quarterTurn, decad.WithSurfaceResult())
+	sheet, err := decad.Revolve(doc, s1, p1, uAxis, quarterTurn).SurfaceResult().Do(t.Context())
 	require.NoError(t, err)
 
 	s2, p2 := solidSketch(t)
-	solid, err := decad.Revolve(t.Context(), doc, s2, p2, uAxis, decad.FullRevolution{})
+	solid, err := decad.Revolve(doc, s2, p2, uAxis, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 
 	before := doc.Bodies()
@@ -352,7 +352,7 @@ func TestSurfaceRevolveSheetRefusesTooFewMeridianSamples(t *testing.T) {
 	t.Parallel()
 	s, p := offAxisSemicircleSketch(t)
 	doc := decad.New()
-	sheet, err := decad.Revolve(t.Context(), doc, s, p, uAxis, quarterTurn, decad.WithSurfaceResult())
+	sheet, err := decad.Revolve(doc, s, p, uAxis, quarterTurn).SurfaceResult().Do(t.Context())
 	require.NoError(t, err)
 
 	_, err = sheet.Tessellate(t.Context(), units.Millimeters(20))

@@ -49,7 +49,7 @@ func yarnPack(t *testing.T, doc *decad.Document) *decad.Body {
 		}
 	}
 	require.NotNil(t, profile)
-	body, err := decad.Extrude(t.Context(), doc, s, profile, decad.Distance{D: units.Millimeters(112), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, profile, decad.Distance{D: units.Millimeters(112), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -68,7 +68,7 @@ func witnessBar(t *testing.T, doc *decad.Document, inner float64, sweep decad.An
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	require.Len(t, s.Profiles(), 1)
-	body, err := decad.Revolve(t.Context(), doc, s, s.Profiles()[0], decad.ConstructionAxis{Dir: r3.Vec{Z: 1}}, sweep)
+	body, err := decad.Revolve(doc, s, s.Profiles()[0], decad.ConstructionAxis{Dir: r3.Vec{Z: 1}}, sweep).Do(t.Context())
 	require.NoError(t, err)
 	angle := math.Remainder((7-100/(2*math.Pi*31))*math.Pi/3+math.Pi/2-math.Asin(2/packRadius), 2*math.Pi)
 	c, sn := math.Cos(angle), math.Sin(angle)
@@ -146,7 +146,7 @@ func yarnRod(t *testing.T, doc *decad.Document, a, c r3.Vec) *decad.Body {
 	s.CreateCircle(centre, 0.35)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(d.Len()), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(d.Len()), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	placed, err := decad.Transform(t.Context(), body, xf)
 	require.NoError(t, err)

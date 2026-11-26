@@ -41,7 +41,7 @@ func flushArcPrism(t *testing.T, doc *Document, p flushPlacement, origin, u, v, 
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	require.Len(t, s.Profiles(), 1)
-	body, err := Extrude(t.Context(), doc, s, s.Profiles()[0], Distance{D: units.Millimeters(length), Dir: p.toward(u, v, dir)})
+	body, err := Extrude(doc, s, s.Profiles()[0], Distance{D: units.Millimeters(length), Dir: p.toward(u, v, dir)}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -130,7 +130,7 @@ func filletedRectPrism(t *testing.T, doc *Document) *Body {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	require.Len(t, s.Profiles(), 1)
-	body, err := Extrude(t.Context(), doc, s, s.Profiles()[0], Distance{D: units.Millimeters(16), Dir: flushPlacements[0].toward(r3.Vec{X: 1}, r3.Vec{Z: 1}, r3.Vec{Y: 1})})
+	body, err := Extrude(doc, s, s.Profiles()[0], Distance{D: units.Millimeters(16), Dir: flushPlacements[0].toward(r3.Vec{X: 1}, r3.Vec{Z: 1}, r3.Vec{Y: 1})}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -235,7 +235,7 @@ func flushDiscUnion(t *testing.T, doc *Document) (*Body, error) {
 	s.CreateCircle(c, 1)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	disc, err := Extrude(t.Context(), doc, s, s.Profiles()[0], Distance{D: units.Millimeters(4), Dir: p.toward(x, z, y)})
+	disc, err := Extrude(doc, s, s.Profiles()[0], Distance{D: units.Millimeters(4), Dir: p.toward(x, z, y)}).Do(t.Context())
 	require.NoError(t, err)
 	return Union(host, disc).Do(t.Context())
 }
@@ -324,7 +324,7 @@ func flushCircleLoft(t *testing.T, doc *Document) *Body {
 		require.NoError(t, err)
 		sections[i], profiles[i] = s, s.Profiles()[0]
 	}
-	body, err := Loft(t.Context(), doc, sections[0], profiles[0], sections[1], profiles[1])
+	body, err := Loft(doc, sections[0], profiles[0], sections[1], profiles[1]).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -469,10 +469,10 @@ func TestFlushContactRoundedCapLevelRefused(t *testing.T) {
 	doc := New(ExactOnly())
 	s0, p0 := square(lower, 5)
 	s1, p1 := square(upper, 5)
-	blank, err := Loft(t.Context(), doc, s0, p0, s1, p1)
+	blank, err := Loft(doc, s0, p0, s1, p1).Do(t.Context())
 	require.NoError(t, err)
 	ts, tp := square(lower, 1)
-	tool, err := Extrude(t.Context(), doc, ts, tp, Distance{D: units.Millimeters(math.Nextafter(2, 0)), Dir: Along})
+	tool, err := Extrude(doc, ts, tp, Distance{D: units.Millimeters(math.Nextafter(2, 0)), Dir: Along}).Do(t.Context())
 	require.NoError(t, err)
 	_, err = Cut(blank, tool).Do(t.Context())
 	require.ErrorIs(t, err, ErrUnsupported)

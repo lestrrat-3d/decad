@@ -1,4 +1,8 @@
-// Package featureoption owns the option vocabulary shared by profile-fed features.
+// Package featureoption owns the validation of the optional inputs the
+// profile-fed feature commands share, and the configurations those inputs fold
+// into (agent-docs/command-api-design.md §4, rule A9). A command method stores
+// a value with the error its validation here returned, and the operation's gate
+// refuses that error where the old option decode did.
 package featureoption
 
 import (
@@ -8,93 +12,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/units"
-	"github.com/lestrrat-go/option/v3"
 )
-
-// ExtrudeOption configures Extrude.
-type ExtrudeOption interface {
-	option.Interface
-	extrudeOption()
-}
-
-// RevolveOption configures Revolve.
-type RevolveOption interface {
-	option.Interface
-	revolveOption()
-}
-
-// SweepOption configures Sweep.
-type SweepOption interface {
-	option.Interface
-	sweepOption()
-}
-
-// LoftOption configures Loft.
-type LoftOption interface {
-	option.Interface
-	loftOption()
-}
-
-// SurfaceResultOption is accepted by all four profile-fed features.
-type SurfaceResultOption interface {
-	ExtrudeOption
-	RevolveOption
-	SweepOption
-	LoftOption
-}
-
-type extrudeOption struct{ option.Interface }
-type sweepOption struct{ option.Interface }
-type loftOption struct{ option.Interface }
-type surfaceResultOption struct{ option.Interface }
-
-func (extrudeOption) extrudeOption()       {}
-func (sweepOption) sweepOption()           {}
-func (loftOption) loftOption()             {}
-func (surfaceResultOption) extrudeOption() {}
-func (surfaceResultOption) revolveOption() {}
-func (surfaceResultOption) sweepOption()   {}
-func (surfaceResultOption) loftOption()    {}
-
-type identTaper struct{}
-type identSurfaceResult struct{}
-type identSweepTwist struct{}
-type identMitredJoins struct{}
-type identSectionScale struct{}
-type identLoftAlignment struct{}
-type identLoftSplits struct{}
-
-// WithTaper records the signed extrusion taper angle.
-func WithTaper(a units.Value) ExtrudeOption {
-	return extrudeOption{option.New(identTaper{}, a)}
-}
-
-// WithSurfaceResult omits closing faces from a profile-fed feature.
-func WithSurfaceResult() SurfaceResultOption {
-	return surfaceResultOption{option.New(identSurfaceResult{}, struct{}{})}
-}
-
-// WithSweepTwist records a sweep twist angle.
-func WithSweepTwist(angle units.Value) SweepOption {
-	return sweepOption{option.New(identSweepTwist{}, angle)}
-}
-
-// WithMitredJoins selects a mitred polyline sweep.
-func WithMitredJoins() SweepOption {
-	return sweepOption{option.New(identMitredJoins{}, struct{}{})}
-}
-
-// WithSectionScale records one section scale per path segment.
-func WithSectionScale(factors ...units.Value) SweepOption {
-	return sweepOption{option.New(identSectionScale{}, append([]units.Value(nil), factors...))}
-}
-
-// WithLoftAlignment records one segment offset per paired loop.
-func WithLoftAlignment(offsets ...int) LoftOption {
-	out := make([]int, len(offsets))
-	copy(out, offsets)
-	return loftOption{option.New(identLoftAlignment{}, out)}
-}
 
 // LoftSplit names one recorded segment of one loop and the fractions of its
 // parameter range at which a loft cuts it.
@@ -103,55 +21,35 @@ type LoftSplit struct {
 	At            []float64
 }
 
-// loftSplitsPayload is WithLoftSplits' value: one list per section.
-type loftSplitsPayload struct{ First, Second []LoftSplit }
-
-// WithLoftSplits records the splits of the first and of the second section.
-func WithLoftSplits(first, second []LoftSplit) LoftOption {
-	clone := func(in []LoftSplit) []LoftSplit {
-		out := make([]LoftSplit, len(in))
-		for i, s := range in {
-			out[i] = LoftSplit{Loop: s.Loop, Segment: s.Segment, At: slices.Clone(s.At)}
-		}
-		return out
+// CloneSplits deep-copies splits, so a caller's later write to a slice reaches
+// neither the copy nor its fractions.
+func CloneSplits(in []LoftSplit) []LoftSplit {
+	out := make([]LoftSplit, len(in))
+	for i, s := range in {
+		out[i] = LoftSplit{Loop: s.Loop, Segment: s.Segment, At: slices.Clone(s.At)}
 	}
-	return loftOption{option.New(identLoftSplits{}, loftSplitsPayload{First: clone(first), Second: clone(second)})}
+	return out
 }
 
-// ExtrudeConfig is the folded extrusion option set.
+// ExtrudeConfig is the folded extrusion input set.
 type ExtrudeConfig struct {
 	Taper         units.Value
 	SurfaceResult bool
 }
 
-// DecodeExtrude preserves Extrude's last-taper-wins and repeated-surface rules.
-func DecodeExtrude(opts []ExtrudeOption) (ExtrudeConfig, error) {
-	cfg := ExtrudeConfig{Taper: units.Degrees(0)}
-	for _, o := range opts {
-		if o == nil {
-			return ExtrudeConfig{}, fmt.Errorf(`%w: a nil option names nothing to apply`, decaderr.ErrDegenerate)
-		}
-		switch o.Ident().(type) {
-		case identTaper:
-			v, ok := option.Get[units.Value](o)
-			if !ok {
-				return ExtrudeConfig{}, fmt.Errorf(`%w: WithTaper carries no angle`, decaderr.ErrDegenerate)
-			}
-			cfg.Taper = v
-		case identSurfaceResult:
-			cfg.SurfaceResult = true
-		}
+// ValidateTaper checks that a taper is a representable angle. It reads
+// nothing but the value.
+func ValidateTaper(a units.Value) error {
+	if a.Kind() != units.Angle {
+		return fmt.Errorf(`%w: a taper must be an angle, got %s`, decaderr.ErrUnitKind, a.Kind())
 	}
-	if cfg.Taper.Kind() != units.Angle {
-		return ExtrudeConfig{}, fmt.Errorf(`%w: a taper must be an angle, got %s`, decaderr.ErrUnitKind, cfg.Taper.Kind())
+	if _, err := a.In(units.Radian); err != nil {
+		return fmt.Errorf(`%w: the taper is not representable: %s`, decaderr.ErrNotFinite, err)
 	}
-	if _, err := cfg.Taper.In(units.Radian); err != nil {
-		return ExtrudeConfig{}, fmt.Errorf(`%w: the taper is not representable: %s`, decaderr.ErrNotFinite, err)
-	}
-	return cfg, nil
+	return nil
 }
 
-// SweepConfig is the validated sweep option set.
+// SweepConfig is the folded sweep input set.
 type SweepConfig struct {
 	SurfaceResult bool
 	Mitred        bool
@@ -161,79 +59,23 @@ type SweepConfig struct {
 	Twist         units.Value
 }
 
-// DecodeSweep validates sweep options against the path's segment count.
-func DecodeSweep(opts []SweepOption, segments int) (SweepConfig, error) {
-	var cfg SweepConfig
-	haveTwist := false
-	var twist sweepOption
-	var scale []units.Value
-	for _, raw := range opts {
-		if raw == nil {
-			return SweepConfig{}, fmt.Errorf(`%w: a nil option names nothing to apply`, decaderr.ErrDegenerate)
-		}
-		if _, ok := raw.(surfaceResultOption); ok {
-			cfg.SurfaceResult = true
-			continue
-		}
-		o, ok := raw.(sweepOption)
-		if !ok {
-			return SweepConfig{}, fmt.Errorf(`%w: the sweep option is not a decad sweep option (%T)`, decaderr.ErrDegenerate, raw)
-		}
-		switch ident := o.Ident().(type) {
-		case identSweepTwist:
-			if haveTwist {
-				return SweepConfig{}, fmt.Errorf(`%w: WithSweepTwist was passed more than once`, decaderr.ErrDegenerate)
-			}
-			twist, haveTwist = o, true
-		case identMitredJoins:
-			if cfg.Mitred {
-				return SweepConfig{}, fmt.Errorf(`%w: WithMitredJoins was passed more than once`, decaderr.ErrDegenerate)
-			}
-			cfg.Mitred = true
-		case identSectionScale:
-			if cfg.Scaled {
-				return SweepConfig{}, fmt.Errorf(`%w: WithSectionScale was passed more than once`, decaderr.ErrDegenerate)
-			}
-			factors, ok := option.Get[[]units.Value](o)
-			if !ok {
-				return SweepConfig{}, fmt.Errorf(`%w: WithSectionScale carries no factors`, decaderr.ErrDegenerate)
-			}
-			scale, cfg.Scaled = factors, true
-		default:
-			return SweepConfig{}, fmt.Errorf(`%w: unknown sweep option identifier %T`, decaderr.ErrDegenerate, ident)
-		}
-	}
-	if cfg.Scaled {
-		factors, err := validateSectionScale(scale, segments)
-		if err != nil {
-			return SweepConfig{}, err
-		}
-		cfg.Factors = factors
-	}
-	if haveTwist {
-		angle, ok := option.Get[units.Value](twist)
-		if !ok {
-			return SweepConfig{}, fmt.Errorf(`%w: WithSweepTwist carries no angle`, decaderr.ErrDegenerate)
-		}
-		if angle.Kind() != units.Angle {
-			return SweepConfig{}, fmt.Errorf(`%w: sweep twist must be an angle, got %s`, decaderr.ErrUnitKind, angle.Kind())
-		}
-		if _, err := angle.In(units.Radian); err != nil {
-			return SweepConfig{}, fmt.Errorf(`%w: the sweep twist is not representable: %s`, decaderr.ErrNotFinite, err)
-		}
-		cfg.Twisted = angle.Mag() != 0
-		cfg.Twist = angle
-	}
-	if cfg.Twisted && (cfg.SurfaceResult || cfg.Mitred || cfg.Scaled) {
-		return SweepConfig{}, fmt.Errorf(`%w: nonzero twist does not combine with a sheet, mitred joins, or section scale`, decaderr.ErrUnsupported)
-	}
-	if cfg.SurfaceResult && (cfg.Mitred || cfg.Scaled) {
-		return SweepConfig{}, fmt.Errorf(`%w: a mitred or scaled sweep builds a solid only; WithSurfaceResult is not implemented for it (agent-docs/sweep-design.md Table SM row SM9)`, decaderr.ErrUnsupported)
-	}
-	return cfg, nil
+// SweepInput is what the sweep methods stored: the flags, the copied section
+// scale factors with the error of validating them, and the twist angle with
+// the error of validating it.
+type SweepInput struct {
+	SurfaceResult bool
+	Mitred        bool
+	ScaleSet      bool
+	Scale         []float64
+	ScaleErr      error
+	TwistSet      bool
+	Twist         units.Value
+	TwistErr      error
 }
 
-func validateSectionScale(raw []units.Value, segments int) ([]float64, error) {
+// ValidateSectionScale checks every factor of a section scale and returns
+// their base values. The factor count against the path is CheckScaleCount's.
+func ValidateSectionScale(raw []units.Value) ([]float64, error) {
 	out := make([]float64, len(raw))
 	for k, f := range raw {
 		if f.Kind() != units.Dimensionless {
@@ -248,60 +90,69 @@ func validateSectionScale(raw []units.Value, segments int) ([]float64, error) {
 		}
 		out[k] = v
 	}
-	if len(out) != segments {
-		return nil, fmt.Errorf(`%w: WithSectionScale states %d factors for a path of %d segments`, decaderr.ErrDegenerate, len(out), segments)
-	}
 	return out, nil
 }
 
-// LoftConfig is the folded loft option set.
+// ValidateTwist checks that a sweep twist is a representable angle.
+func ValidateTwist(angle units.Value) error {
+	if angle.Kind() != units.Angle {
+		return fmt.Errorf(`%w: sweep twist must be an angle, got %s`, decaderr.ErrUnitKind, angle.Kind())
+	}
+	if _, err := angle.In(units.Radian); err != nil {
+		return fmt.Errorf(`%w: the sweep twist is not representable: %s`, decaderr.ErrNotFinite, err)
+	}
+	return nil
+}
+
+// SweepFaultError is the fault of a stored sweep method. Method names the method
+// whose value is refused, for the diagnostic's subject.
+type SweepFaultError struct {
+	Method string
+	Err    error
+}
+
+// Error returns the text of the underlying fault.
+func (f *SweepFaultError) Error() string { return f.Err.Error() }
+
+// Unwrap returns the underlying fault, so errors.Is sees its sentinel.
+func (f *SweepFaultError) Unwrap() error { return f.Err }
+
+// FoldSweep folds the stored sweep inputs for a path of segments spans. A
+// stored method fault is returned first, as a *SweepFaultError, in the order the
+// section scale, the twist and then the conflicts were refused before.
+func FoldSweep(in SweepInput, segments int) (SweepConfig, error) {
+	cfg := SweepConfig{SurfaceResult: in.SurfaceResult, Mitred: in.Mitred}
+	if in.ScaleSet {
+		if in.ScaleErr != nil {
+			return SweepConfig{}, &SweepFaultError{Method: "SectionScale", Err: in.ScaleErr}
+		}
+		if len(in.Scale) != segments {
+			return SweepConfig{}, &SweepFaultError{Method: "SectionScale", Err: fmt.Errorf(
+				`%w: SectionScale states %d factors for a path of %d segments`,
+				decaderr.ErrDegenerate, len(in.Scale), segments)}
+		}
+		cfg.Scaled, cfg.Factors = true, slices.Clone(in.Scale)
+	}
+	if in.TwistSet {
+		if in.TwistErr != nil {
+			return SweepConfig{}, &SweepFaultError{Method: "Twist", Err: in.TwistErr}
+		}
+		cfg.Twisted = in.Twist.Mag() != 0
+		cfg.Twist = in.Twist
+	}
+	if cfg.Twisted && (cfg.SurfaceResult || cfg.Mitred || cfg.Scaled) {
+		return SweepConfig{}, fmt.Errorf(`%w: nonzero twist does not combine with a sheet, mitred joins, or section scale`, decaderr.ErrUnsupported)
+	}
+	if cfg.SurfaceResult && (cfg.Mitred || cfg.Scaled) {
+		return SweepConfig{}, fmt.Errorf(`%w: a mitred or scaled sweep builds a solid only; SurfaceResult is not implemented for it (agent-docs/sweep-design.md Table SM row SM9)`, decaderr.ErrUnsupported)
+	}
+	return cfg, nil
+}
+
+// LoftConfig is the folded loft input set.
 type LoftConfig struct {
 	Alignment     []int
 	SurfaceResult bool
 	// Splits holds the splits of the first and the second section.
 	Splits [2][]LoftSplit
-}
-
-// DecodeLoft checks owned options and repeated alignment before the sketch seam.
-func DecodeLoft(opts []LoftOption) (LoftConfig, error) {
-	var cfg LoftConfig
-	haveAlignment, haveSplits := false, false
-	for _, raw := range opts {
-		if raw == nil {
-			return LoftConfig{}, fmt.Errorf(`%w: a nil option names nothing to apply`, decaderr.ErrDegenerate)
-		}
-		if _, ok := raw.(surfaceResultOption); ok {
-			cfg.SurfaceResult = true
-			continue
-		}
-		o, ok := raw.(loftOption)
-		if !ok {
-			return LoftConfig{}, fmt.Errorf(`%w: the loft option is not a decad loft option (%T)`, decaderr.ErrDegenerate, raw)
-		}
-		switch ident := o.Ident().(type) {
-		case identLoftAlignment:
-			if haveAlignment {
-				return LoftConfig{}, fmt.Errorf(`%w: WithLoftAlignment was passed more than once; two alignment payloads name two different correspondences`, decaderr.ErrDegenerate)
-			}
-			v, ok := option.Get[[]int](o)
-			if !ok {
-				return LoftConfig{}, fmt.Errorf(`%w: WithLoftAlignment carries no offsets`, decaderr.ErrDegenerate)
-			}
-			cfg.Alignment = slices.Clone(v)
-			haveAlignment = true
-		case identLoftSplits:
-			if haveSplits {
-				return LoftConfig{}, fmt.Errorf(`%w: WithLoftSplits was passed more than once; two split payloads name two different correspondences`, decaderr.ErrDegenerate)
-			}
-			v, ok := option.Get[loftSplitsPayload](o)
-			if !ok {
-				return LoftConfig{}, fmt.Errorf(`%w: WithLoftSplits carries no splits`, decaderr.ErrDegenerate)
-			}
-			cfg.Splits = [2][]LoftSplit{v.First, v.Second}
-			haveSplits = true
-		default:
-			return LoftConfig{}, fmt.Errorf(`%w: unknown loft option identifier %T`, decaderr.ErrDegenerate, ident)
-		}
-	}
-	return cfg, nil
 }

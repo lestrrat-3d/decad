@@ -22,9 +22,9 @@ func benchmarkInfillSkin(b *testing.B) *decad.Body {
 	if _, err := s.Solve(b.Context()); err != nil {
 		b.Fatal(err)
 	}
-	block, err := decad.Extrude(b.Context(), doc, s, s.Profiles()[0], decad.Distance{
+	block, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{
 		D: units.Millimeters(12), Dir: decad.Along,
-	})
+	}).Do(b.Context())
 	if err != nil {
 		b.Fatal(err)
 	}

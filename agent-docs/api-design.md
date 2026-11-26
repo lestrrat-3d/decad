@@ -1049,25 +1049,42 @@ exactly identical curved sections, linearly varying four-arc circles, and the
 bounded varying fitted-flank class with fixed arcs; or four rounded-rectangle
 sections with cubic width and fixed height and corner radius.
 `agent-docs/loft-design.md` §20 owns the separate
-`LoftFromPoint(ctx, doc, apex, sketch, profile)` solid construction from
+`LoftFromPoint(doc, apex, sketch, profile)` solid construction from
 an exact world point to one recorded Sketch profile. `agent-docs/sweep-design.md` owns `Sweep`'s
 signature, spatial `Path`, frame transport, refusals, and staged reach.
 `agent-docs/helix-design.md` owns `Coil`'s signature, its axis and its extent in
 turns.
 `agent-docs/surface-design.md` owns `PatchProfile`, `PatchEdges`, `Stitch`, `Unstitch` and `Thicken`,
-together with `WithSurfaceResult()`, the option that
+together with `SurfaceResult`, the method that
 makes `Extrude`, `Revolve`, `Sweep` and `Loft` return their wall set as a
 sheet instead of closing it into a solid, and the chain-fed forms that
-sweep an open curve (§13 there). `agent-docs/modify-design.md` Part D owns `WithTaper`'s
+sweep an open curve (§13 there). `agent-docs/modify-design.md` Part D owns `Taper`'s
 build and `Draft`, the face draft of an existing prism, with its
 `NeutralFace`/`NeutralFrame` planes and the `Walls(b)` selector.
 
 ```go
-func Extrude[S Section](ctx context.Context, d *Document, s *sketch.Sketch, sec S, e Extent, opts ...ExtrudeOption) (*Body, error)
-func Revolve[S Section](ctx context.Context, d *Document, s *sketch.Sketch, sec S, axis Axis, a AngularExtent, opts ...RevolveOption) (*Body, error)
-func Sweep[S Section](ctx context.Context, d *Document, s *sketch.Sketch, sec S, path *Path, opts ...SweepOption) (*Body, error)
-func Coil(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.Profile, axis Axis, pitch, turns units.Value, opts ...CoilOption) (*Body, error)
-func LoftFromPoint(ctx context.Context, d *Document, apex r3.Vec, s *sketch.Sketch, p *sketch.Profile) (*Body, error)
+func Extrude[S Section](d *Document, s *sketch.Sketch, sec S, e Extent) *ExtrudeCommand
+func (c *ExtrudeCommand) Taper(a units.Value) *ExtrudeCommand
+func (c *ExtrudeCommand) SurfaceResult() *ExtrudeCommand
+func (c *ExtrudeCommand) Do(ctx context.Context) (*Body, error)
+
+func Revolve[S Section](d *Document, s *sketch.Sketch, sec S, axis Axis, a AngularExtent) *RevolveCommand
+func (c *RevolveCommand) SurfaceResult() *RevolveCommand
+func (c *RevolveCommand) Do(ctx context.Context) (*Body, error)
+
+func Sweep[S Section](d *Document, s *sketch.Sketch, sec S, path *Path) *SweepCommand
+func (c *SweepCommand) Twist(angle units.Value) *SweepCommand
+func (c *SweepCommand) MitredJoins() *SweepCommand
+func (c *SweepCommand) SectionScale(factors ...units.Value) *SweepCommand
+func (c *SweepCommand) SurfaceResult() *SweepCommand
+func (c *SweepCommand) Do(ctx context.Context) (*Body, error)
+
+func Coil(d *Document, s *sketch.Sketch, p *sketch.Profile, axis Axis, pitch, turns units.Value) *CoilCommand
+func (c *CoilCommand) LeftHand() *CoilCommand
+func (c *CoilCommand) Do(ctx context.Context) (*Body, error)
+
+func LoftFromPoint(d *Document, apex r3.Vec, s *sketch.Sketch, p *sketch.Profile) *LoftFromPointCommand
+func (c *LoftFromPointCommand) Do(ctx context.Context) (*Body, error)
 
 // Section is the sketch geometry a section-fed operation consumes: a closed
 // *sketch.Profile or an open *sketch.Chain.
@@ -1075,31 +1092,31 @@ type Section interface{ *sketch.Profile | *sketch.Chain }
 ```
 
 `Extrude` infers `S` from `sec`, so no call site names the type argument. A
-profile section builds a solid, or a sheet under `WithSurfaceResult()`, and a
-nonzero `WithTaper` builds a draft body. A chain section builds a sheet with no
-draft build, so `Extrude` returns `ErrUnsupported` for `WithSurfaceResult()` and
-for `WithTaper` of any angle, zero included, on a chain. That refusal follows
-the chain's seam gates and nil-option check and precedes extent resolution and
+profile section builds a solid, or a sheet under `SurfaceResult`, and a
+nonzero `Taper` builds a draft body. A chain section builds a sheet with no
+draft build, so `Extrude` returns `ErrUnsupported` for `SurfaceResult` and
+for `Taper` of any angle, zero included, on a chain. That refusal follows
+the chain's seam gates and precedes extent resolution and
 any commit (`agent-docs/surface-design.md` §13.2).
 
 `Sweep` and `Revolve` infer `S` the same way. A profile section builds a solid, or a sheet under
-`WithSurfaceResult()`. A chain section builds a sheet, so `Sweep` returns `ErrUnsupported` for
-`WithSurfaceResult()` and `WithSweepTwist` on a chain, before any commit
+`SurfaceResult`. A chain section builds a sheet, so `Sweep` returns `ErrUnsupported` for
+`SurfaceResult` and `Twist` on a chain, before any commit
 (`agent-docs/surface-design.md` §13.2, `agent-docs/sweep-design.md` §15.3).
 
-`Revolve` returns `ErrUnsupported` for `WithSurfaceResult()` on a chain, after the chain's seam gates and
+`Revolve` returns `ErrUnsupported` for `SurfaceResult` on a chain, after the chain's seam gates and
 before the axis gates and any commit (`agent-docs/surface-design.md` §13.2).
 
-`LoftSections(ctx, doc, sections ...LoftSection)` carries each `Sketch` and
+`LoftSections(doc, sections ...LoftSection)` carries each `Sketch` and
 `Profile` together. It admits the bounded classes in
 `agent-docs/loft-sections-design.md`.
 
-`LoftSectionsWithCircularCorrespondence` takes the same sections and an explicit
+`LoftSections(...).CircularCorrespondence(c)` takes the same sections and an explicit
 `CircularLoftCorrespondence` of four rational Bernstein maps. It admits the
 flat-quarter circular-to-spline class and proves the chosen correspondence as
 specified in `agent-docs/loft-sections-design.md` §14.
 
-`LoftFaces(ctx, sections, opts...)` consumes two to thirty-two ordered planar caps from
+`LoftFaces(sections)` consumes two to thirty-two ordered planar caps from
 authenticated point-loft Split slabs. It retains their original Sketch
 profile and exact cut-plane maps through rigid placement and positive
 uniform scale. It reaches the document through the body of `sections[0]`
@@ -1107,26 +1124,21 @@ and takes no `*Document` (§6.3). Its bounded source class and proof are in
 `agent-docs/loft-face-sections-design.md`.
 
 ```go
-// LoftFacesOption configures LoftFaces.
-type LoftFacesOption interface {
-	option.Interface
-	loftFacesOption()
-}
+func LoftFaces(sections []*Face) *LoftFacesCommand
 
-func LoftFaces(ctx context.Context, sections []*Face, opts ...LoftFacesOption) (*Body, error)
-
-// WithConeTangentEnd ends the loft with a constructed section tangent to
+// LoftFacesToCone ends the loft with a constructed section tangent to
 // cone along the ruling whose radius points along radial.
-func WithConeTangentEnd(cone *Body, radial r3.Vec) LoftFacesOption
+func LoftFacesToCone(sections []*Face, cone *Body, radial r3.Vec) *LoftFacesCommand
+
+func (c *LoftFacesCommand) Do(ctx context.Context) (*Body, error)
 ```
 
-With `WithConeTangentEnd`, `sections` holds one to thirty-one caps, in
+With `LoftFacesToCone`, `sections` holds one to thirty-one caps, in
 the same order (the least slab's toe cap, then heel caps in source order),
 and the last section is built from `cone`'s exact apex and slope instead of
 being selected. The result is an ordinary LoftFaces body: its end face
 carries the cap-end role of the new loft and a rounded `Plane` tag, and
-`Cut` and `Intersect` continue from it as they do without the option. The
-option is accepted at most once. A nil option, a repeated option, a nil
+`Cut` and `Intersect` continue from it as they do for `LoftFaces`. A nil
 cone, a `radial` with a nonzero `X` or without a finite nonzero `(Y, Z)`,
 and a section count outside the bounds are `ErrDegenerate`. A cone that is
 not an unplaced exact point cone about world X is `ErrUnsupported`, a cone
@@ -1502,16 +1514,14 @@ encloses no material region (§6, `BodyKind`). `Thicken` returns a solid;
 `agent-docs/surface-design.md` is normative for all these operations:
 
 ```go
-type SurfaceResultOption interface {
-    ExtrudeOption
-    RevolveOption
-    SweepOption
-    LoftOption
-}
+// Each of the four commands declares its own one-line SurfaceResult method.
+func (c *ExtrudeCommand) SurfaceResult() *ExtrudeCommand
+func (c *RevolveCommand) SurfaceResult() *RevolveCommand
+func (c *SweepCommand) SurfaceResult() *SweepCommand
+func (c *LoftCommand) SurfaceResult() *LoftCommand
 
-func WithSurfaceResult() SurfaceResultOption
-
-func PatchProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.Profile) (*Body, error)
+func PatchProfile(d *Document, s *sketch.Sketch, p *sketch.Profile) *PatchProfileCommand
+func (c *PatchProfileCommand) Do(ctx context.Context) (*Body, error)
 func PatchEdges(ctx context.Context, b *Body, sel EdgeSelector) (*Body, error)
 
 func Stitch(ctx context.Context, bodies ...*Body) (*Body, error)
@@ -1521,15 +1531,15 @@ func (c *ThickenCommand) Side(side ThickenSide) *ThickenCommand
 func (c *ThickenCommand) Do(ctx context.Context) (*Body, error)
 
 // The chain-fed forms. Each sweeps an OPEN sketch curve and always returns a
-// BodySheet, so WithSurfaceResult() is not among their options: ChainLoftOption
-// is LoftChain's own sealed tier, which SurfaceResultOption does not implement.
-// Extrude, Sweep and Revolve take a chain through Section instead (above).
-func LoftChain(ctx context.Context, d *Document, s0 *sketch.Sketch, c0 *sketch.Chain, s1 *sketch.Sketch, c1 *sketch.Chain, opts ...ChainLoftOption) (*Body, error)
+// BodySheet, so SurfaceResult is not among their methods: LoftChainCommand
+// has none. Extrude, Sweep and Revolve take a chain through Section instead (above).
+func LoftChain(d *Document, s0 *sketch.Sketch, c0 *sketch.Chain, s1 *sketch.Sketch, c1 *sketch.Chain) *LoftChainCommand
+func (c *LoftChainCommand) Do(ctx context.Context) (*Body, error)
 ```
 
 `ThickenSide` is `ThickenPositive` (default), `ThickenNegative` or
 `ThickenCentered`; `agent-docs/surface-design.md` §16 owns the receiver and proof
-limits. `WithSurfaceResult()` omits the faces that exist only to close the
+limits. `SurfaceResult` omits the faces that exist only to close the
 solid and changes nothing else — a wall keeps its surface, its role and every bound.
 `PatchProfile` builds a planar face from a recorded profile and consumes
 nothing; `PatchEdges` fills a closed chain of the body's free edges and
@@ -1685,12 +1695,12 @@ persisting or constructing internal identifiers.
 counterbore or countersink head on a round hole, at a world point on a planar face of `b`, or radially at a point on a cylindrical one. It builds the tool bodies, cuts them from `b` in one
 atomic commit, and retires `b`. `agent-docs/hole-design.md` owns the placement, size and refusal rules.
 
-**A rib is a thickened line or arc.** `WebPath(ctx, b, s, path, thickness, e)` thickens each `*sketch.Line` and
+**A rib is a thickened line or arc.** `WebPath(b, s, path, thickness, e)` thickens each `*sketch.Line` and
 `*sketch.Arc` of `path` across its width, a line into a rectangle and an arc into an annular band, extrudes each
-outline by `e`, and joins the ribs to `b` in one commit. A path of one entity is one rib. `WithRibOverrun` buries the
-ends of a rib in the walls it spans, and `WithRibDraft` leans its walls. `agent-docs/rib-design.md` owns the rules.
+outline by `e`, and joins the ribs to `b` in one commit. A path of one entity is one rib. `Overrun` buries the
+ends of a rib in the walls it spans, and `Draft` leans its walls. `agent-docs/rib-design.md` owns the rules.
 
-**A relief is a profile on a face.** `Emboss(ctx, b, s, profiles, face, mode, height)` extrudes closed profiles of a sketch
+**A relief is a profile on a face.** `Emboss(b, s, profiles, face, mode, height)` extrudes closed profiles of a sketch
 that lies in the plane of a planar face, outward for `EmbossRaised` and inward for `EmbossEngraved`, and joins them to
 `b` with `Union` or `Cut` in one commit. `agent-docs/emboss-design.md` owns the rules.
 
@@ -2360,7 +2370,7 @@ the resulting bodies, measurements, and verification reports directly.
   the `Tessellate` tolerance (§11). Three `units.Value` parameters are **signed
   displacements, not magnitudes**, and are outside it: `ToFace.Offset`, which
   displaces along the target face's normal and whose sign says which side of that
-  face the sweep stops on (§8.1); `ExtrudeOpts.Taper` (`WithTaper`, §8.1),
+  face the sweep stops on (§8.1); `ExtrudeOpts.Taper` (`Taper`, §8.1),
   whose sign says which way the wall leans; and `Draft`'s angle
   (`agent-docs/modify-design.md` Part D §10), read the same way about its neutral plane. None carries a `Direction` to reverse,
   so a negative value there is a legal intent, not an error.

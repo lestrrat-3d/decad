@@ -351,7 +351,7 @@ func saddleTubeRoot(t *testing.T) *decad.Body {
 	s.Fix(rect.C)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	tube, err := decad.Revolve(t.Context(), sc.doc, s, s.Profiles()[0], uAxis, decad.FullRevolution{})
+	tube, err := decad.Revolve(sc.doc, s, s.Profiles()[0], uAxis, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	plane, err := sc.w.CreateOffsetPlane(sc.w.XY(), 2)
 	require.NoError(t, err)
@@ -362,8 +362,8 @@ func saddleTubeRoot(t *testing.T) *decad.Body {
 	ps.CreateCircle(c, 3)
 	_, err = ps.Solve(t.Context())
 	require.NoError(t, err)
-	pin, err := decad.Extrude(t.Context(), sc.doc, ps, ps.Profiles()[0],
-		decad.Distance{D: units.Millimeters(13), Dir: decad.Along})
+	pin, err := decad.Extrude(sc.doc, ps, ps.Profiles()[0],
+		decad.Distance{D: units.Millimeters(13), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	body, err := decad.Union(tube, pin).Do(t.Context())
 	require.NoError(t, err)

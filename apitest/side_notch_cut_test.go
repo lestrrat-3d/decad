@@ -173,7 +173,7 @@ func forkBody(t *testing.T, doc *decad.Document, z float64, depth units.Value, h
 		}
 	}
 	require.NotNil(t, profile)
-	body, err := decad.Extrude(t.Context(), doc, s, profile, decad.Distance{D: depth, Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, profile, decad.Distance{D: depth, Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }

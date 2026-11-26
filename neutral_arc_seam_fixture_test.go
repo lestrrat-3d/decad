@@ -34,8 +34,8 @@ func neutralArcSeamCone(t *testing.T, doc *Document, apex float64) *Body {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	require.Len(t, s.Profiles(), 1)
-	tool, err := Revolve(t.Context(), doc, s, s.Profiles()[0],
-		SketchLine{Start: planePoint{}, End: planePoint{U: 1}}, FullRevolution{})
+	tool, err := Revolve(doc, s, s.Profiles()[0],
+		SketchLine{Start: planePoint{}, End: planePoint{U: 1}}, FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	return tool
 }
@@ -71,7 +71,7 @@ func neutralArcSeamSource(t *testing.T) (*Body, *Body) {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	require.Len(t, s.Profiles(), 1)
-	inner, err := LoftFromPoint(t.Context(), doc, r3.Vec{}, s, s.Profiles()[0])
+	inner, err := LoftFromPoint(doc, r3.Vec{}, s, s.Profiles()[0]).Do(t.Context())
 	require.NoError(t, err)
 	slabs := make([]*Body, 0, 8)
 	for k := 1; k <= 8; k++ {
@@ -86,10 +86,10 @@ func neutralArcSeamSource(t *testing.T) (*Body, *Body) {
 		_, sheetErr = sheetSketch.Solve(t.Context())
 		require.NoError(t, sheetErr)
 		require.Len(t, sheetSketch.Chains(), 1)
-		sheet, sheetErr := Extrude(t.Context(), doc, sheetSketch, sheetSketch.Chains()[0], TwoSided{
+		sheet, sheetErr := Extrude(doc, sheetSketch, sheetSketch.Chains()[0], TwoSided{
 			One: DistanceSide{D: units.Millimeters(20)},
 			Two: DistanceSide{D: units.Millimeters(20)},
-		})
+		}).Do(t.Context())
 		require.NoError(t, sheetErr)
 		parts, splitErr := Split(t.Context(), inner, sheet)
 		require.NoError(t, splitErr)
@@ -102,7 +102,7 @@ func neutralArcSeamSource(t *testing.T) (*Body, *Body) {
 	for i := range slices.Backward(slabs) {
 		sections = append(sections, neutralArcSeamCap(t, slabs[i], refOf(CapEnd(slabs[i]))))
 	}
-	loft, err := LoftFaces(t.Context(), sections)
+	loft, err := LoftFaces(sections).Do(t.Context())
 	require.NoError(t, err)
 	toe, err := Cut(loft, neutralArcSeamCone(t, doc, 6.5)).Do(t.Context())
 	require.NoError(t, err)
@@ -127,8 +127,8 @@ func neutralArcSeamSource(t *testing.T) (*Body, *Body) {
 	_, err = blankSketch.Solve(t.Context())
 	require.NoError(t, err)
 	require.Len(t, blankSketch.Profiles(), 1)
-	blank, err := Revolve(t.Context(), doc, blankSketch, blankSketch.Profiles()[0],
-		SketchLine{Start: planePoint{}, End: planePoint{U: 1}}, FullRevolution{})
+	blank, err := Revolve(doc, blankSketch, blankSketch.Profiles()[0],
+		SketchLine{Start: planePoint{}, End: planePoint{U: 1}}, FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	return blank, trimmed
 }

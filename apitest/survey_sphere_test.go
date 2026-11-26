@@ -65,7 +65,7 @@ func halfAnnulusSketch(t *testing.T, ri, ro float64) (*sketch.Sketch, *sketch.Pr
 func sphereWallReport(t *testing.T, s *sketch.Sketch, p *sketch.Profile, axis decad.SketchLine, tool float64) *decad.Report {
 	t.Helper()
 	doc := decad.New()
-	_, err := decad.Revolve(t.Context(), doc, s, p, axis, decad.FullRevolution{})
+	_, err := decad.Revolve(doc, s, p, axis, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(tool)))
 	require.NoError(t, err)

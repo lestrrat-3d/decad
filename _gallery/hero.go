@@ -173,7 +173,7 @@ func heroPlate(ctx context.Context) (*decad.Body, error) {
 		return nil, err
 	}
 	// Extrude has no context-aware variant; Solve above is the cancellable phase.
-	slab, err := decad.Extrude(ctx, decad.New(), s, profile, decad.Symmetric{D: units.Millimeters(plateDepth)})
+	slab, err := decad.Extrude(decad.New(), s, profile, decad.Symmetric{D: units.Millimeters(plateDepth)}).Do(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -276,7 +276,7 @@ func xzPrism(ctx context.Context, loops [][]point, extent decad.Extent) (*decad.
 		return nil, err
 	}
 	// Extrude has no context-aware variant; Solve above is the cancellable phase.
-	return decad.Extrude(ctx, decad.New(), s, profile, extent)
+	return decad.Extrude(decad.New(), s, profile, extent).Do(ctx)
 }
 
 // letterBody extrudes one letter profile letterDepth toward the camera, then
@@ -350,7 +350,7 @@ func heroStud(ctx context.Context, x, z, radius float64) (*decad.Body, error) {
 	}
 	axis := decad.SketchLine{Start: decad.Point2{U: 0, V: z}, End: decad.Point2{U: 1, V: z}}
 	// Revolve has no context-aware variant; Solve above is the cancellable phase.
-	dome, err := decad.Revolve(ctx, decad.New(), s, profile, axis, decad.FullRevolution{})
+	dome, err := decad.Revolve(decad.New(), s, profile, axis, decad.FullRevolution{}).Do(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("revolve the stud: %w", err)
 	}

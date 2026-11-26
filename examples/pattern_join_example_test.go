@@ -37,8 +37,8 @@ func Example_pattern_join() {
 		fmt.Printf("failed to solve: %s\n", err)
 		return
 	}
-	disc, err := decad.Extrude(ctx, doc, ds, ds.Profiles()[0],
-		decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
+	disc, err := decad.Extrude(doc, ds, ds.Profiles()[0],
+		decad.Distance{D: units.Millimeters(height), Dir: decad.Along}).Do(ctx)
 	if err != nil {
 		fmt.Printf("failed to extrude the disc: %s\n", err)
 		return
@@ -94,7 +94,7 @@ func Example_pattern_join() {
 		fmt.Printf("failed to draw the upper section: %s\n", err)
 		return
 	}
-	lobe, err := decad.Loft(ctx, doc, s0, p0, s1, p1)
+	lobe, err := decad.Loft(doc, s0, p0, s1, p1).Do(ctx)
 	if err != nil {
 		fmt.Printf("failed to loft the lobe: %s\n", err)
 		return

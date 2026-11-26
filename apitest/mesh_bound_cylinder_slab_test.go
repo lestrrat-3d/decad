@@ -42,8 +42,8 @@ func slabCylinder(t *testing.T, doc *decad.Document, origin, u, v r3.Vec, r, len
 	s.AddConstraint(sketch.NewRadius(s.CreateCircle(s.Origin(), r), r))
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(length), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(length), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }

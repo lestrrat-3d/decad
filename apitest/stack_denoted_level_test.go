@@ -49,9 +49,9 @@ func stackTopTool(t *testing.T, doc *decad.Document, stack *decad.Body) *decad.B
 	s.Fix(rect.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	tool, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.TwoSided{
+	tool, err := decad.Extrude(doc, s, s.Profiles()[0], decad.TwoSided{
 		One: decad.ToFace{Body: stack, Face: decad.Faces(decad.FaceCreatedBy(decad.CapEnd(stack)))},
-		Two: decad.DistanceSide{D: units.Millimeters(20)}})
+		Two: decad.DistanceSide{D: units.Millimeters(20)}}).Do(t.Context())
 	require.NoError(t, err)
 	return tool
 }
@@ -185,7 +185,7 @@ func splitSheet(t *testing.T, doc *decad.Document, e decad.Extent) *decad.Body {
 	s.CreateLine(a, s.CreatePoint(10, 25))
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	sheet, err := decad.Extrude(t.Context(), doc, s, s.Chains()[0], e)
+	sheet, err := decad.Extrude(doc, s, s.Chains()[0], e).Do(t.Context())
 	require.NoError(t, err)
 	return sheet
 }
@@ -315,7 +315,7 @@ func extendRibbon(t *testing.T, doc *decad.Document, top units.Value) *decad.Bod
 		if len(chain.Edges) != 1 || chain.Edges[0].Entity != line || chain.Edges[0].TStart != 0 {
 			continue
 		}
-		ribbon, err := decad.Extrude(t.Context(), doc, s, chain, decad.Distance{D: top, Dir: decad.Along})
+		ribbon, err := decad.Extrude(doc, s, chain, decad.Distance{D: top, Dir: decad.Along}).Do(t.Context())
 		require.NoError(t, err)
 		return ribbon
 	}

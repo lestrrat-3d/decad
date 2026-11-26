@@ -29,8 +29,8 @@ func Example_pattern_as_one_body() {
 		fmt.Printf("failed to solve: %s\n", err)
 		return
 	}
-	plate, err := decad.Extrude(context.Background(), doc, plateSketch, plateSketch.Profiles()[0],
-		decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	plate, err := decad.Extrude(doc, plateSketch, plateSketch.Profiles()[0],
+		decad.Distance{D: units.Millimeters(5), Dir: decad.Along}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude plate: %s\n", err)
 		return
@@ -50,8 +50,8 @@ func Example_pattern_as_one_body() {
 		fmt.Printf("failed to solve: %s\n", err)
 		return
 	}
-	drill, err := decad.Extrude(context.Background(), doc, drillSketch, drillSketch.Profiles()[0],
-		decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	drill, err := decad.Extrude(doc, drillSketch, drillSketch.Profiles()[0],
+		decad.Distance{D: units.Millimeters(5), Dir: decad.Along}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude drill: %s\n", err)
 		return

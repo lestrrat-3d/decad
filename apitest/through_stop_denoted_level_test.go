@@ -21,7 +21,7 @@ func stopTool(t *testing.T, doc *decad.Document, e decad.Extent) *decad.Body {
 	s.Fix(rect.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	tool, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], e)
+	tool, err := decad.Extrude(doc, s, s.Profiles()[0], e).Do(t.Context())
 	require.NoError(t, err)
 	return tool
 }
@@ -36,7 +36,7 @@ func upPlate(t *testing.T, doc *decad.Document, top units.Value) *decad.Body {
 	s.Fix(rect.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	plate, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: top, Dir: decad.Along})
+	plate, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: top, Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return plate
 }
@@ -242,8 +242,8 @@ func symmetricTool(t *testing.T, doc *decad.Document, x0, y0, x1, y1 float64) *d
 	s.Fix(rect.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	tool, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0],
-		decad.Symmetric{D: units.Inches(0.4), FullLength: true})
+	tool, err := decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Symmetric{D: units.Inches(0.4), FullLength: true}).Do(t.Context())
 	require.NoError(t, err)
 	return tool
 }

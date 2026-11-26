@@ -49,7 +49,7 @@ func Example_loft() {
 	// Loft from the bottom profile to the top one. The result is a frustum:
 	// a pyramid with its tip cut off.
 	doc := decad.New()
-	frustum, err := decad.Loft(context.Background(), doc, bottom, bottom.Profiles()[0], top, top.Profiles()[0])
+	frustum, err := decad.Loft(doc, bottom, bottom.Profiles()[0], top, top.Profiles()[0]).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to loft: %s\n", err)
 		return

@@ -90,7 +90,7 @@ func TestObliqueWallReaders(t *testing.T) {
 			s.CreateCircle(c, 0.5)
 			_, err = s.Solve(t.Context())
 			require.NoError(t, err)
-			return decad.Emboss(t.Context(), body, s, s.Profiles(), wallSelector(t, body, w), decad.EmbossRaised, mm(0.5))
+			return decad.Emboss(body, s, s.Profiles(), wallSelector(t, body, w), decad.EmbossRaised, mm(0.5)).Do(t.Context())
 		}
 		_, err := emboss(part, charged)
 		require.ErrorIs(t, err, decad.ErrUnsupported)

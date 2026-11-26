@@ -60,8 +60,8 @@ func ballAtCentre(t *testing.T, doc *decad.Document, cx, cy, cz, r float64) {
 	s.CreateArc(c, b, a)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	_, err = decad.Revolve(t.Context(), doc, s, s.Profiles()[0],
-		decad.SketchLine{Start: decad.Point2{U: cx, V: cy}, End: decad.Point2{U: cx + 1, V: cy}}, decad.FullRevolution{})
+	_, err = decad.Revolve(doc, s, s.Profiles()[0],
+		decad.SketchLine{Start: decad.Point2{U: cx, V: cy}, End: decad.Point2{U: cx + 1, V: cy}}, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 }
 
@@ -99,9 +99,9 @@ func TestClearanceRevolveConeApexContainsTruth(t *testing.T) {
 	const a = -1048576
 	doc := decad.New()
 	s := fixedPolygonSketch(t, [][2]float64{{0, 0}, {1, 0}, {1, 4}, {0, 1}})
-	_, err := decad.Revolve(t.Context(), doc, s, s.Profiles()[0],
+	_, err := decad.Revolve(doc, s, s.Profiles()[0],
 		decad.SketchLine{Start: decad.Point2{U: a, V: 0}, End: decad.Point2{U: a + 1, V: 0}},
-		decad.SymmetricAngle{A: units.Radians(1)})
+		decad.SymmetricAngle{A: units.Radians(1)}).Do(t.Context())
 	require.NoError(t, err)
 	ballAtCentre(t, doc, -0.25, 2.75, 0, 0.25)
 	requireGapEnclosesRoot(t, clearanceRow(t, doc), big.NewRat(10, 16), big.NewRat(1, 4))
@@ -131,7 +131,7 @@ func TestClearanceRevolveSteepConeContainsTruth(t *testing.T) {
 			t.Parallel()
 			doc := decad.New()
 			s := fixedPolygonSketch(t, [][2]float64{{z0, 0}, {z0 + tc.a*k, tc.b * k}, {z0 + tc.a*k, 0}})
-			_, err := decad.Revolve(t.Context(), doc, s, s.Profiles()[0], uAxis, decad.FullRevolution{})
+			_, err := decad.Revolve(doc, s, s.Profiles()[0], uAxis, decad.FullRevolution{}).Do(t.Context())
 			require.NoError(t, err)
 			const m = k / 2
 			ballAtCentre(t, doc, z0+tc.a*m-tc.b, tc.b*m+tc.a, 0, 0.25)
@@ -185,9 +185,9 @@ func TestClearanceRevolveCapVertexContainsTruth(t *testing.T) {
 			t.Parallel()
 			doc := decad.New()
 			s := rectSketch(t, 0, 0, 1, 1)
-			_, err := decad.Revolve(t.Context(), doc, s, s.Profiles()[0],
+			_, err := decad.Revolve(doc, s, s.Profiles()[0],
 				decad.SketchLine{Start: decad.Point2{U: 0, V: axisV}, End: decad.Point2{U: 1, V: axisV}},
-				decad.SymmetricAngle{A: units.Radians(phi)})
+				decad.SymmetricAngle{A: units.Radians(phi)}).Do(t.Context())
 			require.NoError(t, err)
 
 			// The exact cap corner: (1, axisV + ρ·cos φ, ρ·sin φ), ρ = 2²⁰ + 1.
@@ -247,7 +247,7 @@ func TestClearanceKinkedWallContainsTruth(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
 		s := fixedPolygonSketch(t, [][2]float64{{0, 0}, {1000, 0}, {1000, 2}, {500, 2 + k}, {0, 2}})
-		_, err := decad.Revolve(t.Context(), doc, s, s.Profiles()[0], uAxis, decad.FullRevolution{})
+		_, err := decad.Revolve(doc, s, s.Profiles()[0], uAxis, decad.FullRevolution{}).Do(t.Context())
 		require.NoError(t, err)
 		ballAtCentre(t, doc, 500, 3, 0, 0.25)
 		requireGapEncloses(t, clearanceRow(t, doc), new(big.Rat).Sub(big.NewRat(3, 4), ratOf(k)))
@@ -267,9 +267,9 @@ func witnessConeBody(t *testing.T, doc *decad.Document) *decad.Body {
 	e := 1 + math.Ldexp(1, -32)
 	s := fixedPolygonSketch(t, [][2]float64{{0, 0}, {e, e}, {e, 0}})
 	const a = -1048576
-	body, err := decad.Revolve(t.Context(), doc, s, s.Profiles()[0],
+	body, err := decad.Revolve(doc, s, s.Profiles()[0],
 		decad.SketchLine{Start: decad.Point2{U: a, V: 0}, End: decad.Point2{U: a + 1, V: 0}},
-		decad.SymmetricAngle{A: units.Radians(1)})
+		decad.SymmetricAngle{A: units.Radians(1)}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -294,7 +294,7 @@ func witnessSliceBody(t *testing.T, doc *decad.Document, cx, cy, r float64) *dec
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	require.Len(t, s.Profiles(), 1)
-	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(1), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(1), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -365,8 +365,8 @@ func appleBody(t *testing.T, doc *decad.Document) *decad.Body {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	require.Len(t, s.Profiles(), 1)
-	body, err := decad.Revolve(t.Context(), doc, s, s.Profiles()[0],
-		decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 0, V: 1}}, decad.FullRevolution{})
+	body, err := decad.Revolve(doc, s, s.Profiles()[0],
+		decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 0, V: 1}}, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }

@@ -40,7 +40,7 @@ func patchBody(t *testing.T) (*decad.Document, *decad.Body) {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	doc := decad.New()
-	patch, err := decad.PatchProfile(t.Context(), doc, s, s.Profiles()[0])
+	patch, err := decad.PatchProfile(doc, s, s.Profiles()[0]).Do(t.Context())
 	require.NoError(t, err)
 	return doc, patch
 }

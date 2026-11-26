@@ -137,8 +137,8 @@ func wheelProfile(t *testing.T, s *sketch.Sketch, holes int) *sketch.Profile {
 
 func wheelExtrude(t *testing.T, doc *decad.Document, s *sketch.Sketch, holes int, height float64) *decad.Body {
 	t.Helper()
-	body, err := decad.Extrude(t.Context(), doc, s, wheelProfile(t, s, holes),
-		decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, wheelProfile(t, s, holes),
+		decad.Distance{D: units.Millimeters(height), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -350,7 +350,7 @@ func TestCarrierRecordHoledPlateWithTranslatedBlocks(t *testing.T) {
 	plate := wheelExtrude(t, doc, ps, 1, height)
 	bs := wheelSketch(t)
 	parallelogram(bs, 3.3, 18, 2, 6)
-	block, err := decad.Extrude(t.Context(), doc, bs, bs.Profiles()[0], decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
+	block, err := decad.Extrude(doc, bs, bs.Profiles()[0], decad.Distance{D: units.Millimeters(height), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	copies, err := decad.PatternCopies(t.Context(), block,
 		decad.LinearPattern{Dir: r3.NewVec(1, 0, 0), Step: units.Millimeters(6.1), Count: blocks})
@@ -412,11 +412,11 @@ func TestCarrierRecordArcHeavyPairReachesItsRoute(t *testing.T) {
 	for i := range pts {
 		ds.CreateArc(ds.Origin(), pts[i], pts[(i+1)%arcs])
 	}
-	disc, err := decad.Extrude(t.Context(), doc, ds, ds.Profiles()[0], decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
+	disc, err := decad.Extrude(doc, ds, ds.Profiles()[0], decad.Distance{D: units.Millimeters(height), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	ps := wheelSketch(t)
 	fixedRect(ps, 5, -3, 15, 3)
-	plate, err := decad.Extrude(t.Context(), doc, ps, ps.Profiles()[0], decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
+	plate, err := decad.Extrude(doc, ps, ps.Profiles()[0], decad.Distance{D: units.Millimeters(height), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	joined, err := decad.Union(disc, plate).Do(t.Context())
 	require.NoError(t, err)

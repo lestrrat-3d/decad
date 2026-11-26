@@ -155,7 +155,12 @@ func TestCommandConstructorCallsEndInDo(t *testing.T) {
 				call = recv
 			}
 			name := ""
-			switch fun := call.Fun.(type) {
+			// A generic constructor may spell its type argument.
+			callFun := call.Fun
+			if inst, ok := callFun.(*ast.IndexExpr); ok {
+				callFun = inst.X
+			}
+			switch fun := callFun.(type) {
 			case *ast.SelectorExpr:
 				if id, ok := fun.X.(*ast.Ident); ok && qualifier != "" && id.Name == qualifier {
 					name = fun.Sel.Name
@@ -183,6 +188,20 @@ func TestModifyConstructorsAreCommandConstructors(t *testing.T) {
 	for _, name := range []string{
 		"Fillet", "Chamfer", "FilletChord", "ChamferAngle", "Shell", "ShellClosed",
 		"Draft", "Offset", "Thicken", "MoveFace", "ConeFromFace",
+	} {
+		require.Contains(t, constructors, name)
+	}
+}
+
+// TestFeatureConstructorsAreCommandConstructors fails when a sketch-fed feature
+// constructor stops returning a *<X>Command, which would drop it from both lint
+// checks above (agent-docs/command-api-design.md §12).
+func TestFeatureConstructorsAreCommandConstructors(t *testing.T) {
+	t.Parallel()
+	constructors := commandConstructorNames(t)
+	for _, name := range []string{
+		"Extrude", "Revolve", "Sweep", "Coil", "Loft", "LoftChain", "LoftFromPoint", "LoftSections",
+		"LoftFaces", "LoftFacesToCone", "PatchProfile", "Emboss", "WebPath", "CutExtrude", "CutRevolve",
 	} {
 		require.Contains(t, constructors, name)
 	}

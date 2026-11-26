@@ -46,7 +46,7 @@ func TestPointLoftSourceStaysCurrentOnATiltedPlane(t *testing.T) {
 		require.NoError(t, err)
 
 		doc := New()
-		body, err := LoftFromPoint(t.Context(), doc, r3.Vec{}, s, s.Profiles()[0])
+		body, err := LoftFromPoint(doc, r3.Vec{}, s, s.Profiles()[0]).Do(t.Context())
 		require.NoError(t, err, "%g deg", deg)
 		fp, ok := body.n.Payload.(facetedPayload)
 		require.True(t, ok)

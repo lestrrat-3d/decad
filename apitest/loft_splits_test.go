@@ -67,7 +67,7 @@ func TestLoftSplitsSquareToOctagon(t *testing.T) {
 		cuts = append(cuts, decad.LoftSplit{Loop: 0, Segment: j, At: []float64{0.5}})
 	}
 	doc := decad.New()
-	body, err := decad.Loft(t.Context(), doc, s0, p0, s1, p1, decad.WithLoftSplits(cuts, nil))
+	body, err := decad.Loft(doc, s0, p0, s1, p1).Splits(cuts, nil).Do(t.Context())
 	require.NoError(t, err)
 	require.True(t, body.IsSolid())
 
@@ -88,37 +88,37 @@ func TestLoftSplitsRefusals(t *testing.T) {
 	t.Parallel()
 	square := [][2]float64{{-2, -2}, {2, -2}, {2, 2}, {-2, 2}}
 	hex := regularPolygon(6, 3, 0)
-	build := func(opts ...decad.LoftOption) error {
+	build := func(first, second []decad.LoftSplit) error {
 		w := sketch.NewWorld()
 		s0, p0 := fixedPolygonProfile(t, w, w.XY(), square)
 		s1, p1 := fixedPolygonProfile(t, w, splitTopPlane(t, w, 4), hex)
-		_, err := decad.Loft(t.Context(), decad.New(), s0, p0, s1, p1, opts...)
+		_, err := decad.Loft(decad.New(), s0, p0, s1, p1).Splits(first, second).Do(t.Context())
 		return err
 	}
 	two := []decad.LoftSplit{{Loop: 0, Segment: 0, At: []float64{0.5}}, {Loop: 0, Segment: 1, At: []float64{0.5}}}
 	t.Run("counts still unequal", func(t *testing.T) {
 		t.Parallel()
 		one := two[:1]
-		require.ErrorIs(t, build(decad.WithLoftSplits(one, nil)), decad.ErrUnsupported)
-		require.ErrorIs(t, build(), decad.ErrUnsupported)
+		require.ErrorIs(t, build(one, nil), decad.ErrUnsupported)
+		require.ErrorIs(t, build(nil, nil), decad.ErrUnsupported)
 	})
 	t.Run("equal counts with a twisted correspondence are refused by the audit", func(t *testing.T) {
 		t.Parallel()
 		// Four sides cut into six pair with a hexagon's six sides, but the two
 		// cut sides sit next to each other, so the walls cross.
-		require.ErrorIs(t, build(decad.WithLoftSplits(two, nil)), decad.ErrDegenerate)
+		require.ErrorIs(t, build(two, nil), decad.ErrDegenerate)
 	})
 	t.Run("a fraction outside (0, 1)", func(t *testing.T) {
 		t.Parallel()
 		for _, f := range []float64{0, 1, -0.5, 1.5, math.NaN()} {
 			bad := []decad.LoftSplit{{Loop: 0, Segment: 0, At: []float64{f}}}
-			require.ErrorIs(t, build(decad.WithLoftSplits(bad, nil)), decad.ErrDegenerate, "fraction %v", f)
+			require.ErrorIs(t, build(bad, nil), decad.ErrDegenerate, "fraction %v", f)
 		}
 	})
 	t.Run("fractions that do not increase", func(t *testing.T) {
 		t.Parallel()
 		bad := []decad.LoftSplit{{Loop: 0, Segment: 0, At: []float64{0.6, 0.4}}}
-		require.ErrorIs(t, build(decad.WithLoftSplits(bad, nil)), decad.ErrDegenerate)
+		require.ErrorIs(t, build(bad, nil), decad.ErrDegenerate)
 	})
 	t.Run("an index outside its loop", func(t *testing.T) {
 		t.Parallel()
@@ -127,19 +127,24 @@ func TestLoftSplitsRefusals(t *testing.T) {
 			{{Loop: 3, Segment: 0, At: []float64{0.5}}},
 			{{Loop: 0, Segment: -1, At: []float64{0.5}}},
 		} {
-			require.ErrorIs(t, build(decad.WithLoftSplits(bad, nil)), decad.ErrDegenerate)
+			require.ErrorIs(t, build(bad, nil), decad.ErrDegenerate)
 		}
 	})
 	t.Run("a segment split twice and no fractions", func(t *testing.T) {
 		t.Parallel()
 		dup := []decad.LoftSplit{{Loop: 0, Segment: 0, At: []float64{0.5}}, {Loop: 0, Segment: 0, At: []float64{0.7}}}
-		require.ErrorIs(t, build(decad.WithLoftSplits(dup, nil)), decad.ErrDegenerate)
+		require.ErrorIs(t, build(dup, nil), decad.ErrDegenerate)
 		none := []decad.LoftSplit{{Loop: 0, Segment: 0}}
-		require.ErrorIs(t, build(decad.WithLoftSplits(none, nil)), decad.ErrDegenerate)
+		require.ErrorIs(t, build(none, nil), decad.ErrDegenerate)
 	})
-	t.Run("the option twice", func(t *testing.T) {
+	t.Run("the method twice keeps the last call", func(t *testing.T) {
 		t.Parallel()
-		require.ErrorIs(t, build(decad.WithLoftSplits(two, nil), decad.WithLoftSplits(nil, two)), decad.ErrDegenerate)
+		w := sketch.NewWorld()
+		s0, p0 := fixedPolygonProfile(t, w, w.XY(), square)
+		s1, p1 := fixedPolygonProfile(t, w, splitTopPlane(t, w, 4), hex)
+		// The first call alone is refused by the audit; the second replaces it with no split.
+		_, err := decad.Loft(decad.New(), s0, p0, s1, p1).Splits(two, nil).Splits(nil, nil).Do(t.Context())
+		require.ErrorIs(t, err, decad.ErrUnsupported)
 	})
 }
 
@@ -147,17 +152,17 @@ func TestLoftSplitsRefusals(t *testing.T) {
 func TestLoftSplitsLeaveAnUnsplitLoftAlone(t *testing.T) {
 	t.Parallel()
 	square := [][2]float64{{-2, -2}, {2, -2}, {2, 2}, {-2, 2}}
-	vol := func(opts ...decad.LoftOption) float64 {
+	vol := func(first, second []decad.LoftSplit) float64 {
 		w := sketch.NewWorld()
 		s0, p0 := fixedPolygonProfile(t, w, w.XY(), square)
 		s1, p1 := fixedPolygonProfile(t, w, splitTopPlane(t, w, 3), [][2]float64{{-1, -1}, {1, -1}, {1, 1}, {-1, 1}})
-		b, err := decad.Loft(t.Context(), decad.New(), s0, p0, s1, p1, opts...)
+		b, err := decad.Loft(decad.New(), s0, p0, s1, p1).Splits(first, second).Do(t.Context())
 		require.NoError(t, err)
 		v, err := b.Volume()
 		require.NoError(t, err)
 		return v.Value.Base()
 	}
-	require.Equal(t, vol(), vol(decad.WithLoftSplits(nil, nil)))
+	require.Equal(t, vol(nil, nil), vol([]decad.LoftSplit{}, []decad.LoftSplit{}))
 }
 
 // prismatoidVolume is h/6·(A0 + 4·Amid + A1) for a ruled loft between two polygons
@@ -227,7 +232,7 @@ func TestLoftSplitsPolygonPairs(t *testing.T) {
 			w := sketch.NewWorld()
 			s0, p0 := fixedPolygonProfile(t, w, w.XY(), c.a)
 			s1, p1 := fixedPolygonProfile(t, w, splitTopPlane(t, w, height), c.b)
-			body, err := decad.Loft(t.Context(), decad.New(), s0, p0, s1, p1, decad.WithLoftSplits(c.cuts0, c.cuts1))
+			body, err := decad.Loft(decad.New(), s0, p0, s1, p1).Splits(c.cuts0, c.cuts1).Do(t.Context())
 			require.NoError(t, err)
 			require.True(t, body.IsSolid())
 			v, err := body.Volume()
@@ -325,8 +330,7 @@ func TestLoftSplitsArcs(t *testing.T) {
 		}
 	}
 	require.GreaterOrEqual(t, offset, 0)
-	body, err := decad.Loft(t.Context(), decad.New(), s0, p0, s1, p1,
-		decad.WithLoftSplits(cut, nil), decad.WithLoftAlignment(offset))
+	body, err := decad.Loft(decad.New(), s0, p0, s1, p1).Splits(cut, nil).Alignment(offset).Do(t.Context())
 	require.NoError(t, err)
 	require.True(t, body.IsSolid())
 	want := math.Pi * height / 3 * (R*R + R*r + r*r) / 2
@@ -423,8 +427,7 @@ func TestLoftSplitsFitSplines(t *testing.T) {
 	}
 	require.GreaterOrEqual(t, offset, 0)
 	require.Len(t, spl1, 2)
-	body, err := decad.Loft(t.Context(), decad.New(), s0, p0, s1, p1,
-		decad.WithLoftSplits(cut, nil), decad.WithLoftAlignment(offset))
+	body, err := decad.Loft(decad.New(), s0, p0, s1, p1).Splits(cut, nil).Alignment(offset).Do(t.Context())
 	require.NoError(t, err)
 	require.True(t, body.IsSolid())
 	v, err := body.Volume()
@@ -487,7 +490,7 @@ func TestLoftLineAgainstFitSpline(t *testing.T) {
 	s0, p0 := archSection(t, w, w.XY(), arch)
 	s1, p1 := archSection(t, w, splitTopPlane(t, w, height), [][2]float64{{20, 0}, {-20, 0}})
 	require.Less(t, p1.Area, p0.Area)
-	body, err := decad.Loft(t.Context(), decad.New(), s0, p0, s1, p1)
+	body, err := decad.Loft(decad.New(), s0, p0, s1, p1).Do(t.Context())
 	require.NoError(t, err)
 	require.True(t, body.IsSolid())
 	v, err := body.Volume()
@@ -503,7 +506,7 @@ func TestLoftLineAgainstFitSpline(t *testing.T) {
 	w2 := sketch.NewWorld()
 	t0, q0 := archSection(t, w2, w2.XY(), [][2]float64{{20, 0}, {-20, 0}})
 	t1, q1 := archSection(t, w2, splitTopPlane(t, w2, height), arch)
-	swapped, err := decad.Loft(t.Context(), decad.New(), t0, q0, t1, q1)
+	swapped, err := decad.Loft(decad.New(), t0, q0, t1, q1).Do(t.Context())
 	require.NoError(t, err)
 	sv, err := swapped.Volume()
 	require.NoError(t, err)
@@ -528,6 +531,6 @@ func TestLoftLineAgainstArcStaysRefused(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, round.Profiles(), 1)
 	s1, p1 := archSection(t, w, splitTopPlane(t, w, 30), [][2]float64{{20, 0}, {-20, 0}})
-	_, err = decad.Loft(t.Context(), decad.New(), round, round.Profiles()[0], s1, p1)
+	_, err = decad.Loft(decad.New(), round, round.Profiles()[0], s1, p1).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 }

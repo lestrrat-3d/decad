@@ -35,7 +35,7 @@ func pointConeTooth(t *testing.T, doc *decad.Document) *decad.Body {
 	profiles := s.Profiles()
 	require.Len(t, profiles, 1)
 	require.True(t, profiles[0].Valid)
-	tooth, err := decad.LoftFromPoint(t.Context(), doc, r3.Vec{}, s, profiles[0])
+	tooth, err := decad.LoftFromPoint(doc, r3.Vec{}, s, profiles[0]).Do(t.Context())
 	require.NoError(t, err)
 	return tooth
 }
@@ -58,8 +58,8 @@ func pointConeTool(t testing.TB, doc *decad.Document, apex float64) *decad.Body 
 	require.NoError(t, err)
 	profiles := s.Profiles()
 	require.Len(t, profiles, 1)
-	tool, err := decad.Revolve(t.Context(), doc, s, profiles[0],
-		decad.SketchLine{Start: decad.Point2{}, End: decad.Point2{U: 1}}, decad.FullRevolution{})
+	tool, err := decad.Revolve(doc, s, profiles[0],
+		decad.SketchLine{Start: decad.Point2{}, End: decad.Point2{U: 1}}, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	return tool
 }

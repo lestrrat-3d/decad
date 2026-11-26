@@ -45,7 +45,7 @@ func roundedTrianglePlate(t *testing.T, doc *decad.Document, world *sketch.World
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	require.Len(t, s.Profiles(), 1)
-	plate, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(3), Dir: decad.Along})
+	plate, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(3), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return plate
 }
@@ -135,7 +135,7 @@ func pinBody(t *testing.T, doc *decad.Document, world *sketch.World, x, z, diame
 	s.CreateCircle(c, diameter/2)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	b, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(length), Dir: decad.Along})
+	b, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(length), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return b
 }
@@ -196,7 +196,7 @@ func windowedFrame(t *testing.T, doc *decad.Document, world *sketch.World) *deca
 		}
 	}
 	require.NotNil(t, profile)
-	frame, err := decad.Extrude(t.Context(), doc, s, profile, decad.Distance{D: units.Millimeters(3), Dir: decad.Along})
+	frame, err := decad.Extrude(doc, s, profile, decad.Distance{D: units.Millimeters(3), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return frame
 }
@@ -241,7 +241,7 @@ func TestChamferWindowLoopsAfterBossUnion(t *testing.T) {
 		}
 	}
 	require.NotNil(t, ring)
-	boss, err := decad.Extrude(t.Context(), doc, s, ring, decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
+	boss, err := decad.Extrude(doc, s, ring, decad.Distance{D: units.Millimeters(8), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	cover, err := decad.Union(frame, boss).Do(t.Context())
 	require.NoError(t, err)
@@ -313,7 +313,7 @@ func windowedCoverWithBoss(t *testing.T) *decad.Body {
 		}
 	}
 	require.NotNil(t, ring)
-	boss, err := decad.Extrude(t.Context(), doc, s, ring, decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
+	boss, err := decad.Extrude(doc, s, ring, decad.Distance{D: units.Millimeters(8), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	cover, err := decad.Union(frame, boss).Do(t.Context())
 	require.NoError(t, err)

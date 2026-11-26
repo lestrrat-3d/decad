@@ -65,8 +65,8 @@ func roundedPlate(t *testing.T, solved bool) *decad.Body {
 	require.NoError(t, err)
 	profs := s.Profiles()
 	require.Len(t, profs, 1)
-	body, err := decad.Extrude(t.Context(), doc, s, profs[0],
-		decad.Distance{D: units.Millimeters(rampArmTop), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, profs[0],
+		decad.Distance{D: units.Millimeters(rampArmTop), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	loops := decad.Edges(decad.OuterLoopOf(decad.CapStart(body))).Or(decad.OuterLoopOf(decad.CapEnd(body)))
 	body, err = decad.Chamfer(body, loops, units.Millimeters(rampArmSize)).Do(t.Context())
@@ -109,8 +109,8 @@ func galleryArm(t *testing.T) *decad.Body {
 	require.NoError(t, err)
 	profs := s.Profiles()
 	require.Len(t, profs, 1)
-	body, err := decad.Extrude(t.Context(), doc, s, profs[0],
-		decad.Distance{D: units.Millimeters(rampArmTop), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, profs[0],
+		decad.Distance{D: units.Millimeters(rampArmTop), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	loops := decad.Edges(decad.OuterLoopOf(decad.CapStart(body))).Or(decad.OuterLoopOf(decad.CapEnd(body)))
 	body, err = decad.Chamfer(body, loops, units.Millimeters(rampArmSize)).Do(t.Context())

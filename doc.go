@@ -86,15 +86,15 @@
 //	  Tier A chain proving no single curvature sign across
 //	    its spans and joints (spline design §6.5, R19)        ErrUnsupported
 //	  free-form work past the fixed budget (R7)               ErrUnsupported
-//	  WithTaper   line/circle/arc walls, G1 circular joins,
+//	  Taper   line/circle/arc walls, G1 circular joins,
 //	    Distance/ToFace/ThroughAll/Symmetric/TwoSided extent    builds
-//	  WithTaper   free-form wall, non-G1 circular corner,
-//	    WithSurfaceResult                                       ErrUnsupported
+//	  Taper   free-form wall, non-G1 circular corner,
+//	    SurfaceResult                                       ErrUnsupported
 //	  Tessellate/export/boolean/mass of a draft body          builds
 //	  boolean/mass of one with an inexact G1 join or a
 //	    trimmed segment (draft §9.1)                          ErrUnsupported
 //	  open chain section                                      builds a sheet
-//	  chain section with WithTaper or WithSurfaceResult       ErrUnsupported
+//	  chain section with Taper or SurfaceResult       ErrUnsupported
 //	Draft    prism operand, its complete wall set or a
 //	  subset, about one of its caps (draft design PR 3, 5)    builds
 //	  subset moving one of two walls at a circular corner,
@@ -104,11 +104,11 @@
 //	  composite path without exact transported frames or
 //	    certified span separation                             ErrUnsupported
 //	  closed path                                             ErrUnsupported
-//	  WithSweepTwist: centred convex whole-line or symmetric Line/Arc profile,
+//	  Twist: centred convex whole-line or symmetric Line/Arc profile,
 //	    origin XY plane, one positive-Z line, <= 1 turn     builds
 //	    or line then cardinal XZ quarter arc, <= 1 rad      builds
 //	  other nonzero twist                                     ErrUnsupported
-//	  WithMitredJoins / WithSectionScale over a LineTo path
+//	  MitredJoins / SectionScale over a LineTo path
 //	    and a whole-line profile                              builds
 //	Revolve       cylinder / cone / sphere / torus / annulus  builds
 //	Coil          profile of whole lines, arcs and circles
@@ -244,29 +244,29 @@
 //	  boolean body at a tolerance finer than its bound        ErrUnsupported
 //	  a chorded free-form wall past the fixed work budget     ErrUnsupported
 //
-// Options: Revolve accepts WithSurfaceResult for a sheet result.
+// Options: Revolve accepts SurfaceResult for a sheet result.
 // The TangentChain method expands a Fillet's or Chamfer's edges
 // across proven tangent continuations, Asymmetric gives a Chamfer
 // two setbacks, Sense picks a shell's wall sense, and ShellClosed builds
 // a closed shell (built for a full revolve, a hole-free prism and an
 // inward nested rectangular-slab Union; [ErrUnsupported] elsewhere),
-// and WithTaper drafts an extrude's walls by a signed angle, a positive one
+// and Taper drafts an extrude's walls by a signed angle, a positive one
 // narrowing the body away from the sketch plane (agent-docs/modify-design.md Part D); a
 // taper the support map does not list is [ErrUnsupported], returned before
 // the document changes. Draft leans an existing prism's walls, all of
 // them or a selected subset, the same way about one of its caps.
-// WithSweepTwist names a sweep's distributed twist. Its admitted straight
+// Twist names a sweep's distributed twist. Its admitted straight
 // polygon, symmetric Line/Arc, and cardinal curved polygon cases are
 // described in agent-docs/sweep-design.md §17. A boolean restates a one-cell
 // twisted sweep through its stationed boundary
 // (agent-docs/twist-sweep-cut-design.md).
-// WithLoftAlignment
+// Alignment
 // picks a loft's per-loop correspondence rotation
 // and is accepted at most once; a repeat is [ErrDegenerate], as is a repeated
-// WithLoftSplits, which cuts recorded segments of either section at stated
+// Splits, which cuts recorded segments of either section at stated
 // fractions of their parameter ranges so loops of different segment counts
 // pair one to one, and a repeated
-// WithLeftHand, which turns a coil left-handed. Separately,
+// LeftHand, which turns a coil left-handed. Separately,
 // Verify's options (WithTolerance, WithMinWallThickness, WithPullDirection,
 // WithConcaveRadius, WithClearances) take effect. The export package's STL and
 // OBJ writers take an explicit chord tolerance.

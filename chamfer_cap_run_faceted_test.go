@@ -31,7 +31,7 @@ func prismFrom(t *testing.T, doc *decad.Document, z0, height float64, draw func(
 		}
 	}
 	require.NotNil(t, pr)
-	b, err := decad.Extrude(t.Context(), doc, s, pr, decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
+	b, err := decad.Extrude(doc, s, pr, decad.Distance{D: units.Millimeters(height), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return b
 }

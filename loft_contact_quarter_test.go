@@ -57,7 +57,7 @@ func quarterSeamRealPair(ctx context.Context, t *testing.T, radii [2]float64) (*
 		sections[capIndex], profiles[capIndex] = s, found[0]
 	}
 	doc := New()
-	loft, err := Loft(ctx, doc, sections[0], profiles[0], sections[1], profiles[1])
+	loft, err := Loft(doc, sections[0], profiles[0], sections[1], profiles[1]).Do(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,8 +74,8 @@ func quarterSeamRealPair(ctx context.Context, t *testing.T, radii [2]float64) (*
 	if len(found) != 1 || !found[0].Valid {
 		t.Fatalf("prism profiles=%d", len(found))
 	}
-	prism, err := Extrude(ctx, doc, prismSketch, found[0],
-		Distance{D: units.Millimeters(12), Dir: Along})
+	prism, err := Extrude(doc, prismSketch, found[0],
+		Distance{D: units.Millimeters(12), Dir: Along}).Do(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -506,7 +506,7 @@ func TestLoftQuarterHeldPairRealProducerGate(t *testing.T) {
 		require.True(t, found[0].Valid)
 		sections[endCap], profiles[endCap] = s, found[0]
 	}
-	loft, err := Loft(ctx, doc, sections[0], profiles[0], sections[1], profiles[1])
+	loft, err := Loft(doc, sections[0], profiles[0], sections[1], profiles[1]).Do(ctx)
 	require.NoError(t, err)
 	prismSketch, err := world.CreateSketch(world.XY())
 	require.NoError(t, err)
@@ -517,7 +517,7 @@ func TestLoftQuarterHeldPairRealProducerGate(t *testing.T) {
 	found := prismSketch.Profiles()
 	require.Len(t, found, 1)
 	require.True(t, found[0].Valid)
-	prism, err := Extrude(ctx, doc, prismSketch, found[0], Distance{D: units.Millimeters(12), Dir: Along})
+	prism, err := Extrude(doc, prismSketch, found[0], Distance{D: units.Millimeters(12), Dir: Along}).Do(ctx)
 	require.NoError(t, err)
 	require.Same(t, &doc.n, loft.n.Doc)
 	require.Same(t, &doc.n, prism.n.Doc)
@@ -728,11 +728,11 @@ func TestLoftQuarterHeldPairRealProducerGate(t *testing.T) {
 	})
 	t.Run("copied prism after original removal", func(t *testing.T) {
 		copyDoc := New()
-		copyLoft, buildErr := Loft(t.Context(), copyDoc,
-			sections[0], profiles[0], sections[1], profiles[1])
+		copyLoft, buildErr := Loft(copyDoc,
+			sections[0], profiles[0], sections[1], profiles[1]).Do(t.Context())
 		require.NoError(t, buildErr)
-		original, buildErr := Extrude(t.Context(), copyDoc, prismSketch, found[0],
-			Distance{D: units.Millimeters(12), Dir: Along})
+		original, buildErr := Extrude(copyDoc, prismSketch, found[0],
+			Distance{D: units.Millimeters(12), Dir: Along}).Do(t.Context())
 		require.NoError(t, buildErr)
 		copied, copyErr := Copy(t.Context(), original)
 		require.NoError(t, copyErr)
@@ -793,7 +793,7 @@ func TestLoftQuarterOriginalHeldY1RealProducer(t *testing.T) {
 		require.True(t, found[0].Valid)
 		sections[endCap], profiles[endCap] = s, found[0]
 	}
-	loft, err := Loft(ctx, doc, sections[0], profiles[0], sections[1], profiles[1])
+	loft, err := Loft(doc, sections[0], profiles[0], sections[1], profiles[1]).Do(ctx)
 	require.NoError(t, err)
 	require.Same(t, &doc.n, loft.n.Doc)
 
@@ -806,8 +806,8 @@ func TestLoftQuarterOriginalHeldY1RealProducer(t *testing.T) {
 	prismProfiles := prismSketch.Profiles()
 	require.Len(t, prismProfiles, 1)
 	require.True(t, prismProfiles[0].Valid)
-	prism, err := Extrude(ctx, doc, prismSketch, prismProfiles[0],
-		Distance{D: units.Millimeters(12), Dir: Along})
+	prism, err := Extrude(doc, prismSketch, prismProfiles[0],
+		Distance{D: units.Millimeters(12), Dir: Along}).Do(ctx)
 	require.NoError(t, err)
 	require.Same(t, &doc.n, prism.n.Doc)
 
@@ -1011,8 +1011,8 @@ func TestLoftQuarterJunctionOneRealCase(t *testing.T) {
 		sections[endCap], profiles[endCap] = s, found[0]
 	}
 	doc := New()
-	loft, err := Loft(ctx, doc, sections[0], profiles[0],
-		sections[1], profiles[1])
+	loft, err := Loft(doc, sections[0], profiles[0],
+		sections[1], profiles[1]).Do(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1029,8 +1029,8 @@ func TestLoftQuarterJunctionOneRealCase(t *testing.T) {
 	if len(prismProfiles) != 1 || !prismProfiles[0].Valid {
 		t.Fatalf("prism profiles=%d", len(prismProfiles))
 	}
-	prism, err := Extrude(ctx, doc, prismSketch, prismProfiles[0],
-		Distance{D: units.Millimeters(12), Dir: Along})
+	prism, err := Extrude(doc, prismSketch, prismProfiles[0],
+		Distance{D: units.Millimeters(12), Dir: Along}).Do(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1212,8 +1212,8 @@ func TestLoftQuarterWallOrderRealSketchPair(t *testing.T) {
 		require.True(t, found[0].Valid)
 		sections[endCap], profiles[endCap] = s, found[0]
 	}
-	loft, err := Loft(t.Context(), New(), sections[0], profiles[0],
-		sections[1], profiles[1])
+	loft, err := Loft(New(), sections[0], profiles[0],
+		sections[1], profiles[1]).Do(t.Context())
 	require.NoError(t, err)
 
 	makePrism := func(t *testing.T, xMin float64) *Body {
@@ -1225,8 +1225,8 @@ func TestLoftQuarterWallOrderRealSketchPair(t *testing.T) {
 		require.NoError(t, createErr)
 		found := s.Profiles()
 		require.Len(t, found, 1)
-		prism, buildErr := Extrude(t.Context(), New(), s, found[0],
-			Distance{D: units.Millimeters(12), Dir: Along})
+		prism, buildErr := Extrude(New(), s, found[0],
+			Distance{D: units.Millimeters(12), Dir: Along}).Do(t.Context())
 		require.NoError(t, buildErr)
 		return prism
 	}

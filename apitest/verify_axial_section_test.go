@@ -20,8 +20,8 @@ import (
 func axialScrew(t *testing.T, doc *decad.Document) *decad.Body {
 	t.Helper()
 	s, profile := polygonSketch(t, [][2]float64{{0, 0}, {4, 0}, {4, 40}, {0, 40}})
-	body, err := decad.Revolve(t.Context(), doc, s, profile,
-		decad.SketchLine{End: decad.Point2{V: 1}}, decad.FullRevolution{})
+	body, err := decad.Revolve(doc, s, profile,
+		decad.SketchLine{End: decad.Point2{V: 1}}, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -35,7 +35,7 @@ func screwFlatTool(t *testing.T, doc *decad.Document, y1 float64) *decad.Body {
 	s.CreateRectangle(3, 10, 5, y1)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Symmetric{D: units.Millimeters(5)})
+	body, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Symmetric{D: units.Millimeters(5)}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -70,8 +70,8 @@ func axialKnob(t *testing.T, doc *decad.Document, hx0, hx1, hz, round float64) *
 		}
 	}
 	require.NotNil(t, ring, "the knob's section has one hole")
-	body, err := decad.Extrude(t.Context(), doc, s, ring,
-		decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, ring,
+		decad.Distance{D: units.Millimeters(8), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -179,8 +179,8 @@ func TestVerifyAxialSectionShoulderAtLevel(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	s, profile := polygonSketch(t, [][2]float64{{0, 0}, {4, 0}, {4, 20}, {10, 20}, {10, 22}, {4, 22}, {4, 40}, {0, 40}})
-	shaft, err := decad.Revolve(t.Context(), doc, s, profile,
-		decad.SketchLine{End: decad.Point2{V: 1}}, decad.FullRevolution{})
+	shaft, err := decad.Revolve(doc, s, profile,
+		decad.SketchLine{End: decad.Point2{V: 1}}, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	shaft, err = decad.Cut(shaft, screwFlatTool(t, doc, 45)).Do(t.Context())
 	require.NoError(t, err)
@@ -206,7 +206,7 @@ func roundShaft(t *testing.T, doc *decad.Document) *decad.Body {
 	s.CreateCircle(c, 4)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(40), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(40), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }

@@ -51,9 +51,9 @@ func revolveSectionMeridian(t *testing.T, start [2]float64, steps ...any) (*deca
 	require.NoError(t, err)
 	require.Len(t, s.Profiles(), 1)
 	doc := decad.New()
-	body, err := decad.Revolve(t.Context(), doc, s, s.Profiles()[0], decad.SketchLine{
+	body, err := decad.Revolve(doc, s, s.Profiles()[0], decad.SketchLine{
 		Start: decad.Point2{}, End: decad.Point2{V: 1},
-	}, decad.FullRevolution{})
+	}, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	return doc, body
 }
@@ -111,9 +111,9 @@ func expectedRounding(want float64) float64 {
 // the exact volume and a verified mesh.
 func requireVerifiedExtrude(t *testing.T, section *sketch.Sketch, profile *sketch.Profile, depth, wantVolume float64) {
 	t.Helper()
-	child, err := decad.Extrude(t.Context(), decad.New(), section, profile, decad.Distance{
+	child, err := decad.Extrude(decad.New(), section, profile, decad.Distance{
 		D: units.Millimeters(depth), Dir: decad.Along,
-	})
+	}).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := child.Volume()
 	require.NoError(t, err)
@@ -266,9 +266,9 @@ func TestSectionRevolveMeridianPlacement(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, profiles, 1)
 	requireExactArea(t, section, profiles[0], 100*math.Pi)
-	child, err := decad.Extrude(t.Context(), decad.New(), section, profiles[0], decad.Distance{
+	child, err := decad.Extrude(decad.New(), section, profiles[0], decad.Distance{
 		D: units.Millimeters(2), Dir: decad.Along,
-	})
+	}).Do(t.Context())
 	require.NoError(t, err)
 	box, err := child.Bounds()
 	require.NoError(t, err)
@@ -342,9 +342,9 @@ func revolveCircleMeridian(t *testing.T, center [2]float64, radius float64, hole
 		}
 	}
 	require.NotNil(t, region)
-	body, err := decad.Revolve(t.Context(), decad.New(), s, region, decad.SketchLine{
+	body, err := decad.Revolve(decad.New(), s, region, decad.SketchLine{
 		Start: decad.Point2{}, End: decad.Point2{V: 1},
-	}, decad.FullRevolution{})
+	}, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }

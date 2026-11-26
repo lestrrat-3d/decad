@@ -26,15 +26,14 @@ func TestSweepArcMatchesQuarterRevolveAndReplaysPlacement(t *testing.T) {
 	require.NoError(t, err)
 
 	sweepDoc := decad.New()
-	swept, err := decad.Sweep(t.Context(), sweepDoc, s, profile, path)
+	swept, err := decad.Sweep(sweepDoc, s, profile, path).Do(t.Context())
 	require.NoError(t, err)
 	revolveDoc := decad.New()
-	revolved, err := decad.Revolve(t.Context(), revolveDoc,
+	revolved, err := decad.Revolve(revolveDoc,
 		s,
 		profile,
 		decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 100, V: 0}},
-		decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along},
-	)
+		decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	requireSameBodyReadings(t, revolved, swept)
 
@@ -86,7 +85,7 @@ func TestSweepArcUsesPathEndpointCapRolesWhenAxisGateFlips(t *testing.T) {
 		},
 	)
 	require.NoError(t, err)
-	body, err := decad.Sweep(t.Context(), decad.New(), s, profile, path)
+	body, err := decad.Sweep(decad.New(), s, profile, path).Do(t.Context())
 	require.NoError(t, err)
 
 	startCap := faceByRole(t, body, "capStart")
@@ -116,7 +115,7 @@ func TestSweepArcBuildsGeneralAngleWithRationalCenter(t *testing.T) {
 	)
 	require.NoError(t, err)
 	doc := decad.New()
-	body, err := decad.Sweep(t.Context(), doc, s, profile, path)
+	body, err := decad.Sweep(doc, s, profile, path).Do(t.Context())
 	require.NoError(t, err)
 	require.True(t, body.IsSolid())
 
@@ -174,14 +173,13 @@ func TestSweepArcMatchesRevolveFromObliqueSketchPlane(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	swept, err := decad.Sweep(t.Context(), decad.New(), s, s.Profiles()[0], path)
+	swept, err := decad.Sweep(decad.New(), s, s.Profiles()[0], path).Do(t.Context())
 	require.NoError(t, err)
-	revolved, err := decad.Revolve(t.Context(), decad.New(),
+	revolved, err := decad.Revolve(decad.New(),
 		s,
 		s.Profiles()[0],
 		decad.SketchLine{Start: decad.Point2{U: -10, V: 0}, End: decad.Point2{U: 10, V: 0}},
-		decad.AngleExtent{A: units.Degrees(180), Dir: decad.Along},
-	)
+		decad.AngleExtent{A: units.Degrees(180), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	requireSameHeldBodyReadingsWithBounds(t, revolved, swept)
 }
@@ -221,7 +219,7 @@ func TestSweepArcRefusalsLeaveDocumentUnchanged(t *testing.T) {
 			)
 			require.NoError(t, err)
 			doc := decad.New()
-			_, err = decad.Sweep(t.Context(), doc, s, profile, path)
+			_, err = decad.Sweep(doc, s, profile, path).Do(t.Context())
 			require.ErrorIs(t, err, test.want)
 			require.Empty(t, doc.Bodies())
 		})

@@ -107,44 +107,35 @@ section-pair correspondence.
 ## 2. Public signature and options
 
 ```go
-func Loft(ctx context.Context, d *Document,
-    s0 *sketch.Sketch, p0 *sketch.Profile,
-    s1 *sketch.Sketch, p1 *sketch.Profile,
-    opts ...LoftOption) (*Body, error)
+func Loft(d *Document, s0 *sketch.Sketch, p0 *sketch.Profile,
+    s1 *sketch.Sketch, p1 *sketch.Profile) *LoftCommand
+func (c *LoftCommand) Do(ctx context.Context) (*Body, error)
 
-type LoftOption interface{ /* ... */ }
-
-// WithLoftAlignment records, per loop, which recorded segment index of the
+// Alignment records, per loop, which recorded segment index of the
 // SECOND profile pairs with segment index 0 of the FIRST profile's
 // corresponding loop. offsets[0] is the outer loop; offsets[1+h] is
 // p1.Holes[h]. Omitting the option means every offset is 0 — the natural
 // case where both profiles were authored with matching segment order (the
 // gear generator's top loop is the bottom loop's own points, rotated).
-func WithLoftAlignment(offsets ...int) LoftOption
+func (c *LoftCommand) Alignment(offsets ...int) *LoftCommand
 ```
 
-**Every `LoftOption` value MUST be non-nil and use decad's owned concrete
-implementation.** A foreign type can embed the sealed marker, so `Loft`
-checks the concrete option before invoking any option callback.
-They reject a nil or foreign value with `ErrDegenerate`, without changing the
-document (Table S row S11).
+**A method is a method of `LoftCommand`, so no option value exists to be nil or foreign.** Table S row S11 is
+retired.
 
-**`WithLoftAlignment` is accepted at most once.** The variadic signature
-type-checks a call that passes it twice, so the arity is a stated gate rather
-than a compile-time one: zero occurrences mean every offset is 0, exactly one
-supplies the whole per-loop payload, and two or more are `ErrDegenerate`
-(Table S row S4) — never resolved by a last-wins or a merge rule.
+**A second `Alignment` call replaces the first** (command-api-design M2): no call means every offset is 0, and
+the last call supplies the whole per-loop payload.
 
-**`Loft` also accepts `WithSurfaceResult()`
+**`Loft` also accepts `SurfaceResult`
 (`agent-docs/surface-design.md` §3-§4).** It builds the wall triangles alone and
 omits both section caps, publishing `Kind() == BodySheet` in place of a solid
 loft, exactly as it does for `Extrude` and `Revolve` (`agent-docs/surface-design.md` Table W). Unlike
-`WithLoftAlignment`, a repeated `WithSurfaceResult()` is idempotent, never
+`Alignment`, a repeated `SurfaceResult` is idempotent, never
 `ErrDegenerate`: the two options answer different questions. An alignment
 payload names one of several possible correspondences, so two occurrences name
 two candidates with no way to prefer one, while a surface result is a single
 yes/no flag with nothing to disagree about on a repeat — the same tolerance
-`WithTaper`'s own last-wins rule gives `Extrude` (extrude.go).
+`Taper`'s own last-wins rule gives `Extrude` (extrude.go).
 
 `s0`/`p0` is the **from** section (`capStart`); `s1`/`p1` is the **to**
 section (`capEnd`) — the same naming Extrude already uses for its two caps.
@@ -179,7 +170,7 @@ decad reads the two `ProfileRecord`s' own segment order, and nothing else.
 | **P1** | `p0.Outer` pairs with `p1.Outer`; `p0.Holes[h]` pairs with `p1.Holes[h]`, by **position** in the `Holes` slice — never by area, by nesting radius, or by any other geometric proximity |
 | **P2** | `len(p0.Holes)` MUST equal `len(p1.Holes)`. A mismatch has no positional pairing (Table S, S1) |
 | **P3** | For each paired loop, `len(loop0.Segments)` MUST equal `len(loop1.Segments)` — call it `n`. A mismatch has no one-to-one pairing unless the caller cuts segments to match (§3.1, Table S, S2) |
-| **P4** | Within a paired loop, segment `j` of `loop0` (for `j` in `[0, n)`) pairs with segment `(j + offset) mod n` of `loop1`, where `offset` is that loop's entry in `WithLoftAlignment`'s `offsets` (default 0) |
+| **P4** | Within a paired loop, segment `j` of `loop0` (for `j` in `[0, n)`) pairs with segment `(j + offset) mod n` of `loop1`, where `offset` is that loop's entry in `Alignment`'s `offsets` (default 0) |
 | **P5** | A paired segment's two sides MUST be same-kind: both `LineSeg`, both `ArcSeg`, both `CircleSeg`, both the same Tier A free-form kind, or one `LineSeg` against one open free-form segment (§3.2) (`agent-docs/spline-design.md` Table F). Any other pairing — mixed-kind, or same-kind at a kind this evaluator has no construction for — is `ErrUnsupported` (§1, Table S row S3). A same-kind `CircleSeg` pair MUST also agree in WALK SENSE: the two sides' recorded `CCW` flags MUST be equal, and a pair whose flags disagree is `ErrDegenerate` (Table S row S7's structural arm). A same-kind Tier A free-form pair uses the least common multiple of its two Bézier span counts as its shared station slot count (§5.1). §4's gate-order paragraph owns where each of these gates sits and what its phase can already have read |
 | **P6** | Every loop's own walk direction is intrinsic to its own plane (outer CCW, holes CW, seam §2) and is never reinterpreted for the pairing: P4's ordinal rule pairs walk-position `j` to walk-position `j`, in each loop's own sense, regardless of how the two profiles' planes are posed relative to each other |
 
@@ -198,7 +189,7 @@ vertex `k` of `loop0` (the start of its segment `k`) pairs with vertex
 
 ### 3.1 Splits: pairing sections of different segment counts
 
-`WithLoftSplits(first, second []LoftSplit)` cuts recorded segments of either section before Table P reads them, so
+`Splits(first, second []LoftSplit)` cuts recorded segments of either section before Table P reads them, so
 two loops that hold different numbers of segments can pair one to one. A `LoftSplit` names a loop (0 is the outer
 loop, 1+h is `Holes[h]`), a recorded segment index in that loop, and strictly increasing fractions in (0, 1).
 
@@ -211,9 +202,9 @@ pieces follow each other in the loop's walk order, whichever way the range runs,
 falsifier, the pairing gates and the build, so every later step reads ordinary records and no proof is written twice.
 The split records are the payload's records, so placement and re-evaluation replay them with no option to carry.
 
-- `WithLoftAlignment` rotates the second section's split loop.
+- `Alignment` rotates the second section's split loop.
 - A wall's `side(loop, cell, half)` role names the SPLIT segment index.
-- The option is accepted at most once. A repeat, an index outside its loop, fractions outside (0, 1) or not increasing,
+- A second `Splits` call replaces the first. An index outside its loop, fractions outside (0, 1) or not increasing,
   an empty fraction list, a segment split twice, and a fraction that rounds onto a neighbouring parameter are
   `ErrDegenerate`: they name no single intent.
 - After the splits P3 and P5 apply unchanged. Loops still holding different segment counts are S2 and a pair still of
@@ -259,14 +250,14 @@ that exists and this evaluator cannot build → `ErrUnsupported`.**
 | **S1** | a hole-loop count mismatch (P2) | this evaluator has no positional pairing for it, though a smarter kernel could still loft a differing hole count by point-degenerate construction | `ErrUnsupported` | no — reach no increment in §12 claims |
 | **S2** | a paired loop's segment-count mismatch (P3) | same — a smarter kernel could subdivide to match; this evaluator's ordinal correspondence cannot, and cuts only the caller names (§3.1) | `ErrUnsupported` | no — reach no increment in §12 claims |
 | **S3** | a paired segment whose two sides are not same-kind (§1, P5), or a same-kind pair whose kind this evaluator has no construction for — after this document, a free-form kind that does not reduce to Tier A (`agent-docs/spline-design.md` Table F). A same-kind `CircleSeg` pair whose two recorded `CCW` flags disagree (P5) is NOT this row's refusal: it is S7's `ErrDegenerate` under that row's STRUCTURAL arm, never its audit arm. §4's gate-order paragraph owns where both sit | yes for a mixed-kind pairing — the ruled surface exists; this evaluator has no exact construction for it. A same-kind non-Tier-A free-form pairing never independently reaches this test: every build reads its section's moments (`agent-docs/spline-design.md` Table C), so a Tier B or Tier C section refuses at spline design's own R10 and an `EllipticalArcSeg` section refuses at R2 before this gate has anything of its own left to decide | `ErrUnsupported`, this document's own sentinel for a mixed-kind pairing; `agent-docs/spline-design.md`'s own R10 or R2 sentinel for a same-kind non-Tier-A pairing, never a fresh sentinel of this document's own | yes for mixed-kind, §1 — the correspondence's own two kinds forbid it structurally. For a same-kind non-Tier-A pairing this document makes no permanence claim of its own, since the refusal is `agent-docs/spline-design.md`'s: permanent for an `EllipticalArcSeg` pairing (R2, §2.2), not permanent for a Tier B or Tier C pairing (R10, §8 — no longer standing once §10 P9 supplies that tier's moments) |
-| **S4** | a `WithLoftAlignment` payload of the wrong length, an offset outside `[0, n)` for its loop, or the option passed more than once | no single intent (mirrors modify-reach SX1, which refuses a repeated contradictory option on the same ground) | `ErrDegenerate` | yes, §2 |
+| **S4** | a `Alignment` payload of the wrong length, an offset outside `[0, n)` for its loop | no single intent | `ErrDegenerate` | yes, §2 |
 | **S5** | `p0` and `p1` represent the same geometric plane, regardless of which in-plane origin or right-handed `U`/`V` basis each `PlaneRecord` uses | no — every wall vertex then lies in one plane, so the solid is provably flat: the tetrahedron-sum volume (§8) is a structural zero, not a computed one | `ErrDegenerate` | yes, §4 |
 | **S6** | a wall or cap triangle that collapses (coincident vertices, zero area) — every collapse S16's one-sided chord cell does not already claim, in either of two arms: the RECORDED arm, where EVERY vertex the collapse consumes is a station §5.2 PINS (an untrimmed `LineSeg` pair's own endpoints; the two pinned ends of an `ArcSeg` pair recorded at ZERO RADIUS on BOTH sides), or the COMPUTED arm, which takes every other collapse — one over GENERATED station vertices alone (§5.1's Table C) rounding to the same float64, one whose two stations DIFFER in provenance, and a cap triangle collapsing over either | the RECORDED arm: no — the modification consumed the region, the same existence answer modify §5 test 1 gives an inside-out loop. The COMPUTED arm: this evaluator cannot tell, and the row therefore never claims non-existence, since the record states no coordinate for a COMPUTED vertex to be decided from | `ErrDegenerate` (RECORDED arm) / `ErrUnsupported` (COMPUTED arm) | yes, §4, for the RECORDED arm; no for the COMPUTED arm — a precision ceiling on this evaluator's float64 vertex table, the same reading S13 gives |
 | **S7** | either of two arms: the STRUCTURAL arm — a same-kind `CircleSeg` pair whose two recorded `CCW` flags disagree (P5), decided from the two records alone (§4's gate-order paragraph places both arms) — or the AUDIT arm, where the crossing audit (§6) finds contact other than the pair's own expected contact, whatever §5.1's Table C gives it | no — a self-intersecting or self-touching shell bounds no solid, and an opposite-sense circular correspondence walls each side against the other's reversed walk, which is that same crossing | `ErrDegenerate` | yes, §6 |
 | **S8** | the crossing audit's work passes a fixed ceiling (§6, §10): more triangles than its triangle ceiling, more enumeration work (the smallest of the sweep, grid and tree counts) than its pair ceiling, or more candidates — the box-overlapping pairs it will test pairwise, after the cap proofs — than that pair ceiling; each grows with the assembled triangle count `F` (§7), which a chorded pair grows past `2n` | this evaluator cannot tell | `ErrUnsupported` | no, §6 — a resource ceiling, not a shape rule |
 | **S9** | either profile fails a seam gate (§2): foreign, stale, invalid, or an unrecordable `Partial` fragment | seam design's own answer, per profile | `ErrForeignProfile` / `ErrStaleProfile` / `ErrInvalidProfile` / `ErrUnrecordableProfile` | seam design's own answer, per gate; this document adds no permanence of its own (§2) |
 | **S10** | a nil `*sketch.Sketch` or `*sketch.Profile` argument | no call at all | `ErrDegenerate` | yes, §2 |
-| **S11** | a nil or foreign `LoftOption` value, including a foreign type that embeds the sealed marker | no well-defined decad operation can invoke an unowned callback | `ErrDegenerate` | yes, §2 |
+| **S11** | retired: the option tier no longer exists | none | none | none, §2 |
 | **S12** | ANY build — placed (`Transform`/`Copy`, §12 PR 2a), chorded (§5.1), or both — whose COMBINED proven volume allowance (§8) is not smaller than the held volume | yes — the body itself is sound; only its centroid's shift `epsV · R_c / clearance` (§8) has no positive `clearance` left to divide by | `ErrUnsupported` | no — a precision ceiling on this evaluator's centroid bound, not a shape rule |
 | **S13** | a build whose lifted-and-placed coordinate, whose computed station coordinate (§5.1), or whose orientation anchor (§5), runs past the representable float64 range | yes — every input is finite (both records' coordinates, the plane origins, and a transform `r3` itself validated), and only decad's own float evaluation of the lift or the station computation overflows; a placed body is the rigid image of one this evaluator already built | `ErrUnsupported` | no — a range ceiling on this evaluator's float64 vertex table, not a shape rule |
 | **S14** | ANY build for which a displacement term §5.2's table lists answers `+Inf`, decided in whichever of the two arms the gate-order paragraph below assigns that term | yes — the body exists; this evaluator cannot publish a finite certified enclosure for that term on this build | `ErrUnsupported` | no — an enclosure or numeric-range ceiling, not a shape rule |
@@ -340,9 +331,7 @@ relative to construction and of what each gate's phase can already have
 evaluated.** A site naming a gate's phase cites this paragraph and states no
 phase of its own.
 
-Pre-gates first (S10 nil check, S11 concrete option ownership without
-invoking a callback, S4's ARITY half — a repeated `WithLoftAlignment` — decided
-in that same option loop since it needs no record, S9 seam authentication of
+Pre-gates first (S10 nil check, S9 seam authentication of
 both profiles — nothing downstream is safe to read before this), then the
 shape gates that need only the two authenticated records (S1 hole count, S2
 segment count, S4's PAYLOAD-SHAPE half — a wrong-length alignment or an offset
@@ -435,10 +424,9 @@ the COMBINED proven volume allowance §8 composes and not on how the build was
 reached** — so a chorded build reaches it under `r3.Identity()` too. §5.2's
 table owns which terms that combination carries and when each is positive.
 
-**S9, S10, S11 and S4's ARITY half belong to the original call alone.** Each
+**S9 and S10 belong to the original call alone.** Each
 judges an argument the caller passed to `Loft` — the two live
-`*sketch.Profile`s and their sketches (S9), a nil argument (S10), an option
-value (S11), a repeated `WithLoftAlignment` (S4's arity half) — and a
+`*sketch.Profile`s and their sketches (S9), a nil argument (S10) — and a
 placement receives none of them: the payload carries two already-recorded
 `ProfileRecord`s and one normalized alignment slice, with no `*sketch.Sketch`
 and no `*sketch.Profile` left to authenticate. So a profile that goes stale
@@ -2075,10 +2063,7 @@ excludes, never a reason to loosen §5.1's chord target or its cap.
   STRUCTURAL arm, asserted to refuse at the phase §4's gate-order paragraph
   assigns that arm rather than from the AUDIT arm, so the fixture pins the
   gate's position and not only its sentinel; malformed
-  `WithLoftAlignment` (wrong length, out-of-range offset, or duplicate
-  option) → S4; nil and foreign `LoftOption` values (including a type with a
-  promoted sealed marker) → S11 at the phase §4's gate-order paragraph
-  assigns it, with the document unchanged; geometrically coplanar sections →
+  `Alignment` (wrong length or out-of-range offset) → S4; geometrically coplanar sections →
   S5, including two
   distinct `PlaneRecord`s with the same plane but rotated `U`/`V` bases; a
   nonzero alignment offset pairs the expected rotated vertex, asserted on the
@@ -2118,7 +2103,7 @@ excludes, never a reason to loosen §5.1's chord target or its cap.
   COMPUTED arm instead, asserted on `ErrUnsupported` and not merely on being
   refused.
 - **Audit**: a deliberately over-twisted correspondence (e.g. an intentional
-  wrong `WithLoftAlignment` offset on a non-convex profile) proves a
+  wrong `Alignment` offset on a non-convex profile) proves a
   crossing → S7, asserted against the specific triangle pair the crossing
   predicate found; two matching square `LineSeg` profiles on parallel planes
   pass when their coplanar cap-triangulation pairs and coplanar wall-diagonal
@@ -2193,7 +2178,7 @@ excludes, never a reason to loosen §5.1's chord target or its cap.
   `chordCount`'s closed-walk floor of three CYCLIC stations a side, walled by
   the three cells §5.1's closed rule pairs from them — a fourth station, or a
   closing cell between one station and itself, fails it; its alignment offset
-  is forced to `0` (§1), and a nonzero `WithLoftAlignment` entry for that
+  is forced to `0` (§1), and a nonzero `Alignment` entry for that
   loop is S4. A fixture sized past the station cap → S15 (`freeform.ErrTooManyChords`),
   asserted to fire BEFORE S8 on a construction that would otherwise reach the
   audit ceiling. A synthetic pair whose two sides are forced to different
@@ -2316,7 +2301,7 @@ excludes, never a reason to loosen §5.1's chord target or its cap.
   bounds. Correspondence is asserted on built wall COORDINATES, never
   counts: a same-span-count fit-spline pair maps each station of one side to
   the other side's station at the SAME shared dyadic fraction (§5.1),
-  and a nonzero `WithLoftAlignment` offset on a loop containing a curved pair
+  and a nonzero `Alignment` offset on a loop containing a curved pair
   maps the expected ROTATED station. A pair whose two sides record the SAME
   curve shape under OPPOSITE range orders — one `TStart < TEnd`, the other
   `TStart > TEnd`, each loop walked in its own intrinsic sense — builds the
@@ -2343,7 +2328,7 @@ excludes, never a reason to loosen §5.1's chord target or its cap.
   kind; a record sized to exhaust `agent-docs/spline-design.md`'s
   `freeform.FreeformWorkLimit` gives R7. The audit proves a crossing (S7) on a
   deliberately over-twisted curved correspondence (e.g. a wrong
-  `WithLoftAlignment` offset on a non-convex free-form profile), asserted
+  `Alignment` offset on a non-convex free-form profile), asserted
   against the specific triangle pair the crossing predicate found. Replay of
   the recorded step reproduces the same triangle count, the same roles, and
   bit-identical measurements; a `LoftOpts` carrying a curved (free-form)
@@ -2602,7 +2587,7 @@ other's reversed walk, which twists the ribbon; a twisted ribbon crosses itself
 only sometimes, and one that does not cross builds. decad guesses no intent
 here: the correspondence the two records state is the one it rules, and the
 audit refuses a crossing rather than a correspondence the caller did not mean.
-The same reading already holds for a loop pair under a wrong `WithLoftAlignment`
+The same reading already holds for a loop pair under a wrong `Alignment`
 offset, which §3 states as a crossing refusal and not as an intent check.
 
 **`sketch`'s canonical direction is what makes an opposed pair rare.** Two
@@ -2613,12 +2598,11 @@ two walks whose lexicographic end order disagrees with the geometric
 correspondence, which the ordinary case — one section drawn, then drawn again
 on the other plane — does not produce.
 
-**`WithLoftAlignment` therefore carries nothing for a chain pair.** P4's own
-row above forces the offset to `0`, so a `WithLoftAlignment` payload names a
+**`Alignment` therefore carries nothing for a chain pair.** P4's own
+row above forces the offset to `0`, so an `Alignment` payload names a
 correspondence that does not exist. The refusal is the COMPILER rather than a
-sentinel: the option returns a `LoftOption` and `LoftChain` takes the sealed
-`ChainLoftOption` tier (§16.3), so Table SL carries no row for it, exactly as
-Table R carries none for `WithSurfaceResult()` against a chain-fed call
+sentinel: `Alignment` is a method of `LoftCommand` and `LoftChainCommand` has no method (§16.3), so Table SL carries no row for it, exactly as
+Table R carries none for `SurfaceResult` against a chain-fed call
 (`agent-docs/surface-design.md` §13.5). The rejected alternative is a chain-only reversal option
 pairing segment `j` against segment `n-1-j`: §1 excludes a reversed
 correspondence permanently, because reversal changes which vertices are
@@ -2632,7 +2616,7 @@ CLOSED triangle set — every wall triangle plus both triangulated caps —
 anchored at the placed `p0` origin, and flips every triangle's winding when
 that sum is negative.** A surface-result loft assembles both caps for exactly
 this reason and omits them from the published face set afterwards, which is why
-`WithSurfaceResult()` costs the orientation nothing. Two open walks assemble no
+`SurfaceResult` costs the orientation nothing. Two open walks assemble no
 cap and no closed set, so that sum is anchor-dependent and states nothing about
 the ribbon, and `agent-docs/surface-design.md` §2.3's "the orientation the solid would
 have had" names a solid that does not exist for two open walks.
@@ -2686,12 +2670,9 @@ is where a non-parallel chain loft would land once it can state one.
 ### 16.3 The entry point
 
 ```go
-func LoftChain(ctx context.Context, d *Document, s0 *sketch.Sketch,
-    c0 *sketch.Chain, s1 *sketch.Sketch, c1 *sketch.Chain,
-    opts ...ChainLoftOption) (*Body, error)
-
-// ChainLoftOption configures LoftChain. It is its own sealed tier.
-type ChainLoftOption interface { /* sealed */ }
+func LoftChain(d *Document, s0 *sketch.Sketch, c0 *sketch.Chain,
+    s1 *sketch.Sketch, c1 *sketch.Chain) *LoftChainCommand
+func (c *LoftChainCommand) Do(ctx context.Context) (*Body, error)
 ```
 
 `s0`/`c0` is the **from** chain and `s1`/`c1` the **to** chain — the same
@@ -2700,13 +2681,13 @@ gate reads `N0` from. Two sketches are required for the reason `Loft` requires
 them: `sketch.Sketch` has one plane, and two sections on distinct planes need
 two.
 
-**`ChainLoftOption` is a sealed tier of its own rather than `LoftOption`**, on
-`agent-docs/surface-design.md` §13.2's own reasoning: `WithSurfaceResult()` must not
+**`LoftChainCommand` is its own command type rather than `LoftCommand`**, on
+`agent-docs/surface-design.md` §13.2's own reasoning: `SurfaceResult` must not
 compile against a chain-fed call, since a chain loft is always a sheet and
-there is no cap for the option to omit. `WithLoftAlignment` is not a member
-either, for §16.1's reason — the offset is forced to `0`, so the option names
-nothing. The tier carries no member. The rejected alternative is reusing the `LoftOption`
-tier, which would type-check both of those options against a call that can honour neither.
+there is no cap for the method to omit. `Alignment` is not a method
+either, for §16.1's reason — the offset is forced to `0`, so the method names
+nothing. The command carries no method. The rejected alternative is reusing `LoftCommand`,
+which would compile both of those methods against a call that can honour neither.
 
 **A chain-fed result is always a sheet**: `Kind()` is `BodySheet` by
 construction, `IsSolid()` is `false`, and `Volume()`/`Centroid()` answer
@@ -3253,7 +3234,7 @@ near the axis lies on the bore, and the shell keeps its one hole.
 
 ## 20. Point-section loft
 
-`LoftFromPoint(ctx, doc, apex, sketch, profile)` builds the cone over one
+`LoftFromPoint(doc, apex, sketch, profile)` builds the cone over one
 authenticated, closed Sketch region. The point is a world coordinate in
 millimetres. The region keeps its recorded segment kinds and exact Sketch trim
 ranges. The function accepts a single outer loop and refuses holes: coning every

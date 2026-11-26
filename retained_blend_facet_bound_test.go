@@ -131,7 +131,7 @@ func (sc *stripScene) rect(t testing.TB, x0, y0, x1, y1, h float64) *Body {
 	s.Fix(r.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	b, err := Extrude(t.Context(), sc.doc, s, s.Profiles()[0], Distance{D: units.Millimeters(h), Dir: Along})
+	b, err := Extrude(sc.doc, s, s.Profiles()[0], Distance{D: units.Millimeters(h), Dir: Along}).Do(t.Context())
 	require.NoError(t, err)
 	return b
 }
@@ -146,7 +146,7 @@ func (sc *stripScene) disc(t testing.TB, cx, r, h float64, dir Direction) *Body 
 	s.CreateCircle(c, r)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	b, err := Extrude(t.Context(), sc.doc, s, s.Profiles()[0], Distance{D: units.Millimeters(h), Dir: dir})
+	b, err := Extrude(sc.doc, s, s.Profiles()[0], Distance{D: units.Millimeters(h), Dir: dir}).Do(t.Context())
 	require.NoError(t, err)
 	return b
 }
@@ -343,8 +343,8 @@ func TestRetainedBlendStripFacetBounds(t *testing.T) {
 		s.CreateArc(s.CreatePoint(0, 0), end, o)
 		_, err = s.Solve(t.Context())
 		require.NoError(t, err)
-		ball, err := Revolve(t.Context(), sc.doc, s, s.Profiles()[0],
-			SketchLine{Start: Point2{U: 0, V: 0}, End: Point2{U: 1, V: 0}}, FullRevolution{})
+		ball, err := Revolve(sc.doc, s, s.Profiles()[0],
+			SketchLine{Start: Point2{U: 0, V: 0}, End: Point2{U: 1, V: 0}}, FullRevolution{}).Do(t.Context())
 		require.NoError(t, err)
 		capped, err := Cut(ball, moved(t, sc.rect(t, -100, -100, 100, 100, 20), r3.Vec{Z: cutZ})).Do(t.Context())
 		require.NoError(t, err)
@@ -372,7 +372,7 @@ func TestRetainedBlendStripFacetBounds(t *testing.T) {
 		s.CreateCircle(c, 4)
 		_, err = s.Solve(t.Context())
 		require.NoError(t, err)
-		tool, err := Extrude(t.Context(), sc.doc, s, s.Profiles()[0], Symmetric{D: units.Millimeters(30)})
+		tool, err := Extrude(sc.doc, s, s.Profiles()[0], Symmetric{D: units.Millimeters(30)}).Do(t.Context())
 		require.NoError(t, err)
 		grooved, err := Cut(sc.rect(t, 0, 0, 40, 20, 20), moved(t, tool, r3.Vec{X: 20})).Do(t.Context())
 		require.NoError(t, err)
@@ -715,8 +715,8 @@ func TestRetainedBlendKeywayCuspBounds(t *testing.T) {
 			s.Fix(rect.C)
 			_, err = s.Solve(t.Context())
 			require.NoError(t, err)
-			shaft, err := Revolve(t.Context(), sc.doc, s, s.Profiles()[0],
-				SketchLine{Start: planePoint{}, End: planePoint{U: 1}}, FullRevolution{})
+			shaft, err := Revolve(sc.doc, s, s.Profiles()[0],
+				SketchLine{Start: planePoint{}, End: planePoint{U: 1}}, FullRevolution{}).Do(t.Context())
 			require.NoError(t, err)
 			keyway, err := Cut(shaft, moved(t, sc.rect(t, x0, -3, 90, 3, 6), r3.Vec{Z: 6.5})).Do(t.Context())
 			require.NoError(t, err)

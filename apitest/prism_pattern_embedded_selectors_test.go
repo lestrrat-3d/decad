@@ -45,8 +45,8 @@ func TestPrismPatternEmbeddedJoinKeepsAxialRootsAndCapLoops(t *testing.T) {
 	require.Len(t, s.Profiles(), 1)
 	profile := s.Profiles()[0]
 	require.True(t, profile.Valid)
-	tooth, err := decad.Extrude(t.Context(), doc, s, profile,
-		decad.Distance{D: units.Millimeters(2), Dir: decad.Along})
+	tooth, err := decad.Extrude(doc, s, profile,
+		decad.Distance{D: units.Millimeters(2), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	disc := circleBodyAtZ(t, doc, 0, 5.375, 0, 2)
 	copies, err := decad.PatternCopies(t.Context(), tooth,

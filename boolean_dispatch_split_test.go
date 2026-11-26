@@ -24,7 +24,7 @@ func splitTestBox(t *testing.T, doc *Document, x0, x1 float64) *Body {
 	s.Fix(r.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := Extrude(t.Context(), doc, s, s.Profiles()[0], Distance{D: units.Millimeters(10), Dir: Along})
+	body, err := Extrude(doc, s, s.Profiles()[0], Distance{D: units.Millimeters(10), Dir: Along}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -74,7 +74,7 @@ func TestBooleanDispatchAnalyticPrefix(t *testing.T) {
 		s.Fix(r.A)
 		_, err = s.Solve(t.Context())
 		require.NoError(t, err)
-		prism, err := Extrude(t.Context(), doc, s, s.Profiles()[0], Distance{D: units.Millimeters(20), Dir: Along})
+		prism, err := Extrude(doc, s, s.Profiles()[0], Distance{D: units.Millimeters(20), Dir: Along}).Do(t.Context())
 		require.NoError(t, err)
 		box, err := Fillet(prism, Edges(ParallelTo(r3.NewVec(0, 0, 1))).Exactly(4), units.Millimeters(3)).Do(t.Context())
 		require.NoError(t, err)
@@ -86,7 +86,7 @@ func TestBooleanDispatchAnalyticPrefix(t *testing.T) {
 		ts.CreateCircle(c, 4)
 		_, err = ts.Solve(t.Context())
 		require.NoError(t, err)
-		cyl, err := Extrude(t.Context(), doc, ts, ts.Profiles()[0], Distance{D: units.Millimeters(60), Dir: Along})
+		cyl, err := Extrude(doc, ts, ts.Profiles()[0], Distance{D: units.Millimeters(60), Dir: Along}).Do(t.Context())
 		require.NoError(t, err)
 		move, err := r3.Translation(r3.Vec{Y: 30})
 		require.NoError(t, err)

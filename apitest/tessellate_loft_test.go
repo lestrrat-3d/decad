@@ -28,7 +28,7 @@ func loftBoxAt(t *testing.T, doc *decad.Document, z0, height float64) *decad.Bod
 	t.Helper()
 	const half = 20.0
 	s0, p0, s1, p1 := loftSquaresAt(t, r3.NewVec(0, 0, z0), half, half, height)
-	body, err := decad.Loft(t.Context(), doc, s0, p0, s1, p1)
+	body, err := decad.Loft(doc, s0, p0, s1, p1).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }

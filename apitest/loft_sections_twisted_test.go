@@ -245,7 +245,7 @@ func TestLoftSectionsTwistedRibbonKeepsVolumeAndMeshProof(t *testing.T) {
 	ribbon := twistedRibbon{sections: 41}.defaults()
 	sections, loops := ribbon.build(t)
 	doc := decad.New()
-	body, err := decad.LoftSections(t.Context(), doc, sections...)
+	body, err := decad.LoftSections(doc, sections...).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, decad.BodySolid, body.Kind())
 	require.Len(t, doc.Bodies(), 1)
@@ -306,7 +306,7 @@ func TestLoftSectionsTwistedThreeSectionsFallBackToTwistedRoute(t *testing.T) {
 	ribbon := twistedRibbon{sections: 3}.defaults()
 	ribbon.step = 2
 	sections, _ := ribbon.build(t)
-	body, err := decad.LoftSections(t.Context(), decad.New(), sections...)
+	body, err := decad.LoftSections(decad.New(), sections...).Do(t.Context())
 	require.NoError(t, err)
 	reference, referenceArea := twistedReference(t, sections, ribbon.step)
 	volume, err := body.Volume()
@@ -343,7 +343,7 @@ func TestLoftSectionsTwistedRefusesUnprovedInputs(t *testing.T) {
 			ribbon.sections, ribbon.originShift, ribbon.skipLast = tc.ribbon.sections, tc.ribbon.originShift, tc.ribbon.skipLast
 			sections, _ := ribbon.build(t)
 			doc := decad.New()
-			body, err := decad.LoftSections(t.Context(), doc, sections...)
+			body, err := decad.LoftSections(doc, sections...).Do(t.Context())
 			require.Nil(t, body)
 			require.ErrorIs(t, err, decad.ErrUnsupported)
 			require.ErrorContains(t, err, tc.reason)
@@ -360,7 +360,7 @@ func TestLoftSectionsTwistedRefusesExcessAndUnevenSections(t *testing.T) {
 		tooMany[i] = sections[i%len(sections)]
 	}
 	doc := decad.New()
-	body, err := decad.LoftSections(t.Context(), doc, tooMany...)
+	body, err := decad.LoftSections(doc, tooMany...).Do(t.Context())
 	require.Nil(t, body)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.ErrorContains(t, err, "at most 1024 sections")
@@ -369,7 +369,7 @@ func TestLoftSectionsTwistedRefusesExcessAndUnevenSections(t *testing.T) {
 	// Reordering two sections breaks the ascending equal spacing.
 	uneven := append([]decad.LoftSection(nil), sections...)
 	uneven[1], uneven[2] = uneven[2], uneven[1]
-	body, err = decad.LoftSections(t.Context(), doc, uneven...)
+	body, err = decad.LoftSections(doc, uneven...).Do(t.Context())
 	require.Nil(t, body)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.ErrorContains(t, err, "strictly ascending")

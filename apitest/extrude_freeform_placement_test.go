@@ -25,8 +25,8 @@ func TestExtrudeFreeformReflectedCopyPreservesGeometry(t *testing.T) {
 	require.Len(t, profiles, 1)
 
 	doc := decad.New()
-	base, err := decad.Extrude(t.Context(), doc, s, profiles[0],
-		decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	base, err := decad.Extrude(doc, s, profiles[0],
+		decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	frame, err := r3.NewFrame(r3.Vec{}, r3.Vec{Y: 1}, r3.Vec{Z: 1})
 	require.NoError(t, err)

@@ -37,8 +37,8 @@ func revolveDisc(ctx context.Context, t *testing.T, doc *Document, radius, z0, z
 	}
 	_, err = s.Solve(ctx)
 	require.NoError(t, err)
-	body, err := Revolve(ctx, doc, s, s.Profiles()[0], ConstructionAxis{Origin: r3.Vec{}, Dir: r3.Vec{Z: 1}},
-		FullRevolution{})
+	body, err := Revolve(doc, s, s.Profiles()[0], ConstructionAxis{Origin: r3.Vec{}, Dir: r3.Vec{Z: 1}},
+		FullRevolution{}).Do(ctx)
 	require.NoError(t, err)
 	return body
 }
@@ -68,7 +68,7 @@ func axialTool(ctx context.Context, t *testing.T, doc *Document, x, y, z0, lengt
 		}
 	}
 	require.NotNil(t, pr)
-	body, err := Extrude(ctx, doc, s, pr, Distance{D: units.Millimeters(length), Dir: Along})
+	body, err := Extrude(doc, s, pr, Distance{D: units.Millimeters(length), Dir: Along}).Do(ctx)
 	require.NoError(t, err)
 	return body
 }

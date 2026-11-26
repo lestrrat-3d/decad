@@ -44,14 +44,14 @@ func TestChamferStraightRunAtCircularSupport(t *testing.T) {
 	flange.CreateArc(flange.Origin(), tip, c)
 	flange.CreateLine(c, d)
 	flange.CreateLine(d, a)
-	plate, err := Extrude(ctx, doc, flange, solve(flange), Distance{D: units.Millimeters(1), Dir: Against})
+	plate, err := Extrude(doc, flange, solve(flange), Distance{D: units.Millimeters(1), Dir: Against}).Do(ctx)
 	require.NoError(t, err)
 	// A transverse web makes the input a mesh Boolean, as required by this operation.
 	plate, err = Union(plate, internalBoxBodyAtZ(t, doc, -7.5, .75, -6.5, 2, -.5, 1)).Do(ctx)
 	require.NoError(t, err)
 	disk := section(-1)
 	disk.AddConstraint(sketch.NewRadius(disk.CreateCircle(disk.Origin(), 5), 5))
-	boss, err := Extrude(ctx, doc, disk, solve(disk), Distance{D: units.Millimeters(1.75), Dir: Against})
+	boss, err := Extrude(doc, disk, solve(disk), Distance{D: units.Millimeters(1.75), Dir: Against}).Do(ctx)
 	require.NoError(t, err)
 	stock, err := Union(plate, boss).Do(ctx)
 	require.NoError(t, err)
@@ -65,7 +65,7 @@ func TestChamferStraightRunAtCircularSupport(t *testing.T) {
 		}
 		ss[i], pp[i] = s, solve(s)
 	}
-	tool, err := Loft(ctx, doc, ss[0], pp[0], ss[1], pp[1])
+	tool, err := Loft(doc, ss[0], pp[0], ss[1], pp[1]).Do(ctx)
 	require.NoError(t, err)
 	cut, err := Cut(stock, tool).Do(ctx)
 	require.NoError(t, err)

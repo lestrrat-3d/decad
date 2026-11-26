@@ -12,16 +12,15 @@ import (
 )
 
 // This file is agent-docs/rib-design.md §7's and agent-docs/boss-design.md §5's
-// public-surface tests for WithRibDraft and BossSpec.Draft.
+// public-surface tests for Draft and BossSpec.Draft.
 
 func TestRibDraftThinsTheRibAsItRises(t *testing.T) {
 	t.Parallel()
 	for _, deg := range []float64{3, 5} {
 		_, part := ribPart(t)
 		s, lines := ribSketch(t, [4]float64{3, 20, 37, 20})
-		out, err := decad.WebPath(t.Context(), part, s, lines, units.Millimeters(2),
-			decad.Distance{D: units.Millimeters(11), Dir: decad.Along},
-			decad.WithRibOverrun(units.Millimeters(1)), decad.WithRibDraft(units.Degrees(deg)))
+		out, err := decad.WebPath(part, s, lines, units.Millimeters(2),
+			decad.Distance{D: units.Millimeters(11), Dir: decad.Along}).Overrun(units.Millimeters(1)).Draft(units.Degrees(deg)).Do(t.Context())
 		require.NoError(t, err)
 		// The sketch plane is at z = 4 and the pocket floor at z = 5. At the height t
 		// above the plane the rib is 2 − 2·t·tan(angle) thick, and its 30 mm
@@ -37,9 +36,8 @@ func TestRibDraftNegativeThickensTheRib(t *testing.T) {
 	t.Parallel()
 	_, part := ribPart(t)
 	s, lines := ribSketch(t, [4]float64{3, 20, 37, 20})
-	out, err := decad.WebPath(t.Context(), part, s, lines, units.Millimeters(2),
-		decad.Distance{D: units.Millimeters(11), Dir: decad.Along},
-		decad.WithRibOverrun(units.Millimeters(1)), decad.WithRibDraft(units.Degrees(-4)))
+	out, err := decad.WebPath(part, s, lines, units.Millimeters(2),
+		decad.Distance{D: units.Millimeters(11), Dir: decad.Along}).Overrun(units.Millimeters(1)).Draft(units.Degrees(-4)).Do(t.Context())
 	require.NoError(t, err)
 	tan := math.Tan(-4 * math.Pi / 180)
 	added := 30 * ((2*11 - 121*tan) - (2*1 - 1*tan))
@@ -55,9 +53,8 @@ func TestRibDraftOfAWebAndLastWins(t *testing.T) {
 	t.Parallel()
 	_, part := ribPart(t)
 	s, lines := ribSketch(t, [4]float64{3, 12, 37, 12}, [4]float64{3, 28, 37, 28})
-	out, err := decad.WebPath(t.Context(), part, s, lines, units.Millimeters(2),
-		decad.Distance{D: units.Millimeters(11), Dir: decad.Along},
-		decad.WithRibOverrun(units.Millimeters(1)), decad.WithRibDraft(units.Degrees(10)), decad.WithRibDraft(units.Degrees(5)))
+	out, err := decad.WebPath(part, s, lines, units.Millimeters(2),
+		decad.Distance{D: units.Millimeters(11), Dir: decad.Along}).Overrun(units.Millimeters(1)).Draft(units.Degrees(10)).Draft(units.Degrees(5)).Do(t.Context())
 	require.NoError(t, err)
 	tan := math.Tan(5 * math.Pi / 180)
 	added := 2 * 30 * ((2*11 - 121*tan) - (2*1 - 1*tan))
@@ -75,8 +72,8 @@ func TestRibDraftRefusals(t *testing.T) {
 	} {
 		doc, part := ribPart(t)
 		s, lines := ribSketch(t, [4]float64{3, 20, 37, 20})
-		_, err := decad.WebPath(t.Context(), part, s, lines, units.Millimeters(2),
-			decad.Distance{D: units.Millimeters(11), Dir: decad.Along}, decad.WithRibDraft(tc.draft))
+		_, err := decad.WebPath(part, s, lines, units.Millimeters(2),
+			decad.Distance{D: units.Millimeters(11), Dir: decad.Along}).Draft(tc.draft).Do(t.Context())
 		require.ErrorIs(t, err, tc.want, name)
 		require.Equal(t, []*decad.Body{part}, doc.Bodies(), "%s: a refused rib leaves the part live and alone", name)
 	}

@@ -515,8 +515,8 @@ func partsBinBottle(t *testing.T, doc *decad.Document) *decad.Body {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	require.Len(t, s.Profiles(), 1)
-	body, err := decad.Revolve(t.Context(), doc, s, s.Profiles()[0], decad.SketchLine{
-		Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 0, V: 1}}, decad.FullRevolution{})
+	body, err := decad.Revolve(doc, s, s.Profiles()[0], decad.SketchLine{
+		Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 0, V: 1}}, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -541,7 +541,7 @@ func partsBinLoft(t *testing.T, doc *decad.Document) *decad.Body {
 		{8.5, 0}, {8, 8}, {0, 8.5}, {-8, 8}, {-8.5, 0}, {-8, -8}, {0, -8.5}, {8, -8}})
 	s1, p1 := meshPolygonSketch(t, w, top, [][2]float64{
 		{6, -2.5}, {6, 2.5}, {2.5, 6}, {-2.5, 6}, {-6, 2.5}, {-6, -2.5}, {-2.5, -6}, {2.5, -6}})
-	loft, err := decad.Loft(t.Context(), doc, s0, p0, s1, p1)
+	loft, err := decad.Loft(doc, s0, p0, s1, p1).Do(t.Context())
 	require.NoError(t, err)
 	return loft
 }
@@ -554,7 +554,7 @@ func partsBinSweep(t *testing.T, doc *decad.Document) *decad.Body {
 	s, profile := meshPolygonSketch(t, w, w.XY(), sweepHexagonCorners)
 	path, err := decad.NewPath(r3.Vec{}, decad.LineTo{End: r3.NewVec(0, 0, 14)})
 	require.NoError(t, err)
-	body, err := decad.Sweep(t.Context(), doc, s, profile, path)
+	body, err := decad.Sweep(doc, s, profile, path).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }

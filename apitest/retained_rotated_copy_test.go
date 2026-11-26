@@ -123,7 +123,7 @@ func TestRetainedRotatedCopy(t *testing.T) {
 		sc, _, copied, _ := rotatedRetentionScene(t, 20)
 		top := decad.Faces(decad.Planar(), decad.Facing(r3.NewVec(0, 0, 1)))
 		sk := rotatedCopySketch(t, sc.w)
-		pin, err := decad.Extrude(t.Context(), sc.doc, sk, sk.Profiles()[0], decad.ToFace{Body: copied, Face: top})
+		pin, err := decad.Extrude(sc.doc, sk, sk.Profiles()[0], decad.ToFace{Body: copied, Face: top}).Do(t.Context())
 		require.NoError(t, err)
 		box, err := pin.Bounds()
 		require.NoError(t, err)
@@ -168,7 +168,7 @@ func TestRetainedRotatedCopy(t *testing.T) {
 		_, err = decad.MirroredCopy(t.Context(), copied, decad.MirrorFace{Body: copied, Face: tilted})
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		sk := rotatedCopySketch(t, sc.w)
-		_, err = decad.Extrude(t.Context(), sc.doc, sk, sk.Profiles()[0], decad.ToFace{Body: copied, Face: tilted})
+		_, err = decad.Extrude(sc.doc, sk, sk.Profiles()[0], decad.ToFace{Body: copied, Face: tilted}).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 	})
 }

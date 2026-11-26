@@ -90,8 +90,8 @@ func (b strutBuilder) revolve(origin, u, v r3.Vec, pts [][2]float64) *decad.Body
 	_, err := s.Solve(b.t.Context())
 	require.NoError(b.t, err)
 	require.Len(b.t, s.Profiles(), 1)
-	body, err := decad.Revolve(b.t.Context(), b.doc, s, s.Profiles()[0],
-		decad.ConstructionAxis{Origin: origin, Dir: u}, decad.FullRevolution{})
+	body, err := decad.Revolve(b.doc, s, s.Profiles()[0],
+		decad.ConstructionAxis{Origin: origin, Dir: u}, decad.FullRevolution{}).Do(b.t.Context())
 	require.NoError(b.t, err)
 	return body
 }
@@ -118,8 +118,8 @@ func (b strutBuilder) part(p strutPart) *decad.Body {
 		_, err := s.Solve(b.t.Context())
 		require.NoError(b.t, err)
 		require.Len(b.t, s.Profiles(), 1)
-		body, err := decad.Extrude(b.t.Context(), b.doc, s, s.Profiles()[0],
-			decad.Distance{D: units.Millimeters(strutPostLength), Dir: decad.Along})
+		body, err := decad.Extrude(b.doc, s, s.Profiles()[0],
+			decad.Distance{D: units.Millimeters(strutPostLength), Dir: decad.Along}).Do(b.t.Context())
 		require.NoError(b.t, err)
 		return body
 	}

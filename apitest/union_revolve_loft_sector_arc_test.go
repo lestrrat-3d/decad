@@ -79,8 +79,8 @@ func arcToothHubAndLug(t testing.TB, shape arcToothShape) (*decad.Document, *dec
 	require.NoError(t, err)
 	profiles := section.Profiles()
 	require.Len(t, profiles, 1)
-	hub, err := decad.Revolve(t.Context(), doc, section, profiles[0],
-		decad.SketchLine{Start: decad.Point2{}, End: decad.Point2{U: 1}}, decad.FullRevolution{})
+	hub, err := decad.Revolve(doc, section, profiles[0],
+		decad.SketchLine{Start: decad.Point2{}, End: decad.Point2{U: 1}}, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 
 	lugWorld := sketch.NewWorld()
@@ -116,7 +116,7 @@ func arcToothHubAndLug(t testing.TB, shape arcToothShape) (*decad.Document, *dec
 	require.NoError(t, err)
 	lugProfiles := lug.Profiles()
 	require.Len(t, lugProfiles, 1)
-	tooth, err := decad.LoftFromPoint(t.Context(), doc, r3.Vec{}, lug, lugProfiles[0])
+	tooth, err := decad.LoftFromPoint(doc, r3.Vec{}, lug, lugProfiles[0]).Do(t.Context())
 	require.NoError(t, err)
 	toeTrim, err := decad.Cut(tooth, pointConeTool(t, doc, 7.5)).Do(t.Context())
 	require.NoError(t, err)

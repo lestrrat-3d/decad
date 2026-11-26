@@ -42,7 +42,7 @@ func threePrismUnionInputs(t *testing.T, g r3.Frame, thickness float64) (*decad.
 			}
 		}
 		require.True(t, profile != nil)
-		body, err := decad.Extrude(ctx, doc, s, profile, decad.Distance{D: units.Millimeters(length), Dir: decad.Along})
+		body, err := decad.Extrude(doc, s, profile, decad.Distance{D: units.Millimeters(length), Dir: decad.Along}).Do(ctx)
 		require.NoError(t, err)
 		f, err := r3.NewFrame(origin, u, v)
 		require.NoError(t, err)

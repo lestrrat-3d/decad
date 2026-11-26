@@ -39,8 +39,8 @@ func saddleExtrudedCylinder(t *testing.T, sc *retentionScene, plane *sketch.Plan
 	s.CreateCircle(c, radius)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	b, err := decad.Extrude(t.Context(), sc.doc, s, s.Profiles()[0],
-		decad.Symmetric{D: units.Millimeters(length)})
+	b, err := decad.Extrude(sc.doc, s, s.Profiles()[0],
+		decad.Symmetric{D: units.Millimeters(length)}).Do(t.Context())
 	require.NoError(t, err)
 	if move == (r3.Vec{}) {
 		return b
@@ -64,8 +64,8 @@ func saddleShaftWithFlatBesideMouth(t *testing.T) *decad.Body {
 	s.Fix(rect.C)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	box, err := decad.Extrude(t.Context(), sc.doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	box, err := decad.Extrude(sc.doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(20), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	move, err := r3.Translation(r3.Vec{Z: 9.8})
 	require.NoError(t, err)
@@ -87,7 +87,7 @@ func saddleRevolve(t *testing.T, sc *retentionScene) *decad.Body {
 	s.Fix(rect.C)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	shaft, err := decad.Revolve(t.Context(), sc.doc, s, s.Profiles()[0], uAxis, decad.FullRevolution{})
+	shaft, err := decad.Revolve(sc.doc, s, s.Profiles()[0], uAxis, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	return shaft
 }
@@ -104,8 +104,8 @@ func saddlePin(t *testing.T, sc *retentionScene, r, y float64) *decad.Body {
 	s.CreateCircle(c, r)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	pin, err := decad.Extrude(t.Context(), sc.doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(30), Dir: decad.Along})
+	pin, err := decad.Extrude(sc.doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(30), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return pin
 }

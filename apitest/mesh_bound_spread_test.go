@@ -39,8 +39,7 @@ func spreadTool(t *testing.T, doc *decad.Document, z float64) *decad.Body {
 	require.NoError(t, err)
 	path, err := decad.NewPath(r3.Vec{}, decad.LineTo{End: r3.NewVec(0, 0, spreadToolSpan)})
 	require.NoError(t, err)
-	tool, err := decad.Sweep(t.Context(), doc, s, s.Profiles()[0], path,
-		decad.WithSweepTwist(units.Degrees(spreadToolTwist)))
+	tool, err := decad.Sweep(doc, s, s.Profiles()[0], path).Twist(units.Degrees(spreadToolTwist)).Do(t.Context())
 	require.NoError(t, err)
 	move, err := r3.Translation(r3.NewVec(spreadToolOffset, 0, z))
 	require.NoError(t, err)

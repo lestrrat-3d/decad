@@ -18,7 +18,7 @@ import (
 func plainBox(t *testing.T, doc *decad.Document, dir decad.Direction) *decad.Body {
 	t.Helper()
 	s, p := taperSketch(t, r3.NewVec(0, 0, 0), 0, drawSquare(0, boxSide))
-	b, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(boxHeight), Dir: dir})
+	b, err := decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(boxHeight), Dir: dir}).Do(t.Context())
 	require.NoError(t, err)
 	return b
 }
@@ -212,7 +212,7 @@ func TestDraftRefusals(t *testing.T) {
 	deg5 := units.Degrees(5)
 
 	s, p := taperSketch(t, r3.NewVec(0, 0, 0), 0, drawSquare(10, 4))
-	rev, err := decad.Revolve(t.Context(), doc, s, p, uAxis, decad.FullRevolution{})
+	rev, err := decad.Revolve(doc, s, p, uAxis, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	cyl := cylinderBody(t, doc)
 	other := plainBox(t, doc, decad.Along)
@@ -316,7 +316,7 @@ func cylinderBody(t *testing.T, doc *decad.Document) *decad.Body {
 		r := s.CreateRectangle(0, 0, 10, 4)
 		s.Fix(r.A)
 	})
-	b, err := decad.Revolve(t.Context(), doc, s, p, uAxis, decad.FullRevolution{})
+	b, err := decad.Revolve(doc, s, p, uAxis, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	return b
 }
@@ -333,7 +333,7 @@ func TestDraftSymmetricReceiver(t *testing.T) {
 	for _, neutralStart := range []bool{true, false} {
 		doc := decad.New()
 		s, p := taperSketch(t, r3.NewVec(0, 0, 0), 0, drawSquare(0, boxSide))
-		box, err := decad.Extrude(t.Context(), doc, s, p, decad.Symmetric{D: units.Millimeters(boxHeight / 2)})
+		box, err := decad.Extrude(doc, s, p, decad.Symmetric{D: units.Millimeters(boxHeight / 2)}).Do(t.Context())
 		require.NoError(t, err)
 		bounds, err := box.Bounds()
 		require.NoError(t, err)

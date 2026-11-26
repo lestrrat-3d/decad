@@ -161,8 +161,8 @@ func sectorDigestSixSpanHub(t *testing.T, doc *decad.Document) *decad.Body {
 	require.NoError(t, err)
 	profiles := section.Profiles()
 	require.Len(t, profiles, 1)
-	hub, err := decad.Revolve(t.Context(), doc, section, profiles[0],
-		decad.SketchLine{Start: decad.Point2{}, End: decad.Point2{U: 1}}, decad.FullRevolution{})
+	hub, err := decad.Revolve(doc, section, profiles[0],
+		decad.SketchLine{Start: decad.Point2{}, End: decad.Point2{U: 1}}, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	return hub
 }

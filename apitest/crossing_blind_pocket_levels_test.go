@@ -27,7 +27,7 @@ func crossingPocketTool(t *testing.T, doc *decad.Document, planeZ float64, depth
 	s.Fix(rect.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: depth, Dir: dir})
+	body, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: depth, Dir: dir}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -53,7 +53,7 @@ func crossingHolePlateOfHeight(t *testing.T, doc *decad.Document, height units.V
 	s.Fix(rect.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	plate, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: height, Dir: decad.Along})
+	plate, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: height, Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	part, err := decad.Cut(plate, boxBodyAtZ(t, doc, -4, -2, 0, 2, -1, toolHeight)).Do(t.Context())
 	require.NoError(t, err)

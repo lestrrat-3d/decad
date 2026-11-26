@@ -57,7 +57,7 @@ func (sc *mirrorScene) roundedPort(t *testing.T, plane *sketch.Plane, rIn, rOut,
 		}
 	}
 	require.NotNil(t, profile)
-	body, err := decad.Extrude(t.Context(), sc.doc, s, profile, e)
+	body, err := decad.Extrude(sc.doc, s, profile, e).Do(t.Context())
 	require.NoError(t, err)
 
 	// A round of radius r at an interior angle θ removes r²(cot(θ/2) − (π−θ)/2).

@@ -29,11 +29,11 @@ func stitchBoxSheets(t *testing.T, doc *decad.Document, topHeight float64) (wall
 	w := sketch.NewWorld()
 
 	ws, wp := plateSketch(t)
-	walls, err := decad.Extrude(t.Context(), doc, ws, wp, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}, decad.WithSurfaceResult())
+	walls, err := decad.Extrude(doc, ws, wp, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).SurfaceResult().Do(t.Context())
 	require.NoError(t, err)
 
 	bs, bp := plateSketch(t)
-	bottom, err = decad.PatchProfile(t.Context(), doc, bs, bp)
+	bottom, err = decad.PatchProfile(doc, bs, bp).Do(t.Context())
 	require.NoError(t, err)
 
 	topPlane, err := w.CreateOffsetPlane(w.XY(), topHeight)
@@ -44,7 +44,7 @@ func stitchBoxSheets(t *testing.T, doc *decad.Document, topHeight float64) (wall
 	ts.Fix(rect.A)
 	_, err = ts.Solve(t.Context())
 	require.NoError(t, err)
-	top, err = decad.PatchProfile(t.Context(), doc, ts, ts.Profiles()[0])
+	top, err = decad.PatchProfile(doc, ts, ts.Profiles()[0]).Do(t.Context())
 	require.NoError(t, err)
 
 	return walls, bottom, top
@@ -104,7 +104,7 @@ func stitchBoxSheetsAtOffset(t *testing.T, doc *decad.Document, x0, y0, x1, y1, 
 	ws.Fix(rect.A)
 	_, err = ws.Solve(t.Context())
 	require.NoError(t, err)
-	walls, err = decad.Extrude(t.Context(), doc, ws, ws.Profiles()[0], decad.Distance{D: units.Millimeters(z1 - z0), Dir: decad.Along}, decad.WithSurfaceResult())
+	walls, err = decad.Extrude(doc, ws, ws.Profiles()[0], decad.Distance{D: units.Millimeters(z1 - z0), Dir: decad.Along}).SurfaceResult().Do(t.Context())
 	require.NoError(t, err)
 
 	bs, err := w.CreateSketch(basePlane)
@@ -113,7 +113,7 @@ func stitchBoxSheetsAtOffset(t *testing.T, doc *decad.Document, x0, y0, x1, y1, 
 	bs.Fix(brect.A)
 	_, err = bs.Solve(t.Context())
 	require.NoError(t, err)
-	bottom, err = decad.PatchProfile(t.Context(), doc, bs, bs.Profiles()[0])
+	bottom, err = decad.PatchProfile(doc, bs, bs.Profiles()[0]).Do(t.Context())
 	require.NoError(t, err)
 
 	topPlane, err := w.CreateOffsetPlane(w.XY(), z1)
@@ -124,7 +124,7 @@ func stitchBoxSheetsAtOffset(t *testing.T, doc *decad.Document, x0, y0, x1, y1, 
 	ts.Fix(trect.A)
 	_, err = ts.Solve(t.Context())
 	require.NoError(t, err)
-	top, err = decad.PatchProfile(t.Context(), doc, ts, ts.Profiles()[0])
+	top, err = decad.PatchProfile(doc, ts, ts.Profiles()[0]).Do(t.Context())
 	require.NoError(t, err)
 
 	return walls, bottom, top
@@ -286,7 +286,7 @@ func TestStitchNonzeroBoundRimStaysFreeAgainstExactPatch(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	ws, wp := plateSketch(t)
-	wall, err := decad.Extrude(t.Context(), doc, ws, wp, decad.Distance{D: units.Inches(5), Dir: decad.Along}, decad.WithSurfaceResult())
+	wall, err := decad.Extrude(doc, ws, wp, decad.Distance{D: units.Inches(5), Dir: decad.Along}).SurfaceResult().Do(t.Context())
 	require.NoError(t, err)
 
 	w := sketch.NewWorld()
@@ -298,7 +298,7 @@ func TestStitchNonzeroBoundRimStaysFreeAgainstExactPatch(t *testing.T) {
 	ts.Fix(rect.A)
 	_, err = ts.Solve(t.Context())
 	require.NoError(t, err)
-	patch, err := decad.PatchProfile(t.Context(), doc, ts, ts.Profiles()[0])
+	patch, err := decad.PatchProfile(doc, ts, ts.Profiles()[0]).Do(t.Context())
 	require.NoError(t, err)
 
 	// The fixture's premise, proven rather than assumed: the wall's rim at
@@ -383,9 +383,9 @@ func TestStitchRefusesIdenticalBoundedRimsWithNoSharedDenotation(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	ws, wp := plateSketch(t)
-	wallA, err := decad.Extrude(t.Context(), doc, ws, wp, decad.Symmetric{D: units.Inches(2.5)}, decad.WithSurfaceResult())
+	wallA, err := decad.Extrude(doc, ws, wp, decad.Symmetric{D: units.Inches(2.5)}).SurfaceResult().Do(t.Context())
 	require.NoError(t, err)
-	wallB, err := decad.Extrude(t.Context(), doc, ws, wp, decad.Symmetric{D: units.Inches(2.5)}, decad.WithSurfaceResult())
+	wallB, err := decad.Extrude(doc, ws, wp, decad.Symmetric{D: units.Inches(2.5)}).SurfaceResult().Do(t.Context())
 	require.NoError(t, err)
 
 	// The fixture's whole point, proven rather than assumed: a rim vertex
@@ -430,7 +430,7 @@ func TestStitchClosesABoundedPatchedWallWithChargedVolumeBound(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	s, p := offAxisPlateSketch(t)
-	wall, err := decad.Extrude(t.Context(), doc, s, p, decad.Symmetric{D: units.Inches(2.5)}, decad.WithSurfaceResult())
+	wall, err := decad.Extrude(doc, s, p, decad.Symmetric{D: units.Inches(2.5)}).SurfaceResult().Do(t.Context())
 	require.NoError(t, err)
 
 	rim, err := decad.Edges(decad.Free()).Exactly(8).SelectEdges(wall)
@@ -477,7 +477,7 @@ func TestStitchRefusesAPlacedSheetAgainstItsUnplacedSiblings(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	s, p := offAxisPlateSketch(t)
-	wall, err := decad.Extrude(t.Context(), doc, s, p, decad.Symmetric{D: units.Inches(2.5)}, decad.WithSurfaceResult())
+	wall, err := decad.Extrude(doc, s, p, decad.Symmetric{D: units.Inches(2.5)}).SurfaceResult().Do(t.Context())
 	require.NoError(t, err)
 	capped, err := decad.PatchEdges(t.Context(), wall, decad.Edges(decad.Free()).Exactly(8))
 	require.NoError(t, err)
@@ -686,7 +686,7 @@ func stitchBoxSheetsAtZ(t *testing.T, doc *decad.Document, z0 float64) (walls, b
 	ws.Fix(rect.A)
 	_, err = ws.Solve(t.Context())
 	require.NoError(t, err)
-	walls, err = decad.Extrude(t.Context(), doc, ws, ws.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along}, decad.WithSurfaceResult())
+	walls, err = decad.Extrude(doc, ws, ws.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).SurfaceResult().Do(t.Context())
 	require.NoError(t, err)
 
 	bs, err := w.CreateSketch(basePlane)
@@ -695,7 +695,7 @@ func stitchBoxSheetsAtZ(t *testing.T, doc *decad.Document, z0 float64) (walls, b
 	bs.Fix(brect.A)
 	_, err = bs.Solve(t.Context())
 	require.NoError(t, err)
-	bottom, err = decad.PatchProfile(t.Context(), doc, bs, bs.Profiles()[0])
+	bottom, err = decad.PatchProfile(doc, bs, bs.Profiles()[0]).Do(t.Context())
 	require.NoError(t, err)
 
 	topPlane, err := w.CreateOffsetPlane(w.XY(), z0+10)
@@ -706,7 +706,7 @@ func stitchBoxSheetsAtZ(t *testing.T, doc *decad.Document, z0 float64) (walls, b
 	ts.Fix(trect.A)
 	_, err = ts.Solve(t.Context())
 	require.NoError(t, err)
-	top, err = decad.PatchProfile(t.Context(), doc, ts, ts.Profiles()[0])
+	top, err = decad.PatchProfile(doc, ts, ts.Profiles()[0]).Do(t.Context())
 	require.NoError(t, err)
 
 	return walls, bottom, top
@@ -819,7 +819,7 @@ func TestStitchBoundedStitchedSolidGetsClearance(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	s, p := offAxisPlateSketch(t)
-	wall, err := decad.Extrude(t.Context(), doc, s, p, decad.Symmetric{D: units.Inches(2.5)}, decad.WithSurfaceResult())
+	wall, err := decad.Extrude(doc, s, p, decad.Symmetric{D: units.Inches(2.5)}).SurfaceResult().Do(t.Context())
 	require.NoError(t, err)
 	capped, err := decad.PatchEdges(t.Context(), wall, decad.Edges(decad.Free()).Exactly(8))
 	require.NoError(t, err)

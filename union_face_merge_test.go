@@ -105,7 +105,7 @@ func mergeDovetail(t *testing.T) *Body {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	require.Len(t, s.Profiles(), 1)
-	tool, err := Extrude(t.Context(), doc, s, s.Profiles()[0], Distance{D: units.Millimeters(16), Dir: Against})
+	tool, err := Extrude(doc, s, s.Profiles()[0], Distance{D: units.Millimeters(16), Dir: Against}).Do(t.Context())
 	require.NoError(t, err)
 	joined, err := Union(host, tool).Do(t.Context())
 	require.NoError(t, err)
@@ -289,7 +289,7 @@ func flushPolygonPrism(t *testing.T, doc *Document, p flushPlacement, origin, u,
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	require.Len(t, s.Profiles(), 1)
-	body, err := Extrude(t.Context(), doc, s, s.Profiles()[0], Distance{D: units.Millimeters(length), Dir: p.toward(u, v, dir)})
+	body, err := Extrude(doc, s, s.Profiles()[0], Distance{D: units.Millimeters(length), Dir: p.toward(u, v, dir)}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }

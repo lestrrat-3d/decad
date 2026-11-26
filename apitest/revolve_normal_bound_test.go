@@ -239,9 +239,9 @@ func circleSketch(t *testing.T, cu, cv, r float64) (*sketch.Sketch, *sketch.Prof
 
 func revolveAbout(t *testing.T, s *sketch.Sketch, p *sketch.Profile, ax normalOracleAxis) *decad.Body {
 	t.Helper()
-	b, err := decad.Revolve(t.Context(), decad.New(), s, p,
+	b, err := decad.Revolve(decad.New(), s, p,
 		decad.SketchLine{Start: decad.Point2{U: ax.start[0], V: ax.start[1]}, End: decad.Point2{U: ax.end[0], V: ax.end[1]}},
-		decad.FullRevolution{})
+		decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	return b
 }
@@ -531,7 +531,7 @@ func TestRevolveChainWallNormalCoversNearParallelSegment(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, s.Chains(), 1)
 	ax := normalOracleAxis{end: [2]float64{1, 0}}
-	b, err := decad.Revolve(t.Context(), decad.New(), s, s.Chains()[0], uAxis, decad.FullRevolution{})
+	b, err := decad.Revolve(decad.New(), s, s.Chains()[0], uAxis, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	requireStraightWallsEnclose(t, b, decad.KindCylinder, ax, pts[0],
 		[]normalOracleWall{{p0: pts[0], p1: pts[1]}, {p0: pts[1], p1: pts[2]}})
@@ -559,7 +559,7 @@ func TestRevolveWallNormalIntegerStaysExact(t *testing.T) {
 	t.Run("annulus", func(t *testing.T) {
 		t.Parallel()
 		s, p := annularSketch(t)
-		b, err := decad.Revolve(t.Context(), decad.New(), s, p, uAxis, decad.FullRevolution{})
+		b, err := decad.Revolve(decad.New(), s, p, uAxis, decad.FullRevolution{}).Do(t.Context())
 		require.NoError(t, err)
 		for _, f := range b.Faces() {
 			switch sf := f.Surface().(type) {
@@ -584,7 +584,7 @@ func TestRevolveWallNormalIntegerStaysExact(t *testing.T) {
 	t.Run("sphere", func(t *testing.T) {
 		t.Parallel()
 		s, p := semicircleSketch(t)
-		b, err := decad.Revolve(t.Context(), decad.New(), s, p, uAxis, decad.FullRevolution{})
+		b, err := decad.Revolve(decad.New(), s, p, uAxis, decad.FullRevolution{}).Do(t.Context())
 		require.NoError(t, err)
 		f := b.Faces()[0]
 		require.Equal(t, decad.KindSphere, f.Surface().Kind())
@@ -693,9 +693,9 @@ func requireCapNormalsEnclose(t *testing.T, fx capFixture) float64 {
 	require.NoError(t, err)
 	held, err := s.Plane().Frame()
 	require.NoError(t, err)
-	b, err := decad.Revolve(t.Context(), decad.New(), s, s.Profiles()[0],
+	b, err := decad.Revolve(decad.New(), s, s.Profiles()[0],
 		decad.SketchLine{Start: decad.Point2{U: fx.ax.start[0], V: fx.ax.start[1]}, End: decad.Point2{U: fx.ax.end[0], V: fx.ax.end[1]}},
-		decad.AngleExtent{A: units.Degrees(fx.deg), Dir: decad.Along})
+		decad.AngleExtent{A: units.Degrees(fx.deg), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	b, err = decad.Transform(t.Context(), b, fx.xf)
 	require.NoError(t, err)
@@ -770,7 +770,7 @@ func TestRevolveCapNormalCoversAxisFrameAndPlacement(t *testing.T) {
 func TestRevolveCapNormalStartStaysExact(t *testing.T) {
 	t.Parallel()
 	s, p := polygonSketch(t, [][2]float64{{0, 1}, {1, 1}, {1, 2}, {0, 2}})
-	b, err := decad.Revolve(t.Context(), decad.New(), s, p, uAxis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
+	b, err := decad.Revolve(decad.New(), s, p, uAxis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	faces, err := decad.Faces(decad.FaceCreatedBy(decad.CapStart(b))).SelectFaces(b)
 	require.NoError(t, err)

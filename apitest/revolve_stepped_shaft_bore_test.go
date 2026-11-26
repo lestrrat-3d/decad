@@ -36,8 +36,8 @@ func steppedBoreHost(t *testing.T, doc *decad.Document, w *sketch.World, radii .
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	require.Len(t, s.Profiles(), 1)
-	host, err := decad.Revolve(t.Context(), doc, s, s.Profiles()[0],
-		decad.ConstructionAxis{Dir: r3.Vec{Z: 1}}, decad.FullRevolution{})
+	host, err := decad.Revolve(doc, s, s.Profiles()[0],
+		decad.ConstructionAxis{Dir: r3.Vec{Z: 1}}, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	return host
 }
@@ -68,8 +68,8 @@ func steppedBoreTool(t *testing.T, doc *decad.Document, w *sketch.World, shape s
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	require.Len(t, s.Profiles(), 1)
-	tool, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(32), Dir: decad.Along})
+	tool, err := decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(32), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return tool
 }

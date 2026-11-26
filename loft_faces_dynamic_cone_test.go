@@ -24,7 +24,7 @@ func TestLoftFacesThreeCapConeContinuationKeepsSource(t *testing.T) {
 	s.Fix(rect.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	point, err := LoftFromPoint(t.Context(), doc, r3.Vec{}, s, s.Profiles()[0])
+	point, err := LoftFromPoint(doc, r3.Vec{}, s, s.Profiles()[0]).Do(t.Context())
 	require.NoError(t, err)
 	sheet := func(x float64) *Body {
 		ss, e := world.CreateSketch(world.XY())
@@ -35,8 +35,8 @@ func TestLoftFacesThreeCapConeContinuationKeepsSource(t *testing.T) {
 		ss.CreateLine(a, b)
 		_, e = ss.Solve(t.Context())
 		require.NoError(t, e)
-		body, e := Extrude(t.Context(), doc, ss, ss.Chains()[0], TwoSided{
-			One: DistanceSide{D: units.Millimeters(20)}, Two: DistanceSide{D: units.Millimeters(20)}})
+		body, e := Extrude(doc, ss, ss.Chains()[0], TwoSided{
+			One: DistanceSide{D: units.Millimeters(20)}, Two: DistanceSide{D: units.Millimeters(20)}}).Do(t.Context())
 		require.NoError(t, e)
 		return body
 	}
@@ -51,8 +51,8 @@ func TestLoftFacesThreeCapConeContinuationKeepsSource(t *testing.T) {
 		require.Len(t, fs, 1)
 		return fs[0]
 	}
-	loft, err := LoftFaces(t.Context(), []*Face{section(near, refOf(CapStart(near))),
-		section(near, refOf(CapEnd(near))), section(far, refOf(CapEnd(far)))})
+	loft, err := LoftFaces([]*Face{section(near, refOf(CapStart(near))),
+		section(near, refOf(CapEnd(near))), section(far, refOf(CapEnd(far)))}).Do(t.Context())
 	require.NoError(t, err)
 	baseRecord := loft.n.Payload.(facetedPayload).LoftFacesCap
 	require.Len(t, baseRecord.Maps, 3)
@@ -71,8 +71,8 @@ func TestLoftFacesThreeCapConeContinuationKeepsSource(t *testing.T) {
 		}
 		_, e = cs.Solve(t.Context())
 		require.NoError(t, e)
-		body, e := Revolve(t.Context(), doc, cs, cs.Profiles()[0], SketchLine{
-			Start: planePoint{}, End: planePoint{U: 1}}, FullRevolution{})
+		body, e := Revolve(doc, cs, cs.Profiles()[0], SketchLine{
+			Start: planePoint{}, End: planePoint{U: 1}}, FullRevolution{}).Do(t.Context())
 		require.NoError(t, e)
 		return body
 	}

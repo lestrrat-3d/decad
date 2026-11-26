@@ -28,8 +28,8 @@ func Example_intersect_matching_faces() {
 		if _, err := s.Solve(context.Background()); err != nil {
 			return nil, err
 		}
-		return decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
-			decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
+		return decad.Extrude(doc, s, s.Profiles()[0],
+			decad.Distance{D: units.Millimeters(height), Dir: decad.Along}).Do(context.Background())
 	}
 	a, err := box(0, 0, 20, 20, 10)
 	if err != nil {

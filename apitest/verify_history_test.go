@@ -30,8 +30,8 @@ func slab(t *testing.T, doc *decad.Document, x0, y0, x1, y1, z0, height float64,
 	s.Fix(r.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(height), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	placed, err := decad.Transform(t.Context(), body, move)
 	require.NoError(t, err)
@@ -51,8 +51,8 @@ func boredLeg(t *testing.T, doc *decad.Document) *decad.Body {
 	s.CreateCircle(c, 3)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	leg, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	leg, err := decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(20), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return leg
 }
@@ -255,9 +255,9 @@ func hookRingSweep(t *testing.T, doc *decad.Document, z, degrees float64) *decad
 	s.CreateCircle(c, 0.8)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	ring, err := decad.Revolve(t.Context(), doc, s, s.Profiles()[0],
+	ring, err := decad.Revolve(doc, s, s.Profiles()[0],
 		decad.SketchLine{Start: decad.Point2{U: 10}, End: decad.Point2{U: 10, V: 1}},
-		decad.AngleExtent{A: units.Degrees(degrees), Dir: decad.Along})
+		decad.AngleExtent{A: units.Degrees(degrees), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return ring
 }

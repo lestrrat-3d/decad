@@ -169,7 +169,7 @@ func twistMapSweep(t *testing.T, c twistMapCase) *decad.Body {
 	s, p := c.profile(t)
 	path, err := decad.NewPath(r3.Vec{}, c.segments...)
 	require.NoError(t, err)
-	body, err := decad.Sweep(t.Context(), decad.New(), s, p, path, decad.WithSweepTwist(units.Degrees(c.degrees)))
+	body, err := decad.Sweep(decad.New(), s, p, path).Twist(units.Degrees(c.degrees)).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }

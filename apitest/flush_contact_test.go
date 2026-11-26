@@ -41,7 +41,7 @@ func flushProfilePrism(t *testing.T, doc *decad.Document, origin, u, v r3.Vec, d
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	require.Len(t, s.Profiles(), 1)
-	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(length), Dir: dir})
+	body, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(length), Dir: dir}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }

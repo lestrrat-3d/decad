@@ -44,7 +44,7 @@ func Example_containers() {
 		if err := c.AddSketch(s); err != nil {
 			return nil, err
 		}
-		return decad.Extrude(ctx, doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+		return decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along}).Do(ctx)
 	}
 	plate, err := box(driver, 0, 0, 4, 4, 2)
 	if err != nil {

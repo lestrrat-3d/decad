@@ -159,7 +159,7 @@ func TestThreeMFChordToleranceAndDeterminism(t *testing.T) {
 		}
 	}
 	require.NotNil(t, profile)
-	body, err := decad.Extrude(t.Context(), decad.New(), s, profile, decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
+	body, err := decad.Extrude(decad.New(), s, profile, decad.Distance{D: units.Millimeters(8), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 
 	var coarse, again, fine bytes.Buffer

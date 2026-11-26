@@ -41,8 +41,8 @@ func extrudeSolved(t *testing.T, doc *decad.Document, s *sketch.Sketch, h float6
 	_, err := s.Solve(t.Context())
 	require.NoError(t, err)
 	require.Len(t, s.Profiles(), 1)
-	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(h), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -103,8 +103,8 @@ func requireExactHistorySection(t *testing.T, body *decad.Body, frame r3.Frame, 
 	require.LessOrEqual(t, math.Abs(measured.Value.Base()-area), measured.Bound.Base())
 	require.LessOrEqual(t, measured.Bound.Base(), 1e-9)
 
-	slab, err := decad.Extrude(t.Context(), decad.New(), section, profiles[0],
-		decad.Distance{D: units.Millimeters(2), Dir: decad.Along})
+	slab, err := decad.Extrude(decad.New(), section, profiles[0],
+		decad.Distance{D: units.Millimeters(2), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := slab.Volume()
 	require.NoError(t, err)
@@ -372,8 +372,8 @@ func holedPlate(t *testing.T, doc *decad.Document) *decad.Body {
 	require.NoError(t, err)
 	for _, profile := range s.Profiles() {
 		if len(profile.Holes) == 1 {
-			body, err := decad.Extrude(t.Context(), doc, s, profile,
-				decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+			body, err := decad.Extrude(doc, s, profile,
+				decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 			require.NoError(t, err)
 			return body
 		}
@@ -397,9 +397,9 @@ func boredTube(t *testing.T, doc *decad.Document) *decad.Body {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	require.Len(t, s.Profiles(), 1)
-	body, err := decad.Revolve(t.Context(), doc, s, s.Profiles()[0], decad.SketchLine{
+	body, err := decad.Revolve(doc, s, s.Profiles()[0], decad.SketchLine{
 		Start: decad.Point2{}, End: decad.Point2{V: 1},
-	}, decad.FullRevolution{})
+	}, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -429,8 +429,8 @@ func requireHistoryRegions(t *testing.T, body *decad.Body, frame r3.Frame, want 
 		require.LessOrEqual(t, math.Abs(area.Value.Base()-want[i].area), area.Bound.Base())
 		require.LessOrEqual(t, area.Bound.Base(), 1e-9)
 
-		slab, err := decad.Extrude(t.Context(), decad.New(), section, profile,
-			decad.Distance{D: units.Millimeters(1), Dir: decad.Along})
+		slab, err := decad.Extrude(decad.New(), section, profile,
+			decad.Distance{D: units.Millimeters(1), Dir: decad.Along}).Do(t.Context())
 		require.NoError(t, err)
 		volume, err := slab.Volume()
 		require.NoError(t, err)

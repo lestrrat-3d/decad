@@ -42,12 +42,11 @@ func bodySurveyDocument(tb testing.TB, shape string, count int) (*decad.Document
 	}
 	require.NotNil(tb, profile)
 	doc := decad.New()
-	var opts []decad.ExtrudeOption
+	extrude := decad.Extrude(doc, s, profile, decad.Distance{D: units.Millimeters(200), Dir: decad.Along})
 	if shape == bodySurveySheet {
-		opts = append(opts, decad.WithSurfaceResult())
+		extrude.SurfaceResult()
 	}
-	body, err := decad.Extrude(tb.Context(), doc, s, profile,
-		decad.Distance{D: units.Millimeters(200), Dir: decad.Along}, opts...)
+	body, err := extrude.Do(tb.Context())
 	require.NoError(tb, err)
 	bodies := []*decad.Body{body}
 	for i := 1; i < count; i++ {

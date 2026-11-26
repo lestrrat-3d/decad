@@ -47,7 +47,7 @@ func alignedTrimmedPad(t *testing.T, bore bool) {
 		return nil
 	}
 	extrude := func(s *sketch.Sketch, h float64, dir decad.Direction) *decad.Body {
-		b, e := decad.Extrude(ctx, d, s, profile(s), decad.Distance{D: units.Millimeters(h), Dir: dir})
+		b, e := decad.Extrude(d, s, profile(s), decad.Distance{D: units.Millimeters(h), Dir: dir}).Do(ctx)
 		require.NoError(t, e)
 		return b
 	}

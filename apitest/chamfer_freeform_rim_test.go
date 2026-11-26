@@ -149,8 +149,8 @@ func (f flower) prism(t *testing.T, doc *decad.Document) *decad.Body {
 	require.NoError(t, err)
 	profiles := s.Profiles()
 	require.Len(t, profiles, 1)
-	body, err := decad.Extrude(t.Context(), doc, s, profiles[0],
-		decad.Distance{D: units.Millimeters(flowerHeight), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, profiles[0],
+		decad.Distance{D: units.Millimeters(flowerHeight), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }

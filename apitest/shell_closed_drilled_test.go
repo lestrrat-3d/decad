@@ -33,7 +33,7 @@ func polygonHoledPrism(t *testing.T, pts [][2]float64) *decad.Body {
 	require.NoError(t, err)
 	for _, p := range s.Profiles() {
 		if len(p.Holes) == 1 {
-			body, err := decad.Extrude(t.Context(), decad.New(), s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+			body, err := decad.Extrude(decad.New(), s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 			require.NoError(t, err)
 			return body
 		}

@@ -32,7 +32,7 @@ func offAxisTwistTool(t *testing.T, doc *decad.Document, length, deg float64) (*
 	require.NoError(t, err)
 	path, err := decad.NewPath(r3.Vec{}, decad.LineTo{End: r3.NewVec(0, 0, length)})
 	require.NoError(t, err)
-	return decad.Sweep(t.Context(), doc, s, s.Profiles()[0], path, decad.WithSweepTwist(units.Degrees(deg)))
+	return decad.Sweep(doc, s, s.Profiles()[0], path).Twist(units.Degrees(deg)).Do(t.Context())
 }
 
 func TestSweepTwistOffAxisAngles(t *testing.T) {

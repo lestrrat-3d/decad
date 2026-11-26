@@ -26,8 +26,8 @@ func xzBox(t *testing.T, y0, z0, z1 float64) *decad.Body {
 	s.Fix(r.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	box, err := decad.Extrude(t.Context(), decad.New(), s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(3.6), Dir: decad.Against})
+	box, err := decad.Extrude(decad.New(), s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(3.6), Dir: decad.Against}).Do(t.Context())
 	require.NoError(t, err)
 	return box
 }
@@ -114,8 +114,8 @@ func framePrism(t *testing.T, doc *decad.Document, f r3.Frame, depth float64, di
 	}
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(depth), Dir: dir})
+	body, err := decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(depth), Dir: dir}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }

@@ -24,8 +24,8 @@ func sectionSphereSource(t *testing.T) *decad.Body {
 	s.CreateArc(center, right, left)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := decad.Revolve(t.Context(), decad.New(), s, s.Profiles()[0],
-		decad.SketchLine{Start: decad.Point2{}, End: decad.Point2{U: 1}}, decad.FullRevolution{})
+	body, err := decad.Revolve(decad.New(), s, s.Profiles()[0],
+		decad.SketchLine{Start: decad.Point2{}, End: decad.Point2{U: 1}}, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -54,9 +54,9 @@ func TestSectionCardinalSphereFeedsVerifiedExtrude(t *testing.T) {
 	require.LessOrEqual(t, math.Abs(area.Value.Base()-16*math.Pi), area.Bound.Base())
 	require.Less(t, area.Bound.Base(), 1e-9)
 
-	child, err := decad.Extrude(t.Context(), decad.New(), section, profiles[0], decad.Distance{
+	child, err := decad.Extrude(decad.New(), section, profiles[0], decad.Distance{
 		D: units.Millimeters(2), Dir: decad.Along,
-	})
+	}).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := child.Volume()
 	require.NoError(t, err)
@@ -79,9 +79,9 @@ func TestSectionCardinalSphereNonSquareFeedsVerifiedExtrude(t *testing.T) {
 	_, err = decad.MeasureProfile(section, profiles[0])
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 
-	child, err := decad.Extrude(t.Context(), decad.New(), section, profiles[0], decad.Distance{
+	child, err := decad.Extrude(decad.New(), section, profiles[0], decad.Distance{
 		D: units.Millimeters(2), Dir: decad.Along,
-	})
+	}).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := child.Volume()
 	require.NoError(t, err)
@@ -106,9 +106,9 @@ func TestSectionObliqueCenterSphereFeedsVerifiedExtrude(t *testing.T) {
 	_, err = decad.MeasureProfile(section, profiles[0])
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 
-	child, err := decad.Extrude(t.Context(), decad.New(), section, profiles[0], decad.Distance{
+	child, err := decad.Extrude(decad.New(), section, profiles[0], decad.Distance{
 		D: units.Millimeters(2), Dir: decad.Along,
-	})
+	}).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := child.Volume()
 	require.NoError(t, err)
@@ -133,9 +133,9 @@ func TestSectionObliqueOffsetSphereFeedsVerifiedExtrude(t *testing.T) {
 	_, err = decad.MeasureProfile(section, profiles[0])
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 
-	child, err := decad.Extrude(t.Context(), decad.New(), section, profiles[0], decad.Distance{
+	child, err := decad.Extrude(decad.New(), section, profiles[0], decad.Distance{
 		D: units.Millimeters(2), Dir: decad.Along,
-	})
+	}).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := child.Volume()
 	require.NoError(t, err)
@@ -166,9 +166,9 @@ func TestSectionObliqueOffsetSpherePlacement(t *testing.T) {
 	section, profiles, err := placed.Section(t.Context(), frame)
 	require.NoError(t, err)
 	require.Len(t, profiles, 1)
-	child, err := decad.Extrude(t.Context(), decad.New(), section, profiles[0], decad.Distance{
+	child, err := decad.Extrude(decad.New(), section, profiles[0], decad.Distance{
 		D: units.Millimeters(2), Dir: decad.Along,
-	})
+	}).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := child.Volume()
 	require.NoError(t, err)
@@ -189,9 +189,9 @@ func TestSectionObliqueOffsetSphereHeldGramCrossTerm(t *testing.T) {
 	section, profiles, err := sphere.Section(t.Context(), frame)
 	require.NoError(t, err)
 	require.Len(t, profiles, 1)
-	child, err := decad.Extrude(t.Context(), decad.New(), section, profiles[0], decad.Distance{
+	child, err := decad.Extrude(decad.New(), section, profiles[0], decad.Distance{
 		D: units.Millimeters(2), Dir: decad.Along,
-	})
+	}).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := child.Volume()
 	require.NoError(t, err)
@@ -221,9 +221,9 @@ func TestSectionObliqueCenterSpherePlacementAndPlaneSense(t *testing.T) {
 	sectionFrame, err := section.Plane().Frame()
 	require.NoError(t, err)
 	require.Equal(t, frame, sectionFrame)
-	child, err := decad.Extrude(t.Context(), decad.New(), section, profiles[0], decad.Distance{
+	child, err := decad.Extrude(decad.New(), section, profiles[0], decad.Distance{
 		D: units.Millimeters(2), Dir: decad.Along,
-	})
+	}).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := child.Volume()
 	require.NoError(t, err)
@@ -246,9 +246,9 @@ func TestSectionObliqueSphereShiftedOrigins(t *testing.T) {
 			section, profiles, err := sphere.Section(t.Context(), frame)
 			require.NoError(t, err)
 			require.Len(t, profiles, 1)
-			child, err := decad.Extrude(t.Context(), decad.New(), section, profiles[0], decad.Distance{
+			child, err := decad.Extrude(decad.New(), section, profiles[0], decad.Distance{
 				D: units.Millimeters(2), Dir: decad.Along,
-			})
+			}).Do(t.Context())
 			require.NoError(t, err)
 			volume, err := child.Volume()
 			require.NoError(t, err)
@@ -335,9 +335,9 @@ func TestSectionCardinalSphereNonSquarePlacementAndPlaneSense(t *testing.T) {
 	sectionFrame, err := section.Plane().Frame()
 	require.NoError(t, err)
 	require.Equal(t, frame, sectionFrame)
-	child, err := decad.Extrude(t.Context(), decad.New(), section, profiles[0], decad.Distance{
+	child, err := decad.Extrude(decad.New(), section, profiles[0], decad.Distance{
 		D: units.Millimeters(2), Dir: decad.Along,
-	})
+	}).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := child.Volume()
 	require.NoError(t, err)

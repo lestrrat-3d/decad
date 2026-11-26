@@ -50,7 +50,7 @@ import (
 // this field existed. Being a payload field it re-evaluates with the
 // payload, so Transform and Copy carry it unchanged.
 //
-// SurfaceResult is WithSurfaceResult's own flag (agent-docs/surface-design.md §4):
+// SurfaceResult is SurfaceResult's own flag (agent-docs/surface-design.md §4):
 // true when the build must publish a sheet instead of a solid. A full
 // revolution mints no closing face at all, so the flag changes the face set
 // only when Full is false — a partial sweep omits its two caps — while it

@@ -99,7 +99,7 @@ func originRectSketch(t *testing.T, o r3.Vec, u0, v0, u1, v1 float64) (*sketch.S
 func originBox(t *testing.T, doc *decad.Document, o r3.Vec, u0, v0, u1, v1, h float64, dir decad.Direction) *decad.Body {
 	t.Helper()
 	s, p := originRectSketch(t, o, u0, v0, u1, v1)
-	b, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(h), Dir: dir})
+	b, err := decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(h), Dir: dir}).Do(t.Context())
 	require.NoError(t, err)
 	return b
 }
@@ -166,8 +166,8 @@ func TestVertexFrameOriginBoundEnclosesLift(t *testing.T) {
 		t.Run(fmt.Sprintf("revolve@%v", o), func(t *testing.T) {
 			t.Parallel()
 			s, p := originRectSketch(t, o, 0, 1, 3, 2)
-			b, err := decad.Revolve(t.Context(), decad.New(), s, p, decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}},
-				decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
+			b, err := decad.Revolve(decad.New(), s, p, decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}},
+				decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along}).Do(t.Context())
 			require.NoError(t, err)
 			// Only the start-plane vertices (phi = 0) have an angle-free exact lift.
 			worst := requireVerticesEnclosed(t, b, liftGrid(o, []float64{0, 3}, []float64{1, 2}, []float64{0}), 4)
@@ -319,7 +319,7 @@ func TestVertexIntegerOriginBoundStaysZero(t *testing.T) {
 	extrude := func(t *testing.T, doc *decad.Document, u0, v0, u1, v1, h float64) *decad.Body {
 		t.Helper()
 		s, p := intRect(t, u0, v0, u1, v1)
-		b, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+		b, err := decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(h), Dir: decad.Along}).Do(t.Context())
 		require.NoError(t, err)
 		return b
 	}
@@ -340,7 +340,7 @@ func TestVertexIntegerOriginBoundStaysZero(t *testing.T) {
 	t.Run("revolve", func(t *testing.T) {
 		t.Parallel()
 		s, p := intRect(t, 0, 5, 10, 15)
-		b, err := decad.Revolve(t.Context(), decad.New(), s, p, uAxis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
+		b, err := decad.Revolve(decad.New(), s, p, uAxis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along}).Do(t.Context())
 		require.NoError(t, err)
 		// The phi = 90° cap reads the libm's own sine and cosine, whose
 		// angular term is charged apart; only the start plane is exact.

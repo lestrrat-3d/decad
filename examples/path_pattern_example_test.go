@@ -29,8 +29,8 @@ func Example_path_pattern() {
 		return
 	}
 	doc := decad.New()
-	peg, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(2), Dir: decad.Along})
+	peg, err := decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(2), Dir: decad.Along}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return
@@ -80,8 +80,8 @@ func Example_path_pattern_follow() {
 		return
 	}
 	doc := decad.New()
-	peg, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(2), Dir: decad.Along})
+	peg, err := decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(2), Dir: decad.Along}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return
@@ -131,8 +131,8 @@ func Example_path_pattern_spaced() {
 		return
 	}
 	doc := decad.New()
-	peg, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(2), Dir: decad.Along})
+	peg, err := decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(2), Dir: decad.Along}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return
@@ -179,8 +179,8 @@ func Example_path_pattern_pivot() {
 		return
 	}
 	doc := decad.New()
-	peg, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(2), Dir: decad.Along})
+	peg, err := decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(2), Dir: decad.Along}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return
@@ -227,8 +227,8 @@ func Example_path_pattern_join() {
 		if _, err := s.Solve(context.Background()); err != nil {
 			return nil, err
 		}
-		return decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
-			decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
+		return decad.Extrude(doc, s, s.Profiles()[0],
+			decad.Distance{D: units.Millimeters(height), Dir: decad.Along}).Do(context.Background())
 	}
 	bar, err := build(30, 4, 1)
 	if err != nil {

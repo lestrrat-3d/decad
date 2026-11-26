@@ -38,7 +38,7 @@ func newTeethFixture(t *testing.T) teethFixture {
 	require.NoError(t, err)
 	bottomSketch, bottomProfile := teethSection(t, world, world.XY(), 0)
 	middleSketch, middleProfile := teethSection(t, world, middlePlane, 0.03)
-	lower, err := Loft(t.Context(), d, bottomSketch, bottomProfile, middleSketch, middleProfile)
+	lower, err := Loft(d, bottomSketch, bottomProfile, middleSketch, middleProfile).Do(t.Context())
 	require.NoError(t, err)
 	upper, err := MirroredCopy(t.Context(), lower, MirrorFrame{Frame: middleFrame})
 	require.NoError(t, err)
@@ -62,7 +62,7 @@ func newTeethFixture(t *testing.T) teethFixture {
 	s.CreateCircle(center, 4)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	blank, err := Extrude(t.Context(), d, s, s.Profiles()[0], Distance{D: units.Millimeters(2), Dir: Along})
+	blank, err := Extrude(d, s, s.Profiles()[0], Distance{D: units.Millimeters(2), Dir: Along}).Do(t.Context())
 	require.NoError(t, err)
 	return teethFixture{d: d, blank: blank, pairs: pairs}
 }

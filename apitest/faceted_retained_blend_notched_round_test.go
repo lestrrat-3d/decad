@@ -42,8 +42,8 @@ func notchedBlock(t *testing.T, w *sketch.World, doc *decad.Document, ears ...[6
 	sec.Fix(r.A)
 	_, err = sec.Solve(t.Context())
 	require.NoError(t, err)
-	block, err := decad.Extrude(t.Context(), doc, sec, sec.Profiles()[0],
-		decad.Distance{D: units.Millimeters(40), Dir: decad.Along})
+	block, err := decad.Extrude(doc, sec, sec.Profiles()[0],
+		decad.Distance{D: units.Millimeters(40), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	block, err = decad.Fillet(block, decad.Edges(x, decad.EndpointAt(r3.NewVec(0, 0, 0))).
 		Or(x, decad.EndpointAt(r3.NewVec(0, 20, 0))).Exactly(2), units.Millimeters(notchLongR)).Do(t.Context())

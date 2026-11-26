@@ -29,7 +29,7 @@ func TestSweepChainSingleArcHalfAnnulusVerifies(t *testing.T) {
 	})
 	require.NoError(t, err)
 	doc := decad.New()
-	body, err := decad.Sweep(t.Context(), doc, s, s.Chains()[0], path)
+	body, err := decad.Sweep(doc, s, s.Chains()[0], path).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, decad.BodySheet, body.Kind())
 	require.Len(t, body.Faces(), 1)
@@ -87,7 +87,7 @@ func TestSweepChainSingleArcNoncardinalAndReflectedMesh(t *testing.T) {
 	})
 	require.NoError(t, err)
 	doc := decad.New()
-	base, err := decad.Sweep(t.Context(), doc, s, chain, path)
+	base, err := decad.Sweep(doc, s, chain, path).Do(t.Context())
 	require.NoError(t, err)
 	mesh, err := base.Tessellate(t.Context(), units.Millimeters(0.1),
 		decad.WithVerification(decad.VerifyAll))
@@ -116,7 +116,7 @@ func TestSweepChainSingleArcAxisEndMeshRefuses(t *testing.T) {
 	})
 	require.NoError(t, err)
 	doc := decad.New()
-	body, err := decad.Sweep(t.Context(), doc, s, chain, path)
+	body, err := decad.Sweep(doc, s, chain, path).Do(t.Context())
 	require.NoError(t, err)
 	_, err = body.Tessellate(t.Context(), units.Millimeters(0.1),
 		decad.WithVerification(decad.VerifyAll))
@@ -131,7 +131,7 @@ func TestSweepChainSingleArcOppositeAxisSideWinding(t *testing.T) {
 	})
 	require.NoError(t, err)
 	doc := decad.New()
-	body, err := decad.Sweep(t.Context(), doc, s, chain, path)
+	body, err := decad.Sweep(doc, s, chain, path).Do(t.Context())
 	require.NoError(t, err)
 	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.1),
 		decad.WithVerification(decad.VerifyAll))
@@ -158,7 +158,7 @@ func TestSweepChainSingleArcMultiSegmentMeshRefuses(t *testing.T) {
 	})
 	require.NoError(t, err)
 	doc := decad.New()
-	body, err := decad.Sweep(t.Context(), doc, s, s.Chains()[0], path)
+	body, err := decad.Sweep(doc, s, s.Chains()[0], path).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, body.Faces(), 2)
 	_, err = body.Tessellate(t.Context(), units.Millimeters(0.1),

@@ -63,8 +63,8 @@ func TestToFaceTiltedStopIsChargedOrRefused(t *testing.T) {
 			require.Len(t, pinSketch.Profiles(), 1)
 
 			doc := decad.New()
-			plate, err := decad.Extrude(t.Context(), doc, plateSketch, plateSketch.Profiles()[0],
-				decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+			plate, err := decad.Extrude(doc, plateSketch, plateSketch.Profiles()[0],
+				decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 			require.NoError(t, err)
 			stopFace := decad.Faces(decad.FaceCreatedBy(decad.CapEnd(plate)))
 			faces, err := stopFace.SelectFaces(plate)
@@ -89,8 +89,8 @@ func TestToFaceTiltedStopIsChargedOrRefused(t *testing.T) {
 			}
 
 			before := len(doc.Bodies())
-			pin, err := decad.Extrude(t.Context(), doc, pinSketch, pinSketch.Profiles()[0],
-				decad.ToFace{Body: plate, Face: stopFace})
+			pin, err := decad.Extrude(doc, pinSketch, pinSketch.Profiles()[0],
+				decad.ToFace{Body: plate, Face: stopFace}).Do(t.Context())
 			if err != nil {
 				require.NotZero(t, tc.tilt, `the exactly parallel stop must build`)
 				require.ErrorIs(t, err, decad.ErrUnsupported)
@@ -210,11 +210,11 @@ func TestToFaceRefusesNanoradianTilt(t *testing.T) {
 	require.NoError(t, err)
 
 	doc := decad.New()
-	plate, err := decad.Extrude(t.Context(), doc, plateSketch, plateSketch.Profiles()[0],
-		decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	plate, err := decad.Extrude(doc, plateSketch, plateSketch.Profiles()[0],
+		decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
-	_, err = decad.Extrude(t.Context(), doc, pinSketch, pinSketch.Profiles()[0],
-		decad.ToFace{Body: plate, Face: decad.Faces(decad.FaceCreatedBy(decad.CapEnd(plate)))})
+	_, err = decad.Extrude(doc, pinSketch, pinSketch.Profiles()[0],
+		decad.ToFace{Body: plate, Face: decad.Faces(decad.FaceCreatedBy(decad.CapEnd(plate)))}).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 }
 
@@ -237,8 +237,8 @@ func TestToFacePlacedStopNormal(t *testing.T) {
 			t.Parallel()
 			s, plateProf, pinProf := plateAndPin(t)
 			doc := decad.New()
-			plate, err := decad.Extrude(t.Context(), doc, s, plateProf,
-				decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+			plate, err := decad.Extrude(doc, s, plateProf,
+				decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 			require.NoError(t, err)
 			turn, err := r3.Rotation(tc.axis, units.Degrees(tc.angle))
 			require.NoError(t, err)
@@ -246,8 +246,8 @@ func TestToFacePlacedStopNormal(t *testing.T) {
 			require.NoError(t, err)
 
 			before := len(doc.Bodies())
-			pin, err := decad.Extrude(t.Context(), doc, s, pinProf,
-				decad.ToFace{Body: placed, Face: capEndFace(placed)})
+			pin, err := decad.Extrude(doc, s, pinProf,
+				decad.ToFace{Body: placed, Face: capEndFace(placed)}).Do(t.Context())
 			if !tc.build {
 				require.ErrorIs(t, err, decad.ErrUnsupported)
 				require.Len(t, doc.Bodies(), before, `a refused stop leaves the document unchanged`)

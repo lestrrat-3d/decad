@@ -111,8 +111,8 @@ func TestStackBrepScaledAtRefusesCurvedStack(t *testing.T) {
 	s.CreateCircle(center, 3)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	boss, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	boss, err := decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(5), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	joined, err := decad.Union(plate, boss).Do(t.Context())
 	require.NoError(t, err)

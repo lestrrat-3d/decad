@@ -12,7 +12,9 @@ type LoftSection struct {
     Profile *sketch.Profile
 }
 
-func LoftSections(ctx context.Context, d *Document, sections ...LoftSection) (*Body, error)
+func LoftSections(d *Document, sections ...LoftSection) *LoftSectionsCommand
+func (c *LoftSectionsCommand) CircularCorrespondence(m CircularLoftCorrespondence) *LoftSectionsCommand
+func (c *LoftSectionsCommand) Do(ctx context.Context) (*Body, error)
 
 type CircularLoftCorrespondence struct {
     Numerators   [4][]int64

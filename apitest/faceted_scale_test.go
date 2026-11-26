@@ -61,7 +61,7 @@ func TestScaledAtUnmarkedFacetedSolid(t *testing.T) {
 		sections := fourRectangleSections(t, [4]float64{2, 3, 4, 5},
 			[4]float64{3, 4, 5, 7}, [4]float64{0, 4, 8, 12})
 		doc := decad.New()
-		body, err := decad.LoftSections(t.Context(), doc, sections[:]...)
+		body, err := decad.LoftSections(doc, sections[:]...).Do(t.Context())
 		require.NoError(t, err)
 		// The smooth walls read NURBS before the scale and Faceted after it.
 		nurbs := 0
@@ -107,7 +107,7 @@ func TestScaledAtUnmarkedFacetedSolid(t *testing.T) {
 		t.Parallel()
 		sections := threeArcCircleSections(t, [3]float64{8, 10, 12}, [3]float64{0, 5, 10})
 		doc := decad.New()
-		body, err := decad.LoftSections(t.Context(), doc, sections[:]...)
+		body, err := decad.LoftSections(doc, sections[:]...).Do(t.Context())
 		require.NoError(t, err)
 		move, err := r3.Translation(r3.NewVec(4, 0, -2))
 		require.NoError(t, err)
@@ -183,7 +183,7 @@ func TestScaledAtUnmarkedFacetedSolid(t *testing.T) {
 		t.Parallel()
 		s, profile := pointLoftSquare(t, sketch.NewWorld(), 6)
 		doc := decad.New()
-		body, err := decad.LoftFromPoint(t.Context(), doc, r3.Vec{}, s, profile)
+		body, err := decad.LoftFromPoint(doc, r3.Vec{}, s, profile).Do(t.Context())
 		require.NoError(t, err)
 		scaled, err := decad.ScaledAt(t.Context(), body, r3.Vec{}, units.Scalar(3))
 		require.NoError(t, err)

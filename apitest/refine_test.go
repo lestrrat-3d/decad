@@ -22,7 +22,7 @@ func refineSpan(t *testing.T, doc *decad.Document, a, c r3.Vec, r float64) *deca
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	d := c.Sub(a)
-	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(d.Len()), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(d.Len()), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	n, _ := d.Normalize()
 	ref := r3.Vec{Z: 1}
@@ -240,7 +240,7 @@ func refineTorus(t *testing.T, doc *decad.Document, radius, rho float64) *decad.
 	s.AddConstraint(sketch.NewRadius(s.CreateCircle(c, rho), rho))
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := decad.Revolve(t.Context(), doc, s, s.Profiles()[0], decad.ConstructionAxis{Dir: r3.Vec{Z: 1}}, decad.FullRevolution{})
+	body, err := decad.Revolve(doc, s, s.Profiles()[0], decad.ConstructionAxis{Dir: r3.Vec{Z: 1}}, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -260,7 +260,7 @@ func refineCord(t *testing.T, doc *decad.Document, start r3.Vec, rho float64) *d
 		decad.ArcAround{Center: r3.Vec{Y: 5, Z: 200}, Axis: r3.Vec{X: -1}, End: r3.Vec{Y: 5, Z: 205}},
 		decad.LineTo{End: r3.Vec{Y: 30, Z: 205}})
 	require.NoError(t, err)
-	cord, err := decad.Sweep(t.Context(), doc, s, s.Profiles()[0], path)
+	cord, err := decad.Sweep(doc, s, s.Profiles()[0], path).Do(t.Context())
 	require.NoError(t, err)
 	// Turn the path's +Z start onto +X at start.
 	f, err := r3.NewFrame(start, r3.Vec{Y: 1}, r3.Vec{Z: 1})
@@ -364,7 +364,7 @@ func TestRefineDrilledBar(t *testing.T) {
 		}
 	}
 	require.NotNil(t, profile)
-	bar, err := decad.Extrude(t.Context(), doc, s, profile, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	bar, err := decad.Extrude(doc, s, profile, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	turn, err := r3.RotationAround(r3.Vec{X: 20, Y: 5, Z: 5}, r3.Vec{X: 1, Y: 2, Z: -1}, units.Radians(0.4))
 	require.NoError(t, err)

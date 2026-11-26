@@ -181,7 +181,7 @@ func TestDraftUndercutBodyDraft(t *testing.T) {
 	t.Parallel()
 	s, p := taperSketch(t, r3.NewVec(0, 0, 0), 0, drawSquare(0, boxSide))
 	doc := decad.New()
-	box, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(boxHeight), Dir: decad.Along})
+	box, err := decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(boxHeight), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	b, err := decad.Draft(box, decad.Faces(decad.Walls(box)), capNeutral(box, decad.CapStart), units.Degrees(5)).Do(t.Context())
 	require.NoError(t, err)
@@ -259,8 +259,7 @@ func TestDraftStagedSurveyNamesPayloadClass(t *testing.T) {
 		t.Parallel()
 		s, p := taperSketch(t, r3.NewVec(0, 0, 0), 0, drawSquare(0, boxSide))
 		doc := decad.New()
-		b, err := decad.Extrude(t.Context(), doc, s, p, decad.Symmetric{D: units.Millimeters(10)},
-			decad.WithTaper(units.Degrees(5)))
+		b, err := decad.Extrude(doc, s, p, decad.Symmetric{D: units.Millimeters(10)}).Taper(units.Degrees(5)).Do(t.Context())
 		require.NoError(t, err)
 		require.Equal(t, "twoSidedDraftPayload pull survey support is not implemented; use an analytic body or wait for wider "+
 			"twoSidedDraftPayload survey support", staged(t, doc, b, decad.WithPullDirection(r3.NewVec(0, 0, 1))))

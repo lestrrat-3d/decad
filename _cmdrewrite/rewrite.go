@@ -54,10 +54,11 @@ func (c *callSite) isCall(e ast.Expr, name string) bool {
 
 // option reports whether e is a call of a decad function in the qualifier
 // form this file uses, and returns its name and the source text of its
-// arguments (from the first to the last, with line breaks and comments).
+// arguments (from the first to the last, with line breaks and comments, and
+// the dots of a spread tail).
 func (c *callSite) option(e ast.Expr) (name, argText string, args []ast.Expr, ok bool) {
 	call, isCall := e.(*ast.CallExpr)
-	if !isCall || call.Ellipsis.IsValid() {
+	if !isCall {
 		return "", "", nil, false
 	}
 	fname, qual := callee(call.Fun, c.pkg, c.pkg == "")
@@ -66,6 +67,10 @@ func (c *callSite) option(e ast.Expr) (name, argText string, args []ast.Expr, ok
 	}
 	if len(call.Args) > 0 {
 		argText = c.spanOf(call.Args[0], call.Args[len(call.Args)-1])
+	}
+	if call.Ellipsis.IsValid() {
+		// A spread tail, WithSectionScale(factors...), keeps its dots.
+		argText += "..."
 	}
 	return fname, argText, call.Args, true
 }
@@ -86,6 +91,33 @@ var families = map[string]map[string]rule{
 		"MoveFace":     ruleModify("MoveFace", 3, nil),
 		"ConeFromFace": ruleModify("ConeFromFace", 3, nil),
 		"Shell":        ruleShell,
+	},
+	"features": {
+		"Extrude": ruleModify("Extrude", 4, optionMethods{"WithTaper": {"Taper", 1}, "WithSurfaceResult": {"SurfaceResult", 0}}),
+		"Revolve": ruleModify("Revolve", 5, optionMethods{"WithSurfaceResult": {"SurfaceResult", 0}}),
+		"Sweep": ruleModify("Sweep", 4, optionMethods{
+			"WithSweepTwist": {"Twist", 1}, "WithMitredJoins": {"MitredJoins", 0},
+			"WithSectionScale": {"SectionScale", anyArgs}, "WithSurfaceResult": {"SurfaceResult", 0},
+		}),
+		"Coil": ruleModify("Coil", 6, optionMethods{"WithLeftHand": {"LeftHand", 0}}),
+		"Loft": ruleModify("Loft", 5, optionMethods{
+			"WithLoftAlignment": {"Alignment", anyArgs}, "WithLoftSplits": {"Splits", 2},
+			"WithSurfaceResult": {"SurfaceResult", 0},
+		}),
+		"LoftChain":     ruleModify("LoftChain", 5, nil),
+		"LoftFromPoint": ruleModify("LoftFromPoint", 4, nil),
+		"PatchProfile":  ruleModify("PatchProfile", 3, nil),
+		"Emboss": ruleModify("Emboss", 6, optionMethods{
+			"WithEmbossRimFillet": {"RimFillet", 1}, "WithEmbossDraft": {"Draft", 1},
+		}),
+		"WebPath": ruleModify("WebPath", 5, optionMethods{
+			"WithRibDraft": {"Draft", 1}, "WithRibOverrun": {"Overrun", 1},
+		}),
+		"CutExtrude":                             ruleModify("CutExtrude", 4, optionMethods{"WithTaper": {"Taper", 1}}),
+		"CutRevolve":                             ruleModify("CutRevolve", 5, nil),
+		"LoftSections":                           ruleLoftSections,
+		"LoftSectionsWithCircularCorrespondence": ruleLoftSectionsCircular,
+		"LoftFaces":                              ruleLoftFaces,
 	},
 	"booleans": {
 		"Union":        ruleUnion,
@@ -296,6 +328,11 @@ func rewriteFile(name string, src []byte, rules map[string]rule, root bool) ([]b
 // callee names the decad function a call expression calls and the qualifier
 // it uses, or "" when the callee is no decad function.
 func callee(fun ast.Expr, pkgName string, bare bool) (string, string) {
+	// A generic call spells its type argument, Extrude[*sketch.Profile](...). The
+	// command constructor infers it from the section, so the rewrite drops it.
+	if inst, ok := fun.(*ast.IndexExpr); ok {
+		fun = inst.X
+	}
 	switch f := fun.(type) {
 	case *ast.SelectorExpr:
 		if id, ok := f.X.(*ast.Ident); ok && pkgName != "" && id.Name == pkgName {
@@ -308,6 +345,10 @@ func callee(fun ast.Expr, pkgName string, bare bool) (string, string) {
 	}
 	return "", ""
 }
+
+// anyArgs is the argument count of a variadic option: the method takes
+// whatever the option took.
+const anyArgs = -1
 
 // optionMethods maps an option constructor to the command method that
 // replaces it and the number of arguments the option takes.
@@ -346,7 +387,7 @@ func (c *callSite) optionChain(name string, opts []ast.Expr, methods optionMetho
 	for _, opt := range opts {
 		oname, argText, args, ok := c.option(opt)
 		m, known := methods[oname]
-		if !ok || !known || len(args) != m.nargs {
+		if !ok || !known || (m.nargs != anyArgs && len(args) != m.nargs) {
 			return "", name + " option " + c.text(opt) + " has no command method rule"
 		}
 		chain += "." + m.method + "(" + argText + ")"
@@ -384,4 +425,56 @@ func ruleShell(c *callSite) (string, string) {
 	}
 	return fmt.Sprintf("%s(%s, %s)%s.Do(%s)", qualify(c.pkg, "ShellClosed"),
 		c.text(c.args[1]), c.text(c.args[3]), chain, ctx), ""
+}
+
+// ruleLoftSections: LoftSections(ctx, d, sections...) ->
+// LoftSections(d, sections...).Do(ctx). A spread slice keeps its ellipsis.
+func ruleLoftSections(c *callSite) (string, string) {
+	if len(c.args) < 2 {
+		return "", "LoftSections call without a context and a document"
+	}
+	dots := ""
+	if c.ellipsis {
+		dots = "..."
+	}
+	return fmt.Sprintf("%s(%s%s).Do(%s)", qualify(c.pkg, "LoftSections"),
+		c.span(1, len(c.args)-1), dots, c.text(c.args[0])), ""
+}
+
+// ruleLoftSectionsCircular: LoftSectionsWithCircularCorrespondence(ctx, d, c,
+// sections...) -> LoftSections(d, sections...).CircularCorrespondence(c).Do(ctx).
+func ruleLoftSectionsCircular(c *callSite) (string, string) {
+	if len(c.args) < 3 {
+		return "", "LoftSectionsWithCircularCorrespondence call without a context, a document and a correspondence"
+	}
+	sections := c.text(c.args[1])
+	if len(c.args) > 3 {
+		sections += ", " + c.span(3, len(c.args)-1)
+	}
+	if c.ellipsis {
+		sections += "..."
+	}
+	return fmt.Sprintf("%s(%s).CircularCorrespondence(%s).Do(%s)", qualify(c.pkg, "LoftSections"),
+		sections, c.text(c.args[2]), c.text(c.args[0])), ""
+}
+
+// ruleLoftFaces: LoftFaces(ctx, sections) -> LoftFaces(sections).Do(ctx), and
+// LoftFaces(ctx, sections, WithConeTangentEnd(cone, radial)) ->
+// LoftFacesToCone(sections, cone, radial).Do(ctx).
+func ruleLoftFaces(c *callSite) (string, string) {
+	if c.ellipsis || len(c.args) < 2 {
+		return "", "LoftFaces call with a spread option list or too few arguments"
+	}
+	ctx := c.text(c.args[0])
+	switch len(c.args) {
+	case 2:
+		return fmt.Sprintf("%s(%s).Do(%s)", qualify(c.pkg, "LoftFaces"), c.text(c.args[1]), ctx), ""
+	case 3:
+		name, argText, args, ok := c.option(c.args[2])
+		if ok && name == "WithConeTangentEnd" && len(args) == 2 {
+			return fmt.Sprintf("%s(%s, %s).Do(%s)", qualify(c.pkg, "LoftFacesToCone"),
+				c.text(c.args[1]), argText, ctx), ""
+		}
+	}
+	return "", "LoftFaces option " + c.text(c.args[len(c.args)-1]) + " has no command rule"
 }

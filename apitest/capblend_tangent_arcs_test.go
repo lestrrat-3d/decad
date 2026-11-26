@@ -39,7 +39,7 @@ func tangentArcPlate(t *testing.T, doc *decad.Document) *decad.Body {
 		sketch.NewRadius(arcL, cornerR), sketch.NewTangent(left, arcL),
 		sketch.NewRadius(arcB, endR), sketch.NewTangentCircles(arcB, arcR, true), sketch.NewTangentCircles(arcB, arcL, true),
 	)
-	body, err := decad.Extrude(t.Context(), doc, s, shortStepProfile(t, s), decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, shortStepProfile(t, s), decad.Distance{D: units.Millimeters(8), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }

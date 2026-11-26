@@ -191,7 +191,7 @@ func TestArcFragmentRevolveReadingsAreTight(t *testing.T) {
 			t.Parallel()
 			s := arcFragmentCapSketch(t)
 			doc := decad.New()
-			body, err := decad.Revolve(t.Context(), doc, s, arcFragmentProfile(t, s, tc.sketchA), trimRevolveAxis(), decad.FullRevolution{})
+			body, err := decad.Revolve(doc, s, arcFragmentProfile(t, s, tc.sketchA), trimRevolveAxis(), decad.FullRevolution{}).Do(t.Context())
 			require.NoError(t, err)
 			volume, err := body.Volume()
 			require.NoError(t, err)
@@ -229,8 +229,8 @@ func TestArcFragmentPrismReadingsAreTight(t *testing.T) {
 			t.Parallel()
 			s := arcFragmentCapSketch(t)
 			doc := decad.New()
-			body, err := decad.Extrude(t.Context(), doc, s, arcFragmentProfile(t, s, tc.sketchA),
-				decad.Distance{D: units.Millimeters(2), Dir: decad.Along})
+			body, err := decad.Extrude(doc, s, arcFragmentProfile(t, s, tc.sketchA),
+				decad.Distance{D: units.Millimeters(2), Dir: decad.Along}).Do(t.Context())
 			require.NoError(t, err)
 			volume, err := body.Volume()
 			require.NoError(t, err)

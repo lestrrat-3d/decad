@@ -32,7 +32,7 @@ func TestMirrorFaceStatedAxialDelta(t *testing.T) {
 		}
 		_, err = s.Solve(t.Context())
 		require.NoError(t, err)
-		body, err := Extrude(t.Context(), New(), s, s.Profiles()[0], Distance{D: units.Millimeters(10), Dir: Along})
+		body, err := Extrude(New(), s, s.Profiles()[0], Distance{D: units.Millimeters(10), Dir: Along}).Do(t.Context())
 		require.NoError(t, err)
 		sel := Faces(FaceCreatedBy(CapEnd(body)))
 		faces, err := sel.SelectFaces(body)

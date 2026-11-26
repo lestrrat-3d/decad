@@ -42,7 +42,7 @@ func Example_verify_linkage_closed_loop() {
 		if _, err := s.Solve(context.Background()); err != nil {
 			return nil, err
 		}
-		return decad.Extrude(context.Background(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+		return decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along}).Do(context.Background())
 	}
 	// bar is a link between two pins: a rectangle 8 mm wide that runs from
 	// point p to point q, 8 mm tall, starting at height z0.

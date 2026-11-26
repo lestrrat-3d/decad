@@ -42,7 +42,7 @@ func socketTool(t *testing.T, doc *decad.Document, world *sketch.World, d bool) 
 	}
 	require.NoError(t, solveSketch(t, s))
 	require.Len(t, s.Profiles(), 1)
-	b, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	b, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(5), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return b
 }

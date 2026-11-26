@@ -41,7 +41,7 @@ func stitchTrianglePatch(t *testing.T, doc *decad.Document, w *sketch.World, pla
 	}
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	patch, err := decad.PatchProfile(t.Context(), doc, s, s.Profiles()[0])
+	patch, err := decad.PatchProfile(doc, s, s.Profiles()[0]).Do(t.Context())
 	require.NoError(t, err)
 	return patch
 }
@@ -173,7 +173,7 @@ func TestMassPropertiesLoftOctagons(t *testing.T) {
 	s1, p1 := fixedPolygonProfile(t, w, top, [][2]float64{
 		{5, -1.5}, {5, 2.5}, {3, 4.5}, {-1, 4.5}, {-3, 2.5}, {-3, -1.5}, {-1, -3.5}, {3, -3.5},
 	})
-	loft, err := decad.Loft(t.Context(), doc, s0, p0, s1, p1)
+	loft, err := decad.Loft(doc, s0, p0, s1, p1).Do(t.Context())
 	require.NoError(t, err)
 	got, err := loft.MassProperties(t.Context(), meshMassDensity)
 	require.NoError(t, err)
@@ -343,8 +343,8 @@ func TestMassPropertiesRevolvedSphere(t *testing.T) {
 	s.CreateArc(center, end, start)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	ball, err := decad.Revolve(t.Context(), decad.New(), s, s.Profiles()[0],
-		decad.SketchLine{End: decad.Point2{U: 1}}, decad.FullRevolution{})
+	ball, err := decad.Revolve(decad.New(), s, s.Profiles()[0],
+		decad.SketchLine{End: decad.Point2{U: 1}}, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	got, err := ball.MassProperties(t.Context(), meshMassDensity)
 	require.NoError(t, err)

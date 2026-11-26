@@ -31,7 +31,7 @@ func Example_fillet_rounded_outline() {
 		fmt.Printf("failed to solve: %s\n", err)
 		return
 	}
-	box, err := decad.Extrude(ctx, doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	box, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(20), Dir: decad.Along}).Do(ctx)
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return
@@ -56,7 +56,7 @@ func Example_fillet_rounded_outline() {
 		fmt.Printf("failed to solve tool sketch: %s\n", err)
 		return
 	}
-	cyl, err := decad.Extrude(ctx, doc, ts, ts.Profiles()[0], decad.Distance{D: units.Millimeters(60), Dir: decad.Along})
+	cyl, err := decad.Extrude(doc, ts, ts.Profiles()[0], decad.Distance{D: units.Millimeters(60), Dir: decad.Along}).Do(ctx)
 	if err != nil {
 		fmt.Printf("failed to extrude tool: %s\n", err)
 		return

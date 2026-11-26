@@ -349,7 +349,7 @@ func TestRevolveShellSlantedRim(t *testing.T) {
 		// two circles is 5·(169 − 10.625²)/2 = 140.2734375.
 		doc := decad.New()
 		s, p := notchEndSketch(t)
-		body, err := decad.Revolve(t.Context(), doc, s, p, uAxis, decad.FullRevolution{})
+		body, err := decad.Revolve(doc, s, p, uAxis, decad.FullRevolution{}).Do(t.Context())
 		require.NoError(t, err)
 		cylinder20 := func(s decad.Surface) bool {
 			c, ok := s.(decad.Cylinder)
@@ -466,7 +466,7 @@ func TestRevolveShellSlantedRim(t *testing.T) {
 			t.Parallel()
 			doc := decad.New()
 			s, p := beadSketch(t)
-			bead, err := decad.Revolve(t.Context(), doc, s, p, uAxis, decad.FullRevolution{})
+			bead, err := decad.Revolve(doc, s, p, uAxis, decad.FullRevolution{}).Do(t.Context())
 			require.NoError(t, err)
 			shelled, err := applyShell(bead, sideFace(t, bead, torusSurface), units.Millimeters(1), tc.set...).Do(t.Context())
 			require.NoError(t, err)

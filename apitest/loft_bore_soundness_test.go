@@ -119,7 +119,7 @@ func loftBoredSquares(t *testing.T, world *sketch.World, lower, upper *sketch.Pl
 		require.NoError(t, err)
 		sections[i], profiles[i] = s, s.Profiles()[0]
 	}
-	body, err := decad.Loft(t.Context(), decad.New(), sections[0], profiles[0], sections[1], profiles[1])
+	body, err := decad.Loft(decad.New(), sections[0], profiles[0], sections[1], profiles[1]).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -276,7 +276,7 @@ func loftBoreSoundnessBlank(t *testing.T, frame r3.Frame, opts ...decad.Document
 		sections[i], profiles[i] = s, s.Profiles()[0]
 	}
 	doc := decad.New(opts...)
-	blank, err := decad.Loft(t.Context(), doc, sections[0], profiles[0], sections[1], profiles[1])
+	blank, err := decad.Loft(doc, sections[0], profiles[0], sections[1], profiles[1]).Do(t.Context())
 	require.NoError(t, err)
 	return blank, doc
 }
@@ -294,8 +294,8 @@ func loftBoreSoundnessTool(t *testing.T, doc *decad.Document, frame r3.Frame,
 	s.CreateCircle(center, 1)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	tool, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(height), Dir: direction})
+	tool, err := decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(height), Dir: direction}).Do(t.Context())
 	require.NoError(t, err)
 	return tool
 }

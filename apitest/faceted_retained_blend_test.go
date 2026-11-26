@@ -49,8 +49,8 @@ func zCylinderAt(t *testing.T, sc *retentionScene, cx, cy, r, z0, z1 float64) *d
 	ts.CreateCircle(c, r)
 	_, err = ts.Solve(t.Context())
 	require.NoError(t, err)
-	pin, err := decad.Extrude(t.Context(), sc.doc, ts, ts.Profiles()[0],
-		decad.Distance{D: units.Millimeters(z1 - z0), Dir: decad.Along})
+	pin, err := decad.Extrude(sc.doc, ts, ts.Profiles()[0],
+		decad.Distance{D: units.Millimeters(z1 - z0), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	move, err := r3.Translation(r3.Vec{Z: z0 + 0.001})
 	require.NoError(t, err)
@@ -67,8 +67,8 @@ func blendPlate(t *testing.T, sc *retentionScene) *decad.Body {
 	s.Fix(r.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	plate, err := decad.Extrude(t.Context(), sc.doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	plate, err := decad.Extrude(sc.doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(20), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return plate
 }
@@ -174,8 +174,8 @@ func TestFacetedRetainedBlend(t *testing.T) {
 			s.CreateCircle(c, 3)
 			_, err = s.Solve(t.Context())
 			require.NoError(t, err)
-			pin, err := decad.Extrude(t.Context(), sc.doc, s, s.Profiles()[0],
-				decad.Distance{D: units.Millimeters(60), Dir: decad.Along})
+			pin, err := decad.Extrude(sc.doc, s, s.Profiles()[0],
+				decad.Distance{D: units.Millimeters(60), Dir: decad.Along}).Do(t.Context())
 			require.NoError(t, err)
 			bored, err := decad.Cut(blendPlate(t, sc), translated(t, pin, 0, 0, 0.1)).Do(t.Context())
 			require.NoError(t, err)
@@ -307,7 +307,7 @@ func TestFacetedRetainedBlend(t *testing.T) {
 		cross.CreateCircle(c, 1)
 		_, err = cross.Solve(t.Context())
 		require.NoError(t, err)
-		pin, err := decad.Extrude(t.Context(), sc.doc, cross, cross.Profiles()[0], decad.Symmetric{D: units.Millimeters(30)})
+		pin, err := decad.Extrude(sc.doc, cross, cross.Profiles()[0], decad.Symmetric{D: units.Millimeters(30)}).Do(t.Context())
 		require.NoError(t, err)
 		move, err := r3.Translation(r3.Vec{Y: 0.001})
 		require.NoError(t, err)
@@ -324,8 +324,8 @@ func TestFacetedRetainedBlend(t *testing.T) {
 		ss.CreateCircle(sc0, 4)
 		_, err = ss.Solve(t.Context())
 		require.NoError(t, err)
-		shaft, err := decad.Extrude(t.Context(), sc.doc, ss, ss.Profiles()[0],
-			decad.Distance{D: units.Millimeters(20), Dir: decad.Against})
+		shaft, err := decad.Extrude(sc.doc, ss, ss.Profiles()[0],
+			decad.Distance{D: units.Millimeters(20), Dir: decad.Against}).Do(t.Context())
 		require.NoError(t, err)
 		shaft = translated(t, shaft, 0, 0, 20.001)
 		drilled, err := decad.Cut(shaft, hole).Do(t.Context())
@@ -459,7 +459,7 @@ func wedgedPlate(t *testing.T, sketchPlane func(*retentionScene) *sketch.Plane, 
 	}
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	tool, err := decad.Extrude(t.Context(), sc.doc, s, s.Profiles()[0], decad.Symmetric{D: units.Millimeters(depth)})
+	tool, err := decad.Extrude(sc.doc, s, s.Profiles()[0], decad.Symmetric{D: units.Millimeters(depth)}).Do(t.Context())
 	require.NoError(t, err)
 	cut, err := decad.Cut(plate, translated(t, tool, move.X, move.Y, move.Z)).Do(t.Context())
 	require.NoError(t, err)
@@ -565,8 +565,8 @@ func TestFacetedRetainedBlendStraight(t *testing.T) {
 			s.Fix(rect.C)
 			_, err = s.Solve(t.Context())
 			require.NoError(t, err)
-			tool, err := decad.Extrude(t.Context(), sc.doc, s, s.Profiles()[0],
-				decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+			tool, err := decad.Extrude(sc.doc, s, s.Profiles()[0],
+				decad.Distance{D: units.Millimeters(20), Dir: decad.Along}).Do(t.Context())
 			require.NoError(t, err)
 			cut, err := decad.Cut(blendPlate(t, sc), translated(t, tool, 0, 0.1, 0)).Do(t.Context())
 			require.NoError(t, err)
@@ -692,7 +692,7 @@ func TestFacetedRetainedBlendStraight(t *testing.T) {
 		}
 		_, err = s.Solve(t.Context())
 		require.NoError(t, err)
-		prism, err := decad.Extrude(t.Context(), sc.doc, s, s.Profiles()[0], decad.Symmetric{D: units.Millimeters(10)})
+		prism, err := decad.Extrude(sc.doc, s, s.Profiles()[0], decad.Symmetric{D: units.Millimeters(10)}).Do(t.Context())
 		require.NoError(t, err)
 		shift, err := r3.Translation(r3.Vec{Y: 10})
 		require.NoError(t, err)
@@ -742,8 +742,8 @@ func TestFacetedRetainedBlendStraight(t *testing.T) {
 			ws.Fix(wr.A)
 			_, err = ws.Solve(t.Context())
 			require.NoError(t, err)
-			wall, err := decad.Extrude(t.Context(), sc.doc, ws, ws.Profiles()[0],
-				decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+			wall, err := decad.Extrude(sc.doc, ws, ws.Profiles()[0],
+				decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 			require.NoError(t, err)
 			lift, err := r3.Translation(r3.Vec{Z: 15})
 			require.NoError(t, err)
@@ -871,7 +871,7 @@ func groovedPlate(t *testing.T) *decad.Body {
 	s.CreateCircle(c, 4)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	tool, err := decad.Extrude(t.Context(), sc.doc, s, s.Profiles()[0], decad.Symmetric{D: units.Millimeters(30)})
+	tool, err := decad.Extrude(sc.doc, s, s.Profiles()[0], decad.Symmetric{D: units.Millimeters(30)}).Do(t.Context())
 	require.NoError(t, err)
 	shift, err := r3.Translation(r3.Vec{X: 20})
 	require.NoError(t, err)
@@ -905,7 +905,7 @@ func rodOnPlate(t *testing.T, sc *retentionScene) *decad.Body {
 	s.CreateCircle(c, 4)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	rod, err := decad.Extrude(t.Context(), sc.doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	rod, err := decad.Extrude(sc.doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(20), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	shift, err := r3.Translation(r3.Vec{X: 10})
 	require.NoError(t, err)
@@ -1193,8 +1193,8 @@ func TestFacetedRetainedBlendArc(t *testing.T) {
 		rs.CreateCircle(rc, 6)
 		_, err = rs.Solve(t.Context())
 		require.NoError(t, err)
-		rod, err := decad.Extrude(t.Context(), sc.doc, rs, rs.Profiles()[0],
-			decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+		rod, err := decad.Extrude(sc.doc, rs, rs.Profiles()[0],
+			decad.Distance{D: units.Millimeters(20), Dir: decad.Along}).Do(t.Context())
 		require.NoError(t, err)
 		fs, err := sc.w.CreateSketch(sc.w.XY())
 		require.NoError(t, err)
@@ -1202,7 +1202,7 @@ func TestFacetedRetainedBlendArc(t *testing.T) {
 		fs.Fix(fr.A)
 		_, err = fs.Solve(t.Context())
 		require.NoError(t, err)
-		slab, err := decad.Extrude(t.Context(), sc.doc, fs, fs.Profiles()[0], decad.Symmetric{D: units.Millimeters(30)})
+		slab, err := decad.Extrude(sc.doc, fs, fs.Profiles()[0], decad.Symmetric{D: units.Millimeters(30)}).Do(t.Context())
 		require.NoError(t, err)
 		lift, err := r3.Translation(r3.Vec{Z: 0.001})
 		require.NoError(t, err)

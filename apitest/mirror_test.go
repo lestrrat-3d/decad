@@ -30,7 +30,7 @@ func newMirrorScene() *mirrorScene {
 func (sc *mirrorScene) poly(t *testing.T, plane *sketch.Plane, pts [][2]float64, e decad.Extent) *decad.Body {
 	t.Helper()
 	s, profile := meshPolygonSketch(t, sc.w, plane, pts)
-	body, err := decad.Extrude(t.Context(), sc.doc, s, profile, e)
+	body, err := decad.Extrude(sc.doc, s, profile, e).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -52,7 +52,7 @@ func (sc *mirrorScene) cylinder(t *testing.T, plane *sketch.Plane, cx, cy, r flo
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	require.Len(t, s.Profiles(), 1)
-	body, err := decad.Extrude(t.Context(), sc.doc, s, s.Profiles()[0], e)
+	body, err := decad.Extrude(sc.doc, s, s.Profiles()[0], e).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -153,9 +153,9 @@ func TestMirroredCopyEveryPayload(t *testing.T) {
 			// §2 M7: a stepped section revolved 270° about the sketch's u axis.
 			s, profile := meshPolygonSketch(t, sc.w, sc.w.XY(),
 				[][2]float64{{0, 2}, {10, 2}, {10, 6}, {4, 6}, {4, 4}, {0, 4}})
-			body, err := decad.Revolve(t.Context(), sc.doc, s, profile,
+			body, err := decad.Revolve(sc.doc, s, profile,
 				decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}},
-				decad.AngleExtent{A: units.Degrees(270), Dir: decad.Along})
+				decad.AngleExtent{A: units.Degrees(270), Dir: decad.Along}).Do(t.Context())
 			require.NoError(t, err)
 			return body
 		}},
@@ -168,7 +168,7 @@ func TestMirroredCopyEveryPayload(t *testing.T) {
 		{Name: "arc sweep", Build: func(t *testing.T, sc *mirrorScene) *decad.Body {
 			// A quarter turn about the x axis of the rectangle [0, 10]×[0, 6].
 			s, profile := meshPolygonSketch(t, sc.w, sc.w.XY(), [][2]float64{{0, 0}, {10, 0}, {10, 6}, {0, 6}})
-			body, err := decad.Sweep(t.Context(), sc.doc, s, profile, sweepArcPath(t))
+			body, err := decad.Sweep(sc.doc, s, profile, sweepArcPath(t)).Do(t.Context())
 			require.NoError(t, err)
 			return body
 		}},

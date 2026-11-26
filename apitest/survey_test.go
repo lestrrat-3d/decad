@@ -32,7 +32,7 @@ func rectPrism(t *testing.T, w, d, h float64) *decad.Document {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	doc := decad.New()
-	_, err = decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+	_, err = decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return doc
 }
@@ -109,7 +109,7 @@ func TestWallWedgePrismNoWall(t *testing.T) {
 	// determination that no wall exists — nothing for the tool to violate.
 	s, p := polygonSketch(t, [][2]float64{{0, 0}, {30, 0}, {15, 15 * math.Sqrt(3)}})
 	doc := decad.New()
-	_, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(80), Dir: decad.Along})
+	_, err := decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(80), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))
@@ -128,7 +128,7 @@ func TestWallConeNoWall(t *testing.T) {
 	// past the allowance and opposes none. Proven no wall, Sound.
 	s, p := polygonSketch(t, [][2]float64{{0, 0}, {30, 0}, {30, 30 * math.Tan(30*math.Pi/180)}})
 	doc := decad.New()
-	_, err := decad.Revolve(t.Context(), doc, s, p, uAxis, decad.FullRevolution{})
+	_, err := decad.Revolve(doc, s, p, uAxis, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))
@@ -162,7 +162,7 @@ func TestWallAnnularPrism(t *testing.T) {
 	require.NotNil(t, prof)
 
 	doc := decad.New()
-	_, err = decad.Extrude(t.Context(), doc, s, prof, decad.Distance{D: units.Millimeters(30), Dir: decad.Along})
+	_, err = decad.Extrude(doc, s, prof, decad.Distance{D: units.Millimeters(30), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))
@@ -190,7 +190,7 @@ func TestWallDraftAllowanceBoundary(t *testing.T) {
 	top := 0.5 + 20*math.Tan(beta)
 	s, p := polygonSketch(t, [][2]float64{{-0.5, 0}, {0.5, 0}, {top, 20}, {-top, 20}})
 	doc := decad.New()
-	_, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(30), Dir: decad.Along})
+	_, err := decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(30), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1.2)))
@@ -230,7 +230,7 @@ func TestWallKnifeEdgeExactZero(t *testing.T) {
 	require.Len(t, profiles, 1)
 
 	doc := decad.New()
-	_, err = decad.Extrude(t.Context(), doc, s, profiles[0], decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	_, err = decad.Extrude(doc, s, profiles[0], decad.Distance{D: units.Millimeters(5), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(0.001)))
@@ -247,7 +247,7 @@ func TestWallPartialRevolve(t *testing.T) {
 	// allowance — and the ring's own cross-section reads its 10 mm walls.
 	s, p := annularSketch(t)
 	doc := decad.New()
-	_, err := decad.Revolve(t.Context(), doc, s, p, uAxis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
+	_, err := decad.Revolve(doc, s, p, uAxis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))
 	require.NoError(t, err)
@@ -266,7 +266,7 @@ func TestVerifyWallCancellationStopsCandidateWork(t *testing.T) {
 	}
 	s, p := polygonSketch(t, pts)
 	doc := decad.New()
-	_, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	_, err := decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	before := snapshotDocument(t, doc)
 	ctx := newCancelAfterContext(t.Context(), 5)
@@ -305,7 +305,7 @@ func TestUndercutExactlyPerpendicularWallIsNotOpposed(t *testing.T) {
 	t.Parallel()
 	s, p := polygonSketch(t, [][2]float64{{0, 0}, {3, 9}, {-6, 12}, {-9, 3}})
 	doc := decad.New()
-	_, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	_, err := decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	report, err := doc.Verify(t.Context(), decad.WithPullDirection(r3.NewVec(3, 9, 0)))
 	require.NoError(t, err)
@@ -353,7 +353,7 @@ func TestUndercutWallTiltedOffItsHeldTangent(t *testing.T) {
 	corners := [][2]float64{{-1e-15, 0}, {24, 0}, {24, 32}}
 	s, p := polygonSketch(t, corners)
 	doc := decad.New()
-	body, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(20), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	// cornersOf is the set of plane-local corners a face's outer loop visits.
 	cornersOf := func(f *decad.Face) map[[2]float64]bool {
@@ -424,7 +424,7 @@ func TestUndercutArcWindowFollowsTheRecord(t *testing.T) {
 		require.NoError(t, err)
 		require.Len(t, s.Profiles(), 1)
 		doc := decad.New()
-		body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+		body, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(20), Dir: decad.Along}).Do(t.Context())
 		require.NoError(t, err)
 		held := map[[2]float64]bool{}
 		for _, v := range body.Vertices() {
@@ -494,7 +494,7 @@ func TestUndercutNearTangentPullDecidedAtRecordedStart(t *testing.T) {
 	require.Len(t, s.Profiles(), 1)
 
 	doc := decad.New()
-	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	sawStart := false
 	for _, v := range body.Vertices() {
@@ -553,7 +553,7 @@ func TestWallReflexSweep(t *testing.T) {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	doc := decad.New()
-	_, err = decad.Revolve(t.Context(), doc, s, s.Profiles()[0], uAxis, decad.AngleExtent{A: units.Degrees(270), Dir: decad.Along})
+	_, err = decad.Revolve(doc, s, s.Profiles()[0], uAxis, decad.AngleExtent{A: units.Degrees(270), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))
 	require.NoError(t, err)
@@ -588,7 +588,7 @@ func TestWallSectorTooTightForItsFlats(t *testing.T) {
 	// spans it, so this body has NO wall: nil, a proven absence, Sound.
 	s, p := solidSketch(t)
 	doc := decad.New()
-	_, err := decad.Revolve(t.Context(), doc, s, p, uAxis, decad.AngleExtent{A: units.Degrees(270), Dir: decad.Along})
+	_, err := decad.Revolve(doc, s, p, uAxis, decad.AngleExtent{A: units.Degrees(270), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))
 	require.NoError(t, err)
@@ -603,7 +603,7 @@ func TestWallThinPieWedge(t *testing.T) {
 	// ground to zero at every size. Exact 0, Violating against any tool.
 	s, p := solidSketch(t)
 	doc := decad.New()
-	_, err := decad.Revolve(t.Context(), doc, s, p, uAxis, decad.AngleExtent{A: units.Degrees(10), Dir: decad.Along})
+	_, err := decad.Revolve(doc, s, p, uAxis, decad.AngleExtent{A: units.Degrees(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))
 	require.NoError(t, err)
@@ -651,7 +651,7 @@ func TestUndercutsSphereListed(t *testing.T) {
 	// the doc's own spherical case. One face, Violating.
 	s, p := semicircleSketch(t)
 	doc := decad.New()
-	body, err := decad.Revolve(t.Context(), doc, s, p, uAxis, decad.FullRevolution{})
+	body, err := decad.Revolve(doc, s, p, uAxis, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context(), decad.WithPullDirection(r3.NewVec(0, 0, 1)))
@@ -667,7 +667,7 @@ func TestRevolvePartialUndercutCaps(t *testing.T) {
 	t.Parallel()
 	s, p := annularSketch(t)
 	doc := decad.New()
-	body, err := decad.Revolve(t.Context(), doc, s, p, uAxis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
+	body, err := decad.Revolve(doc, s, p, uAxis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context(), decad.WithPullDirection(r3.NewVec(0, 1, 1)))
@@ -740,7 +740,7 @@ func TestMinRadiusDonutWaist(t *testing.T) {
 	require.NoError(t, err)
 
 	doc := decad.New()
-	_, err = decad.Revolve(t.Context(), doc, s, s.Profiles()[0], uAxis, decad.FullRevolution{})
+	_, err = decad.Revolve(doc, s, s.Profiles()[0], uAxis, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context(), decad.WithConcaveRadius())
@@ -802,7 +802,7 @@ func TestWallSolidCylinder(t *testing.T) {
 	// keeps its exactness through boundedSqrt.
 	s, p := solidSketch(t)
 	doc := decad.New()
-	_, err := decad.Revolve(t.Context(), doc, s, p, uAxis, decad.FullRevolution{})
+	_, err := decad.Revolve(doc, s, p, uAxis, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))
 	require.NoError(t, err)
@@ -825,7 +825,7 @@ func TestMinRadiusAnnularRevolveStaysExact(t *testing.T) {
 	t.Parallel()
 	s, p := annularSketch(t)
 	doc := decad.New()
-	_, err := decad.Revolve(t.Context(), doc, s, p, uAxis, decad.FullRevolution{})
+	_, err := decad.Revolve(doc, s, p, uAxis, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context(), decad.WithConcaveRadius())
@@ -848,7 +848,7 @@ func TestWallNarrowConeTaperZero(t *testing.T) {
 	r := 30 * math.Tan(5*math.Pi/180)
 	s, p := polygonSketch(t, [][2]float64{{0, 0}, {30, 0}, {30, r}})
 	doc := decad.New()
-	_, err := decad.Revolve(t.Context(), doc, s, p, uAxis, decad.FullRevolution{})
+	_, err := decad.Revolve(doc, s, p, uAxis, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))
 	require.NoError(t, err)
@@ -917,7 +917,7 @@ func TestWallReadingBoundEnclosesCurvedWeb(t *testing.T) {
 	require.NotNil(t, prof)
 
 	doc := decad.New()
-	_, err = decad.Extrude(t.Context(), doc, s, prof, decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	_, err = decad.Extrude(doc, s, prof, decad.Distance{D: units.Millimeters(20), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))
@@ -973,7 +973,7 @@ func TestWallReadingBoundIsOnTheSpanningDiameter(t *testing.T) {
 	require.NotNil(t, prof)
 
 	doc := decad.New()
-	_, err = decad.Extrude(t.Context(), doc, s, prof, decad.Distance{D: units.Millimeters(100), Dir: decad.Along})
+	_, err = decad.Extrude(doc, s, prof, decad.Distance{D: units.Millimeters(100), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))
@@ -1047,7 +1047,7 @@ func TestWallHeightCarriesAxialDelta(t *testing.T) {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	doc := decad.New()
-	_, err = decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Inches(0.1), Dir: decad.Along})
+	_, err = decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Inches(0.1), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))
@@ -1070,7 +1070,7 @@ func TestMinRadiusArcRadiusBound(t *testing.T) {
 	// hole on the same fixture family (holePlate) stays Exact with Bound zero.
 	s, prof := dSectionProfile(t)
 	doc := decad.New()
-	_, err := decad.Extrude(t.Context(), doc, s, prof, decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	_, err := decad.Extrude(doc, s, prof, decad.Distance{D: units.Millimeters(5), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context(), decad.WithConcaveRadius())
@@ -1203,7 +1203,7 @@ func TestSurveySweepEnclosesHalfDiscTruths(t *testing.T) {
 				doc := decad.New()
 				// A tall prism keeps the sweep height out of the wall
 				// comparison, so the reading is the section's own.
-				_, err := decad.Extrude(t.Context(), doc, s, prof, decad.Distance{D: units.Millimeters(200), Dir: decad.Along})
+				_, err := decad.Extrude(doc, s, prof, decad.Distance{D: units.Millimeters(200), Dir: decad.Along}).Do(t.Context())
 				require.NoError(t, err)
 				report, err := doc.Verify(t.Context(),
 					decad.WithMinWallThickness(units.Millimeters(0.001)),
@@ -1258,7 +1258,7 @@ func TestWallConcentricRingCarriesRadiusDifferenceBound(t *testing.T) {
 	require.NotNil(t, prof)
 
 	doc := decad.New()
-	_, err = decad.Extrude(t.Context(), doc, s, prof, decad.Distance{D: units.Millimeters(500), Dir: decad.Along})
+	_, err = decad.Extrude(doc, s, prof, decad.Distance{D: units.Millimeters(500), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))
@@ -1289,7 +1289,7 @@ func TestRevolveMinRadiusArcRadiusBound(t *testing.T) {
 	t.Parallel()
 	s, prof := dSectionProfile(t)
 	doc := decad.New()
-	_, err := decad.Revolve(t.Context(), doc, s, prof, uAxis, decad.FullRevolution{})
+	_, err := decad.Revolve(doc, s, prof, uAxis, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context(), decad.WithConcaveRadius())
@@ -1320,7 +1320,7 @@ func coneBore(t *testing.T, u0, v0, u1, v1, vTop float64) *decad.Document {
 	t.Helper()
 	s, p := polygonSketch(t, [][2]float64{{u0, v0}, {u1, v1}, {u1, vTop}, {u0, vTop}})
 	doc := decad.New()
-	_, err := decad.Revolve(t.Context(), doc, s, p, uAxis, decad.FullRevolution{})
+	_, err := decad.Revolve(doc, s, p, uAxis, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	return doc
 }
@@ -1430,7 +1430,7 @@ func TestRevolveMinRadiusChargesTheAxisSnap(t *testing.T) {
 		t.Helper()
 		s, p := polygonSketch(t, [][2]float64{{0, v0}, {10, 1}, {0, 2}})
 		doc := decad.New()
-		_, err := decad.Revolve(t.Context(), doc, s, p, axis, decad.FullRevolution{})
+		_, err := decad.Revolve(doc, s, p, axis, decad.FullRevolution{}).Do(t.Context())
 		require.NoError(t, err)
 		report, err := doc.Verify(t.Context(), decad.WithConcaveRadius())
 		require.NoError(t, err)
@@ -1600,7 +1600,7 @@ func TestMinRadiusAggregatesLosingCandidate(t *testing.T) {
 	t.Parallel()
 	s, prof := rivalRadiusPlate(t)
 	doc := decad.New()
-	_, err := decad.Extrude(t.Context(), doc, s, prof, decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	_, err := decad.Extrude(doc, s, prof, decad.Distance{D: units.Millimeters(5), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context(), decad.WithConcaveRadius())
@@ -1645,7 +1645,7 @@ func TestMinRadiusExactCandidatesStayExact(t *testing.T) {
 	require.NotNil(t, prof)
 
 	doc := decad.New()
-	_, err = decad.Extrude(t.Context(), doc, s, prof, decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
+	_, err = decad.Extrude(doc, s, prof, decad.Distance{D: units.Millimeters(8), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	report, err := doc.Verify(t.Context(), decad.WithConcaveRadius())
 	require.NoError(t, err)
@@ -1698,7 +1698,7 @@ func TestRevolveMinRadiusAggregatesLosingCandidate(t *testing.T) {
 	t.Parallel()
 	s, prof := rivalRadiusMeridian(t)
 	doc := decad.New()
-	_, err := decad.Revolve(t.Context(), doc, s, prof, uAxis, decad.FullRevolution{})
+	_, err := decad.Revolve(doc, s, prof, uAxis, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context(), decad.WithConcaveRadius())
@@ -1725,7 +1725,7 @@ func TestRevolveMinRadiusExactCandidatesStayExact(t *testing.T) {
 	t.Parallel()
 	s, p := polygonSketch(t, [][2]float64{{0, 5}, {10, 5}, {10, 8}, {20, 8}, {20, 20}, {0, 20}})
 	doc := decad.New()
-	_, err := decad.Revolve(t.Context(), doc, s, p, uAxis, decad.FullRevolution{})
+	_, err := decad.Revolve(doc, s, p, uAxis, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context(), decad.WithConcaveRadius())
@@ -1763,7 +1763,7 @@ func TestWallHeightArmAggregatesAgainstTheSectionSpan(t *testing.T) {
 	require.NoError(t, err)
 
 	doc := decad.New()
-	_, err = decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Inches(0.1), Dir: decad.Along})
+	_, err = decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Inches(0.1), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))

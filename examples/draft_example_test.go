@@ -12,7 +12,7 @@ import (
 // Draft tilts the walls of a body that already exists. Molded and cast parts
 // need drafted walls so they can be pulled out of the mold. A neutral face
 // tells Draft which end stays the same size; the walls lean inward away from
-// it. If you are drawing the part from scratch, WithTaper on Extrude does the
+// it. If you are drawing the part from scratch, Taper on Extrude does the
 // same in one step.
 func Example_draft() {
 	// Make the body to draft: sketch a 20 x 20 mm square and extrude it into
@@ -30,8 +30,8 @@ func Example_draft() {
 		return
 	}
 	doc := decad.New()
-	block, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	block, err := decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return

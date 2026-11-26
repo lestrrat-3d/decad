@@ -16,7 +16,7 @@ import (
 func lShapedTool(t *testing.T, doc *decad.Document) *decad.Body {
 	t.Helper()
 	s, profile := polygonSketch(t, [][2]float64{{-1, -1}, {4, -1}, {4, 2}, {2, 2}, {2, 6}, {-1, 6}})
-	tool, err := decad.Extrude(t.Context(), doc, s, profile, decad.Distance{D: units.Millimeters(12), Dir: decad.Along})
+	tool, err := decad.Extrude(doc, s, profile, decad.Distance{D: units.Millimeters(12), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return placedAlongZ(t, tool, -1)
 }
@@ -56,8 +56,8 @@ func crossingRod(t *testing.T, doc *decad.Document, x0, cy, cz, r, length float6
 	s.CreateCircle(c, r)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(length), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(length), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	box, err := body.Bounds()
 	require.NoError(t, err)

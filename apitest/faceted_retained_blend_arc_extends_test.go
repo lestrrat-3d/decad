@@ -58,7 +58,7 @@ func earTube(t *testing.T) *decad.Body {
 		}
 	}
 	require.NotNil(t, ring)
-	pipe, err := decad.Extrude(t.Context(), sc.doc, s, ring, decad.Distance{D: units.Millimeters(30), Dir: decad.Along})
+	pipe, err := decad.Extrude(sc.doc, s, ring, decad.Distance{D: units.Millimeters(30), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	move, err := r3.Translation(r3.Vec{X: -15 + 0.001})
 	require.NoError(t, err)

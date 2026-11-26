@@ -21,7 +21,7 @@ import (
 func trimRectSheet(t *testing.T, doc *decad.Document) *decad.Body {
 	t.Helper()
 	s, p := plateSketch(t)
-	sheet, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}, decad.WithSurfaceResult())
+	sheet, err := decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).SurfaceResult().Do(t.Context())
 	require.NoError(t, err)
 	return sheet
 }
@@ -39,10 +39,10 @@ func trimSquareTool(t *testing.T, doc *decad.Document, u0, v0, u1, v1, z0, z1 fl
 	s.Fix(rect.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.TwoSided{
+	body, err := decad.Extrude(doc, s, s.Profiles()[0], decad.TwoSided{
 		One: decad.DistanceSide{D: units.Millimeters(z1)},
 		Two: decad.DistanceSide{D: units.Millimeters(-z0)},
-	})
+	}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -346,10 +346,10 @@ func TestSurfaceTrimS4IsExactFloatEquality(t *testing.T) {
 		s.Fix(rect.A)
 		_, err = s.Solve(t.Context())
 		require.NoError(t, err)
-		tool, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.TwoSided{
+		tool, err := decad.Extrude(doc, s, s.Profiles()[0], decad.TwoSided{
 			One: decad.DistanceSide{D: units.Millimeters(15)},
 			Two: decad.DistanceSide{D: units.Millimeters(5)},
-		})
+		}).Do(t.Context())
 		require.NoError(t, err)
 		basis, err := r3.FromBasis(r3.Basis{EX: r3.NewVec(1, 0, 0), EY: r3.NewVec(0, 1, 0), EZ: r3.NewVec(0, 0, 1)}, r3.NewVec(0, 0, 0))
 		require.NoError(t, err)
@@ -381,7 +381,7 @@ func trimRevolveCylinderSheet(t *testing.T, doc *decad.Document) *decad.Body {
 	require.Len(t, chains, 1)
 
 	axis := decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 0, V: 1}}
-	body, err := decad.Revolve(t.Context(), doc, s, chains[0], axis, decad.FullRevolution{})
+	body, err := decad.Revolve(doc, s, chains[0], axis, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }

@@ -65,14 +65,14 @@ func TestToFaceChargesStopOriginLift(t *testing.T) {
 	plateSketch, plateProf := taperSketch(t, r3.NewVec(0, 0, 0.1), 0, drawSquare(0, 60))
 	pinSketch, pinProf := levelPin(t)
 	doc := decad.New()
-	plate, err := decad.Extrude(t.Context(), doc, plateSketch, plateProf,
-		decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	plate, err := decad.Extrude(doc, plateSketch, plateProf,
+		decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	zStar := new(big.Rat).Add(tiltRat(0.1), big.NewRat(10, 1))
 
 	before := len(doc.Bodies())
-	pin, err := decad.Extrude(t.Context(), doc, pinSketch, pinProf,
-		decad.ToFace{Body: plate, Face: capEndFace(plate)})
+	pin, err := decad.Extrude(doc, pinSketch, pinProf,
+		decad.ToFace{Body: plate, Face: capEndFace(plate)}).Do(t.Context())
 	if err != nil {
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.Len(t, doc.Bodies(), before, `a refused stop leaves the document unchanged`)
@@ -133,13 +133,13 @@ func TestToFaceRefusesFootprintDependentStop(t *testing.T) {
 
 	doc := decad.New()
 	const depth = 10.0
-	plate, err := decad.Extrude(t.Context(), doc, plateSketch, plateSketch.Profiles()[0],
-		decad.Distance{D: units.Millimeters(depth), Dir: decad.Along})
+	plate, err := decad.Extrude(doc, plateSketch, plateSketch.Profiles()[0],
+		decad.Distance{D: units.Millimeters(depth), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 
 	before := len(doc.Bodies())
-	pin, err := decad.Extrude(t.Context(), doc, pinSketch, pinSketch.Profiles()[0],
-		decad.ToFace{Body: plate, Face: capEndFace(plate)})
+	pin, err := decad.Extrude(doc, pinSketch, pinSketch.Profiles()[0],
+		decad.ToFace{Body: plate, Face: capEndFace(plate)}).Do(t.Context())
 	if err != nil {
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.Len(t, doc.Bodies(), before, `a refused stop leaves the document unchanged`)
@@ -167,7 +167,7 @@ func TestToFaceRefusesFacetedLoftCap(t *testing.T) {
 	t.Parallel()
 	s0, p0, s1, p1 := loftSquaresAt(t, r3.NewVec(0, 0, 0.1), 2, 1, 10)
 	doc := decad.New()
-	lower, err := decad.Loft(t.Context(), doc, s0, p0, s1, p1)
+	lower, err := decad.Loft(doc, s0, p0, s1, p1).Do(t.Context())
 	require.NoError(t, err)
 	mirrorFrame, err := r3.NewFrame(r3.NewVec(0, 0, 10.1), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	require.NoError(t, err)
@@ -193,8 +193,8 @@ func TestToFaceRefusesFacetedLoftCap(t *testing.T) {
 
 	pinSketch, pinProf := levelPin(t)
 	before := len(doc.Bodies())
-	pin, err := decad.Extrude(t.Context(), doc, pinSketch, pinProf,
-		decad.ToFace{Body: joined, Face: capEndFace(joined)})
+	pin, err := decad.Extrude(doc, pinSketch, pinProf,
+		decad.ToFace{Body: joined, Face: capEndFace(joined)}).Do(t.Context())
 	if err != nil {
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.Len(t, doc.Bodies(), before, `a refused stop leaves the document unchanged`)

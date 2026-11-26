@@ -48,8 +48,8 @@ func roundedCornerBox(t *testing.T, sc *retentionScene) *decad.Body {
 	s.Fix(r.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	box, err := decad.Extrude(t.Context(), sc.doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	box, err := decad.Extrude(sc.doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(20), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	corner, err := decad.Fillet(box,
 		decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)), decad.EndpointAt(r3.Vec{})).Exactly(1),
@@ -93,8 +93,8 @@ func rectBox(t *testing.T, w *sketch.World, doc *decad.Document, x0, y0, x1, y1,
 	s.Fix(r.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	b, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+	b, err := decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(h), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return b
 }
@@ -306,8 +306,8 @@ func TestFacetedRetainedBlendOpenChain(t *testing.T) {
 		s.Fix(r.A)
 		_, err = s.Solve(t.Context())
 		require.NoError(t, err)
-		box, err := decad.Extrude(t.Context(), sc.doc, s, s.Profiles()[0],
-			decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+		box, err := decad.Extrude(sc.doc, s, s.Profiles()[0],
+			decad.Distance{D: units.Millimeters(20), Dir: decad.Along}).Do(t.Context())
 		require.NoError(t, err)
 		rounded, err := decad.Fillet(box,
 			decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1))).Exactly(4), units.Millimeters(2.7)).Do(t.Context())

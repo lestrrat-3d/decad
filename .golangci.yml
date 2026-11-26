@@ -150,6 +150,21 @@ linters:
             - github.com/lestrrat-3d/decad.Thicken
             - github.com/lestrrat-3d/decad.MoveFace
             - github.com/lestrrat-3d/decad.ConeFromFace
+            - github.com/lestrrat-3d/decad.Extrude
+            - github.com/lestrrat-3d/decad.Revolve
+            - github.com/lestrrat-3d/decad.Sweep
+            - github.com/lestrrat-3d/decad.Coil
+            - github.com/lestrrat-3d/decad.Loft
+            - github.com/lestrrat-3d/decad.LoftChain
+            - github.com/lestrrat-3d/decad.LoftFromPoint
+            - github.com/lestrrat-3d/decad.LoftSections
+            - github.com/lestrrat-3d/decad.LoftFaces
+            - github.com/lestrrat-3d/decad.LoftFacesToCone
+            - github.com/lestrrat-3d/decad.PatchProfile
+            - github.com/lestrrat-3d/decad.Emboss
+            - github.com/lestrrat-3d/decad.WebPath
+            - github.com/lestrrat-3d/decad.CutExtrude
+            - github.com/lestrrat-3d/decad.CutRevolve
   exclusions:
     generated: lax
     presets:

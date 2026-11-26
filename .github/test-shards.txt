@@ -384,3 +384,5 @@
 12	0.40	TestCommandConstructorCallsEndInDo
 12	0.01	TestModifyConstructorsAreCommandConstructors
 12	0.10	TestConeFromFaceCommand
+12	0.10	TestFeatureConstructorsAreCommandConstructors
+12	0.10	TestFeatureCopyHelpersDeepCopyTheirSelectors

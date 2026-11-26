@@ -21,9 +21,9 @@ func torusArcBody(t *testing.T, doc *decad.Document, sweep float64) *decad.Body 
 	s.CreateCircle(c, 1)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := decad.Revolve(t.Context(), doc, s, s.Profiles()[0],
+	body, err := decad.Revolve(doc, s, s.Profiles()[0],
 		decad.ConstructionAxis{Dir: r3.Vec{X: 1}},
-		decad.AngleExtent{A: units.Radians(sweep), Dir: decad.Along})
+		decad.AngleExtent{A: units.Radians(sweep), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -38,8 +38,8 @@ func radialStemBody(t *testing.T, doc *decad.Document) *decad.Body {
 	s.CreateCircle(c, 1)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(7), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(7), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	tr, err := r3.Translation(r3.Vec{Y: 4})
 	require.NoError(t, err)

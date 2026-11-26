@@ -28,7 +28,7 @@ func trimRevolveAxis() decad.SketchLine {
 
 // trimRevolveRing spins the axis-aligned rectangle meridian (u0,v0)-(u1,v1) a
 // full turn about that axis. surface selects the sheet — a full turn mints no
-// cap to omit, so WithSurfaceResult returns a CLOSED sheet (agent-docs/surface-design.md
+// cap to omit, so SurfaceResult returns a CLOSED sheet (agent-docs/surface-design.md
 // §2.1's closed-sheet rule) — and its absence the solid.
 func trimRevolveRing(t *testing.T, doc *decad.Document, u0, v0, u1, v1 float64, surface bool) *decad.Body {
 	t.Helper()
@@ -44,11 +44,11 @@ func trimRevolveRingAxis(t *testing.T, doc *decad.Document, u0, v0, u1, v1 float
 	s.Fix(rect.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	var opts []decad.RevolveOption
+	cmd := decad.Revolve(doc, s, s.Profiles()[0], axis, decad.FullRevolution{})
 	if surface {
-		opts = append(opts, decad.WithSurfaceResult())
+		cmd.SurfaceResult()
 	}
-	body, err := decad.Revolve(t.Context(), doc, s, s.Profiles()[0], axis, decad.FullRevolution{}, opts...)
+	body, err := cmd.Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -64,12 +64,12 @@ func trimRevolvePartial(t *testing.T, doc *decad.Document, u0, v0, u1, v1, degre
 	s.Fix(rect.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	var opts []decad.RevolveOption
+	cmd := decad.Revolve(doc, s, s.Profiles()[0], trimRevolveAxis(),
+		decad.AngleExtent{A: units.Degrees(degrees), Dir: decad.Along})
 	if surface {
-		opts = append(opts, decad.WithSurfaceResult())
+		cmd.SurfaceResult()
 	}
-	body, err := decad.Revolve(t.Context(), doc, s, s.Profiles()[0], trimRevolveAxis(),
-		decad.AngleExtent{A: units.Degrees(degrees), Dir: decad.Along}, opts...)
+	body, err := cmd.Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -230,8 +230,8 @@ func TestSurfaceTrimAndExtendRevolveRefuseAxisTouch(t *testing.T) {
 		_, err = s.Solve(t.Context())
 		require.NoError(t, err)
 		require.Equal(t, 1, len(s.Chains()))
-		ribbon, err := decad.Revolve(t.Context(), doc, s, s.Chains()[0],
-			trimRevolveAxis(), decad.FullRevolution{})
+		ribbon, err := decad.Revolve(doc, s, s.Chains()[0],
+			trimRevolveAxis(), decad.FullRevolution{}).Do(t.Context())
 		require.NoError(t, err)
 		tool := trimRevolveRing(t, doc, 2, 60, 8, 80, false)
 		_, err = decad.Extend(t.Context(), ribbon, decad.Edges(decad.Free()).Exactly(1), tool)
@@ -272,7 +272,7 @@ func extendRevolveRibbon(t *testing.T, doc *decad.Document, a decad.AngularExten
 			continue // the upper fragment, anchored at the line's far end
 		}
 		require.InDelta(t, 0.4, seg.TEnd, 1e-12)
-		body, err := decad.Revolve(t.Context(), doc, s, chain, trimRevolveAxis(), a)
+		body, err := decad.Revolve(doc, s, chain, trimRevolveAxis(), a).Do(t.Context())
 		require.NoError(t, err)
 		return body
 	}

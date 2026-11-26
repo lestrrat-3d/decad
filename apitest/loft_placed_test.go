@@ -82,7 +82,7 @@ func TestLoftPlacementDoesNotRerunTheSeamGates(t *testing.T) {
 	t.Parallel()
 	s0, p0, s1, p1 := loftSquares(t, 20, 20) // two 40x40 squares, h=10 -> 16000 mm3 box
 	doc := decad.New()
-	body, err := decad.Loft(t.Context(), doc, s0, p0, s1, p1)
+	body, err := decad.Loft(doc, s0, p0, s1, p1).Do(t.Context())
 	require.NoError(t, err)
 
 	// Both source profiles go stale only after the loft is recorded.
@@ -96,7 +96,7 @@ func TestLoftPlacementDoesNotRerunTheSeamGates(t *testing.T) {
 	require.True(t, p1.IsStale())
 
 	// S9 still gates the entry point: a fresh Loft on the same profiles refuses.
-	fresh, err := decad.Loft(t.Context(), doc, s0, p0, s1, p1)
+	fresh, err := decad.Loft(doc, s0, p0, s1, p1).Do(t.Context())
 	require.Nil(t, fresh)
 	require.ErrorIs(t, err, decad.ErrStaleProfile)
 
@@ -131,7 +131,7 @@ func TestLoftCopyIdentityIsMeasurementIdentical(t *testing.T) {
 	t.Parallel()
 	s0, p0, s1, p1 := loftSquares(t, 20, 20) // two 40x40 squares, h=10 -> 16000 mm3 box
 	doc := decad.New()
-	body, err := decad.Loft(t.Context(), doc, s0, p0, s1, p1)
+	body, err := decad.Loft(doc, s0, p0, s1, p1).Do(t.Context())
 	require.NoError(t, err)
 
 	dup, err := decad.Copy(t.Context(), body)
@@ -192,7 +192,7 @@ func TestLoftPlacedRotationSoundness(t *testing.T) {
 	t.Parallel()
 	s0, p0, s1, p1 := loftSquares(t, 20, 20)
 	doc := decad.New()
-	body, err := decad.Loft(t.Context(), doc, s0, p0, s1, p1)
+	body, err := decad.Loft(doc, s0, p0, s1, p1).Do(t.Context())
 	require.NoError(t, err)
 
 	rot, err := r3.Rotation(r3.NewVec(1, 0, 0), units.Degrees(37))
@@ -232,7 +232,7 @@ func TestLoftCopyPlacementTranslation(t *testing.T) {
 	t.Parallel()
 	s0, p0, s1, p1 := loftSquares(t, 20, 20)
 	doc := decad.New()
-	body, err := decad.Loft(t.Context(), doc, s0, p0, s1, p1)
+	body, err := decad.Loft(doc, s0, p0, s1, p1).Do(t.Context())
 	require.NoError(t, err)
 
 	srcBounds, err := body.Bounds()
@@ -280,7 +280,7 @@ func TestLoftPlacedReflectionHerringbone(t *testing.T) {
 	t.Parallel()
 	s0, p0, s1, p1 := loftSquares(t, 20, 20)
 	doc := decad.New()
-	body, err := decad.Loft(t.Context(), doc, s0, p0, s1, p1)
+	body, err := decad.Loft(doc, s0, p0, s1, p1).Do(t.Context())
 	require.NoError(t, err)
 
 	mirrorFrame, err := r3.NewFrame(r3.NewVec(0, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1))
@@ -348,7 +348,7 @@ func TestLoftCopyPlacementChainDoesNotAccumulate(t *testing.T) {
 	t.Parallel()
 	s0, p0, s1, p1 := loftSquares(t, 20, 20)
 	doc := decad.New()
-	body, err := decad.Loft(t.Context(), doc, s0, p0, s1, p1)
+	body, err := decad.Loft(doc, s0, p0, s1, p1).Do(t.Context())
 	require.NoError(t, err)
 
 	rot, err := r3.Rotation(r3.NewVec(0, 1, 0), units.Degrees(11))
@@ -380,7 +380,7 @@ func TestLoftPlacedTopologyAndRoles(t *testing.T) {
 	t.Parallel()
 	s0, p0, s1, p1 := loftSquares(t, 20, 20)
 	doc := decad.New()
-	body, err := decad.Loft(t.Context(), doc, s0, p0, s1, p1)
+	body, err := decad.Loft(doc, s0, p0, s1, p1).Do(t.Context())
 	require.NoError(t, err)
 
 	move, err := r3.Translation(r3.NewVec(50, -25, 5))
@@ -414,7 +414,7 @@ func TestLoftPlacedFaceAreaSumMatchesBodyArea(t *testing.T) {
 	t.Parallel()
 	s0, p0, s1, p1 := loftSquares(t, 20, 20)
 	doc := decad.New()
-	body, err := decad.Loft(t.Context(), doc, s0, p0, s1, p1)
+	body, err := decad.Loft(doc, s0, p0, s1, p1).Do(t.Context())
 	require.NoError(t, err)
 
 	rot, err := r3.Rotation(r3.NewVec(1, 1, 1), units.Degrees(23))
@@ -454,7 +454,7 @@ func TestLoftPlacedAccessorExactness(t *testing.T) {
 	t.Parallel()
 	s0, p0, s1, p1 := loftSquares(t, 20, 20)
 	doc := decad.New()
-	body, err := decad.Loft(t.Context(), doc, s0, p0, s1, p1)
+	body, err := decad.Loft(doc, s0, p0, s1, p1).Do(t.Context())
 	require.NoError(t, err)
 
 	for _, v := range body.Vertices() {
@@ -502,7 +502,7 @@ func TestLoftPlacedRetireAndLiveness(t *testing.T) {
 	t.Parallel()
 	s0, p0, s1, p1 := loftSquares(t, 20, 20)
 	doc := decad.New()
-	body, err := decad.Loft(t.Context(), doc, s0, p0, s1, p1)
+	body, err := decad.Loft(doc, s0, p0, s1, p1).Do(t.Context())
 	require.NoError(t, err)
 
 	move, err := r3.Translation(r3.NewVec(1, 2, 3))
@@ -536,7 +536,7 @@ func TestLoftPlacedS12TinyBodyFarTranslation(t *testing.T) {
 	t.Parallel()
 	s0, p0, s1, p1 := loftSquares(t, 1e-4, 1e-4)
 	doc := decad.New()
-	body, err := decad.Loft(t.Context(), doc, s0, p0, s1, p1)
+	body, err := decad.Loft(doc, s0, p0, s1, p1).Do(t.Context())
 	require.NoError(t, err)
 
 	vol, err := body.Volume()
@@ -570,7 +570,7 @@ func TestLoftPlacedS13OverflowingCoordinate(t *testing.T) {
 	t.Parallel()
 	s0, p0, s1, p1 := loftSquaresAt(t, r3.NewVec(0, 0, 0), 5, 5, 1e300)
 	doc := decad.New()
-	body, err := decad.Loft(t.Context(), doc, s0, p0, s1, p1)
+	body, err := decad.Loft(doc, s0, p0, s1, p1).Do(t.Context())
 	require.NoError(t, err, "the unplaced far-plane loft builds")
 	bodiesBefore := doc.Bodies()
 
@@ -604,7 +604,7 @@ func TestLoftPlacedNearMaxFloatSectionRefusesUnsupported(t *testing.T) {
 	x := 0.75 * math.MaxFloat64
 	s0, p0, s1, p1 := loftSquaresAt(t, r3.NewVec(0, 0, x), 1, 1, 8e292)
 	doc := decad.New()
-	body, err := decad.Loft(t.Context(), doc, s0, p0, s1, p1)
+	body, err := decad.Loft(doc, s0, p0, s1, p1).Do(t.Context())
 	require.NoError(t, err, "a finite, in-range, buildable body")
 
 	vol, err := body.Volume()
@@ -630,7 +630,7 @@ func TestLoftPlacedContextCancellation(t *testing.T) {
 	t.Parallel()
 	s0, p0, s1, p1 := loftSquares(t, 20, 20)
 	doc := decad.New()
-	body, err := decad.Loft(t.Context(), doc, s0, p0, s1, p1)
+	body, err := decad.Loft(doc, s0, p0, s1, p1).Do(t.Context())
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithCancel(t.Context())
@@ -650,7 +650,7 @@ func TestLoftPlacedVerifySound(t *testing.T) {
 	t.Parallel()
 	s0, p0, s1, p1 := loftSquares(t, 20, 20)
 	doc := decad.New()
-	body, err := decad.Loft(t.Context(), doc, s0, p0, s1, p1)
+	body, err := decad.Loft(doc, s0, p0, s1, p1).Do(t.Context())
 	require.NoError(t, err)
 
 	rot, err := r3.Rotation(r3.NewVec(1, 0, 0), units.Degrees(37))
@@ -665,7 +665,7 @@ func TestLoftPlacedVerifySound(t *testing.T) {
 	require.True(t, report.Passed())
 
 	t0, tp0, t1, tp1 := loftSquaresAt(t, r3.NewVec(1000, 0, 0), 20, 20, 10)
-	other, err := decad.Loft(t.Context(), doc, t0, tp0, t1, tp1)
+	other, err := decad.Loft(doc, t0, tp0, t1, tp1).Do(t.Context())
 	require.NoError(t, err)
 	move, err := r3.Translation(r3.NewVec(2000, 0, 0))
 	require.NoError(t, err)

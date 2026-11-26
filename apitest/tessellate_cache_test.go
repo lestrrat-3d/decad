@@ -141,7 +141,7 @@ func TestTessellationCachePayloadClasses(t *testing.T) {
 		}},
 		{name: "revolve", body: func(t *testing.T) *decad.Body {
 			s, p := solidSketch(t)
-			body, err := decad.Revolve(t.Context(), decad.New(), s, p, uAxis, decad.FullRevolution{})
+			body, err := decad.Revolve(decad.New(), s, p, uAxis, decad.FullRevolution{}).Do(t.Context())
 			require.NoError(t, err)
 			return body
 		}},

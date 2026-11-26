@@ -108,7 +108,7 @@ func TestLoftCapAreaChargesPlacementStretch(t *testing.T) {
 	// world-XY frames through the origin, so the plane-local lift is exact and
 	// the denoted map is the placement basis B alone.
 	s0, p0, s1, p1 := loftSquaresAt(t, r3.NewVec(0, 0, 0), 50, 30, 2)
-	body, err := decad.Loft(t.Context(), decad.New(), s0, p0, s1, p1)
+	body, err := decad.Loft(decad.New(), s0, p0, s1, p1).Do(t.Context())
 	require.NoError(t, err)
 	pose := loftCapMapDriftedPose(t, 5000)
 	placed, err := decad.Transform(t.Context(), body, pose)
@@ -173,7 +173,7 @@ func TestLoftCapAreaExactMapKeepsBound(t *testing.T) {
 	// World-XY frames through the origin and no placement denote through the
 	// identity, so the cap charge is zero and each cap area stays Exact.
 	s0, p0, s1, p1 := loftSquaresAt(t, r3.NewVec(0, 0, 0), 50, 30, 2)
-	body, err := decad.Loft(t.Context(), decad.New(), s0, p0, s1, p1)
+	body, err := decad.Loft(decad.New(), s0, p0, s1, p1).Do(t.Context())
 	require.NoError(t, err)
 	for _, want := range []float64{10000, 3600} {
 		got := loftCapMapFace(t, body, want)

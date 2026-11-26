@@ -34,7 +34,7 @@ func revolvedAxisVec(t *testing.T, plane func(*sketch.World) *sketch.Plane, axis
 	t.Helper()
 	world := sketch.NewWorld()
 	s, profile := axisVecSketch(t, world, plane(world))
-	body, err := Revolve(t.Context(), New(), s, profile, axis, FullRevolution{})
+	body, err := Revolve(New(), s, profile, axis, FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	return body.n.Payload.(revolvePayload).AxisVec
 }
@@ -70,7 +70,7 @@ func TestRevolveRecordsAxisVec(t *testing.T) {
 	t.Run("canonical", func(t *testing.T) {
 		world := sketch.NewWorld()
 		s, profile := axisVecSketch(t, world, world.XY())
-		body, err := Revolve(t.Context(), New(), s, profile, SketchLine{End: Point2{U: 1}}, FullRevolution{})
+		body, err := Revolve(New(), s, profile, SketchLine{End: Point2{U: 1}}, FullRevolution{}).Do(t.Context())
 		require.NoError(t, err)
 		rp := body.n.Payload.(revolvePayload)
 		require.Equal(t, r3.Vec{X: 1}, rp.AxisVec)
@@ -83,7 +83,7 @@ func TestRevolveRecordsAxisVec(t *testing.T) {
 		} {
 			world := sketch.NewWorld()
 			s, profile := axisVecSketch(t, world, plane(world))
-			body, err := Revolve(t.Context(), New(), s, profile, SketchLine{End: Point2{U: 1, V: 2}}, FullRevolution{})
+			body, err := Revolve(New(), s, profile, SketchLine{End: Point2{U: 1, V: 2}}, FullRevolution{}).Do(t.Context())
 			require.NoError(t, err, name)
 			rp := body.n.Payload.(revolvePayload)
 			// The recorded vector is the plane direction read in the frame's axes.
@@ -105,7 +105,7 @@ func TestRevolveRecordsAxisVec(t *testing.T) {
 		_, err = s.Solve(t.Context())
 		require.NoError(t, err)
 		require.Len(t, s.Chains(), 1)
-		body, err := Revolve(t.Context(), New(), s, s.Chains()[0], SketchLine{End: Point2{U: 1, V: 2}}, FullRevolution{})
+		body, err := Revolve(New(), s, s.Chains()[0], SketchLine{End: Point2{U: 1, V: 2}}, FullRevolution{}).Do(t.Context())
 		require.NoError(t, err)
 		require.Equal(t, r3.Vec{X: 1, Y: 2}, body.n.Payload.(chainRevolvePayload).AxisVec)
 	})
@@ -113,7 +113,7 @@ func TestRevolveRecordsAxisVec(t *testing.T) {
 		world := sketch.NewWorld()
 		s, profile := axisVecSketch(t, world, world.XY())
 		doc := New()
-		body, err := Revolve(t.Context(), doc, s, profile, SketchLine{End: Point2{U: 1, V: 2}}, FullRevolution{})
+		body, err := Revolve(doc, s, profile, SketchLine{End: Point2{U: 1, V: 2}}, FullRevolution{}).Do(t.Context())
 		require.NoError(t, err)
 		move, err := r3.Translation(r3.Vec{Z: 3})
 		require.NoError(t, err)

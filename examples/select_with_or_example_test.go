@@ -37,8 +37,8 @@ func Example_select_with_or() {
 	}
 	doc := decad.New()
 	axis := decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}}
-	ring, err := decad.Revolve(context.Background(), doc, s, s.Profiles()[0], axis,
-		decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
+	ring, err := decad.Revolve(doc, s, s.Profiles()[0], axis,
+		decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to revolve: %s\n", err)
 		return

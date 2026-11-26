@@ -28,7 +28,7 @@ func crossDrilledBar(t *testing.T) (*decad.Document, *decad.Body) {
 	s.Fix(rect.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	box, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	box, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(20), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 
 	plane, err := w.CreateOffsetPlane(w.XZ(), -10)
@@ -40,7 +40,7 @@ func crossDrilledBar(t *testing.T) (*decad.Document, *decad.Body) {
 	ds.CreateCircle(c, 3)
 	_, err = ds.Solve(t.Context())
 	require.NoError(t, err)
-	drill, err := decad.Extrude(t.Context(), doc, ds, ds.Profiles()[0], decad.Symmetric{D: units.Millimeters(11)})
+	drill, err := decad.Extrude(doc, ds, ds.Profiles()[0], decad.Symmetric{D: units.Millimeters(11)}).Do(t.Context())
 	require.NoError(t, err)
 	bar, err := decad.Cut(box, drill).Do(t.Context())
 	require.NoError(t, err)

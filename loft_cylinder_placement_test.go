@@ -27,7 +27,7 @@ func loftCylinderPlacedTabPair(t *testing.T, lower, upper r3.Frame, opts ...Docu
 	s0, p0 := loftCylinderTabProfile(t, ctx, world, bottomPlane, 0)
 	s1, p1 := loftCylinderTabProfile(t, ctx, world, topPlane, 10*math.Pi/180)
 	doc := New(opts...)
-	tooth, err := Loft(ctx, doc, s0, p0, s1, p1)
+	tooth, err := Loft(doc, s0, p0, s1, p1).Do(ctx)
 	require.NoError(t, err)
 	s, err := world.CreateSketch(bottomPlane)
 	require.NoError(t, err)
@@ -37,7 +37,7 @@ func loftCylinderPlacedTabPair(t *testing.T, lower, upper r3.Frame, opts ...Docu
 	_, err = s.Solve(ctx)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(s.Profiles()))
-	blank, err := Extrude(ctx, doc, s, s.Profiles()[0], Distance{D: units.Millimeters(2), Dir: Along})
+	blank, err := Extrude(doc, s, s.Profiles()[0], Distance{D: units.Millimeters(2), Dir: Along}).Do(ctx)
 	require.NoError(t, err)
 	return doc, blank, tooth
 }
@@ -303,7 +303,7 @@ func TestLoftCylinderCommonPlacementConsumers(t *testing.T) {
 	_, err = s.Solve(ctx)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(s.Profiles()))
-	tool, err := Extrude(ctx, doc, s, s.Profiles()[0], Distance{D: units.Millimeters(4), Dir: Along})
+	tool, err := Extrude(doc, s, s.Profiles()[0], Distance{D: units.Millimeters(4), Dir: Along}).Do(ctx)
 	require.NoError(t, err)
 	localBore, admitted, err := tryLoftCylinderBoreCut(ctx, meshbool.OpCut, doc,
 		tool.originProducer(), localJoin, tool)
@@ -350,7 +350,7 @@ func TestLoftCylinderCommonPlacementDifferentLoftSourceFallsBack(t *testing.T) {
 	require.NoError(t, err)
 	s0, p0 := loftCylinderTabProfile(t, ctx, world, bottomPlane, 0)
 	s1, p1 := loftCylinderTabProfile(t, ctx, world, topPlane, 10*math.Pi/180)
-	other, err := Loft(ctx, doc, s0, p0, s1, p1)
+	other, err := Loft(doc, s0, p0, s1, p1).Do(ctx)
 	require.NoError(t, err)
 	firstSource := tooth.n.Payload.(loftPayload).SourceIdentity
 	otherSource := other.n.Payload.(loftPayload).SourceIdentity
@@ -415,8 +415,8 @@ func TestLoftCylinderCommonPlacementBoreEligibilityPrecedesRebuild(t *testing.T)
 		_, err = s.Solve(ctx)
 		require.NoError(t, err)
 		require.Equal(t, 1, len(s.Profiles()))
-		tool, err := Extrude(ctx, doc, s, s.Profiles()[0],
-			Distance{D: units.Millimeters(height), Dir: Along})
+		tool, err := Extrude(doc, s, s.Profiles()[0],
+			Distance{D: units.Millimeters(height), Dir: Along}).Do(ctx)
 		require.NoError(t, err)
 		tool, err = Transform(ctx, tool, move)
 		require.NoError(t, err)
@@ -487,7 +487,7 @@ func TestLoftCylinderCommonPlacementNativeYZConsumers(t *testing.T) {
 	_, err = s.Solve(ctx)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(s.Profiles()))
-	tool, err := Extrude(ctx, doc, s, s.Profiles()[0], Distance{D: units.Millimeters(4), Dir: Along})
+	tool, err := Extrude(doc, s, s.Profiles()[0], Distance{D: units.Millimeters(4), Dir: Along}).Do(ctx)
 	require.NoError(t, err)
 	bored, err := Cut(joined, tool).Do(ctx)
 	require.NoError(t, err)

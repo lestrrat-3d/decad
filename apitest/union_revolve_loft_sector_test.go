@@ -146,8 +146,8 @@ func TestUnionSixSpanHubSerialRadialLugs(t *testing.T) {
 	require.NoError(t, err)
 	profiles := section.Profiles()
 	require.Len(t, profiles, 1)
-	hub, err := decad.Revolve(t.Context(), doc, section, profiles[0],
-		decad.SketchLine{Start: decad.Point2{}, End: decad.Point2{U: 1}}, decad.FullRevolution{})
+	hub, err := decad.Revolve(doc, section, profiles[0],
+		decad.SketchLine{Start: decad.Point2{}, End: decad.Point2{U: 1}}, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	hubVolume, err := hub.Volume()
 	require.NoError(t, err)
@@ -308,8 +308,8 @@ func shoulderedHubAndRadialLug(t *testing.T) (*decad.Document, *decad.Body, *dec
 	require.NoError(t, err)
 	profiles := section.Profiles()
 	require.Len(t, profiles, 1)
-	hub, err := decad.Revolve(t.Context(), doc, section, profiles[0],
-		decad.SketchLine{Start: decad.Point2{}, End: decad.Point2{U: 1}}, decad.FullRevolution{})
+	hub, err := decad.Revolve(doc, section, profiles[0],
+		decad.SketchLine{Start: decad.Point2{}, End: decad.Point2{U: 1}}, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	require.Greater(t, len(hub.Faces()), 5, "the shoulder must add an effective meridian side")
 	return doc, hub, trimmed
@@ -370,8 +370,8 @@ func taperedHubAndRadialLugWidth(t testing.TB, splitU, toeApex, rootRadius, half
 	require.NoError(t, err)
 	profiles := section.Profiles()
 	require.Len(t, profiles, 1)
-	hub, err := decad.Revolve(t.Context(), doc, section, profiles[0],
-		decad.SketchLine{Start: decad.Point2{}, End: decad.Point2{U: 1}}, decad.FullRevolution{})
+	hub, err := decad.Revolve(doc, section, profiles[0],
+		decad.SketchLine{Start: decad.Point2{}, End: decad.Point2{U: 1}}, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	var splitCap []decad.FeatureRef
 	for _, face := range hub.Faces() {
@@ -427,7 +427,7 @@ func taperedHubAndRadialLugWidth(t testing.TB, splitU, toeApex, rootRadius, half
 	require.NoError(t, err)
 	lugProfiles := lugSketch.Profiles()
 	require.Len(t, lugProfiles, 1)
-	lug, err := decad.LoftFromPoint(t.Context(), doc, r3.Vec{}, lugSketch, lugProfiles[0])
+	lug, err := decad.LoftFromPoint(doc, r3.Vec{}, lugSketch, lugProfiles[0]).Do(t.Context())
 	require.NoError(t, err)
 	toeTrim, err := decad.Cut(lug, pointConeTool(t, doc, toeApex)).Do(t.Context())
 	require.NoError(t, err)

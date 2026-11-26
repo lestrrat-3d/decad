@@ -120,7 +120,7 @@ func pieBody(t *testing.T, doc *decad.Document, endV float64) *decad.Body {
 	s.CreateLine(end, o)
 	profiles := s.Profiles()
 	require.Len(t, profiles, 1)
-	body, err := decad.Extrude(t.Context(), doc, s, profiles[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, profiles[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, "decad.prismPayload", decadtest.PayloadClass(body))
 	return body
@@ -179,7 +179,7 @@ func TestPointLocationDenotedLevel(t *testing.T) {
 			_, err = s.Solve(t.Context())
 			require.NoError(t, err)
 			require.Len(t, s.Profiles(), 1)
-			body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: tc.depth, Dir: decad.Along})
+			body, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: tc.depth, Dir: decad.Along}).Do(t.Context())
 			require.NoError(t, err)
 			requireLocations(t, body, []locateCase{
 				{"below", r3.NewVec(.5, .5, math.Nextafter(5.08, 0)), decad.PointInside},
@@ -230,7 +230,7 @@ func TestPointLocationDenotedExtentModes(t *testing.T) {
 			s.Fix(r.A)
 			_, err = s.Solve(t.Context())
 			require.NoError(t, err)
-			body, err := decad.Extrude(t.Context(), decad.New(), s, s.Profiles()[0], tc.extent)
+			body, err := decad.Extrude(decad.New(), s, s.Profiles()[0], tc.extent).Do(t.Context())
 			require.NoError(t, err)
 			requireLocations(t, body, []locateCase{
 				{"interior", r3.NewVec(.5, .5, math.Nextafter(0, -1)), decad.PointInside},

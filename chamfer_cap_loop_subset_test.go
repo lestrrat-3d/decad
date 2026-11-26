@@ -34,7 +34,7 @@ func capLoopSubsetBody(t *testing.T, draw func(s *sketch.Sketch)) *decad.Body {
 		}
 	}
 	require.NotNil(t, pr)
-	body, err := decad.Extrude(ctx, decad.New(), s, pr, decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	body, err := decad.Extrude(decad.New(), s, pr, decad.Distance{D: units.Millimeters(5), Dir: decad.Along}).Do(ctx)
 	require.NoError(t, err)
 	return body
 }
@@ -771,7 +771,7 @@ func TestChamferCapLoopSubsetEnds(t *testing.T) {
 			}
 		}
 		require.NotNil(t, pr)
-		body, err := decad.Extrude(ctx, decad.New(), s, pr, decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+		body, err := decad.Extrude(decad.New(), s, pr, decad.Distance{D: units.Millimeters(5), Dir: decad.Along}).Do(ctx)
 		require.NoError(t, err)
 		out, err := chamfer(t, body, topEdges(topEdge{r3.Vec{X: 10, Y: 5}, r3.Vec{X: 1}}, topEdge{r3.Vec{X: 20, Y: 5}, r3.Vec{Y: 1}}))
 		require.NoError(t, err)

@@ -37,7 +37,7 @@ func ribPart(tb testing.TB) (*decad.Document, *decad.Body) {
 	s.Fix(r.A)
 	_, err = s.Solve(ctx)
 	require.NoError(tb, err)
-	pocket, err := decad.Extrude(ctx, doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(15), Dir: decad.Along})
+	pocket, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(15), Dir: decad.Along}).Do(ctx)
 	require.NoError(tb, err)
 	part, err := decad.Cut(block, pocket).Do(ctx)
 	require.NoError(tb, err)
@@ -72,8 +72,8 @@ func TestRibAcrossPocket(t *testing.T) {
 	doc, part := ribPart(t)
 	s, lines := ribSketch(t, [4]float64{3, 20, 37, 20})
 	operationCount := len(doc.OperationHistory().Operations())
-	out, err := decad.WebPath(t.Context(), part, s, lines, units.Millimeters(2),
-		decad.Distance{D: units.Millimeters(11), Dir: decad.Along})
+	out, err := decad.WebPath(part, s, lines, units.Millimeters(2),
+		decad.Distance{D: units.Millimeters(11), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, []*decad.Body{out}, doc.Bodies(), "the part and the rib tool leave the document")
 	operations := doc.OperationHistory().Operations()
@@ -92,8 +92,8 @@ func TestWebCrossesRibs(t *testing.T) {
 	doc, part := ribPart(t)
 	s, lines := ribSketch(t, [4]float64{3, 20, 37, 20}, [4]float64{20, 3, 20, 37})
 	operationCount := len(doc.OperationHistory().Operations())
-	out, err := decad.WebPath(t.Context(), part, s, lines, units.Millimeters(2),
-		decad.ThroughAll{Dir: decad.Along})
+	out, err := decad.WebPath(part, s, lines, units.Millimeters(2),
+		decad.ThroughAll{Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, doc.Bodies(), 1)
 	operations := doc.OperationHistory().Operations()
@@ -117,8 +117,8 @@ func TestRibOverrunBuriesTheEnds(t *testing.T) {
 	// The line stops exactly at the pocket walls, so the rib's end faces lie in
 	// the wall faces; an overrun of 1 mm buries them.
 	s, lines := ribSketch(t, [4]float64{5, 20, 35, 20})
-	out, err := decad.WebPath(t.Context(), part, s, lines, units.Millimeters(2),
-		decad.Distance{D: units.Millimeters(11), Dir: decad.Along}, decad.WithRibOverrun(units.Millimeters(1)))
+	out, err := decad.WebPath(part, s, lines, units.Millimeters(2),
+		decad.Distance{D: units.Millimeters(11), Dir: decad.Along}).Overrun(units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	decadtest.MeasuresVolume(t, out, units.CubicMillimeters(ribPartVolume+30*2*10))
 }
@@ -132,13 +132,13 @@ func TestRibRefusals(t *testing.T) {
 		name string
 		seg  [4]float64
 		th   units.Value
-		opts []decad.RibOption
+		over *units.Value
 		want error
 		text string
 	}{
 		{"zero thickness", good, units.Millimeters(0), nil, decad.ErrDegenerate, ""},
 		{"thickness of the wrong kind", good, units.Degrees(2), nil, decad.ErrUnitKind, ""},
-		{"negative overrun", good, thick, []decad.RibOption{decad.WithRibOverrun(units.Millimeters(-1))}, decad.ErrNegativeMagnitude, ""},
+		{"negative overrun", good, thick, new(units.Millimeters(-1)), decad.ErrNegativeMagnitude, ""},
 		{"line without length", [4]float64{20, 20, 20, 20}, thick, nil, decad.ErrDegenerate, ""},
 		{"rib beside the body", [4]float64{60, 20, 80, 20}, thick, nil, decad.ErrDegenerate, "would not attach"},
 		{"rib inside the material", [4]float64{1, 20, 4, 20}, thick, nil, decad.ErrDegenerate, "adds no material"},
@@ -148,7 +148,11 @@ func TestRibRefusals(t *testing.T) {
 			t.Parallel()
 			doc, part := ribPart(t)
 			s, lines := ribSketch(t, tc.seg)
-			_, err := decad.WebPath(t.Context(), part, s, lines, tc.th, e, tc.opts...)
+			cmd := decad.WebPath(part, s, lines, tc.th, e)
+			if tc.over != nil {
+				cmd.Overrun(*tc.over)
+			}
+			_, err := cmd.Do(t.Context())
 			require.ErrorIs(t, err, tc.want)
 			require.ErrorContains(t, err, tc.text)
 			require.Equal(t, []*decad.Body{part}, doc.Bodies(), "a refused rib leaves the part live and alone")
@@ -161,9 +165,9 @@ func TestRibRefusesForeignLine(t *testing.T) {
 	doc, part := ribPart(t)
 	s, _ := ribSketch(t, [4]float64{3, 20, 37, 20})
 	_, other := ribSketch(t, [4]float64{3, 10, 37, 10})
-	_, err := decad.WebPath(t.Context(), part, s, other, units.Millimeters(2), decad.Distance{D: units.Millimeters(11), Dir: decad.Along})
+	_, err := decad.WebPath(part, s, other, units.Millimeters(2), decad.Distance{D: units.Millimeters(11), Dir: decad.Along}).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrDegenerate)
-	_, err = decad.WebPath(t.Context(), part, s, nil, units.Millimeters(2), decad.Distance{D: units.Millimeters(11), Dir: decad.Along})
+	_, err = decad.WebPath(part, s, nil, units.Millimeters(2), decad.Distance{D: units.Millimeters(11), Dir: decad.Along}).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 	require.Equal(t, []*decad.Body{part}, doc.Bodies())
 }

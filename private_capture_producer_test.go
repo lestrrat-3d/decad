@@ -21,7 +21,7 @@ func privateCaptureBox(t *testing.T, ctx context.Context, d *Document, x0, size,
 	s.Fix(rect.A)
 	_, err = s.Solve(ctx)
 	require.NoError(t, err)
-	b, err := Extrude(ctx, d, s, s.Profiles()[0], Distance{D: units.Millimeters(height), Dir: Along})
+	b, err := Extrude(d, s, s.Profiles()[0], Distance{D: units.Millimeters(height), Dir: Along}).Do(ctx)
 	require.NoError(t, err)
 	return b
 }

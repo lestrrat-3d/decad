@@ -159,7 +159,7 @@ func drawRing(r, hole float64) func(*sketch.Sketch) {
 
 func taperExtrude(t *testing.T, doc *decad.Document, s *sketch.Sketch, p *sketch.Profile, h, deg float64, dir decad.Direction) *decad.Body {
 	t.Helper()
-	b, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(h), Dir: dir}, decad.WithTaper(units.Degrees(deg)))
+	b, err := decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(h), Dir: dir}).Taper(units.Degrees(deg)).Do(t.Context())
 	require.NoError(t, err)
 	return b
 }
@@ -209,11 +209,11 @@ func TestTaperStopExtents(t *testing.T) {
 			t.Parallel()
 			doc := decad.New()
 			stopSketch, stopProfile := taperSketch(t, r3.NewVec(0, 0, tc.stopZ), 0, drawSquare(0, 60))
-			stop, err := decad.Extrude(t.Context(), doc, stopSketch, stopProfile,
-				decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+			stop, err := decad.Extrude(doc, stopSketch, stopProfile,
+				decad.Distance{D: units.Millimeters(5), Dir: decad.Along}).Do(t.Context())
 			require.NoError(t, err)
 			s, p := taperSketch(t, r3.NewVec(0, 0, 0), 0, drawSquare(0, boxSide))
-			body, err := decad.Extrude(t.Context(), doc, s, p, tc.extent(stop), decad.WithTaper(units.Degrees(5)))
+			body, err := decad.Extrude(doc, s, p, tc.extent(stop)).Taper(units.Degrees(5)).Do(t.Context())
 			require.NoError(t, err)
 			requireManifold(t, body)
 			height := math.Abs(tc.farZ)
@@ -243,8 +243,8 @@ func TestTaperToFaceOffsetBound(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	stopSketch, stopProfile := taperSketch(t, r3.NewVec(0, 0, 30), 0, drawSquare(0, 60))
-	stop, err := decad.Extrude(t.Context(), doc, stopSketch, stopProfile,
-		decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	stop, err := decad.Extrude(doc, stopSketch, stopProfile,
+		decad.Distance{D: units.Millimeters(5), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	s, p := taperSketch(t, r3.NewVec(0, 0, 0), 0, drawSquare(0, boxSide))
 	end := decad.ToFace{
@@ -252,7 +252,7 @@ func TestTaperToFaceOffsetBound(t *testing.T) {
 		Face:   decad.Faces(decad.FaceCreatedBy(decad.CapStart(stop))),
 		Offset: units.Inches(0.1),
 	}
-	body, err := decad.Extrude(t.Context(), doc, s, p, end, decad.WithTaper(units.Degrees(5)))
+	body, err := decad.Extrude(doc, s, p, end).Taper(units.Degrees(5)).Do(t.Context())
 	require.NoError(t, err)
 	h := bfAdd(bf(30), bfMul(bf(0.1), bf(units.Inch.Factor())))
 	d := bfMul(h, taperTan(5))
@@ -287,7 +287,7 @@ func TestTaperTwoSidedBuild(t *testing.T) {
 			t.Parallel()
 			s, p := taperSketch(t, r3.NewVec(0, 0, 0), 0, drawSquare(0, boxSide))
 			doc := decad.New()
-			body, err := decad.Extrude(t.Context(), doc, s, p, tc.extent, decad.WithTaper(units.Degrees(5)))
+			body, err := decad.Extrude(doc, s, p, tc.extent).Taper(units.Degrees(5)).Do(t.Context())
 			require.NoError(t, err)
 			requireManifold(t, body)
 			require.Len(t, body.Faces(), 10)
@@ -338,10 +338,10 @@ func TestTaperTwoSidedCurvedMesh(t *testing.T) {
 			t.Parallel()
 			doc := decad.New()
 			s, p := taperSketch(t, r3.NewVec(0, 0, 0), 0, drawSlot(0, 0))
-			body, err := decad.Extrude(t.Context(), doc, s, p, decad.TwoSided{
+			body, err := decad.Extrude(doc, s, p, decad.TwoSided{
 				One: decad.DistanceSide{D: units.Millimeters(6)},
 				Two: decad.DistanceSide{D: units.Millimeters(4)},
-			}, decad.WithTaper(units.Degrees(degrees)))
+			}).Taper(units.Degrees(degrees)).Do(t.Context())
 			require.NoError(t, err)
 			requireManifold(t, body)
 			mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.05))
@@ -364,10 +364,10 @@ func TestTaperTwoSidedCut(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	s, p := taperSketch(t, r3.NewVec(0, 0, 0), 0, drawSquare(0, boxSide))
-	drafted, err := decad.Extrude(t.Context(), doc, s, p, decad.TwoSided{
+	drafted, err := decad.Extrude(doc, s, p, decad.TwoSided{
 		One: decad.DistanceSide{D: units.Millimeters(6)},
 		Two: decad.DistanceSide{D: units.Millimeters(4)},
-	}, decad.WithTaper(units.Degrees(5)))
+	}).Taper(units.Degrees(5)).Do(t.Context())
 	require.NoError(t, err)
 	post := boxBodyAtZ(t, doc, -2, -2, 2, 2, -5, 20)
 	cut, err := decad.Cut(drafted, post).Do(t.Context())
@@ -385,16 +385,16 @@ func TestTaperTwoSidedToFaces(t *testing.T) {
 	doc := decad.New()
 	stopBody := func(z float64) *decad.Body {
 		s, p := taperSketch(t, r3.NewVec(0, 0, z), 0, drawSquare(0, 60))
-		body, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+		body, err := decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(5), Dir: decad.Along}).Do(t.Context())
 		require.NoError(t, err)
 		return body
 	}
 	top, bottom := stopBody(6), stopBody(-9)
 	s, p := taperSketch(t, r3.NewVec(0, 0, 0), 0, drawSquare(0, boxSide))
-	body, err := decad.Extrude(t.Context(), doc, s, p, decad.TwoSided{
+	body, err := decad.Extrude(doc, s, p, decad.TwoSided{
 		One: decad.ToFace{Body: top, Face: decad.Faces(decad.FaceCreatedBy(decad.CapStart(top)))},
 		Two: decad.ToFace{Body: bottom, Face: decad.Faces(decad.FaceCreatedBy(decad.CapEnd(bottom)))},
-	}, decad.WithTaper(units.Degrees(5)))
+	}).Taper(units.Degrees(5)).Do(t.Context())
 	require.NoError(t, err)
 	requireManifold(t, body)
 	want := bfAdd(
@@ -981,13 +981,13 @@ func TestTaperRefusals(t *testing.T) {
 		holes int
 		draw  func(*sketch.Sketch)
 		e     decad.Extent
-		opts  []decad.ExtrudeOption
+		apply func(*decad.ExtrudeCommand)
 		want  error
 	}{
 		{"SD2 right angle", 0, drawSquare(0, 20), decad.Distance{D: units.Millimeters(10), Dir: decad.Along},
-			[]decad.ExtrudeOption{decad.WithTaper(units.Degrees(90))}, decad.ErrDegenerate},
+			func(c *decad.ExtrudeCommand) { c.Taper(units.Degrees(90)) }, decad.ErrDegenerate},
 		{"SD2 past a right angle", 0, drawSquare(0, 20), decad.Distance{D: units.Millimeters(10), Dir: decad.Along},
-			[]decad.ExtrudeOption{decad.WithTaper(units.Degrees(-120))}, decad.ErrDegenerate},
+			func(c *decad.ExtrudeCommand) { c.Taper(units.Degrees(-120)) }, decad.ErrDegenerate},
 		{"SD3 spline wall", 0, func(s *sketch.Sketch) {
 			p0, p1 := s.CreatePoint(0, 0), s.CreatePoint(20, 0)
 			s.Fix(p0)
@@ -997,7 +997,7 @@ func TestTaperRefusals(t *testing.T) {
 				panic(err)
 			}
 		}, decad.Distance{D: units.Millimeters(10), Dir: decad.Along},
-			[]decad.ExtrudeOption{decad.WithTaper(units.Degrees(5))}, decad.ErrUnsupported},
+			func(c *decad.ExtrudeCommand) { c.Taper(units.Degrees(5)) }, decad.ErrUnsupported},
 		{"SD4 bite meeting its lines at right angles", 0, func(s *sketch.Sketch) {
 			pts := []*sketch.Point{s.CreatePoint(0, 0), s.CreatePoint(40, 0), s.CreatePoint(40, 20), s.CreatePoint(25, 20), s.CreatePoint(15, 20), s.CreatePoint(0, 20)}
 			for _, p := range pts {
@@ -1010,16 +1010,16 @@ func TestTaperRefusals(t *testing.T) {
 			s.CreateLine(pts[4], pts[5])
 			s.CreateLine(pts[5], pts[0])
 		}, decad.Distance{D: units.Millimeters(10), Dir: decad.Along},
-			[]decad.ExtrudeOption{decad.WithTaper(units.Degrees(5))}, decad.ErrUnsupported},
+			func(c *decad.ExtrudeCommand) { c.Taper(units.Degrees(5)) }, decad.ErrUnsupported},
 		{"SD5 cone apex inside the sweep", 0, drawDisk(5), decad.Distance{D: units.Millimeters(10), Dir: decad.Along},
-			[]decad.ExtrudeOption{decad.WithTaper(units.Degrees(30))}, decad.ErrUnsupported},
+			func(c *decad.ExtrudeCommand) { c.Taper(units.Degrees(30)) }, decad.ErrUnsupported},
 		{"SD6 square consumed", 0, drawSquare(0, 20), decad.Distance{D: units.Millimeters(10), Dir: decad.Along},
-			[]decad.ExtrudeOption{decad.WithTaper(units.Degrees(50))}, decad.ErrDegenerate},
+			func(c *decad.ExtrudeCommand) { c.Taper(units.Degrees(50)) }, decad.ErrDegenerate},
 		{"SD7 short walls consumed", 0, func(s *sketch.Sketch) {
 			r := s.CreateRectangle(0, 0, 40, 4)
 			s.Fix(r.A)
 		}, decad.Distance{D: units.Millimeters(10), Dir: decad.Along},
-			[]decad.ExtrudeOption{decad.WithTaper(units.Degrees(15))}, decad.ErrUnsupported},
+			func(c *decad.ExtrudeCommand) { c.Taper(units.Degrees(15)) }, decad.ErrUnsupported},
 		{"SD8 widened hole crossing the outer wall", 1, func(s *sketch.Sketch) {
 			r := s.CreateRectangle(-20, -20, 20, 20)
 			s.Fix(r.A)
@@ -1027,23 +1027,25 @@ func TestTaperRefusals(t *testing.T) {
 			s.CreateCircle(c, 4)
 			s.Fix(c)
 		}, decad.Distance{D: units.Millimeters(10), Dir: decad.Along},
-			[]decad.ExtrudeOption{decad.WithTaper(units.Degrees(9))}, decad.ErrUnsupported},
+			func(c *decad.ExtrudeCommand) { c.Taper(units.Degrees(9)) }, decad.ErrUnsupported},
 		// F7 with d closing the ring: the two concentric circles never cross,
 		// so the far hole ends outside the far outer loop and the audit's
 		// decided nesting row reads the region consumed.
 		{"F7 ring closed", 1, drawRing(10, 4), decad.Distance{D: units.Millimeters(10), Dir: decad.Along},
-			[]decad.ExtrudeOption{decad.WithTaper(units.Degrees(18))}, decad.ErrDegenerate},
+			func(c *decad.ExtrudeCommand) { c.Taper(units.Degrees(18)) }, decad.ErrDegenerate},
 		{"SD12 surface result", 0, drawSquare(0, 20), decad.Distance{D: units.Millimeters(10), Dir: decad.Along},
-			[]decad.ExtrudeOption{decad.WithTaper(units.Degrees(5)), decad.WithSurfaceResult()}, decad.ErrUnsupported},
+			func(c *decad.ExtrudeCommand) { c.Taper(units.Degrees(5)).SurfaceResult() }, decad.ErrUnsupported},
 		{"SD13 amount rounds away", 0, drawSquare(0, 20), decad.Distance{D: units.Millimeters(1), Dir: decad.Along},
-			[]decad.ExtrudeOption{decad.WithTaper(units.Degrees(1e-14))}, decad.ErrUnsupported},
+			func(c *decad.ExtrudeCommand) { c.Taper(units.Degrees(1e-14)) }, decad.ErrUnsupported},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			s, p := taperSketch(t, origin, tc.holes, tc.draw)
 			doc := decad.New()
-			_, err := decad.Extrude(t.Context(), doc, s, p, tc.e, tc.opts...)
+			cmd := decad.Extrude(doc, s, p, tc.e)
+			tc.apply(cmd)
+			_, err := cmd.Do(t.Context())
 			require.ErrorIs(t, err, tc.want)
 			require.Empty(t, doc.Bodies())
 		})

@@ -147,7 +147,7 @@ func gapLoft(t *testing.T, doc *decad.Document, r, gap, half, height float64) *d
 	}
 	s0, p0 := section(w.XY())
 	s1, p1 := section(splitTopPlane(t, w, height))
-	b, err := decad.Loft(t.Context(), doc, s0, p0, s1, p1)
+	b, err := decad.Loft(doc, s0, p0, s1, p1).Do(t.Context())
 	require.NoError(t, err)
 	return b
 }

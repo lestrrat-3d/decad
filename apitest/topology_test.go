@@ -14,7 +14,7 @@ import (
 func coedgeBox(t *testing.T) *decad.Body {
 	t.Helper()
 	s, p := plateSketch(t)
-	body, err := decad.Extrude(t.Context(), decad.New(), s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	body, err := decad.Extrude(decad.New(), s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -139,7 +139,7 @@ func requireSolidTopologyBaseline(t *testing.T, body *decad.Body, wantFaces, wan
 // extrude and a full-revolution annulus. None of today's builders produces a
 // free edge or an open shell, so every one of these reads false — the
 // negative space Table K and §2.2 both require before a later PR's
-// WithSurfaceResult can ever make it read true.
+// SurfaceResult can ever make it read true.
 func TestSolidBodiesReportSolidKindAndNoFreeBoundary(t *testing.T) {
 	t.Parallel()
 
@@ -267,8 +267,8 @@ func TestEdgeFacesAreTheBodyFaces(t *testing.T) {
 	}
 
 	s, p := plateSketch(t)
-	sheet, err := decad.Extrude(t.Context(), decad.New(), s, p,
-		decad.Distance{D: units.Millimeters(10), Dir: decad.Along}, decad.WithSurfaceResult())
+	sheet, err := decad.Extrude(decad.New(), s, p,
+		decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).SurfaceResult().Do(t.Context())
 	require.NoError(t, err)
 	sheetFaces := sheet.Faces()
 	require.Len(t, sheetFaces, 4)

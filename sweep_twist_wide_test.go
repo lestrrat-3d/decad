@@ -23,7 +23,7 @@ func wideRectTwist(t *testing.T, w, th, length, deg float64) (*Body, error) {
 	require.NoError(t, err)
 	path, err := NewPath(r3.Vec{}, LineTo{End: r3.NewVec(0, 0, length)})
 	require.NoError(t, err)
-	return Sweep(t.Context(), New(), s, s.Profiles()[0], path, WithSweepTwist(units.Degrees(deg)))
+	return Sweep(New(), s, s.Profiles()[0], path).Twist(units.Degrees(deg)).Do(t.Context())
 }
 
 func TestTwistWideThinRectangleAngles(t *testing.T) {

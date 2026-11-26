@@ -57,7 +57,7 @@ func TestLoftBoreTwistedSections(t *testing.T) {
 	w := sketch.NewWorld()
 	sk0, p0, _ := squareSection(t, w, w.XY(), 10, 0, 0)
 	sk1, p1, _ := squareSection(t, w, splitTopPlane(t, w, height), 7, -30*math.Pi/180, 0)
-	square, err := decad.Loft(t.Context(), decad.New(), sk0, p0, sk1, p1)
+	square, err := decad.Loft(decad.New(), sk0, p0, sk1, p1).Do(t.Context())
 	require.NoError(t, err)
 	requireBoredLoft(t, square, height, 1, "square")
 }

@@ -35,8 +35,8 @@ func shaftTool(t *testing.T, sc *retentionScene, plane *sketch.Plane, u0, v0, u1
 	s.Fix(r.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	box, err := decad.Extrude(t.Context(), sc.doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	box, err := decad.Extrude(sc.doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(20), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return box
 }
@@ -159,7 +159,7 @@ func TestRevolvedShaftClassBCut(t *testing.T) {
 		_, err = s.Solve(t.Context())
 		require.NoError(t, err)
 		vAxis := decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 0, V: 1}}
-		shaft, err := decad.Revolve(t.Context(), sc.doc, s, s.Profiles()[0], vAxis, decad.FullRevolution{})
+		shaft, err := decad.Revolve(sc.doc, s, s.Profiles()[0], vAxis, decad.FullRevolution{}).Do(t.Context())
 		require.NoError(t, err)
 		plane, err := sc.w.CreateOffsetPlane(sc.w.YZ(), flatZ)
 		require.NoError(t, err)
@@ -268,7 +268,7 @@ func TestRevolvedShaftClassBMisses(t *testing.T) {
 		t.Parallel()
 		s, profile := polygonSketch(t, [][2]float64{{0, 4}, {40, 4}, {40, 10}, {0, 10}})
 		sc := newRetentionScene()
-		tube, err := decad.Revolve(t.Context(), sc.doc, s, profile, uAxis, decad.FullRevolution{})
+		tube, err := decad.Revolve(sc.doc, s, profile, uAxis, decad.FullRevolution{}).Do(t.Context())
 		require.NoError(t, err)
 		got, err := decad.Cut(tube, shaftTool(t, sc, flatPlane(t, sc), -5, -20, shaftL+5, 20)).Do(t.Context())
 		requireShaftMeshPath(t, got, err)

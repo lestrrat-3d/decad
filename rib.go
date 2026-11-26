@@ -6,6 +6,7 @@ import (
 	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/opcommand"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/ribplan"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
@@ -13,34 +14,6 @@ import (
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 )
-
-// RibOption configures WebPath. WithRibOverrun and WithRibDraft make one.
-type RibOption interface{ ribOption() }
-
-type ribOverrunOption struct{ overrun units.Value }
-
-func (ribOverrunOption) ribOption() {}
-
-type ribDraftOption struct{ angle units.Value }
-
-func (ribDraftOption) ribOption() {}
-
-// WithRibDraft leans the rib's walls by a draft angle
-// (agent-docs/rib-design.md §7). A positive angle makes the rib thinner as it
-// rises from the plane of the sketch, the way a moulded or cast rib releases
-// from its tool, and a negative one thicker. The angle is [WithTaper]'s, so the
-// lean is measured from the sketch plane, the ends lean too, and a draft at or
-// past a right angle is ErrDegenerate. The last occurrence wins and the default
-// is a straight wall. A rib whose outline has a corner that an arc meets, such
-// as an arc rib of [WebPath], takes the refusals of the drafted [Extrude] it builds.
-func WithRibDraft(angle units.Value) RibOption { return ribDraftOption{angle: angle} }
-
-// WithRibOverrun lengthens every rib by overrun beyond both ends of its line or
-// arc, measured along the arc for an arc rib. A rib whose ends only touch a wall of the body is a coplanar contact that
-// the union refuses, so a rib that spans a cavity draws its line wall to wall
-// and adds an overrun to bury both ends in the walls. overrun is a
-// non-negative length, and the last occurrence wins. The default is zero.
-func WithRibOverrun(overrun units.Value) RibOption { return ribOverrunOption{overrun: overrun} }
 
 // ribTolerance is the slack, in millimetres, within which WebPath treats a tool
 // and the body as touching when it compares their bounding boxes.
@@ -54,12 +27,9 @@ type ribSetup struct {
 }
 
 // newRibSetup runs the gates WebPath applies before it reads its path: a
-// context, a live solid body, a sketch, a thickness and an overrun.
-func newRibSetup(ctx context.Context, b *Body, s *sketch.Sketch, thickness units.Value, opts []RibOption) (ribSetup, error) {
+// live solid body, a sketch, a thickness and an overrun.
+func newRibSetup(b *Body, s *sketch.Sketch, thickness units.Value, set webSettings) (ribSetup, error) {
 	var rs ribSetup
-	if ctx == nil {
-		return rs, fmt.Errorf(`%w: a nil context cannot control a rib`, ErrDegenerate)
-	}
 	if b == nil || b.n.Doc == nil {
 		return rs, fmt.Errorf(`%w: the body belongs to no document`, ErrDegenerate)
 	}
@@ -77,9 +47,10 @@ func newRibSetup(ctx context.Context, b *Body, s *sketch.Sketch, thickness units
 	if rs.thick, err = sectionrecord.MagnitudeIn(thickness, units.Length, units.Millimeter, "the rib thickness"); err != nil {
 		return rs, err
 	}
-	if rs.overrun, err = ribOverrun(opts); err != nil {
-		return rs, err
+	if set.overrunErr != nil {
+		return rs, subjectError(OperationWeb, "Overrun", set.overrunErr)
 	}
+	rs.overrun = set.overrun
 	if rs.frame, err = s.Plane().Frame(); err != nil {
 		return rs, fmt.Errorf(`%w: the sketch plane has no frame: %s`, ErrDegenerate, err)
 	}
@@ -115,17 +86,87 @@ func newRibSetup(ctx context.Context, b *Body, s *sketch.Sketch, thickness units
 // whose bounding box is disjoint from b's, and ribs that Union certifies add no
 // volume to b, are ErrDegenerate. A union the evaluator cannot decide is the
 // union's own error. Every failure leaves the document unchanged and b live.
-func WebPath(ctx context.Context, b *Body, s *sketch.Sketch, path []sketch.Entity, thickness units.Value, e Extent,
-	opts ...RibOption) (result *Body, retErr error) {
-	defer func() { retErr = operationError(OperationWeb, retErr) }()
-	return webEntities(ctx, b, s, path, thickness, e, opts...)
+func WebPath(b *Body, s *sketch.Sketch, path []sketch.Entity, thickness units.Value, e Extent) *WebPathCommand {
+	c := &WebPathCommand{b: b, s: s, path: slices.Clone(path), thickness: thickness, e: copyExtent(e)}
+	if b == nil {
+		c.state.Record("body", errNilBody)
+	}
+	return c
+}
+
+// WebPathCommand adds a rib along each entity of a path. Build it with
+// [WebPath].
+type WebPathCommand struct {
+	state     opcommand.State             // consumed flag and first recorded fault
+	b         *Body                       // stored as given
+	s         *sketch.Sketch              // stored as given
+	path      []sketch.Entity             // copied at WebPath
+	thickness units.Value                 // gated at Do
+	e         Extent                      // copied at WebPath, with the selector of a ToFace stop
+	draft     opcommand.Slot[units.Value] // set by Draft
+	overrun   opcommand.Slot[float64]     // set by Overrun; millimetres
+}
+
+// Draft leans the rib's walls by a draft angle
+// (agent-docs/rib-design.md §7). A positive angle makes the rib thinner as it
+// rises from the plane of the sketch, the way a moulded or cast rib releases
+// from its tool, and a negative one thicker. The angle is
+// [ExtrudeCommand.Taper]'s, so the lean is measured from the sketch plane, the
+// ends lean too, and a draft at or past a right angle is ErrDegenerate. The
+// last call wins and the default is a straight wall. A rib whose outline has a
+// corner that an arc meets, such as an arc rib of [WebPath], takes the
+// refusals of the drafted [Extrude] it builds.
+func (c *WebPathCommand) Draft(angle units.Value) *WebPathCommand {
+	c.draft.Set(angle, nil)
+	return c
+}
+
+// Overrun lengthens every rib by overrun beyond both ends of its line or
+// arc, measured along the arc for an arc rib. A rib whose ends only touch a wall of the body is a coplanar contact that
+// the union refuses, so a rib that spans a cavity draws its line wall to wall
+// and adds an overrun to bury both ends in the walls. overrun is a
+// non-negative length, and the last call wins. The default is zero.
+func (c *WebPathCommand) Overrun(overrun units.Value) *WebPathCommand {
+	var mm float64
+	var err error
+	if overrun != (units.Value{}) {
+		mm, err = sectionrecord.MagnitudeIn(overrun, units.Length, units.Millimeter, "the rib overrun")
+	}
+	c.overrun.Set(mm, err)
+	return c
+}
+
+// Do adds the ribs and retires the body, or returns the error of the first
+// gate that refuses, leaving the body live and the document unchanged. A nil
+// ctx is ErrDegenerate, and a second call returns ErrConsumed.
+func (c *WebPathCommand) Do(ctx context.Context) (*Body, error) {
+	return runCommand(ctx, &c.state, OperationWeb, c.run)
+}
+
+func (c *WebPathCommand) run(ctx context.Context) (*Body, error) {
+	var set webSettings
+	if c.draft.IsSet() {
+		angle, _ := c.draft.Get()
+		set.taper = withTaper(angle, "Draft")
+	}
+	set.overrun, set.overrunErr = c.overrun.Get()
+	return webEntities(ctx, c.b, c.s, c.path, c.thickness, c.e, set)
+}
+
+// webSettings is what WebPath's implementation reads of its methods: the
+// overrun in millimetres with the error validating it, and the extrude
+// settings of the draft.
+type webSettings struct {
+	overrun    float64
+	overrunErr error
+	taper      extrudeSettings
 }
 
 // webEntities builds the outline of each entity, a line or an arc of s, and
 // joins the ribs to b.
 func webEntities(ctx context.Context, b *Body, s *sketch.Sketch, entities []sketch.Entity,
-	thickness units.Value, e Extent, opts ...RibOption) (*Body, error) {
-	rs, err := newRibSetup(ctx, b, s, thickness, opts)
+	thickness units.Value, e Extent, set webSettings) (*Body, error) {
+	rs, err := newRibSetup(b, s, thickness, set)
 	if err != nil {
 		return nil, err
 	}
@@ -161,7 +202,7 @@ func webEntities(ctx context.Context, b *Body, s *sketch.Sketch, entities []sket
 			return nil, fmt.Errorf(`%w: a rib follows a line or an arc, not a %T`, ErrDegenerate, entity)
 		}
 	}
-	return joinRibs(ctx, rs, b, s, outlines, e, ribDraft(opts))
+	return joinRibs(ctx, rs, b, s, outlines, e, set.taper)
 }
 
 // ribOutline is the footprint of one rib on the sketch plane: the four corners
@@ -171,21 +212,9 @@ type ribOutline struct {
 	band    *ribplan.Band
 }
 
-// ribDraft returns the extrude options that lean the rib's walls: WithTaper of
-// the last WithRibDraft, or none.
-func ribDraft(opts []RibOption) []ExtrudeOption {
-	var out []ExtrudeOption
-	for _, raw := range opts {
-		if o, ok := raw.(ribDraftOption); ok {
-			out = []ExtrudeOption{WithTaper(o.angle)}
-		}
-	}
-	return out
-}
-
 // joinRibs builds a tool for each outline and joins the tools to b.
 func joinRibs(ctx context.Context, rs ribSetup, b *Body, s *sketch.Sketch,
-	outlines []ribOutline, e Extent, taper []ExtrudeOption) (*Body, error) {
+	outlines []ribOutline, e Extent, taper extrudeSettings) (*Body, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -210,26 +239,8 @@ func joinRibs(ctx context.Context, rs ribSetup, b *Body, s *sketch.Sketch,
 	}, history, history.snapshot()...)
 }
 
-// ribOverrun reads the last WithRibOverrun in opts, in millimetres.
-func ribOverrun(opts []RibOption) (float64, error) {
-	var overrun units.Value
-	for _, raw := range opts {
-		switch o := raw.(type) {
-		case ribOverrunOption:
-			overrun = o.overrun
-		case ribDraftOption:
-		default:
-			return 0, fmt.Errorf(`%w: the rib option is not a decad rib option (%T)`, ErrDegenerate, raw)
-		}
-	}
-	if overrun == (units.Value{}) {
-		return 0, nil
-	}
-	return sectionrecord.MagnitudeIn(overrun, units.Length, units.Millimeter, "the rib overrun")
-}
-
 // ribTool extrudes one rib outline on the plane of frame.
-func ribTool(ctx context.Context, d *Document, frame r3.Frame, outline ribOutline, e Extent, taper []ExtrudeOption) (*Body, error) {
+func ribTool(ctx context.Context, d *Document, frame r3.Frame, outline ribOutline, e Extent, taper extrudeSettings) (*Body, error) {
 	w := sketch.NewWorld()
 	pl, err := w.CreatePlaneFromFrame(frame)
 	if err != nil {
@@ -269,7 +280,7 @@ func ribTool(ctx context.Context, d *Document, frame r3.Frame, outline ribOutlin
 	if _, err := rs.Solve(ctx); err != nil {
 		return nil, err
 	}
-	return Extrude(ctx, d, rs, rs.Profiles()[0], e, taper...)
+	return extrudeTool(ctx, d, rs, rs.Profiles()[0], e, taper)
 }
 
 // requireRibTouches refuses a rib whose bounding box certifiably misses b's.

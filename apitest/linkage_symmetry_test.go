@@ -104,7 +104,7 @@ func TestVerifyLinkageSymmetricBody(t *testing.T) {
 		s.CreateLine(top, o)
 		_, err = s.Solve(t.Context())
 		require.NoError(t, err)
-		cone, err := decad.Revolve(t.Context(), doc, s, s.Profiles()[0], uAxis, decad.FullRevolution{})
+		cone, err := decad.Revolve(doc, s, s.Profiles()[0], uAxis, decad.FullRevolution{}).Do(t.Context())
 		require.NoError(t, err)
 		boxBodyAtZ(t, doc, -20, 15, 30, 25, -30, 60)
 		l := decad.NewLinkage()

@@ -314,7 +314,7 @@ func annularRevolveBody(t *testing.T) *decad.Body {
 	t.Helper()
 	s, p := annularSketch(t)
 	doc := decad.New()
-	body, err := decad.Revolve(t.Context(), doc, s, p, uAxis, decad.FullRevolution{})
+	body, err := decad.Revolve(doc, s, p, uAxis, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -594,7 +594,7 @@ func TestSelectorProvenanceSurvivesFaceMerge(t *testing.T) {
 	require.NoError(t, err)
 
 	doc := decad.New()
-	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 
 	var merged *decad.Face

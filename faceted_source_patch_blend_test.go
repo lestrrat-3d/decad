@@ -27,8 +27,8 @@ func (sc *blendScene) plate(ctx context.Context, t *testing.T) *Body {
 	s.Fix(r.A)
 	_, err = s.Solve(ctx)
 	require.NoError(t, err)
-	plate, err := Extrude(ctx, sc.doc, s, s.Profiles()[0],
-		Distance{D: units.Millimeters(20), Dir: Along})
+	plate, err := Extrude(sc.doc, s, s.Profiles()[0],
+		Distance{D: units.Millimeters(20), Dir: Along}).Do(ctx)
 	require.NoError(t, err)
 	return plate
 }
@@ -44,8 +44,8 @@ func (sc *blendScene) zTool(ctx context.Context, t *testing.T, cx, cy, r float64
 	s.CreateCircle(c, r)
 	_, err = s.Solve(ctx)
 	require.NoError(t, err)
-	pin, err := Extrude(ctx, sc.doc, s, s.Profiles()[0],
-		Distance{D: units.Millimeters(60), Dir: Along})
+	pin, err := Extrude(sc.doc, s, s.Profiles()[0],
+		Distance{D: units.Millimeters(60), Dir: Along}).Do(ctx)
 	require.NoError(t, err)
 	move, err := r3.Translation(r3.Vec{Z: -29.999})
 	require.NoError(t, err)

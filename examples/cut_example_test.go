@@ -29,8 +29,8 @@ func Example_cut() {
 		fmt.Printf("failed to solve: %s\n", err)
 		return
 	}
-	plate, err := decad.Extrude(context.Background(), doc, plateSketch, plateSketch.Profiles()[0],
-		decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
+	plate, err := decad.Extrude(doc, plateSketch, plateSketch.Profiles()[0],
+		decad.Distance{D: units.Millimeters(8), Dir: decad.Along}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude plate: %s\n", err)
 		return
@@ -50,8 +50,8 @@ func Example_cut() {
 		fmt.Printf("failed to solve: %s\n", err)
 		return
 	}
-	pin, err := decad.Extrude(context.Background(), doc, pinSketch, pinSketch.Profiles()[0],
-		decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	pin, err := decad.Extrude(doc, pinSketch, pinSketch.Profiles()[0],
+		decad.Distance{D: units.Millimeters(20), Dir: decad.Along}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude pin: %s\n", err)
 		return

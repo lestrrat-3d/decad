@@ -21,8 +21,8 @@ func TestContainedCutUsesCertifiedSourceVolumeAndRecordsHistory(t *testing.T) {
 	cubeSketch.Fix(cube.A)
 	_, err = cubeSketch.Solve(t.Context())
 	require.NoError(t, err)
-	target, err := Extrude(t.Context(), doc, cubeSketch, cubeSketch.Profiles()[0],
-		Distance{D: units.Millimeters(20), Dir: Along})
+	target, err := Extrude(doc, cubeSketch, cubeSketch.Profiles()[0],
+		Distance{D: units.Millimeters(20), Dir: Along}).Do(t.Context())
 	require.NoError(t, err)
 
 	drillSketch, err := world.CreateSketch(world.XY())
@@ -32,8 +32,8 @@ func TestContainedCutUsesCertifiedSourceVolumeAndRecordsHistory(t *testing.T) {
 	drillSketch.CreateCircle(center, 1)
 	_, err = drillSketch.Solve(t.Context())
 	require.NoError(t, err)
-	tool, err := Extrude(t.Context(), doc, drillSketch, drillSketch.Profiles()[0],
-		Distance{D: units.Millimeters(4), Dir: Along})
+	tool, err := Extrude(doc, drillSketch, drillSketch.Profiles()[0],
+		Distance{D: units.Millimeters(4), Dir: Along}).Do(t.Context())
 	require.NoError(t, err)
 
 	rotation, err := r3.Rotation(r3.Vec{X: 1}, units.Degrees(20))

@@ -218,5 +218,5 @@ func revolveMeridianCone(ctx context.Context, d *Document, far, radius, apex flo
 		return nil, fmt.Errorf(`%w: the cone section is not one closed profile`, ErrUnsupported)
 	}
 	return revolveProfileBuild(ctx, d, s, profiles[0],
-		SketchLine{Start: planePoint{}, End: planePoint{U: 1}}, FullRevolution{}, nil)
+		SketchLine{Start: planePoint{}, End: planePoint{U: 1}}, FullRevolution{}, false)
 }

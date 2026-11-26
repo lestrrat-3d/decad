@@ -30,8 +30,8 @@ func TestBrepUnionSectionFeedsExtrude(t *testing.T) {
 	area, err := reading.Area()
 	require.NoError(t, err)
 	require.LessOrEqual(t, math.Abs(area.Value.Base()-108), area.Bound.Base())
-	child, err := decad.Extrude(t.Context(), decad.New(), section, profiles[0],
-		decad.Distance{D: units.Millimeters(2), Dir: decad.Along})
+	child, err := decad.Extrude(decad.New(), section, profiles[0],
+		decad.Distance{D: units.Millimeters(2), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := child.Volume()
 	require.NoError(t, err)

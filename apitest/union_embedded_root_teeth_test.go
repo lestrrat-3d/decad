@@ -73,8 +73,8 @@ func bevelRevolved(t *testing.T, doc *decad.Document, outline [][2]float64) *dec
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	require.Len(t, s.Profiles(), 1)
-	body, err := decad.Revolve(t.Context(), doc, s, s.Profiles()[0],
-		decad.SketchLine{Start: decad.Point2{}, End: decad.Point2{U: 1}}, decad.FullRevolution{})
+	body, err := decad.Revolve(doc, s, s.Profiles()[0],
+		decad.SketchLine{Start: decad.Point2{}, End: decad.Point2{U: 1}}, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -158,7 +158,7 @@ func (m bevelMember) toothProfile(t *testing.T) (*sketch.Sketch, *sketch.Profile
 func (m bevelMember) tooth(t *testing.T, doc *decad.Document, matching bool) (*decad.Body, error) {
 	t.Helper()
 	s, profile := m.toothProfile(t)
-	loft, err := decad.LoftFromPoint(t.Context(), doc, r3.Vec{}, s, profile)
+	loft, err := decad.LoftFromPoint(doc, r3.Vec{}, s, profile).Do(t.Context())
 	require.NoError(t, err)
 	toeKept, err := decad.Cut(loft, m.endCone(t, doc, m.toeApex)).Do(t.Context())
 	require.NoError(t, err)

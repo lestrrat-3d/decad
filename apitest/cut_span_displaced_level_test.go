@@ -21,8 +21,8 @@ func twoSidedRect(t *testing.T, doc *decad.Document, x0, y0, x1, y1 float64, up,
 	s.Fix(rect.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.TwoSided{
-		One: decad.DistanceSide{D: up}, Two: decad.DistanceSide{D: down}})
+	body, err := decad.Extrude(doc, s, s.Profiles()[0], decad.TwoSided{
+		One: decad.DistanceSide{D: up}, Two: decad.DistanceSide{D: down}}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -197,9 +197,8 @@ func TestCutSpanDisplacedLevelSurfaceTrim(t *testing.T) {
 			t.Parallel()
 			doc := decad.New()
 			s, p := plateSketch(t)
-			sheet, err := decad.Extrude(t.Context(), doc, s, p, decad.TwoSided{
-				One: decad.DistanceSide{D: tc.top}, Two: decad.DistanceSide{D: units.Millimeters(3)}},
-				decad.WithSurfaceResult())
+			sheet, err := decad.Extrude(doc, s, p, decad.TwoSided{
+				One: decad.DistanceSide{D: tc.top}, Two: decad.DistanceSide{D: units.Millimeters(3)}}).SurfaceResult().Do(t.Context())
 			require.NoError(t, err)
 			tool := twoSidedRect(t, doc, 40, -10, 60, 70, units.Inches(0.2), units.Millimeters(20))
 			trimmed, err := decad.Trim(t.Context(), sheet, tool, decad.KeepOutside)
@@ -233,8 +232,8 @@ func TestCutSpanDisplacedLevelIntersect(t *testing.T) {
 	s.Fix(rect.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	block, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.TwoSided{
-		One: decad.DistanceSide{D: units.Millimeters(10)}, Two: decad.DistanceSide{D: units.Millimeters(5e-17)}})
+	block, err := decad.Extrude(doc, s, s.Profiles()[0], decad.TwoSided{
+		One: decad.DistanceSide{D: units.Millimeters(10)}, Two: decad.DistanceSide{D: units.Millimeters(5e-17)}}).Do(t.Context())
 	require.NoError(t, err)
 	_, err = decad.Intersect(plate, block).Do(t.Context())
 	var be *decad.BooleanError

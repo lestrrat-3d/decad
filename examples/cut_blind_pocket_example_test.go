@@ -28,8 +28,8 @@ func Example_cut_blind_pocket() {
 		fmt.Printf("failed to solve: %s\n", err)
 		return
 	}
-	cube, err := decad.Extrude(context.Background(), doc, cubeSketch, cubeSketch.Profiles()[0],
-		decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	cube, err := decad.Extrude(doc, cubeSketch, cubeSketch.Profiles()[0],
+		decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude cube: %s\n", err)
 		return
@@ -54,8 +54,8 @@ func Example_cut_blind_pocket() {
 		fmt.Printf("failed to solve: %s\n", err)
 		return
 	}
-	tool, err := decad.Extrude(context.Background(), doc, toolSketch, toolSketch.Profiles()[0],
-		decad.Distance{D: units.Millimeters(4), Dir: decad.Along})
+	tool, err := decad.Extrude(doc, toolSketch, toolSketch.Profiles()[0],
+		decad.Distance{D: units.Millimeters(4), Dir: decad.Along}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude tool: %s\n", err)
 		return

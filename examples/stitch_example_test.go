@@ -51,18 +51,18 @@ func Example_stitch() {
 
 	// Three sheets: the four walls, and one flat cap for each end.
 	doc := decad.New()
-	walls, err := decad.Extrude(ctx, doc, bottomSketch, bottomSketch.Profiles()[0],
-		decad.Distance{D: units.Millimeters(10), Dir: decad.Along}, decad.WithSurfaceResult())
+	walls, err := decad.Extrude(doc, bottomSketch, bottomSketch.Profiles()[0],
+		decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).SurfaceResult().Do(ctx)
 	if err != nil {
 		fmt.Printf("failed to extrude walls: %s\n", err)
 		return
 	}
-	bottom, err := decad.PatchProfile(ctx, doc, bottomSketch, bottomSketch.Profiles()[0])
+	bottom, err := decad.PatchProfile(doc, bottomSketch, bottomSketch.Profiles()[0]).Do(ctx)
 	if err != nil {
 		fmt.Printf("failed to patch bottom: %s\n", err)
 		return
 	}
-	top, err := decad.PatchProfile(ctx, doc, topSketch, topSketch.Profiles()[0])
+	top, err := decad.PatchProfile(doc, topSketch, topSketch.Profiles()[0]).Do(ctx)
 	if err != nil {
 		fmt.Printf("failed to patch top: %s\n", err)
 		return

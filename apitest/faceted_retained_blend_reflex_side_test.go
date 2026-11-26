@@ -31,7 +31,7 @@ func steppedArm(t *testing.T, outline [][2]float64) *decad.Body {
 	}
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	arm, err := decad.Extrude(t.Context(), sc.doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(6)})
+	arm, err := decad.Extrude(sc.doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(6)}).Do(t.Context())
 	require.NoError(t, err)
 	box, err := arm.Bounds()
 	require.NoError(t, err)
@@ -45,8 +45,8 @@ func steppedArm(t *testing.T, outline [][2]float64) *decad.Body {
 	cs.Fix(rect.A)
 	_, err = cs.Solve(t.Context())
 	require.NoError(t, err)
-	block, err := decad.Extrude(t.Context(), sc.doc, cs, cs.Profiles()[0],
-		decad.Distance{D: units.Millimeters(4), Dir: decad.Along})
+	block, err := decad.Extrude(sc.doc, cs, cs.Profiles()[0],
+		decad.Distance{D: units.Millimeters(4), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	joined, err := decad.Union(arm, translated(t, block, 0, 0, 12)).Do(t.Context())
 	require.NoError(t, err)

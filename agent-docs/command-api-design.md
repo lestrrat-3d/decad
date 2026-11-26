@@ -274,10 +274,16 @@ name its methods and special rules.
   Shell and `ShellClosed` each have `Sense` and `FaceThickness`. Offset and Thicken have `Side`. `ShellClosed(b, t)`
   is the closed shell (M6). `FilletChord`, `ChamferAngle`, `Draft`, `MoveFace` and `ConeFromFace` have no method.
 - Sketch-fed features: Extrude, Revolve, Sweep and Loft each declare `SurfaceResult` (§6, M11). The other methods
-  are `Extrude.Taper`, `Loft.Alignment`, `Loft.Splits`, `Sweep.MitredJoins`, `Sweep.SectionScale`, `Sweep.Twist`,
-  `Coil.LeftHand`, `Emboss.RimFillet`, `Emboss.Draft`, `WebPath.Draft` and `WebPath.Overrun`.
-  `LoftSections.CircularCorrespondence` folds its twin (M8). `LoftFacesToCone` replaces `WithConeTangentEnd`
-  (M6). `Extrude`, `Revolve` and `Sweep` keep generic constructors (N8, §6).
+  are `Extrude.Taper`, `CutExtrude.Taper`, `Loft.Alignment`, `Loft.Splits`, `Sweep.MitredJoins`,
+  `Sweep.SectionScale`, `Sweep.Twist`, `Coil.LeftHand`, `Emboss.RimFillet`, `Emboss.Draft`, `WebPath.Draft` and
+  `WebPath.Overrun`. `LoftChain`, `LoftFromPoint`, `LoftFaces`, `LoftFacesToCone`, `PatchProfile` and `CutRevolve`
+  have no method. `LoftSections.CircularCorrespondence` folds its twin (M8). `LoftFacesToCone(sections, cone,
+  radial)` replaces the old cone-tangent-end option (M6). `Extrude`, `Revolve` and `Sweep` keep generic
+  constructors (N8, §6). A section constructor records a nil document and a nil sketch, section or path (A5),
+  and each `Do` of a profile-or-chain section refuses a chain's `SurfaceResult` and `Taper` at the seam gate's
+  position. `Sweep.Twist` and `Sweep.SectionScale` store their validation errors, and the count of factors
+  against the path is refused at the same gate as the old option decode, naming `SectionScale`. A composite that
+  sweeps a private tool calls `extrudeTool`, which tags the error with `OperationExtrude` as the public call did.
 - Placement and patterns: `Copy.Place` takes a sealed placement (M3). `MirroredJoin` replaces `WithJoin` (M6).
   `PathPattern` takes sealed `PathStations` (M4) and has `Follow` and `FollowAbout` (M5). Arrange has `Angle` and
   `Turns`.

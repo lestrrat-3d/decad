@@ -342,14 +342,12 @@
 1	0.79	TestHoleCountersinkInARod
 1	0.01	TestHoleOutlineBlindAndIrregularTriangle
 1	6.82	TestHoleThreadInAThinRodIsTheBooleansRefusal
-1	0.00	TestImplicitExactlyOneStopSatisfiedAssertionRewritten
 1	0.04	TestInchPocketLevelsInvertedAfterRounding
 1	0.13	TestIntersectWithAToolFlushWithBothFacesOfAMeshPlate
 1	0.00	TestLoftBuildsCongruentSquares
 1	0.01	TestLoftChainPlacedRibbonKeepsItsAreaAndChargesItsVertices
 1	0.24	TestLoftCutExactToolSpanKeepsUncutCap
 1	0.06	TestLoftDirectCircleRoundedAxisKeepsFacetedTopology
-1	0.00	TestLoftDuplicateAlignmentOption
 1	0.20	TestLoftEmbeddedFitFlanksKeepOriginalCurve
 1	0.00	TestLoftPlacedFaceAreaSumMatchesBodyArea
 1	1.19	TestLoftSectionsCircularFitTransverseHole
@@ -565,7 +563,6 @@
 2	0.02	TestExtrudeClosedSplineProfileBuilds
 2	0.01	TestExtrudeClosedSplineTwoLoopsAndSound
 2	0.00	TestExtrudeCoalescedEdgesCarryLengthBounds
-2	0.00	TestExtrudeRejectsNilOption
 2	0.01	TestExtrudeThroughAllStacked
 2	0.00	TestExtrudeToFaceSides
 2	0.01	TestFacetedMassPropertiesLumpsAndVoid
@@ -1079,7 +1076,6 @@
 4	0.00	TestLoftChainMultiCellRibbonFreeEdgesAndArea
 4	0.09	TestLoftDirectBoreBoundsRoundedCylinder
 4	0.04	TestLoftFilletRectangleCorner
-4	0.00	TestLoftForeignOption
 4	0.10	TestLoftHugeCircleRefusesNonFiniteVolume
 4	19.65	TestLoftMirrorJoinThroughBore
 4	0.01	TestLoftMirrorUnionKeepsUnrelatedSourcesSeparate
@@ -2409,7 +2405,6 @@
 9	0.00	TestStraightSweepClosedShell
 9	0.00	TestSurfaceExtendRequiresNamedEnd
 9	0.01	TestSurfaceExtrudeHoledProfileReportsDisconnectedLumps
-9	0.00	TestSurfaceLoftWithSurfaceResultIsIdempotent
 9	0.01	TestSurfaceSplitChainSheetDenotedLevel
 9	0.02	TestSurfaceSplitRevolveRefusals
 9	0.00	TestSurfaceTrimBoundsChargesAnExtremeWonByACut
@@ -3043,7 +3038,6 @@
 12	0.54	TestGyroidLatticeThickensWithItsLevel
 12	0.01	TestHoleRectangularTurned
 12	12.84	TestHoleThreadOutOfABore
-12	0.00	TestImplicitExactlyOneStopFailedAssertionPassesThrough
 12	0.00	TestLinkageJointLimits
 12	11.36	TestLoftCapChamferRoundedTwistedGear
 12	0.00	TestLoftCopyPlacementTranslation
@@ -3235,3 +3229,18 @@
 12	0.50	TestDraftCopiesItsNeutralFaceSelector
 12	0.50	TestModifyCommandsRefuseMethodFaultsAtTheirGate
 12	0.50	TestChamferAngleNamesTheArgumentOfAComputedFault
+12	0.10	TestExtrudeTaperLastCallWins
+12	0.10	TestFeatureCommandsCopySelectorsInSealedArguments
+12	0.10	TestFeatureCommandsCopyTheirSlices
+12	0.10	TestFeatureCommandsRefuseMethodFaultsAtTheirGate
+12	0.10	TestFeatureCommandsRefuseNilContext
+12	0.10	TestFeatureCommandsRefuseRetiredBodiesFirst
+12	0.10	TestFeatureCommandsReturnCancellationByIdentity
+12	0.10	TestFeatureCommandsReturnMidBuildCancellationByIdentity
+12	0.10	TestFeatureCommandsRunOnceAndConsume
+12	0.10	TestFeatureConstructorsRecordNilOperands
+12	0.10	TestFeatureMethodsLastCallWins
+12	0.10	TestImplicitExactlyOneStopAssertions
+12	0.10	TestLoftAlignmentLastCallWins
+12	0.10	TestSurfaceLoftSurfaceResultIsIdempotent
+12	0.10	TestSweepTwistLastCallWins

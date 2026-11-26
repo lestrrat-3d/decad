@@ -1,7 +1,7 @@
 // Command cmdrewrite rewrites call sites of decad's function-plus-options
 // operations to the command form of agent-docs/command-api-design.md.
 //
-//	go run ./_cmdrewrite -family booleans|modify [-root] <file-or-dir>...
+//	go run ./_cmdrewrite -family booleans|modify|features [-root] <file-or-dir>...
 //
 // It matches calls by syntax: a selector call on the local name of the decad
 // import, or, with -root, a bare call in a _test.go file of package decad. A

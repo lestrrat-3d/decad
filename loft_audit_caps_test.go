@@ -42,7 +42,7 @@ func capsAuditFixtureLoft(t *testing.T, doc *Document) *Body {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	require.Len(t, s.Profiles(), 1)
-	loft, err := LoftFromPoint(t.Context(), doc, r3.Vec{}, s, s.Profiles()[0])
+	loft, err := LoftFromPoint(doc, r3.Vec{}, s, s.Profiles()[0]).Do(t.Context())
 	require.NoError(t, err)
 	return loft
 }
@@ -61,10 +61,10 @@ func capsAuditSplit(t *testing.T, doc *Document, body *Body, x float64) (*Body, 
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	require.Len(t, s.Chains(), 1)
-	sheet, err := Extrude(t.Context(), doc, s, s.Chains()[0], TwoSided{
+	sheet, err := Extrude(doc, s, s.Chains()[0], TwoSided{
 		One: DistanceSide{D: units.Millimeters(20)},
 		Two: DistanceSide{D: units.Millimeters(20)},
-	})
+	}).Do(t.Context())
 	require.NoError(t, err)
 	parts, err := Split(t.Context(), body, sheet)
 	require.NoError(t, err)
@@ -119,10 +119,10 @@ func TestPointLoftAuditsDecideCapsAsFamilies(t *testing.T) {
 	addSlab("apex slab 2", inner2, 1)
 	addSlab("two-plane slab 1", slab1, 2)
 
-	loft, err := LoftFaces(t.Context(), []*Face{
+	loft, err := LoftFaces([]*Face{
 		neutralArcSeamCap(t, slab1, refOf(CapStart(slab1))),
 		neutralArcSeamCap(t, slab1, refOf(CapEnd(slab1))),
-		neutralArcSeamCap(t, slab0, refOf(CapEnd(slab0)))})
+		neutralArcSeamCap(t, slab0, refOf(CapEnd(slab0)))}).Do(t.Context())
 	require.NoError(t, err)
 	facesPayload, ok := loft.n.Payload.(facetedPayload)
 	require.True(t, ok)

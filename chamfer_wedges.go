@@ -284,5 +284,5 @@ func buildWedgeTool(ctx context.Context, d *Document, w wedge, dmm float64) (*Bo
 	if frame.N().Dot(dir) < 0 {
 		way = Against
 	}
-	return Extrude(ctx, d, s, s.Profiles()[0], Distance{D: units.Millimeters(length + w.e0 + w.e1), Dir: way})
+	return extrudeTool(ctx, d, s, s.Profiles()[0], Distance{D: units.Millimeters(length + w.e0 + w.e1), Dir: way}, extrudeSettings{})
 }

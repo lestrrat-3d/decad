@@ -4,15 +4,16 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/embossplan"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/opcommand"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
-	"github.com/lestrrat-go/option/v3"
 )
 
 // EmbossMode says whether a relief stands out of a face or is cut into it.
@@ -37,39 +38,6 @@ func (m EmbossMode) String() string {
 	}
 }
 
-// EmbossOption configures [Emboss].
-type EmbossOption interface {
-	option.Interface
-	embossOption()
-}
-
-type embossOption struct{ option.Interface }
-
-func (embossOption) embossOption() {}
-
-type identEmbossDraft struct{}
-type identEmbossRimFillet struct{}
-
-// WithEmbossRimFillet rounds the relief's rim with a fillet of the given radius
-// (agent-docs/emboss-design.md §7). The rim of a raised relief is the edges of
-// its top face, and the rim of an engraving is the edges where its wall meets the
-// face it is cut into. The radius is a positive length. The relief is built and
-// filleted on a copy of b first, so a fillet the evaluator refuses leaves b
-// live and the document unchanged; the copy leaves history entries.
-func WithEmbossRimFillet(radius units.Value) EmbossOption {
-	return embossOption{option.New(identEmbossRimFillet{}, radius)}
-}
-
-// WithEmbossDraft leans the relief's walls by a draft angle
-// (agent-docs/emboss-design.md §6). A positive angle makes a raised relief
-// narrower toward its top and an engraving narrower toward its floor, the way a
-// moulded or cast part leaves its mould. A negative angle widens them. The angle
-// is [WithTaper]'s: a draft at or past a right angle is ErrDegenerate, and the
-// zero value is a straight wall.
-func WithEmbossDraft(angle units.Value) EmbossOption {
-	return embossOption{option.New(identEmbossDraft{}, angle)}
-}
-
 // Emboss raises or engraves the profiles on a planar or cylindrical face of b and
 // returns the result, retiring b.
 //
@@ -91,11 +59,90 @@ func WithEmbossDraft(angle units.Value) EmbossOption {
 // vertices, is ErrUnsupported. Profiles must not touch each other
 // in a shared plane. A boolean the evaluator cannot decide is the boolean's
 // own error. Every failure leaves the document unchanged and b live.
-func Emboss(ctx context.Context, b *Body, s *sketch.Sketch, profiles []*sketch.Profile, face FaceSelector,
-	mode EmbossMode, height units.Value, opts ...EmbossOption) (*Body, error) {
-	if ctx == nil {
-		return nil, fmt.Errorf(`%w: a nil context cannot control an emboss`, ErrDegenerate)
+func Emboss(b *Body, s *sketch.Sketch, profiles []*sketch.Profile, face FaceSelector,
+	mode EmbossMode, height units.Value) *EmbossCommand {
+	c := &EmbossCommand{b: b, s: s, profiles: slices.Clone(profiles), face: copyFaceSelector(face),
+		mode: mode, height: height}
+	if b == nil {
+		c.state.Record("body", errNilBody)
 	}
+	return c
+}
+
+// EmbossCommand raises or engraves profiles on a face. Build it with [Emboss].
+type EmbossCommand struct {
+	state    opcommand.State             // consumed flag and first recorded fault
+	b        *Body                       // stored as given
+	s        *sketch.Sketch              // stored as given
+	profiles []*sketch.Profile           // copied at Emboss
+	face     FaceSelector                // copied at Emboss
+	mode     EmbossMode                  // gated at Do
+	height   units.Value                 // gated at Do
+	rim      opcommand.Slot[float64]     // set by RimFillet; the radius in millimetres
+	draft    opcommand.Slot[units.Value] // set by Draft
+}
+
+// RimFillet rounds the relief's rim with a fillet of the given radius
+// (agent-docs/emboss-design.md §7). The rim of a raised relief is the edges of
+// its top face, and the rim of an engraving is the edges where its wall meets the
+// face it is cut into. The radius is a positive length. The relief is built and
+// filleted on a copy of b first, so a fillet the evaluator refuses leaves b
+// live and the document unchanged; the copy leaves history entries. A second
+// call replaces the first.
+func (c *EmbossCommand) RimFillet(radius units.Value) *EmbossCommand {
+	mm, err := sectionrecord.MagnitudeIn(radius, units.Length, units.Millimeter, "the relief rim fillet")
+	if err == nil && mm == 0 {
+		err = fmt.Errorf(`%w: a relief rim fillet needs a positive radius`, ErrDegenerate)
+	}
+	c.rim.Set(mm, err)
+	return c
+}
+
+// Draft leans the relief's walls by a draft angle
+// (agent-docs/emboss-design.md §6). A positive angle makes a raised relief
+// narrower toward its top and an engraving narrower toward its floor, the way a
+// moulded or cast part leaves its mould. A negative angle widens them. The angle
+// is [ExtrudeCommand.Taper]'s: a draft at or past a right angle is ErrDegenerate,
+// and the zero value is a straight wall. A second call replaces the first.
+func (c *EmbossCommand) Draft(angle units.Value) *EmbossCommand {
+	c.draft.Set(angle, nil)
+	return c
+}
+
+// Do raises or engraves the relief and retires the body, or returns the error
+// of the first gate that refuses, leaving the body live and the document
+// unchanged. A nil ctx is ErrDegenerate, and a second call returns ErrConsumed.
+func (c *EmbossCommand) Do(ctx context.Context) (*Body, error) {
+	return runCommand(ctx, &c.state, OperationEmboss, c.run)
+}
+
+func (c *EmbossCommand) run(ctx context.Context) (*Body, error) {
+	var st extrudeSettings
+	if c.draft.IsSet() {
+		angle, _ := c.draft.Get()
+		st = withTaper(angle, "Draft")
+	}
+	rim, rimErr := c.rim.Get()
+	return emboss(ctx, c.b, c.s, c.profiles, c.face, c.mode, c.height, embossSettings{
+		rimSet: c.rim.IsSet(), rim: rim, rimErr: rimErr, taper: st,
+	})
+}
+
+// embossSettings is what Emboss's implementation reads of its methods: the
+// rim fillet radius in millimetres with the error validating it, and the
+// extrude settings of the draft.
+type embossSettings struct {
+	rimSet bool
+	rim    float64
+	rimErr error
+	taper  extrudeSettings
+}
+
+// emboss is Emboss's implementation. ctx is not nil, and the errors it
+// returns carry no operation tag, except the refusal of a stored method value
+// (agent-docs/command-api-design.md §11).
+func emboss(ctx context.Context, b *Body, s *sketch.Sketch, profiles []*sketch.Profile, face FaceSelector,
+	mode EmbossMode, height units.Value, set embossSettings) (*Body, error) {
 	if b == nil || b.n.Doc == nil {
 		return nil, fmt.Errorf(`%w: the body belongs to no document`, ErrDegenerate)
 	}
@@ -115,30 +162,9 @@ func Emboss(ctx context.Context, b *Body, s *sketch.Sketch, profiles []*sketch.P
 	if face == nil {
 		return nil, errNilSelector
 	}
-	var taper []ExtrudeOption
-	var rim *units.Value
-	for _, o := range opts {
-		if o == nil {
-			return nil, fmt.Errorf(`%w: a nil option names nothing to apply`, ErrDegenerate)
-		}
-		switch o.Ident().(type) {
-		case identEmbossDraft:
-			angle, _ := option.Get[units.Value](o)
-			taper = []ExtrudeOption{WithTaper(angle)}
-		case identEmbossRimFillet:
-			r, _ := option.Get[units.Value](o)
-			rim = &r
-		}
-	}
-	rimRadius := 0.0
-	if rim != nil {
-		var err error
-		if rimRadius, err = sectionrecord.MagnitudeIn(*rim, units.Length, units.Millimeter, "the relief rim fillet"); err != nil {
-			return nil, err
-		}
-		if rimRadius == 0 {
-			return nil, fmt.Errorf(`%w: a relief rim fillet needs a positive radius`, ErrDegenerate)
-		}
+	taper, rim, rimRadius := set.taper, set.rimSet, set.rim
+	if set.rimErr != nil {
+		return nil, subjectError(OperationEmboss, "RimFillet", set.rimErr)
 	}
 	h, err := sectionrecord.MagnitudeIn(height, units.Length, units.Millimeter, "the relief height")
 	if err != nil {
@@ -155,7 +181,7 @@ func Emboss(ctx context.Context, b *Body, s *sketch.Sketch, profiles []*sketch.P
 	plane, outward := site.plane, VecMeasurement{Value: site.outward}
 	extra := 0.0
 	if site.cylinder != nil {
-		if rim != nil {
+		if rim {
 			return nil, fmt.Errorf(`%w: a relief on a cylindrical face takes no rim fillet`, ErrUnsupported)
 		}
 		if extra, err = embossCurvedReach(ctx, d, s, profiles, frame, site, mode); err != nil {
@@ -179,7 +205,7 @@ func Emboss(ctx context.Context, b *Body, s *sketch.Sketch, profiles []*sketch.P
 	run := func(target *Body) (*Body, error) {
 		return embossOnto(ctx, d, target, s, profiles, mode, extent, taper)
 	}
-	if rim == nil {
+	if !rim {
 		return run(b)
 	}
 	// The relief and its rim are tried on a copy first, so a fillet the evaluator
@@ -208,7 +234,7 @@ func Emboss(ctx context.Context, b *Body, s *sketch.Sketch, profiles []*sketch.P
 // embossOnto builds the relief tools of the profiles and unions them into
 // target, or cuts them from it, in one atomic commit that retires target.
 func embossOnto(ctx context.Context, d *Document, target *Body, s *sketch.Sketch, profiles []*sketch.Profile,
-	mode EmbossMode, extent TwoSided, taper []ExtrudeOption) (*Body, error) {
+	mode EmbossMode, extent TwoSided, st extrudeSettings) (*Body, error) {
 	var tools []*Body
 	defer func() { removeTools(tools) }()
 	toolCtx, capture := privateConstructionContext(ctx)
@@ -216,7 +242,7 @@ func embossOnto(ctx context.Context, d *Document, target *Body, s *sketch.Sketch
 		if p == nil {
 			return nil, fmt.Errorf(`%w: a nil profile names no relief`, ErrDegenerate)
 		}
-		tool, err := Extrude(toolCtx, d, s, p, extent, taper...)
+		tool, err := extrudeTool(toolCtx, d, s, p, extent, st)
 		if err != nil {
 			return nil, err
 		}
@@ -371,7 +397,7 @@ func embossCurvedReach(ctx context.Context, d *Document, s *sketch.Sketch, profi
 		if p == nil {
 			return 0, fmt.Errorf(`%w: a nil profile names no relief`, ErrDegenerate)
 		}
-		probe, err := Extrude(toolCtx, d, s, p, Distance{D: units.Millimeters(1), Dir: Along})
+		probe, err := extrudeTool(toolCtx, d, s, p, Distance{D: units.Millimeters(1), Dir: Along}, extrudeSettings{})
 		if err != nil {
 			return 0, err
 		}

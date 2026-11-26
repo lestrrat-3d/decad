@@ -610,7 +610,7 @@ func holeBore(ctx context.Context, d *Document, plan holeplan.Plan) (*Body, erro
 	if plan.Against {
 		dir = Against
 	}
-	return Extrude(ctx, d, s, s.Profiles()[0], Distance{D: units.Millimeters(plan.Bore.Tool()), Dir: dir})
+	return extrudeTool(ctx, d, s, s.Profiles()[0], Distance{D: units.Millimeters(plan.Bore.Tool()), Dir: dir}, extrudeSettings{})
 }
 
 // holeCylinder extrudes one circle on the face plane inward by c.Length.
@@ -637,11 +637,11 @@ func holeCylinder(ctx context.Context, d *Document, plan holeplan.Plan, c holepl
 	if plan.Against {
 		dir = Against
 	}
-	var taper []ExtrudeOption
+	var st extrudeSettings
 	if draft != 0 {
-		taper = []ExtrudeOption{WithTaper(units.Radians(draft))}
+		st = withTaper(units.Radians(draft), "")
 	}
-	return Extrude(ctx, d, s, s.Profiles()[0], Distance{D: units.Millimeters(c.Tool()), Dir: dir}, taper...)
+	return extrudeTool(ctx, d, s, s.Profiles()[0], Distance{D: units.Millimeters(c.Tool()), Dir: dir}, st)
 }
 
 // holeSink revolves the countersink cone profile about the hole axis.
@@ -667,7 +667,7 @@ func holeSink(ctx context.Context, d *Document, sink *holeplan.Sink) (*Body, err
 		return nil, err
 	}
 	axis := SketchLine{Start: Point2{U: 0, V: 0}, End: Point2{U: 0, V: 1}}
-	return Revolve(ctx, d, s, s.Profiles()[0], axis, FullRevolution{})
+	return revolve(ctx, d, s, s.Profiles()[0], axis, FullRevolution{}, false)
 }
 
 // holeTap is the thread of a tapped hole in the plain data buildThreadCoil reads.

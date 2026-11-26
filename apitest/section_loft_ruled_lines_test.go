@@ -14,7 +14,7 @@ import (
 func TestSectionRuledSquareLoftFeedsExtrude(t *testing.T) {
 	t.Parallel()
 	bottom, bottomProfile, top, topProfile := loftSquaresAt(t, r3.NewVec(0, 0, 0), 5, 4, 2)
-	source, err := decad.Loft(t.Context(), decad.New(), bottom, bottomProfile, top, topProfile)
+	source, err := decad.Loft(decad.New(), bottom, bottomProfile, top, topProfile).Do(t.Context())
 	require.NoError(t, err)
 	frame, err := r3.NewFrame(r3.NewVec(0, 0, 1), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	require.NoError(t, err)
@@ -27,8 +27,8 @@ func TestSectionRuledSquareLoftFeedsExtrude(t *testing.T) {
 	area, err := measured.Area()
 	require.NoError(t, err)
 	require.LessOrEqual(t, math.Abs(area.Value.Base()-81), area.Bound.Base())
-	child, err := decad.Extrude(t.Context(), decad.New(), section, profiles[0],
-		decad.Distance{D: units.Millimeters(2), Dir: decad.Along})
+	child, err := decad.Extrude(decad.New(), section, profiles[0],
+		decad.Distance{D: units.Millimeters(2), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := child.Volume()
 	require.NoError(t, err)
@@ -62,7 +62,7 @@ func TestSectionRuledNonplanarWallsKeepDiagonalKinks(t *testing.T) {
 	upper := [4][2]float64{{-4, -4}, {4, -3}, {4, 4}, {-4, 4}}
 	bottom, bottomProfile := build(world.XY(), lower)
 	top, topProfile := build(topPlane, upper)
-	source, err := decad.Loft(t.Context(), decad.New(), bottom, bottomProfile, top, topProfile)
+	source, err := decad.Loft(decad.New(), bottom, bottomProfile, top, topProfile).Do(t.Context())
 	require.NoError(t, err)
 	frame, err := r3.NewFrame(r3.NewVec(0, 0, 1), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	require.NoError(t, err)
@@ -75,8 +75,8 @@ func TestSectionRuledNonplanarWallsKeepDiagonalKinks(t *testing.T) {
 	area, err := measured.Area()
 	require.NoError(t, err)
 	require.LessOrEqual(t, math.Abs(area.Value.Base()-77.5), area.Bound.Base())
-	child, err := decad.Extrude(t.Context(), decad.New(), section, profiles[0],
-		decad.Distance{D: units.Millimeters(2), Dir: decad.Along})
+	child, err := decad.Extrude(decad.New(), section, profiles[0],
+		decad.Distance{D: units.Millimeters(2), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := child.Volume()
 	require.NoError(t, err)
@@ -109,7 +109,7 @@ func TestSectionRuledLoftWithChangingHoleFeedsExtrude(t *testing.T) {
 	}
 	bottom, bottomProfile := build(world.XY(), 5, 1)
 	top, topProfile := build(topPlane, 4, 2)
-	source, err := decad.Loft(t.Context(), decad.New(), bottom, bottomProfile, top, topProfile)
+	source, err := decad.Loft(decad.New(), bottom, bottomProfile, top, topProfile).Do(t.Context())
 	require.NoError(t, err)
 	frame, err := r3.NewFrame(r3.NewVec(0, 0, 1), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	require.NoError(t, err)
@@ -122,8 +122,8 @@ func TestSectionRuledLoftWithChangingHoleFeedsExtrude(t *testing.T) {
 	area, err := measured.Area()
 	require.NoError(t, err)
 	require.LessOrEqual(t, math.Abs(area.Value.Base()-72), area.Bound.Base())
-	child, err := decad.Extrude(t.Context(), decad.New(), section, profiles[0],
-		decad.Distance{D: units.Millimeters(2), Dir: decad.Along})
+	child, err := decad.Extrude(decad.New(), section, profiles[0],
+		decad.Distance{D: units.Millimeters(2), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := child.Volume()
 	require.NoError(t, err)
@@ -136,7 +136,7 @@ func TestSectionRuledLoftWithChangingHoleFeedsExtrude(t *testing.T) {
 
 func TestSectionRuledLoftRefusesNonexactCrossing(t *testing.T) {
 	bottom, bottomProfile, top, topProfile := loftSquaresAt(t, r3.NewVec(0, 0, 0), 5, 4, 2)
-	source, err := decad.Loft(t.Context(), decad.New(), bottom, bottomProfile, top, topProfile)
+	source, err := decad.Loft(decad.New(), bottom, bottomProfile, top, topProfile).Do(t.Context())
 	require.NoError(t, err)
 	frame, err := r3.NewFrame(r3.NewVec(0, 0, 0.2), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	require.NoError(t, err)
@@ -148,7 +148,7 @@ func TestSectionRuledLoftRefusesNonexactCrossing(t *testing.T) {
 
 func TestSectionRuledLoftRefusesShiftedCutOrigin(t *testing.T) {
 	bottom, bottomProfile, top, topProfile := loftSquaresAt(t, r3.NewVec(0, 0, 0), 5, 4, 2)
-	source, err := decad.Loft(t.Context(), decad.New(), bottom, bottomProfile, top, topProfile)
+	source, err := decad.Loft(decad.New(), bottom, bottomProfile, top, topProfile).Do(t.Context())
 	require.NoError(t, err)
 	for _, tc := range []struct {
 		name   string
@@ -191,8 +191,7 @@ func TestSectionRuledLoftRefusesNonzeroAlignment(t *testing.T) {
 	}
 	bottom, bottomProfile := build(world.XY(), 0)
 	top, topProfile := build(topPlane, 1)
-	source, err := decad.Loft(t.Context(), decad.New(), bottom, bottomProfile, top, topProfile,
-		decad.WithLoftAlignment(4))
+	source, err := decad.Loft(decad.New(), bottom, bottomProfile, top, topProfile).Alignment(4).Do(t.Context())
 	require.NoError(t, err)
 	frame, err := r3.NewFrame(r3.NewVec(0, 0, 1), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	require.NoError(t, err)
@@ -205,7 +204,7 @@ func TestSectionRuledLoftRefusesNonzeroAlignment(t *testing.T) {
 func TestSectionRuledLoftRefusesDisplacedVertices(t *testing.T) {
 	origin := r3.NewVec(1e9, 0, 0)
 	bottom, bottomProfile, top, topProfile := loftSquaresAt(t, origin, 5, 5+math.Ldexp(1, -23), 2)
-	source, err := decad.Loft(t.Context(), decad.New(), bottom, bottomProfile, top, topProfile)
+	source, err := decad.Loft(decad.New(), bottom, bottomProfile, top, topProfile).Do(t.Context())
 	require.NoError(t, err)
 	frame, err := r3.NewFrame(r3.NewVec(origin.X, 0, 1), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	require.NoError(t, err)

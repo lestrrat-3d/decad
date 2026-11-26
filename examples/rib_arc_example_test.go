@@ -28,8 +28,8 @@ func Example_rib_arc() {
 		return
 	}
 	doc := decad.New()
-	plate, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	plate, err := decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(5), Dir: decad.Along}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return
@@ -61,8 +61,8 @@ func Example_rib_arc() {
 
 	// A 2 mm thick rib, 9 mm tall from the sketch plane, so it stands 8 mm
 	// above the plate's top face.
-	ribbed, err := decad.WebPath(context.Background(), plate, rs, []sketch.Entity{arc}, units.Millimeters(2),
-		decad.Distance{D: units.Millimeters(9), Dir: decad.Along})
+	ribbed, err := decad.WebPath(plate, rs, []sketch.Entity{arc}, units.Millimeters(2),
+		decad.Distance{D: units.Millimeters(9), Dir: decad.Along}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to add the rib: %s\n", err)
 		return

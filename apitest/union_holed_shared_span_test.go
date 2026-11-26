@@ -75,7 +75,7 @@ func spokedHubDisc(t *testing.T) (*decad.Document, *decad.Body) {
 	}
 	require.NotNil(t, profile)
 	doc := decad.New()
-	body, err := decad.Extrude(t.Context(), doc, s, profile, decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, profile, decad.Distance{D: units.Millimeters(5), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return doc, body
 }
@@ -273,7 +273,7 @@ func TestUnionHoledSharedSpanKidneySlot(t *testing.T) {
 	}
 	require.NotNil(t, profile)
 	doc := decad.New()
-	plate, err := decad.Extrude(t.Context(), doc, s, profile, decad.Distance{D: units.Millimeters(4), Dir: decad.Along})
+	plate, err := decad.Extrude(doc, s, profile, decad.Distance{D: units.Millimeters(4), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	plateVolume, plateBound := volumeAndBound(t, plate)
 
@@ -327,7 +327,7 @@ func holedSquarePlate(t *testing.T, doc *decad.Document) *decad.Body {
 	require.NoError(t, err)
 	for _, p := range s.Profiles() {
 		if p.Valid && len(p.Holes) == 1 {
-			body, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+			body, err := decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(5), Dir: decad.Along}).Do(t.Context())
 			require.NoError(t, err)
 			return body
 		}
@@ -439,7 +439,7 @@ func TestUnionHoledSharedSpanSharpSector(t *testing.T) {
 	}
 	require.NotNil(t, profile)
 	doc := decad.New()
-	disc, err := decad.Extrude(t.Context(), doc, s, profile, decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	disc, err := decad.Extrude(doc, s, profile, decad.Distance{D: units.Millimeters(5), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	discVolume, discBound := volumeAndBound(t, disc)
 

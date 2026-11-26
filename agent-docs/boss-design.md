@@ -71,7 +71,7 @@ faces are planes and cylinders where the Booleans admit them.
 
 ## 5. A drafted boss
 
-`BossSpec.Draft` leans the boss's wall. It passes `WithTaper` to the `Extrude` that builds the pillar.
+`BossSpec.Draft` leans the boss's wall. It passes `Taper` to the `Extrude` that builds the pillar.
 
 | Decision | Rule |
 |---|---|

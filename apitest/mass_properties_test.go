@@ -18,7 +18,7 @@ const testNegative = "negative"
 func TestMassPropertiesTrianglePrism(t *testing.T) {
 	doc := decad.New()
 	sketch, profile := polygonSketch(t, [][2]float64{{0, 0}, {6, 0}, {0, 8}})
-	body, err := decad.Extrude(t.Context(), doc, sketch, profile, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	body, err := decad.Extrude(doc, sketch, profile, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	density := units.KilogramsPerCubicMillimeter(0.001)
 	got, err := body.MassProperties(t.Context(), density)
@@ -190,7 +190,7 @@ func TestMassPropertiesSourceSphere(t *testing.T) {
 func TestMassPropertiesRevolvedCylinder(t *testing.T) {
 	doc := decad.New()
 	sketch, profile := solidSketch(t)
-	body, err := decad.Revolve(t.Context(), doc, sketch, profile, uAxis, decad.FullRevolution{})
+	body, err := decad.Revolve(doc, sketch, profile, uAxis, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	density := units.KilogramsPerCubicMillimeter(.001)
 	got, err := body.MassProperties(t.Context(), density)
@@ -233,7 +233,7 @@ func TestMassPropertiesRevolvedCylinder(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, got, again)
 
-	sheet, err := decad.Revolve(t.Context(), doc, sketch, profile, uAxis, decad.FullRevolution{}, decad.WithSurfaceResult())
+	sheet, err := decad.Revolve(doc, sketch, profile, uAxis, decad.FullRevolution{}).SurfaceResult().Do(t.Context())
 	require.NoError(t, err)
 	reading, err := sheet.MassProperties(t.Context(), density)
 	require.ErrorIs(t, err, decad.ErrNotSolid)

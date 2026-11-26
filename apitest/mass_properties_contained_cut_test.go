@@ -19,8 +19,8 @@ func TestMassPropertiesContainedCutSourceMoments(t *testing.T) {
 	boxSketch.Fix(box.A)
 	_, err = boxSketch.Solve(t.Context())
 	require.NoError(t, err)
-	target, err := decad.Extrude(t.Context(), doc, boxSketch, boxSketch.Profiles()[0],
-		decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	target, err := decad.Extrude(doc, boxSketch, boxSketch.Profiles()[0],
+		decad.Distance{D: units.Millimeters(20), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 
 	drillSketch, err := world.CreateSketch(world.XY())
@@ -30,8 +30,8 @@ func TestMassPropertiesContainedCutSourceMoments(t *testing.T) {
 	drillSketch.CreateCircle(center, 1)
 	_, err = drillSketch.Solve(t.Context())
 	require.NoError(t, err)
-	tool, err := decad.Extrude(t.Context(), doc, drillSketch, drillSketch.Profiles()[0],
-		decad.Distance{D: units.Millimeters(4), Dir: decad.Along})
+	tool, err := decad.Extrude(doc, drillSketch, drillSketch.Profiles()[0],
+		decad.Distance{D: units.Millimeters(4), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	rotation, err := r3.Rotation(r3.Vec{X: 1}, units.Degrees(20))
 	require.NoError(t, err)

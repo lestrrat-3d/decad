@@ -45,7 +45,7 @@ func fittedSectorPointLoft(t *testing.T, doc *decad.Document) *decad.Body {
 	for _, edge := range s.Profiles()[0].Outer {
 		require.False(t, edge.Partial)
 	}
-	loft, err := decad.LoftFromPoint(t.Context(), doc, r3.Vec{}, s, s.Profiles()[0])
+	loft, err := decad.LoftFromPoint(doc, r3.Vec{}, s, s.Profiles()[0]).Do(t.Context())
 	require.NoError(t, err)
 	return loft
 }
@@ -62,10 +62,10 @@ func axialSliceSheet(t *testing.T, doc *decad.Document, x float64) *decad.Body {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	require.Len(t, s.Chains(), 1)
-	sheet, err := decad.Extrude(t.Context(), doc, s, s.Chains()[0], decad.TwoSided{
+	sheet, err := decad.Extrude(doc, s, s.Chains()[0], decad.TwoSided{
 		One: decad.DistanceSide{D: units.Millimeters(20)},
 		Two: decad.DistanceSide{D: units.Millimeters(20)},
-	})
+	}).Do(t.Context())
 	require.NoError(t, err)
 	return sheet
 }
@@ -91,8 +91,8 @@ func finiteConicalBlank(t *testing.T, doc *decad.Document) *decad.Body {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	require.Len(t, s.Profiles(), 1)
-	blank, err := decad.Revolve(t.Context(), doc, s, s.Profiles()[0],
-		decad.SketchLine{Start: decad.Point2{}, End: decad.Point2{U: 1}}, decad.FullRevolution{})
+	blank, err := decad.Revolve(doc, s, s.Profiles()[0],
+		decad.SketchLine{Start: decad.Point2{}, End: decad.Point2{U: 1}}, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	return blank
 }
@@ -114,7 +114,7 @@ func TestCurvedLoftFacesUnionStopsAtTheChainDepthGate(t *testing.T) {
 	for i := range slices.Backward(slabs) {
 		sections = append(sections, pointSlabCap(t, slabs[i], decad.CapEnd(slabs[i])))
 	}
-	loft, err := decad.LoftFaces(t.Context(), sections)
+	loft, err := decad.LoftFaces(sections).Do(t.Context())
 	require.NoError(t, err)
 	toe, err := decad.Cut(loft, pointConeTool(t, doc, 6.5)).Do(t.Context())
 	require.NoError(t, err)

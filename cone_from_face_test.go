@@ -223,8 +223,8 @@ func coneFromFaceNextFeatureOrigins(t *testing.T, d *Document) [][]provenance.Re
 	}
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	next, err := Revolve(t.Context(), d, s, s.Profiles()[0],
-		SketchLine{Start: planePoint{}, End: planePoint{U: 1}}, FullRevolution{})
+	next, err := Revolve(d, s, s.Profiles()[0],
+		SketchLine{Start: planePoint{}, End: planePoint{U: 1}}, FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	var origins [][]provenance.Ref
 	for _, face := range next.Faces() {
@@ -282,7 +282,7 @@ func TestCommitExactPointConeRefusalKeepsDocument(t *testing.T) {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	built, err := revolveProfileBuild(t.Context(), doc, s, s.Profiles()[0],
-		SketchLine{Start: planePoint{}, End: planePoint{U: 1}}, FullRevolution{}, nil)
+		SketchLine{Start: planePoint{}, End: planePoint{U: 1}}, FullRevolution{}, false)
 	require.NoError(t, err)
 	require.Equal(t, before, doc.Bodies(), "building registers nothing")
 	require.Equal(t, producer, doc.producerAt(t.Context()))
@@ -333,7 +333,7 @@ func TestConeFromFaceMoreRefusals(t *testing.T) {
 		s.CreateLine(e, a)
 		_, err = s.Solve(t.Context())
 		require.NoError(t, err)
-		box, err := Extrude(t.Context(), New(), s, s.Profiles()[0], Distance{D: units.Millimeters(2), Dir: Along})
+		box, err := Extrude(New(), s, s.Profiles()[0], Distance{D: units.Millimeters(2), Dir: Along}).Do(t.Context())
 		require.NoError(t, err)
 		return box
 	}
@@ -403,8 +403,8 @@ func spiralTestRevolveBlank(t *testing.T, section []planePoint) *Body {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	require.Len(t, s.Profiles(), 1)
-	blank, err := Revolve(t.Context(), doc, s, s.Profiles()[0],
-		SketchLine{Start: planePoint{}, End: planePoint{U: 1}}, FullRevolution{})
+	blank, err := Revolve(doc, s, s.Profiles()[0],
+		SketchLine{Start: planePoint{}, End: planePoint{U: 1}}, FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	return blank
 }

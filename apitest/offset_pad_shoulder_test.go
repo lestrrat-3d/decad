@@ -38,7 +38,7 @@ func TestOffsetPadShoulderChamfer(t *testing.T) {
 		return nil
 	}
 	extrude := func(s *sketch.Sketch, h float64, dir decad.Direction) *decad.Body {
-		b, e := decad.Extrude(ctx, d, s, profile(s), decad.Distance{D: units.Millimeters(h), Dir: dir})
+		b, e := decad.Extrude(d, s, profile(s), decad.Distance{D: units.Millimeters(h), Dir: dir}).Do(ctx)
 		require.NoError(t, e)
 		return b
 	}
@@ -88,7 +88,7 @@ func TestOffsetPadShoulderChamfer(t *testing.T) {
 		}
 		pp[i] = profile(s)
 	}
-	loft, e := decad.Loft(ctx, d, ss[0], pp[0], ss[1], pp[1])
+	loft, e := decad.Loft(d, ss[0], pp[0], ss[1], pp[1]).Do(ctx)
 	require.NoError(t, e)
 	trimmed, e := decad.Cut(rounded, loft).Do(ctx)
 	require.NoError(t, e)

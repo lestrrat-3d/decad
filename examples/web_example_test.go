@@ -68,8 +68,8 @@ func Example_web() {
 
 	// Make each rib 2 mm thick and 11 mm tall (reaching z = 15, which is 5 mm
 	// below the top of the pocket).
-	ribbed, err := decad.WebPath(ctx, part, ribs, lines, units.Millimeters(2),
-		decad.Distance{D: units.Millimeters(11), Dir: decad.Along})
+	ribbed, err := decad.WebPath(part, ribs, lines, units.Millimeters(2),
+		decad.Distance{D: units.Millimeters(11), Dir: decad.Along}).Do(ctx)
 	if err != nil {
 		fmt.Printf("failed to add web: %s\n", err)
 		return

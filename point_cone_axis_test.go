@@ -54,7 +54,7 @@ func axisTooth(t *testing.T, doc *Document, origin, u, v r3.Vec) *Body {
 	}
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := LoftFromPoint(t.Context(), doc, r3.Vec{}, s, s.Profiles()[0])
+	body, err := LoftFromPoint(doc, r3.Vec{}, s, s.Profiles()[0]).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -76,8 +76,8 @@ func axisConeTool(t *testing.T, doc *Document, u, v r3.Vec, end planePoint, far,
 	}
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	tool, err := Revolve(t.Context(), doc, s, s.Profiles()[0],
-		SketchLine{Start: planePoint{}, End: end}, FullRevolution{})
+	tool, err := Revolve(doc, s, s.Profiles()[0],
+		SketchLine{Start: planePoint{}, End: end}, FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	return tool
 }
@@ -375,7 +375,7 @@ func TestCommitExactPointConeRefusesGeneralAxis(t *testing.T) {
 		_, err = s.Solve(t.Context())
 		require.NoError(t, err)
 		built, err := revolveProfileBuild(t.Context(), doc, s, s.Profiles()[0],
-			SketchLine{Start: planePoint{}, End: planePoint{U: 1}}, FullRevolution{}, nil)
+			SketchLine{Start: planePoint{}, End: planePoint{U: 1}}, FullRevolution{}, false)
 		require.NoError(t, err)
 		return built
 	}
@@ -387,7 +387,7 @@ func TestCommitExactPointConeRefusesGeneralAxis(t *testing.T) {
 	require.NoError(t, commitExactPointCone(t.Context(), doc, build(worldX, worldY)), "the +X cone is the control")
 }
 
-// WithConeTangentEnd builds its end from +X cone arithmetic, so a cone
+// LoftFacesToCone builds its end from +X cone arithmetic, so a cone
 // about another axis refuses (agent-docs/revolve-axis-design.md §4.6).
 func TestLoftFacesConeTangentEndRefusesGeneralAxis(t *testing.T) {
 	t.Parallel()
@@ -395,8 +395,7 @@ func TestLoftFacesConeTangentEndRefusesGeneralAxis(t *testing.T) {
 	cone := coneAboutY(t, f.doc, -4, 16, 8)
 	_, ok := revolveplan.PointConeSource(&cone.n)
 	require.True(t, ok, "the cone about Y is an exact point cone")
-	_, err := LoftFaces(t.Context(), []*Face{f.toe, f.heel},
-		WithConeTangentEnd(cone, r3.NewVec(0, 1, 0)))
+	_, err := LoftFacesToCone([]*Face{f.toe, f.heel}, cone, r3.NewVec(0, 1, 0)).Do(t.Context())
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.ErrorContains(t, err, "cone about X")
 }

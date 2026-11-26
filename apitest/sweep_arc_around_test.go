@@ -17,7 +17,7 @@ func TestSweepArcAroundHalfTurn(t *testing.T) {
 		decad.ArcAround{Center: r3.NewVec(5, 0, 5), Axis: r3.NewVec(0, 2, 0), End: r3.NewVec(10, 0, 5)},
 		decad.LineTo{End: r3.NewVec(10, 0, 0)})
 	require.NoError(t, err)
-	body, err := decad.Sweep(t.Context(), decad.New(), s, profile, path)
+	body, err := decad.Sweep(decad.New(), s, profile, path).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := body.Volume()
 	require.NoError(t, err)
@@ -90,7 +90,7 @@ func TestSweepDisplacedArcThroughRefuses(t *testing.T) {
 		decad.LineTo{End: r3.NewVec(10, 0, 0)})
 	require.NoError(t, err)
 	doc := decad.New()
-	_, err = decad.Sweep(t.Context(), doc, s, profile, path)
+	_, err = decad.Sweep(doc, s, profile, path).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.ErrorContains(t, err, "not tangent")
 	require.Empty(t, doc.Bodies())
@@ -99,7 +99,7 @@ func TestSweepDisplacedArcThroughRefuses(t *testing.T) {
 	around, err := decad.NewPath(r3.Vec{}, decad.LineTo{End: r3.NewVec(0, 0, 5)},
 		decad.ArcAround{Center: r3.NewVec(5, 0, 5), Axis: r3.NewVec(0, -1, 0), End: r3.NewVec(10, 0, 5)})
 	require.NoError(t, err)
-	_, err = decad.Sweep(t.Context(), doc, s, profile, around)
+	_, err = decad.Sweep(doc, s, profile, around).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.ErrorContains(t, err, "not tangent")
 	require.Empty(t, doc.Bodies())
@@ -155,7 +155,7 @@ func TestSweepChainArcAroundShortcutRefuses(t *testing.T) {
 		decad.ArcAround{Center: r3.NewVec(5, 0, 20), Axis: r3.NewVec(0, 1, 0), End: r3.NewVec(10, 0, 20)})
 	require.NoError(t, err)
 	doc := decad.New()
-	sheet, err := decad.Sweep(t.Context(), doc, s, chain, path)
+	sheet, err := decad.Sweep(doc, s, chain, path).Do(t.Context())
 	require.NoError(t, err)
 	_, err = sheet.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
@@ -167,7 +167,7 @@ func TestSweepArcAroundClosedCircle(t *testing.T) {
 	quarter, err := decad.NewPath(r3.NewVec(10, 0, 0),
 		decad.ArcAround{Axis: r3.NewVec(0, -1, 0), End: r3.NewVec(0, 0, 10)})
 	require.NoError(t, err)
-	partial, err := decad.Sweep(t.Context(), decad.New(), s, profile, quarter)
+	partial, err := decad.Sweep(decad.New(), s, profile, quarter).Do(t.Context())
 	require.NoError(t, err)
 	partialVolume, err := partial.Volume()
 	require.NoError(t, err)
@@ -180,7 +180,7 @@ func TestSweepArcAroundClosedCircle(t *testing.T) {
 		decad.ArcAround{Axis: r3.NewVec(0, -1, 0), End: r3.NewVec(-10, 0, 0)},
 		decad.ArcAround{Axis: r3.NewVec(0, -1, 0), End: r3.NewVec(10, 0, 0)})
 	require.NoError(t, err)
-	body, err := decad.Sweep(t.Context(), decad.New(), s, profile, path)
+	body, err := decad.Sweep(decad.New(), s, profile, path).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := body.Volume()
 	require.NoError(t, err)

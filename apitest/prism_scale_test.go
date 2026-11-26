@@ -83,8 +83,8 @@ func TestStraightPrismScaledAtKeepsPolygonHole(t *testing.T) {
 func TestPrismScaledAtRefusesSheetSource(t *testing.T) {
 	sheetDoc := decad.New()
 	s, profile := plateSketch(t)
-	sheet, err := decad.Extrude(t.Context(), sheetDoc, s, profile,
-		decad.Distance{D: units.Millimeters(2), Dir: decad.Along}, decad.WithSurfaceResult())
+	sheet, err := decad.Extrude(sheetDoc, s, profile,
+		decad.Distance{D: units.Millimeters(2), Dir: decad.Along}).SurfaceResult().Do(t.Context())
 	require.NoError(t, err)
 	_, err = decad.ScaledAt(t.Context(), sheet, r3.NewVec(0, 0, 0), units.Scalar(2))
 	require.ErrorIs(t, err, decad.ErrUnsupported)

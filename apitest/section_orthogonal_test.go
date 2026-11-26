@@ -67,7 +67,7 @@ func TestSectionOfAnLShapedMeshSolidIsExact(t *testing.T) {
 	// The section enters a feature: extruded 2 mm it is a 2 mm slab of the L.
 	section, profiles, err := l.Section(t.Context(), planeFrame(t, r3.NewVec(0, 0, 2), x, y))
 	require.NoError(t, err)
-	slab, err := decad.Extrude(t.Context(), decad.New(), section, profiles[0], decad.Distance{D: units.Millimeters(2), Dir: decad.Along})
+	slab, err := decad.Extrude(decad.New(), section, profiles[0], decad.Distance{D: units.Millimeters(2), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := slab.Volume()
 	require.NoError(t, err)

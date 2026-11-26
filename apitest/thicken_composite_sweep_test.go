@@ -42,8 +42,7 @@ func TestThickenCompositeSweepSheetBuildsExactSolid(t *testing.T) {
 			t.Parallel()
 			s, profile := orthogonalSweepProfile(t)
 			doc := decad.New()
-			sheet, err := decad.Sweep(t.Context(), doc, s, profile, compositeThickenPath(t),
-				decad.WithSurfaceResult())
+			sheet, err := decad.Sweep(doc, s, profile, compositeThickenPath(t)).SurfaceResult().Do(t.Context())
 			require.NoError(t, err)
 			require.Equal(t, decad.BodySheet, sheet.Kind())
 
@@ -93,8 +92,7 @@ func TestThickenCompositeSweepSheetRefusesAxisContact(t *testing.T) {
 			t.Parallel()
 			s, profile := orthogonalSweepProfile(t)
 			doc := decad.New()
-			sheet, err := decad.Sweep(t.Context(), doc, s, profile, compositeThickenPath(t),
-				decad.WithSurfaceResult())
+			sheet, err := decad.Sweep(doc, s, profile, compositeThickenPath(t)).SurfaceResult().Do(t.Context())
 			require.NoError(t, err)
 			_, err = decad.Thicken(sheet, units.Millimeters(tc.mm)).Do(t.Context())
 			require.ErrorIs(t, err, decad.ErrUnsupported)
@@ -113,8 +111,7 @@ func TestThickenCompositeSweepSheetKeepsR24(t *testing.T) {
 		t.Parallel()
 		s, profile := orthogonalSweepProfileWithHole(t)
 		doc := decad.New()
-		sheet, err := decad.Sweep(t.Context(), doc, s, profile, compositeThickenPath(t),
-			decad.WithSurfaceResult())
+		sheet, err := decad.Sweep(doc, s, profile, compositeThickenPath(t)).SurfaceResult().Do(t.Context())
 		require.NoError(t, err)
 		_, err = decad.Thicken(sheet, units.Millimeters(0.2)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
@@ -124,8 +121,7 @@ func TestThickenCompositeSweepSheetKeepsR24(t *testing.T) {
 		t.Parallel()
 		s, profile := orthogonalSweepProfile(t)
 		doc := decad.New()
-		sheet, err := decad.Sweep(t.Context(), doc, s, profile, compositeThickenPath(t),
-			decad.WithSurfaceResult())
+		sheet, err := decad.Sweep(doc, s, profile, compositeThickenPath(t)).SurfaceResult().Do(t.Context())
 		require.NoError(t, err)
 		move, err := r3.Translation(r3.NewVec(3, 2, 1))
 		require.NoError(t, err)

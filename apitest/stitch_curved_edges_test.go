@@ -48,9 +48,9 @@ func TestStitchWeldsAZeroBoundCircularRim(t *testing.T) {
 	const r, h = 10.0, 15.0
 	doc := decad.New()
 	s, p := circleSketchAt(t, 0)
-	wall, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(h), Dir: decad.Along}, decad.WithSurfaceResult())
+	wall, err := decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(h), Dir: decad.Along}).SurfaceResult().Do(t.Context())
 	require.NoError(t, err)
-	disk, err := decad.PatchProfile(t.Context(), doc, s, p)
+	disk, err := decad.PatchProfile(doc, s, p).Do(t.Context())
 	require.NoError(t, err)
 
 	sheet, err := decad.Stitch(t.Context(), wall, disk)
@@ -73,10 +73,10 @@ func TestStitchLeavesANonzeroBoundCircularRimFree(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	s, p := circleSketchAt(t, 0)
-	wall, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Inches(5), Dir: decad.Along}, decad.WithSurfaceResult())
+	wall, err := decad.Extrude(doc, s, p, decad.Distance{D: units.Inches(5), Dir: decad.Along}).SurfaceResult().Do(t.Context())
 	require.NoError(t, err)
 	ts, tp := circleSketchAt(t, 127)
-	top, err := decad.PatchProfile(t.Context(), doc, ts, tp)
+	top, err := decad.PatchProfile(doc, ts, tp).Do(t.Context())
 	require.NoError(t, err)
 
 	sheet, err := decad.Stitch(t.Context(), wall, top)
@@ -116,9 +116,9 @@ func TestStitchLeavesComplementaryArcsFree(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	s := halfDiskSketch(t)
-	up, err := decad.PatchProfile(t.Context(), doc, s, s.Profiles()[0])
+	up, err := decad.PatchProfile(doc, s, s.Profiles()[0]).Do(t.Context())
 	require.NoError(t, err)
-	down, err := decad.PatchProfile(t.Context(), doc, s, s.Profiles()[1])
+	down, err := decad.PatchProfile(doc, s, s.Profiles()[1]).Do(t.Context())
 	require.NoError(t, err)
 
 	sheet, err := decad.Stitch(t.Context(), up, down)
@@ -171,9 +171,9 @@ func TestStitchedCylinderRimKeepsConsistentNormals(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	s, p := circleSketchAt(t, 0)
-	wall, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(15), Dir: decad.Along}, decad.WithSurfaceResult())
+	wall, err := decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(15), Dir: decad.Along}).SurfaceResult().Do(t.Context())
 	require.NoError(t, err)
-	disk, err := decad.PatchProfile(t.Context(), doc, s, p)
+	disk, err := decad.PatchProfile(doc, s, p).Do(t.Context())
 	require.NoError(t, err)
 	sheet, err := decad.Stitch(t.Context(), wall, disk)
 	require.NoError(t, err)
@@ -191,10 +191,10 @@ func TestStitchDoesNotWeldAnOppositeAxisCircle(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	s, p := circleSketchAt(t, 0)
-	wall, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(15), Dir: decad.Along}, decad.WithSurfaceResult())
+	wall, err := decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(15), Dir: decad.Along}).SurfaceResult().Do(t.Context())
 	require.NoError(t, err)
 	fs, fp := flippedCircleSketch(t)
-	disk, err := decad.PatchProfile(t.Context(), doc, fs, fp)
+	disk, err := decad.PatchProfile(doc, fs, fp).Do(t.Context())
 	require.NoError(t, err)
 	_, err = decad.Stitch(t.Context(), wall, disk)
 	require.ErrorIs(t, err, decad.ErrDegenerate)
@@ -230,7 +230,7 @@ func halfDiskWallAndPatch(t *testing.T, flipped, lower bool) (*decad.Body, *deca
 	}
 	w := sketch.NewWorld()
 	s, p := build(w, w.XY(), false)
-	wall, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(15), Dir: decad.Along}, decad.WithSurfaceResult())
+	wall, err := decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(15), Dir: decad.Along}).SurfaceResult().Do(t.Context())
 	require.NoError(t, err)
 
 	pw := sketch.NewWorld()
@@ -242,7 +242,7 @@ func halfDiskWallAndPatch(t *testing.T, flipped, lower bool) (*decad.Body, *deca
 		require.NoError(t, err)
 	}
 	ps, pp := build(pw, plane, lower)
-	patch, err := decad.PatchProfile(t.Context(), doc, ps, pp)
+	patch, err := decad.PatchProfile(doc, ps, pp).Do(t.Context())
 	require.NoError(t, err)
 	return wall, patch
 }

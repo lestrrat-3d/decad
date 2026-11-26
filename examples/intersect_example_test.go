@@ -28,8 +28,8 @@ func Example_intersect() {
 		fmt.Printf("failed to solve: %s\n", err)
 		return
 	}
-	a, err := decad.Extrude(context.Background(), doc, aSketch, aSketch.Profiles()[0],
-		decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	a, err := decad.Extrude(doc, aSketch, aSketch.Profiles()[0],
+		decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude box A: %s\n", err)
 		return
@@ -53,8 +53,8 @@ func Example_intersect() {
 		fmt.Printf("failed to solve: %s\n", err)
 		return
 	}
-	b, err := decad.Extrude(context.Background(), doc, bSketch, bSketch.Profiles()[0],
-		decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	b, err := decad.Extrude(doc, bSketch, bSketch.Profiles()[0],
+		decad.Distance{D: units.Millimeters(20), Dir: decad.Along}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude box B: %s\n", err)
 		return

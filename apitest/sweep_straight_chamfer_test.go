@@ -140,7 +140,7 @@ func TestStraightSweepChamferRefusesOtherSweeps(t *testing.T) {
 				Through: r3.NewVec(0, 3, 4), End: r3.NewVec(0, 0, 5)})
 			require.NoError(t, err)
 			doc := decad.New()
-			body, err := decad.Sweep(t.Context(), doc, s, profile, path)
+			body, err := decad.Sweep(doc, s, profile, path).Do(t.Context())
 			require.NoError(t, err)
 			return doc, body
 		}},
@@ -151,7 +151,7 @@ func TestStraightSweepChamferRefusesOtherSweeps(t *testing.T) {
 				decad.LineTo{End: r3.NewVec(8, 0, 5)})
 			require.NoError(t, err)
 			doc := decad.New()
-			body, err := decad.Sweep(t.Context(), doc, s, profile, path)
+			body, err := decad.Sweep(doc, s, profile, path).Do(t.Context())
 			require.NoError(t, err)
 			return doc, body
 		}},
@@ -159,7 +159,7 @@ func TestStraightSweepChamferRefusesOtherSweeps(t *testing.T) {
 			s, profile := squareSweepSketch(t, 2)
 			path := mustPath(t, r3.Vec{}, r3.NewVec(0, 0, 10), r3.NewVec(6, 0, 10))
 			doc := decad.New()
-			body, err := decad.Sweep(t.Context(), doc, s, profile, path, decad.WithMitredJoins())
+			body, err := decad.Sweep(doc, s, profile, path).MitredJoins().Do(t.Context())
 			require.NoError(t, err)
 			return doc, body
 		}},

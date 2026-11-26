@@ -38,8 +38,8 @@ func TestFacetedRetainedBlendAreaCharge(t *testing.T) {
 	s.CreateCircle(c, 6)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	post, err := decad.Extrude(t.Context(), sc.doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
+	post, err := decad.Extrude(sc.doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(8), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	move, err := r3.Translation(r3.Vec{X: 65, Y: 45, Z: 10})
 	require.NoError(t, err)

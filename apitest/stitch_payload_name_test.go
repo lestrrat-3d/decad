@@ -40,7 +40,7 @@ func TestTessellateRefusalNamesUnstitchPayload(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	s, p := plateSketch(t)
-	box, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	box, err := decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	pieces, err := decad.Unstitch(t.Context(), box)
 	require.NoError(t, err)

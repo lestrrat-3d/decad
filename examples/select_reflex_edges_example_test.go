@@ -34,8 +34,8 @@ func Example_selectReflexEdges() {
 		if _, err := s.Solve(ctx); err != nil {
 			return nil, err
 		}
-		return decad.Extrude(ctx, doc, s, s.Profiles()[0],
-			decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+		return decad.Extrude(doc, s, s.Profiles()[0],
+			decad.Distance{D: units.Millimeters(h), Dir: decad.Along}).Do(ctx)
 	}
 	// An 80 x 60 x 10 mm plate with a 20 x 20 mm boss, 15 mm tall.
 	plate, err := box(0, 0, 80, 60, 0, 10)

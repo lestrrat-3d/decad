@@ -30,7 +30,7 @@ func chordedFrustum(t *testing.T, doc *decad.Document, cx, r0, r1, h float64) *d
 	}
 	s0, p0 := circle(w.XY(), r0)
 	s1, p1 := circle(top, r1)
-	body, err := decad.Loft(t.Context(), doc, s0, p0, s1, p1)
+	body, err := decad.Loft(doc, s0, p0, s1, p1).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }

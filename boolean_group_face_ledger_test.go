@@ -87,7 +87,7 @@ func testBlindSourceSealCancellation(t *testing.T) {
 	}
 	producer, live, history := doc.producerAt(t.Context()), len(doc.n.LiveSet), len(doc.operations)
 	ctx := &sealBatchCancelContext{Context: t.Context()}
-	body, err := Extrude(ctx, doc, s, s.Profiles()[0], Distance{D: units.Millimeters(2), Dir: Along})
+	body, err := Extrude(doc, s, s.Profiles()[0], Distance{D: units.Millimeters(2), Dir: Along}).Do(ctx)
 	if !ctx.reached || body != nil || !errors.Is(err, context.Canceled) {
 		t.Fatalf("checkpoint reached=%t body=%t error=%v", ctx.reached, body != nil, err)
 	}
@@ -230,7 +230,7 @@ func blindGroupSources(t *testing.T, withSlot bool) (*Document, *Body, *Body) {
 		if profile == nil {
 			t.Fatal("missing host profile with slot")
 		}
-		host, err = Extrude(t.Context(), doc, s, profile, Distance{D: units.Millimeters(10), Dir: Along})
+		host, err = Extrude(doc, s, profile, Distance{D: units.Millimeters(10), Dir: Along}).Do(t.Context())
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -27,7 +27,7 @@ func pocketBelow(t *testing.T, doc *decad.Document, x0, y0, x1, y1 float64, e de
 	s.Fix(rect.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], e)
+	body, err := decad.Extrude(doc, s, s.Profiles()[0], e).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }

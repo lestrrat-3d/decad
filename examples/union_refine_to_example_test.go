@@ -39,8 +39,8 @@ func Example_unionRefined() {
 		if _, err := s.Solve(ctx); err != nil {
 			return nil, err
 		}
-		return decad.Revolve(ctx, doc, s, s.Profiles()[0],
-			decad.SketchLine{Start: decad.Point2{}, End: decad.Point2{U: 1}}, decad.FullRevolution{})
+		return decad.Revolve(doc, s, s.Profiles()[0],
+			decad.SketchLine{Start: decad.Point2{}, End: decad.Point2{U: 1}}, decad.FullRevolution{}).Do(ctx)
 	}
 
 	// The blank: a ring section revolved about the X axis.
@@ -63,8 +63,8 @@ func Example_unionRefined() {
 		fmt.Printf("failed to solve the blank sketch: %s\n", err)
 		return
 	}
-	blank, err := decad.Revolve(ctx, doc, section, section.Profiles()[0],
-		decad.SketchLine{Start: decad.Point2{}, End: decad.Point2{U: 1}}, decad.FullRevolution{})
+	blank, err := decad.Revolve(doc, section, section.Profiles()[0],
+		decad.SketchLine{Start: decad.Point2{}, End: decad.Point2{U: 1}}, decad.FullRevolution{}).Do(ctx)
 	if err != nil {
 		fmt.Printf("failed to revolve the blank: %s\n", err)
 		return
@@ -105,7 +105,7 @@ func Example_unionRefined() {
 		fmt.Printf("failed to solve the tooth sketch: %s\n", err)
 		return
 	}
-	lug, err := decad.LoftFromPoint(ctx, doc, r3.Vec{}, tooth, tooth.Profiles()[0])
+	lug, err := decad.LoftFromPoint(doc, r3.Vec{}, tooth, tooth.Profiles()[0]).Do(ctx)
 	if err != nil {
 		fmt.Printf("failed to loft the tooth: %s\n", err)
 		return

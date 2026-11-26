@@ -28,8 +28,8 @@ func Example_split() {
 		fmt.Printf("failed to solve: %s\n", err)
 		return
 	}
-	block, err := decad.Extrude(context.Background(), doc, blockSketch, blockSketch.Profiles()[0],
-		decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	block, err := decad.Extrude(doc, blockSketch, blockSketch.Profiles()[0],
+		decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude block: %s\n", err)
 		return
@@ -50,10 +50,10 @@ func Example_split() {
 		fmt.Printf("failed to solve: %s\n", err)
 		return
 	}
-	sheet, err := decad.Extrude(context.Background(), doc, lineSketch, lineSketch.Chains()[0], decad.TwoSided{
+	sheet, err := decad.Extrude(doc, lineSketch, lineSketch.Chains()[0], decad.TwoSided{
 		One: decad.DistanceSide{D: units.Millimeters(15)},
 		Two: decad.DistanceSide{D: units.Millimeters(5)},
-	})
+	}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude sheet: %s\n", err)
 		return

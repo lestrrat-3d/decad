@@ -1,6 +1,6 @@
 # Source-cap face-fed loft
 
-`LoftFaces(ctx, sections, opts...)` builds one solid through two to
+`LoftFaces(sections)` builds one solid through two to
 thirty-two ordered planar caps. The admitted producer is one to thirty-one
 live, complete Split slabs from one authenticated `LoftFromPoint` source.
 Each section is an original Split cap, its rigid image, or its positive uniform
@@ -16,7 +16,7 @@ source station order, exact rational ray-plane cut map, and ordered rigid
 and positive-scale steps. Each source record is current when the loft is
 built. A side face, mixed source, duplicate cap, stale source, reordered
 cap, or missing proof record refuses without retiring an operand. A section count
-outside two to thirty-two (one to thirty-one with `WithConeTangentEnd`) is
+outside two to thirty-two (one to thirty-one with `LoftFacesToCone`) is
 `ErrDegenerate`. The
 record, rather than a face's rounded `Plane` tag or `FacetedCurve` edges,
 defines the cap curve.
@@ -244,11 +244,10 @@ Every other Intersect result has no continuation record. Placement drops every r
 
 ## Cone-tangent end section
 
-`LoftFaces(ctx, sections, WithConeTangentEnd(cone, radial))` lofts
+`LoftFacesToCone(sections, cone, radial)` lofts
 through the selected caps and then through a last section that no
-selected cap supplies. With the option, `sections` holds one to
-thirty-one caps, so the loft has at most thirty-two sections, and the
-option is accepted at most once. The cone must be live in the document
+selected cap supplies. With the cone, `sections` holds one to
+thirty-one caps, so the loft has at most thirty-two sections. The cone must be live in the document
 of the body of `sections[0]` and share its container. The history record
 is the `LoftFaces` record, with the cone as a referenced input of role
 `tangent` after the sections. The last section is the plane that touches

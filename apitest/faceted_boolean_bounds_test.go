@@ -15,9 +15,8 @@ func TestFacetedUnionKeepsUntouchedVertexAndFaceBounds(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	ts, tp := polygonSweepSketch(t, 16, 5)
-	trunk, err := decad.Sweep(t.Context(), doc, ts, tp,
-		mustPath(t, r3.NewVec(0, 0, 0), r3.NewVec(0, 0, 30), r3.NewVec(3, 0, 60)),
-		decad.WithMitredJoins(), decad.WithSectionScale(scalars(1, 0.9)...))
+	trunk, err := decad.Sweep(doc, ts, tp,
+		mustPath(t, r3.NewVec(0, 0, 0), r3.NewVec(0, 0, 30), r3.NewVec(3, 0, 60))).MitredJoins().SectionScale(scalars(1, 0.9)...).Do(t.Context())
 	require.NoError(t, err)
 	trunkBounds := make(map[r3.Vec]units.Value)
 	for _, vertex := range trunk.Vertices() {
@@ -32,10 +31,9 @@ func TestFacetedUnionKeepsUntouchedVertexAndFaceBounds(t *testing.T) {
 	for k := range 3 {
 		phi := golden * float64(k)
 		u := r3.NewVec(math.Cos(phi), math.Sin(phi), 0)
-		branch, err := decad.Sweep(t.Context(), doc, bs, bp,
+		branch, err := decad.Sweep(doc, bs, bp,
 			mustPath(t, r3.NewVec(0, 0, 0), r3.NewVec(0, 0, 2.5), r3.NewVec(0.8, 0.3, 6),
-				r3.NewVec(2.5, 0.6, 9.5)),
-			decad.WithMitredJoins(), decad.WithSectionScale(scalars(1.375/1.5, 1.2/1.5, 1/1.5)...))
+				r3.NewVec(2.5, 0.6, 9.5))).MitredJoins().SectionScale(scalars(1.375/1.5, 1.2/1.5, 1/1.5)...).Do(t.Context())
 		require.NoError(t, err)
 		direction := u.Scale(math.Sin(alpha)).Add(r3.NewVec(0, 0, math.Cos(alpha)))
 		forward := r3.NewVec(0, 0, 1).Cross(direction)

@@ -28,9 +28,9 @@ func sectionConeSource(t *testing.T, height float64) (*decad.Document, *decad.Bo
 	require.NoError(t, err)
 	require.Len(t, s.Profiles(), 1)
 	doc := decad.New()
-	body, err := decad.Revolve(t.Context(), doc, s, s.Profiles()[0], decad.SketchLine{
+	body, err := decad.Revolve(doc, s, s.Profiles()[0], decad.SketchLine{
 		Start: decad.Point2{}, End: decad.Point2{V: 1},
-	}, decad.FullRevolution{})
+	}, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	return doc, body
 }
@@ -55,9 +55,9 @@ func TestSectionCardinalConeFeedsVerifiedExtrude(t *testing.T) {
 	require.NoError(t, err)
 	require.LessOrEqual(t, math.Abs(area.Value.Base()-6.25*math.Pi), area.Bound.Base())
 	require.Less(t, area.Bound.Base(), 1e-9)
-	child, err := decad.Extrude(t.Context(), decad.New(), section, profiles[0], decad.Distance{
+	child, err := decad.Extrude(decad.New(), section, profiles[0], decad.Distance{
 		D: units.Millimeters(2), Dir: decad.Along,
-	})
+	}).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := child.Volume()
 	require.NoError(t, err)
@@ -79,9 +79,9 @@ func TestSectionCardinalConeInexactRadiusFeedsVerifiedExtrude(t *testing.T) {
 	require.Len(t, profiles, 1)
 	_, err = decad.MeasureProfile(section, profiles[0])
 	require.ErrorIs(t, err, decad.ErrUnsupported)
-	child, err := decad.Extrude(t.Context(), decad.New(), section, profiles[0], decad.Distance{
+	child, err := decad.Extrude(decad.New(), section, profiles[0], decad.Distance{
 		D: units.Millimeters(2), Dir: decad.Along,
-	})
+	}).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := child.Volume()
 	require.NoError(t, err)
@@ -124,9 +124,9 @@ func TestSectionCardinalConeRoundedProxyCarriesDisplacement(t *testing.T) {
 	require.Positive(t, outside)
 	_, err = decad.MeasureProfile(section, profiles[0])
 	require.ErrorIs(t, err, decad.ErrUnsupported)
-	child, err := decad.Extrude(t.Context(), decad.New(), section, profiles[0], decad.Distance{
+	child, err := decad.Extrude(decad.New(), section, profiles[0], decad.Distance{
 		D: units.Millimeters(2), Dir: decad.Along,
-	})
+	}).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := child.Volume()
 	require.NoError(t, err)
@@ -180,9 +180,9 @@ func TestSectionCardinalConePlacementAndAxisSense(t *testing.T) {
 	section, profiles, err := placed.Section(t.Context(), frame)
 	require.NoError(t, err)
 	require.Len(t, profiles, 1)
-	child, err := decad.Extrude(t.Context(), decad.New(), section, profiles[0], decad.Distance{
+	child, err := decad.Extrude(decad.New(), section, profiles[0], decad.Distance{
 		D: units.Millimeters(2), Dir: decad.Along,
-	})
+	}).Do(t.Context())
 	require.NoError(t, err)
 	box, err := child.Bounds()
 	require.NoError(t, err)

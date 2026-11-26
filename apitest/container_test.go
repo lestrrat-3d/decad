@@ -32,7 +32,7 @@ func containerRect(t *testing.T, c *decad.Container, x0, y0, x1, y1 float64) (*s
 func containerBox(t *testing.T, doc *decad.Document, c *decad.Container, x0, y0, x1, y1, h float64) *decad.Body {
 	t.Helper()
 	s, p := containerRect(t, c, x0, y0, x1, y1)
-	body, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(h), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -166,7 +166,7 @@ func TestContainerPlacement(t *testing.T) {
 	_, err = s1.Solve(t.Context())
 	require.NoError(t, err)
 	require.NoError(t, a.AddSketch(s1))
-	lofted, err := decad.Loft(t.Context(), doc, s0, p0, s1, s1.Profiles()[0])
+	lofted, err := decad.Loft(doc, s0, p0, s1, s1.Profiles()[0]).Do(t.Context())
 	require.NoError(t, err)
 	require.Same(t, a, containerOf(t, doc, lofted))
 }
@@ -213,13 +213,13 @@ func TestContainerCrossRefusal(t *testing.T) {
 		"Intersect of two": func() error { _, err := decad.Intersect(inA, inB).Do(t.Context()); return err },
 		"Extrude to a face": func() error {
 			s, p := containerRect(t, a, 5, 5, 6, 6)
-			_, err := decad.Extrude(t.Context(), doc, s, p, decad.ToFace{Body: inB, Face: capEndFace(inB)})
+			_, err := decad.Extrude(doc, s, p, decad.ToFace{Body: inB, Face: capEndFace(inB)}).Do(t.Context())
 			return err
 		},
 		"Loft of two sketches": func() error {
 			s0, p0 := containerRect(t, a, 0, 0, 1, 1)
 			s1, p1 := containerRect(t, b, 0, 0, 1, 1)
-			_, err := decad.Loft(t.Context(), doc, s0, p0, s1, p1)
+			_, err := decad.Loft(doc, s0, p0, s1, p1).Do(t.Context())
 			return err
 		},
 	} {

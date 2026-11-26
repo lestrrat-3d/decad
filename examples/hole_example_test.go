@@ -31,8 +31,8 @@ func Example_hole() {
 		return
 	}
 	doc := decad.New()
-	plate, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	plate, err := decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return
@@ -79,8 +79,8 @@ func Example_hole_draft() {
 		fmt.Printf("failed to solve: %s\n", err)
 		return
 	}
-	plate, err := decad.Extrude(context.Background(), decad.New(), s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	plate, err := decad.Extrude(decad.New(), s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return
@@ -125,8 +125,8 @@ func Example_hole_counterbore_on_a_cylinder() {
 		fmt.Printf("failed to solve: %s\n", err)
 		return
 	}
-	rod, err := decad.Extrude(context.Background(), decad.New(), s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(16), Dir: decad.Along})
+	rod, err := decad.Extrude(decad.New(), s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(16), Dir: decad.Along}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return
@@ -172,8 +172,8 @@ func Example_hole_thread_on_a_cylinder() {
 	var block *decad.Body
 	for _, p := range s.Profiles() {
 		if len(p.Holes) == 1 {
-			block, err = decad.Extrude(context.Background(), decad.New(), s, p,
-				decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+			block, err = decad.Extrude(decad.New(), s, p,
+				decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(context.Background())
 			if err != nil {
 				fmt.Printf("failed to extrude: %s\n", err)
 				return

@@ -28,8 +28,7 @@ func TestSweepTwistStraightPolygon(t *testing.T) {
 	path, err := decad.NewPath(r3.Vec{}, decad.LineTo{End: r3.NewVec(0, 0, 5)})
 	require.NoError(t, err)
 	doc := decad.New()
-	body, err := decad.Sweep(t.Context(), doc, s, profiles[0], path,
-		decad.WithSweepTwist(units.Degrees(30)))
+	body, err := decad.Sweep(doc, s, profiles[0], path).Twist(units.Degrees(30)).Do(t.Context())
 	require.NoError(t, err)
 	require.True(t, body.IsSolid())
 	require.Len(t, body.Faces(), 6)
@@ -121,8 +120,7 @@ func TestSweepTwistStraightStationsVerifyAll(t *testing.T) {
 	require.NoError(t, err)
 	path, err := decad.NewPath(r3.Vec{}, decad.LineTo{End: r3.NewVec(0, 0, 5)})
 	require.NoError(t, err)
-	body, err := decad.Sweep(t.Context(), decad.New(), s, s.Profiles()[0], path,
-		decad.WithSweepTwist(units.Radians(2)))
+	body, err := decad.Sweep(decad.New(), s, s.Profiles()[0], path).Twist(units.Radians(2)).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, body.Faces(), 6)
 	roles := make(map[string]bool)
@@ -171,15 +169,13 @@ func TestSweepTwistStraightStationsNegativeAndLimits(t *testing.T) {
 	path, err := decad.NewPath(r3.Vec{}, decad.LineTo{End: r3.NewVec(0, 0, 5)})
 	require.NoError(t, err)
 	doc := decad.New()
-	negative, err := decad.Sweep(t.Context(), doc, s, s.Profiles()[0], path,
-		decad.WithSweepTwist(units.Radians(-2)))
+	negative, err := decad.Sweep(doc, s, s.Profiles()[0], path).Twist(units.Radians(-2)).Do(t.Context())
 	require.NoError(t, err)
 	mesh, err := negative.Tessellate(t.Context(), units.Millimeters(0.1),
 		decad.WithVerification(decad.VerifyAll))
 	require.NoError(t, err)
 	require.True(t, mesh.VolumeVerified())
-	fullTurn, err := decad.Sweep(t.Context(), doc, s, s.Profiles()[0], path,
-		decad.WithSweepTwist(units.Degrees(360)))
+	fullTurn, err := decad.Sweep(doc, s, s.Profiles()[0], path).Twist(units.Degrees(360)).Do(t.Context())
 	require.NoError(t, err)
 	fullMesh, err := fullTurn.Tessellate(t.Context(), units.Millimeters(0.1),
 		decad.WithVerification(decad.VerifyAll))
@@ -187,8 +183,7 @@ func TestSweepTwistStraightStationsNegativeAndLimits(t *testing.T) {
 	require.True(t, fullMesh.VolumeVerified())
 
 	before := doc.Bodies()
-	_, err = decad.Sweep(t.Context(), doc, s, s.Profiles()[0], path,
-		decad.WithSweepTwist(units.Radians(7)))
+	_, err = decad.Sweep(doc, s, s.Profiles()[0], path).Twist(units.Radians(7)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Contains(t, err.Error(), "at most one full turn")
 	require.Equal(t, before, doc.Bodies())
@@ -199,8 +194,7 @@ func TestSweepTwistStraightStationsNegativeAndLimits(t *testing.T) {
 	thinS.Fix(narrow.A)
 	_, err = thinS.Solve(t.Context())
 	require.NoError(t, err)
-	_, err = decad.Sweep(t.Context(), doc, thinS, thinS.Profiles()[0], path,
-		decad.WithSweepTwist(units.Degrees(360)))
+	_, err = decad.Sweep(doc, thinS, thinS.Profiles()[0], path).Twist(units.Degrees(360)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Contains(t, err.Error(), "more than 64 cells")
 	require.Equal(t, before, doc.Bodies())
@@ -217,8 +211,7 @@ func TestSweepTwistNegativeAngleAndAdmission(t *testing.T) {
 	path, err := decad.NewPath(r3.Vec{}, decad.LineTo{End: r3.NewVec(0, 0, 5)})
 	require.NoError(t, err)
 	doc := decad.New()
-	body, err := decad.Sweep(t.Context(), doc, s, s.Profiles()[0], path,
-		decad.WithSweepTwist(units.Degrees(-30)))
+	body, err := decad.Sweep(doc, s, s.Profiles()[0], path).Twist(units.Degrees(-30)).Do(t.Context())
 	require.NoError(t, err)
 	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.5),
 		decad.WithVerification(decad.VerifyAll))
@@ -226,12 +219,10 @@ func TestSweepTwistNegativeAngleAndAdmission(t *testing.T) {
 	require.True(t, mesh.VolumeVerified())
 
 	before := doc.Bodies()
-	_, err = decad.Sweep(t.Context(), doc, s, s.Profiles()[0], path,
-		decad.WithSweepTwist(units.Radians(7)))
+	_, err = decad.Sweep(doc, s, s.Profiles()[0], path).Twist(units.Radians(7)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Equal(t, before, doc.Bodies())
-	_, err = decad.Sweep(t.Context(), doc, s, s.Profiles()[0], path,
-		decad.WithSweepTwist(units.Degrees(30)), decad.WithSurfaceResult())
+	_, err = decad.Sweep(doc, s, s.Profiles()[0], path).Twist(units.Degrees(30)).SurfaceResult().Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Equal(t, before, doc.Bodies())
 }
@@ -251,8 +242,7 @@ func TestSweepTwistCompositeCardinalArc(t *testing.T) {
 		decad.LineTo{End: r3.NewVec(0, 0, 1)},
 		decad.ArcThrough{Through: r3.NewVec(2, 0, 5), End: r3.NewVec(5, 0, 6)})
 	require.NoError(t, err)
-	body, err := decad.Sweep(t.Context(), decad.New(), s, s.Profiles()[0], path,
-		decad.WithSweepTwist(units.Degrees(5)))
+	body, err := decad.Sweep(decad.New(), s, s.Profiles()[0], path).Twist(units.Degrees(5)).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, body.Faces(), 10)
 	roles := map[string]*decad.Face{}
@@ -320,16 +310,14 @@ func TestSweepTwistCompositeCardinalArcAdmission(t *testing.T) {
 		decad.ArcThrough{Through: r3.NewVec(2, 0, 5), End: r3.NewVec(5, 0, 6)})
 	require.NoError(t, err)
 	doc := decad.New()
-	negative, err := decad.Sweep(t.Context(), doc, s, s.Profiles()[0], path,
-		decad.WithSweepTwist(units.Degrees(-5)))
+	negative, err := decad.Sweep(doc, s, s.Profiles()[0], path).Twist(units.Degrees(-5)).Do(t.Context())
 	require.NoError(t, err)
 	mesh, err := negative.Tessellate(t.Context(), units.Millimeters(0.5),
 		decad.WithVerification(decad.VerifyAll))
 	require.NoError(t, err)
 	require.True(t, mesh.VolumeVerified())
 	before := doc.Bodies()
-	_, err = decad.Sweep(t.Context(), doc, s, s.Profiles()[0], path,
-		decad.WithSweepTwist(units.Degrees(70)))
+	_, err = decad.Sweep(doc, s, s.Profiles()[0], path).Twist(units.Degrees(70)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Equal(t, before, doc.Bodies())
 	wideWorld := sketch.NewWorld()
@@ -339,16 +327,14 @@ func TestSweepTwistCompositeCardinalArcAdmission(t *testing.T) {
 	wideSketch.Fix(wide.A)
 	_, err = wideSketch.Solve(t.Context())
 	require.NoError(t, err)
-	_, err = decad.Sweep(t.Context(), doc, wideSketch, wideSketch.Profiles()[0], path,
-		decad.WithSweepTwist(units.Degrees(5)))
+	_, err = decad.Sweep(doc, wideSketch, wideSketch.Profiles()[0], path).Twist(units.Degrees(5)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Equal(t, before, doc.Bodies())
 	largeArc, err := decad.NewPath(r3.Vec{},
 		decad.LineTo{End: r3.NewVec(0, 0, 1)},
 		decad.ArcThrough{Through: r3.NewVec(40, 0, 81), End: r3.NewVec(100, 0, 101)})
 	require.NoError(t, err)
-	_, err = decad.Sweep(t.Context(), doc, s, s.Profiles()[0], largeArc,
-		decad.WithSweepTwist(units.Degrees(5)))
+	_, err = decad.Sweep(doc, s, s.Profiles()[0], largeArc).Twist(units.Degrees(5)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.ErrorContains(t, err, "boundary tube exceeds")
 	require.Equal(t, before, doc.Bodies())

@@ -32,7 +32,7 @@ func TestLoftCylinderChamfersBothOuterCaps(t *testing.T) {
 	require.NoError(t, err)
 	bottomSketch, bottomProfile := loftMirrorChamferSection(t, world, world.XY(), 0)
 	topSketch, topProfile := loftMirrorChamferSection(t, world, topPlane, 0.02)
-	tooth, err := decad.Loft(t.Context(), doc, bottomSketch, bottomProfile, topSketch, topProfile)
+	tooth, err := decad.Loft(doc, bottomSketch, bottomProfile, topSketch, topProfile).Do(t.Context())
 	require.NoError(t, err)
 	blank := circleBodyAtZ(t, doc, 0, 4, 0, height)
 	joined, err := decad.Union(blank, tooth).Do(t.Context())

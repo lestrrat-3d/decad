@@ -257,7 +257,7 @@ func (sc *slabScene) revolvedShaft(ctx context.Context, t *testing.T) *Body {
 	_, err = s.Solve(ctx)
 	require.NoError(t, err)
 	axis := SketchLine{Start: Point2{U: 0, V: 0}, End: Point2{U: 1, V: 0}}
-	part, err := Revolve(ctx, sc.doc, s, s.Profiles()[0], axis, AngleExtent{A: units.Degrees(270), Dir: Along})
+	part, err := Revolve(sc.doc, s, s.Profiles()[0], axis, AngleExtent{A: units.Degrees(270), Dir: Along}).Do(ctx)
 	require.NoError(t, err)
 	return part
 }
@@ -274,7 +274,7 @@ func (sc *slabScene) zPin(ctx context.Context, t *testing.T, x, y float64) *Body
 	s.CreateCircle(c, 1.5)
 	_, err = s.Solve(ctx)
 	require.NoError(t, err)
-	pin, err := Extrude(ctx, sc.doc, s, s.Profiles()[0], Symmetric{D: units.Millimeters(4)})
+	pin, err := Extrude(sc.doc, s, s.Profiles()[0], Symmetric{D: units.Millimeters(4)}).Do(ctx)
 	require.NoError(t, err)
 	return pin
 }

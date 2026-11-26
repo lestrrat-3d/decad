@@ -15,7 +15,7 @@ import (
 // grows toward.
 func Example_thicken() {
 	// The sheet is a four-wall tube: a rectangle extruded with
-	// WithSurfaceResult (see Example_surface_result).
+	// SurfaceResult (see Example_surface_result).
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {
@@ -29,8 +29,8 @@ func Example_thicken() {
 		return
 	}
 	doc := decad.New()
-	tube, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(10), Dir: decad.Along}, decad.WithSurfaceResult())
+	tube, err := decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).SurfaceResult().Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return

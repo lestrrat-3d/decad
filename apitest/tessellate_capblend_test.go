@@ -299,7 +299,7 @@ func TestTessellateCapBlendRectangularHoleApexFans(t *testing.T) {
 	}
 	require.NotNil(t, profile)
 	doc := decad.New()
-	body, err := decad.Extrude(t.Context(), doc, s, profile, decad.Distance{D: units.Millimeters(14), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, profile, decad.Distance{D: units.Millimeters(14), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	const d = 1.5
 	chamfered, err := decad.Chamfer(body, capLoopEdges(body), units.Millimeters(d)).Do(t.Context())
@@ -542,7 +542,7 @@ func chamferedFlangeBody(t *testing.T) (*sketch.World, *decad.Body) {
 	s.Fix(rect.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	plate, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(16), Dir: decad.Along})
+	plate, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(16), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	drilled, err := decad.Cut(plate, cylinderAt(t, w, doc, 0, 18)).Do(t.Context())
 	require.NoError(t, err)
@@ -566,7 +566,7 @@ func cylinderAt(t *testing.T, w *sketch.World, doc *decad.Document, x, r float64
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	require.Len(t, s.Profiles(), 1)
-	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Symmetric{D: units.Millimeters(32)})
+	body, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Symmetric{D: units.Millimeters(32)}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -608,7 +608,7 @@ func TestCapBlendChamferedPinAsTool(t *testing.T) {
 	s.Fix(rect.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	plate, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(16), Dir: decad.Along})
+	plate, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(16), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	pin := cylinderAt(t, w, doc, 0, 10)
 	pin, err = decad.Chamfer(pin, capLoopEdges(pin), units.Millimeters(1)).Do(t.Context())

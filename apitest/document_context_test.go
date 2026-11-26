@@ -191,7 +191,7 @@ func TestPlacementContextCancelsAnalyticRebuilds(t *testing.T) {
 			build: func(t *testing.T) (*decad.Document, *decad.Body) {
 				s, p := plateSketch(t)
 				doc := decad.New()
-				body, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+				body, err := decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 				require.NoError(t, err)
 				return doc, body
 			},
@@ -201,10 +201,10 @@ func TestPlacementContextCancelsAnalyticRebuilds(t *testing.T) {
 			build: func(t *testing.T) (*decad.Document, *decad.Body) {
 				s, p := solidSketch(t)
 				doc := decad.New()
-				body, err := decad.Revolve(t.Context(), doc, s, p, decad.SketchLine{
+				body, err := decad.Revolve(doc, s, p, decad.SketchLine{
 					Start: decad.Point2{U: 0, V: 0},
 					End:   decad.Point2{U: 1, V: 0},
-				}, decad.FullRevolution{})
+				}, decad.FullRevolution{}).Do(t.Context())
 				require.NoError(t, err)
 				return doc, body
 			},
@@ -251,7 +251,7 @@ func TestPlacementContextCancelsAnalyticAssembly(t *testing.T) {
 			build: func(t *testing.T) (*decad.Document, *decad.Body) {
 				s, p := plateSketch(t)
 				doc := decad.New()
-				body, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+				body, err := decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 				require.NoError(t, err)
 				return doc, body
 			},
@@ -261,10 +261,10 @@ func TestPlacementContextCancelsAnalyticAssembly(t *testing.T) {
 			build: func(t *testing.T) (*decad.Document, *decad.Body) {
 				s, p := solidSketch(t)
 				doc := decad.New()
-				body, err := decad.Revolve(t.Context(), doc, s, p, decad.SketchLine{
+				body, err := decad.Revolve(doc, s, p, decad.SketchLine{
 					Start: decad.Point2{U: 0, V: 0},
 					End:   decad.Point2{U: 1, V: 0},
-				}, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
+				}, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along}).Do(t.Context())
 				require.NoError(t, err)
 				return doc, body
 			},
@@ -316,7 +316,7 @@ func TestPlacementContextCancelsAnalyticProvenanceAssembly(t *testing.T) {
 			build: func(t *testing.T) (*decad.Document, *decad.Body) {
 				s, p := plateSketch(t)
 				doc := decad.New()
-				body, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+				body, err := decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 				require.NoError(t, err)
 				return doc, body
 			},
@@ -327,10 +327,10 @@ func TestPlacementContextCancelsAnalyticProvenanceAssembly(t *testing.T) {
 			build: func(t *testing.T) (*decad.Document, *decad.Body) {
 				s, p := solidSketch(t)
 				doc := decad.New()
-				body, err := decad.Revolve(t.Context(), doc, s, p, decad.SketchLine{
+				body, err := decad.Revolve(doc, s, p, decad.SketchLine{
 					Start: decad.Point2{U: 0, V: 0},
 					End:   decad.Point2{U: 1, V: 0},
-				}, decad.FullRevolution{})
+				}, decad.FullRevolution{}).Do(t.Context())
 				require.NoError(t, err)
 				return doc, body
 			},
@@ -363,10 +363,10 @@ func TestPlacementContextCancelsFullRevolveShellAssembly(t *testing.T) {
 	require.NoError(t, err)
 	s, p := solidSketch(t)
 	doc := decad.New()
-	body, err := decad.Revolve(t.Context(), doc, s, p, decad.SketchLine{
+	body, err := decad.Revolve(doc, s, p, decad.SketchLine{
 		Start: decad.Point2{U: 0, V: 0},
 		End:   decad.Point2{U: 1, V: 0},
-	}, decad.FullRevolution{})
+	}, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	beforeBodies := doc.Bodies()
 	ctx := &cancelWhenInFrameContext{
@@ -452,7 +452,7 @@ func TestPlacementContextPollsAnalyticRebuildHelpers(t *testing.T) {
 			build: func(t *testing.T) (*decad.Document, *decad.Body) {
 				s, p := plateSketch(t)
 				doc := decad.New()
-				body, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+				body, err := decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 				require.NoError(t, err)
 				return doc, body
 			},
@@ -463,10 +463,10 @@ func TestPlacementContextPollsAnalyticRebuildHelpers(t *testing.T) {
 			build: func(t *testing.T) (*decad.Document, *decad.Body) {
 				s, p := solidSketch(t)
 				doc := decad.New()
-				body, err := decad.Revolve(t.Context(), doc, s, p, decad.SketchLine{
+				body, err := decad.Revolve(doc, s, p, decad.SketchLine{
 					Start: decad.Point2{U: 0, V: 0},
 					End:   decad.Point2{U: 1, V: 0},
-				}, decad.FullRevolution{})
+				}, decad.FullRevolution{}).Do(t.Context())
 				require.NoError(t, err)
 				return doc, body
 			},
@@ -487,7 +487,7 @@ func TestPlacementContextPollsAnalyticRebuildHelpers(t *testing.T) {
 			build: func(t *testing.T) (*decad.Document, *decad.Body) {
 				s, p := plateSketch(t)
 				doc := decad.New()
-				body, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+				body, err := decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 				require.NoError(t, err)
 				return doc, body
 			},
@@ -498,10 +498,10 @@ func TestPlacementContextPollsAnalyticRebuildHelpers(t *testing.T) {
 			build: func(t *testing.T) (*decad.Document, *decad.Body) {
 				s, p := solidSketch(t)
 				doc := decad.New()
-				body, err := decad.Revolve(t.Context(), doc, s, p, decad.SketchLine{
+				body, err := decad.Revolve(doc, s, p, decad.SketchLine{
 					Start: decad.Point2{U: 0, V: 0},
 					End:   decad.Point2{U: 1, V: 0},
-				}, decad.FullRevolution{})
+				}, decad.FullRevolution{}).Do(t.Context())
 				require.NoError(t, err)
 				return doc, body
 			},
@@ -568,7 +568,7 @@ func TestCopyIdentity(t *testing.T) {
 	t.Parallel()
 	s, p := plateSketch(t)
 	doc := decad.New()
-	body, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 
 	inst, err := decad.Copy(t.Context(), body)
@@ -603,7 +603,7 @@ func TestCopyPlacement(t *testing.T) {
 	t.Parallel()
 	s, p := plateSketch(t)
 	doc := decad.New()
-	body, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 
 	shift, err := r3.Translation(r3.NewVec(200, 0, 0))
@@ -655,7 +655,7 @@ func TestCopyPlacementOptions(t *testing.T) {
 	t.Parallel()
 	s, p := plateSketch(t)
 	doc := decad.New()
-	body, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 
 	_, err = decad.Copy(t.Context(), body, decad.WithCopyPlacement(r3.Transform{}))
@@ -767,7 +767,7 @@ func TestCopyPlainExtrudeHasNoBlendRoles(t *testing.T) {
 	// fillet/chamfer roles — the empty descriptor path is a no-op.
 	s, p := plateSketch(t)
 	doc := decad.New()
-	body, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	require.Zero(t, countRolePrefix(body, "fillet("))
 	require.Zero(t, countRolePrefix(body, "chamfer("))

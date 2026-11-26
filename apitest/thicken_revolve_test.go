@@ -28,7 +28,7 @@ func thickenWasherSheet(t *testing.T, a decad.AngularExtent) (*decad.Document, *
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	doc := decad.New()
-	sheet, err := decad.Revolve(t.Context(), doc, s, s.Profiles()[0], thickenMeridianAxis, a, decad.WithSurfaceResult())
+	sheet, err := decad.Revolve(doc, s, s.Profiles()[0], thickenMeridianAxis, a).SurfaceResult().Do(t.Context())
 	require.NoError(t, err)
 	return doc, sheet
 }
@@ -43,8 +43,7 @@ func thickenTorusSheet(t *testing.T, cu, r float64) (*decad.Document, *decad.Bod
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	doc := decad.New()
-	sheet, err := decad.Revolve(t.Context(), doc, s, s.Profiles()[0], thickenMeridianAxis, decad.FullRevolution{},
-		decad.WithSurfaceResult())
+	sheet, err := decad.Revolve(doc, s, s.Profiles()[0], thickenMeridianAxis, decad.FullRevolution{}).SurfaceResult().Do(t.Context())
 	require.NoError(t, err)
 	return doc, sheet
 }
@@ -187,8 +186,7 @@ func TestThickenRevolveAxisRefusals(t *testing.T) {
 			Start: decad.Point2{U: -40, V: 0},
 			End:   decad.Point2{U: -40 + 0.5, V: 0.8660254037844386},
 		}
-		sheet, err := decad.Revolve(t.Context(), doc, s, s.Profiles()[0], tilted, decad.FullRevolution{},
-			decad.WithSurfaceResult())
+		sheet, err := decad.Revolve(doc, s, s.Profiles()[0], tilted, decad.FullRevolution{}).SurfaceResult().Do(t.Context())
 		require.NoError(t, err)
 		_, err = decad.Thicken(sheet, units.Millimeters(2)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
@@ -211,7 +209,7 @@ func TestThickenArcSweepSheetKeepsPathAndMesh(t *testing.T) {
 	})
 	require.NoError(t, err)
 	doc := decad.New()
-	sheet, err := decad.Sweep(t.Context(), doc, s, s.Profiles()[0], path, decad.WithSurfaceResult())
+	sheet, err := decad.Sweep(doc, s, s.Profiles()[0], path).SurfaceResult().Do(t.Context())
 	require.NoError(t, err)
 	solid, err := decad.Thicken(sheet, units.Millimeters(0.5)).Side(decad.ThickenNegative).Do(t.Context())
 	require.NoError(t, err)

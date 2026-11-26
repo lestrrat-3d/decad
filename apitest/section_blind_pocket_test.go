@@ -49,8 +49,8 @@ func TestSectionBlindPocketFeedsExtrude(t *testing.T) {
 		require.LessOrEqual(t, math.Abs(area.Value.Base()-tc.area), area.Bound.Base())
 		require.LessOrEqual(t, area.Bound.Base(), 1e-9)
 
-		child, extrudeErr := decad.Extrude(t.Context(), decad.New(), section, profiles[0],
-			decad.Distance{D: units.Millimeters(2), Dir: decad.Along})
+		child, extrudeErr := decad.Extrude(decad.New(), section, profiles[0],
+			decad.Distance{D: units.Millimeters(2), Dir: decad.Along}).Do(t.Context())
 		require.NoError(t, extrudeErr)
 		volume, volumeErr := child.Volume()
 		require.NoError(t, volumeErr)

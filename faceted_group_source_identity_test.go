@@ -24,7 +24,7 @@ func boxAt(t *testing.T, w *sketch.World, doc *Document, x, y, z, sx, sy, sz flo
 	s.Fix(r.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	box, err := Extrude(t.Context(), doc, s, s.Profiles()[0], Distance{D: units.Millimeters(sz), Dir: Along})
+	box, err := Extrude(doc, s, s.Profiles()[0], Distance{D: units.Millimeters(sz), Dir: Along}).Do(t.Context())
 	require.NoError(t, err)
 	move, err := r3.Translation(r3.Vec{X: x, Y: y, Z: z})
 	require.NoError(t, err)

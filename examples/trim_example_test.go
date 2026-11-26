@@ -14,7 +14,7 @@ import (
 // outline of a mating part.
 func Example_trim() {
 	// The sheet to trim is a four-wall tube: a rectangle extruded with
-	// WithSurfaceResult (see Example_surface_result).
+	// SurfaceResult (see Example_surface_result).
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {
@@ -28,8 +28,8 @@ func Example_trim() {
 		return
 	}
 	doc := decad.New()
-	tube, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(10), Dir: decad.Along}, decad.WithSurfaceResult())
+	tube, err := decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).SurfaceResult().Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude tube: %s\n", err)
 		return
@@ -49,10 +49,10 @@ func Example_trim() {
 		fmt.Printf("failed to solve tool sketch: %s\n", err)
 		return
 	}
-	tool, err := decad.Extrude(context.Background(), doc, toolSketch, toolSketch.Profiles()[0], decad.TwoSided{
+	tool, err := decad.Extrude(doc, toolSketch, toolSketch.Profiles()[0], decad.TwoSided{
 		One: decad.DistanceSide{D: units.Millimeters(15)},
 		Two: decad.DistanceSide{D: units.Millimeters(5)},
-	})
+	}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude tool: %s\n", err)
 		return

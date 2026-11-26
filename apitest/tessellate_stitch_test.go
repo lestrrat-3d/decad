@@ -51,7 +51,7 @@ func TestStitchOpenCurvedRevolveSheetKeepsFreeRims(t *testing.T) {
 	t.Parallel()
 	s, p := offAxisSemicircleSketch(t)
 	doc := decad.New()
-	sheet, err := decad.Revolve(t.Context(), doc, s, p, uAxis, quarterTurn, decad.WithSurfaceResult())
+	sheet, err := decad.Revolve(doc, s, p, uAxis, quarterTurn).SurfaceResult().Do(t.Context())
 	require.NoError(t, err)
 	stitched, err := decad.Stitch(t.Context(), sheet)
 	require.NoError(t, err)
@@ -78,7 +78,7 @@ func TestStitchCurvedWeldedRevolveSiblingsTessellate(t *testing.T) {
 	t.Parallel()
 	s, p := offAxisSemicircleSketch(t)
 	doc := decad.New()
-	sheet, err := decad.Revolve(t.Context(), doc, s, p, uAxis, quarterTurn, decad.WithSurfaceResult())
+	sheet, err := decad.Revolve(doc, s, p, uAxis, quarterTurn).SurfaceResult().Do(t.Context())
 	require.NoError(t, err)
 	tol := units.Millimeters(0.1)
 	original, err := sheet.Tessellate(t.Context(), tol)
@@ -119,7 +119,7 @@ func TestStitchCurvedWeldedRevolveSiblingPlacementRefusesMesh(t *testing.T) {
 	t.Parallel()
 	s, p := offAxisSemicircleSketch(t)
 	doc := decad.New()
-	sheet, err := decad.Revolve(t.Context(), doc, s, p, uAxis, quarterTurn, decad.WithSurfaceResult())
+	sheet, err := decad.Revolve(doc, s, p, uAxis, quarterTurn).SurfaceResult().Do(t.Context())
 	require.NoError(t, err)
 	pieces, err := decad.Unstitch(t.Context(), sheet)
 	require.NoError(t, err)
@@ -167,7 +167,7 @@ func TestStitchCurvedRevolveSurfaceKindsTessellate(t *testing.T) {
 			return sheet
 		}, func(t *testing.T) *decad.Body {
 			s, p := trapezoidFrustumSketch(t, 10, 5, 15, 8, 12)
-			solid, err := decad.Revolve(t.Context(), decad.New(), s, p, uAxis, decad.FullRevolution{})
+			solid, err := decad.Revolve(decad.New(), s, p, uAxis, decad.FullRevolution{}).Do(t.Context())
 			require.NoError(t, err)
 			return solid
 		}, frustumVolume},
@@ -176,19 +176,19 @@ func TestStitchCurvedRevolveSurfaceKindsTessellate(t *testing.T) {
 			return sheet
 		}, func(t *testing.T) *decad.Body {
 			s, p := semicircleSketchAt(t, 0, 10)
-			solid, err := decad.Revolve(t.Context(), decad.New(), s, p, uAxis, decad.FullRevolution{})
+			solid, err := decad.Revolve(decad.New(), s, p, uAxis, decad.FullRevolution{}).Do(t.Context())
 			require.NoError(t, err)
 			return solid
 		}, 4.0 / 3.0 * math.Pi * 125},
 		{"torus", func(t *testing.T) *decad.Body {
 			s, p := offAxisSemicircleSketch(t)
 			doc := decad.New()
-			sheet, err := decad.Revolve(t.Context(), doc, s, p, uAxis, decad.FullRevolution{}, decad.WithSurfaceResult())
+			sheet, err := decad.Revolve(doc, s, p, uAxis, decad.FullRevolution{}).SurfaceResult().Do(t.Context())
 			require.NoError(t, err)
 			return sheet
 		}, func(t *testing.T) *decad.Body {
 			s, p := offAxisSemicircleSketch(t)
-			solid, err := decad.Revolve(t.Context(), decad.New(), s, p, uAxis, decad.FullRevolution{})
+			solid, err := decad.Revolve(decad.New(), s, p, uAxis, decad.FullRevolution{}).Do(t.Context())
 			require.NoError(t, err)
 			return solid
 		}, torusVolume},
@@ -265,7 +265,7 @@ func TestStitchCurvedMeshRefusesUnsharedChording(t *testing.T) {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	doc := decad.New()
-	sheet, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along}, decad.WithSurfaceResult())
+	sheet, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).SurfaceResult().Do(t.Context())
 	require.NoError(t, err)
 	stitched, err := decad.Stitch(t.Context(), sheet)
 	require.NoError(t, err)
@@ -698,7 +698,7 @@ func TestStitchCertificateWeldedSolidUnionStillRefusesOnTheVolumeProof(t *testin
 	t.Parallel()
 	doc := decad.New()
 	s, p := offAxisPlateSketch(t)
-	wall, err := decad.Extrude(t.Context(), doc, s, p, decad.Symmetric{D: units.Inches(2.5)}, decad.WithSurfaceResult())
+	wall, err := decad.Extrude(doc, s, p, decad.Symmetric{D: units.Inches(2.5)}).SurfaceResult().Do(t.Context())
 	require.NoError(t, err)
 	capped, err := decad.PatchEdges(t.Context(), wall, decad.Edges(decad.Free()).Exactly(8))
 	require.NoError(t, err)

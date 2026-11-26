@@ -79,8 +79,8 @@ func sceneSphere(t *testing.T, doc *decad.Document, radius float64) *decad.Body 
 	s.CreateArc(center, right, left)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	ball, err := decad.Revolve(t.Context(), doc, s, s.Profiles()[0],
-		decad.SketchLine{Start: decad.Point2{}, End: decad.Point2{U: 1}}, decad.FullRevolution{})
+	ball, err := decad.Revolve(doc, s, s.Profiles()[0],
+		decad.SketchLine{Start: decad.Point2{}, End: decad.Point2{U: 1}}, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	return ball
 }
@@ -95,7 +95,7 @@ func sceneCylinder(t *testing.T, doc *decad.Document, radius, height float64) *d
 	s.Fix(center)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	cylinder, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
+	cylinder, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(height), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return cylinder
 }
@@ -462,7 +462,7 @@ func tumbleTriangle(t *testing.T, doc *decad.Document, w *sketch.World, plane *s
 	}
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	patch, err := decad.PatchProfile(t.Context(), doc, s, s.Profiles()[0])
+	patch, err := decad.PatchProfile(doc, s, s.Profiles()[0]).Do(t.Context())
 	require.NoError(t, err)
 	return patch
 }
@@ -942,7 +942,7 @@ func partsBinLoft(t *testing.T, doc *decad.Document) *decad.Body {
 	s1, p1 := partsBinPolygon(t, w, top, [][2]float64{
 		{6, -2.5}, {6, 2.5}, {2.5, 6}, {-2.5, 6}, {-6, 2.5}, {-6, -2.5}, {-2.5, -6}, {2.5, -6},
 	})
-	loft, err := decad.Loft(t.Context(), doc, s0, p0, s1, p1)
+	loft, err := decad.Loft(doc, s0, p0, s1, p1).Do(t.Context())
 	require.NoError(t, err)
 	return loft
 }
@@ -957,7 +957,7 @@ func partsBinSweep(t *testing.T, doc *decad.Document) *decad.Body {
 	})
 	path, err := decad.NewPath(r3.Vec{}, decad.LineTo{End: r3.NewVec(0, 0, 14)})
 	require.NoError(t, err)
-	sweep, err := decad.Sweep(t.Context(), doc, s, p, path)
+	sweep, err := decad.Sweep(doc, s, p, path).Do(t.Context())
 	require.NoError(t, err)
 	return sweep
 }

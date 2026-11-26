@@ -50,7 +50,7 @@ func Example_extend() {
 	// Extrude that fragment 10 mm into a wall: a sheet whose right edge, at
 	// x = 40, is free.
 	doc := decad.New()
-	wall, err := decad.Extrude(ctx, doc, s, left, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	wall, err := decad.Extrude(doc, s, left, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(ctx)
 	if err != nil {
 		fmt.Printf("failed to extrude wall: %s\n", err)
 		return
@@ -69,10 +69,10 @@ func Example_extend() {
 		fmt.Printf("failed to solve tool sketch: %s\n", err)
 		return
 	}
-	tool, err := decad.Extrude(ctx, doc, toolSketch, toolSketch.Profiles()[0], decad.TwoSided{
+	tool, err := decad.Extrude(doc, toolSketch, toolSketch.Profiles()[0], decad.TwoSided{
 		One: decad.DistanceSide{D: units.Millimeters(15)},
 		Two: decad.DistanceSide{D: units.Millimeters(5)},
-	})
+	}).Do(ctx)
 	if err != nil {
 		fmt.Printf("failed to extrude tool: %s\n", err)
 		return

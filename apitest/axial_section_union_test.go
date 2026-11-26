@@ -62,7 +62,7 @@ func flankLobeLoft(t testing.TB, doc *decad.Document, r, rot, half float64, heig
 	}
 	s0, p0 := section(w.XY())
 	s1, p1 := section(splitTopPlane(t, w, height))
-	b, err := decad.Loft(t.Context(), doc, s0, p0, s1, p1)
+	b, err := decad.Loft(doc, s0, p0, s1, p1).Do(t.Context())
 	require.NoError(t, err)
 	return b
 }
@@ -197,7 +197,7 @@ func tongueLoft(t *testing.T, doc *decad.Document, height float64) *decad.Body {
 	}
 	s0, p0 := section(w.XY())
 	s1, p1 := section(splitTopPlane(t, w, height))
-	b, err := decad.Loft(t.Context(), doc, s0, p0, s1, p1)
+	b, err := decad.Loft(doc, s0, p0, s1, p1).Do(t.Context())
 	require.NoError(t, err)
 	return b
 }
@@ -262,7 +262,7 @@ func TestAxialSectionUnionLiftedLobeKeepsCapLevel(t *testing.T) {
 	s.CreateCircle(s.Origin(), 0.5)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	pin, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.ToFace{Body: joined, Face: capEndFace(joined)})
+	pin, err := decad.Extrude(doc, s, s.Profiles()[0], decad.ToFace{Body: joined, Face: capEndFace(joined)}).Do(t.Context())
 	require.NoError(t, err)
 	tops := 0
 	for _, v := range pin.Vertices() {
@@ -300,7 +300,7 @@ func TestAxialSectionUnionExactTurnsKeepExactCaps(t *testing.T) {
 	s.CreateCircle(s.Origin(), 0.5)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	pin, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.ToFace{Body: joined, Face: capEndFace(joined)})
+	pin, err := decad.Extrude(doc, s, s.Profiles()[0], decad.ToFace{Body: joined, Face: capEndFace(joined)}).Do(t.Context())
 	require.NoError(t, err)
 	tops := 0
 	for _, v := range pin.Vertices() {
@@ -344,7 +344,7 @@ func TestAxialSectionUnionCounterboreRimChamfers(t *testing.T) {
 	s.CreateCircle(centre, bore)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	tool, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(2), Dir: decad.Along})
+	tool, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(2), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	cut, err := decad.Cut(joined, tool).Do(t.Context())
 	require.NoError(t, err)

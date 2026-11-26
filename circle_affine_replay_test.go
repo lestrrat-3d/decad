@@ -38,7 +38,7 @@ func TestCircleExactAffineAllowance(t *testing.T) {
 				t.Fatal(err)
 			}
 			doc := New()
-			base, err := Extrude(t.Context(), doc, sk, sk.Profiles()[0], Distance{D: units.Millimeters(4), Dir: Along})
+			base, err := Extrude(doc, sk, sk.Profiles()[0], Distance{D: units.Millimeters(4), Dir: Along}).Do(t.Context())
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -228,7 +228,7 @@ func TestCircleAffineLargeRadius(t *testing.T) {
 			t.Fatal(err)
 		}
 		doc := New()
-		body, err := Extrude(t.Context(), doc, sk, sk.Profiles()[0], Distance{D: units.Millimeters(4), Dir: Along})
+		body, err := Extrude(doc, sk, sk.Profiles()[0], Distance{D: units.Millimeters(4), Dir: Along}).Do(t.Context())
 		if err != nil {
 			t.Fatal(err)
 		}

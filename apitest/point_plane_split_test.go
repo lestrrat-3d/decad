@@ -42,10 +42,10 @@ func pointLoftSliceSheetDirected(t *testing.T, doc *decad.Document,
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	require.Len(t, s.Chains(), 1)
-	sheet, err := decad.Extrude(t.Context(), doc, s, s.Chains()[0], decad.TwoSided{
+	sheet, err := decad.Extrude(doc, s, s.Chains()[0], decad.TwoSided{
 		One: decad.DistanceSide{D: units.Millimeters(30)},
 		Two: decad.DistanceSide{D: units.Millimeters(30)},
-	})
+	}).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, decad.BodySheet, sheet.Kind())
 	return sheet
@@ -114,8 +114,8 @@ func TestPointLoftParallelSheetFarCapFollowsApexSide(t *testing.T) {
 			_, err = profileSketch.Solve(t.Context())
 			require.NoError(t, err)
 			require.Len(t, profileSketch.Profiles(), 1)
-			tooth, err := decad.LoftFromPoint(t.Context(), doc, r3.NewVec(apexX, 0, 0),
-				profileSketch, profileSketch.Profiles()[0])
+			tooth, err := decad.LoftFromPoint(doc, r3.NewVec(apexX, 0, 0),
+				profileSketch, profileSketch.Profiles()[0]).Do(t.Context())
 			require.NoError(t, err)
 			farFaces, err := decad.Faces(decad.FaceCreatedBy(decad.CapEnd(tooth))).SelectFaces(tooth)
 			require.NoError(t, err)
@@ -147,10 +147,10 @@ func TestPointLoftParallelSheetFarCapFollowsApexSide(t *testing.T) {
 			_, err = sheetSketch.Solve(t.Context())
 			require.NoError(t, err)
 			require.Len(t, sheetSketch.Chains(), 1)
-			sheet, err := decad.Extrude(t.Context(), doc, sheetSketch, sheetSketch.Chains()[0], decad.TwoSided{
+			sheet, err := decad.Extrude(doc, sheetSketch, sheetSketch.Chains()[0], decad.TwoSided{
 				One: decad.DistanceSide{D: units.Millimeters(30)},
 				Two: decad.DistanceSide{D: units.Millimeters(30)},
-			})
+			}).Do(t.Context())
 			require.NoError(t, err)
 			pieces, err := decad.Split(t.Context(), tooth, sheet)
 			require.NoError(t, err)
@@ -229,10 +229,10 @@ func TestPointLoftParallelSheetFarCapFollowsApexSide(t *testing.T) {
 			innerSheetSketch.CreateLine(innerA, innerB)
 			_, err = innerSheetSketch.Solve(t.Context())
 			require.NoError(t, err)
-			innerSheet, err := decad.Extrude(t.Context(), doc, innerSheetSketch, innerSheetSketch.Chains()[0], decad.TwoSided{
+			innerSheet, err := decad.Extrude(doc, innerSheetSketch, innerSheetSketch.Chains()[0], decad.TwoSided{
 				One: decad.DistanceSide{D: units.Millimeters(30)},
 				Two: decad.DistanceSide{D: units.Millimeters(30)},
-			})
+			}).Do(t.Context())
 			require.NoError(t, err)
 			beforeRoundTripSplit := doc.Bodies()
 			_, err = decad.Split(t.Context(), roundTrip, innerSheet)
@@ -245,10 +245,10 @@ func TestPointLoftParallelSheetFarCapFollowsApexSide(t *testing.T) {
 				require.True(t, mesh.BoundaryVerified())
 				require.True(t, mesh.VolumeVerified())
 			}
-			canceledSheet, err := decad.Extrude(t.Context(), doc, sheetSketch, sheetSketch.Chains()[0], decad.TwoSided{
+			canceledSheet, err := decad.Extrude(doc, sheetSketch, sheetSketch.Chains()[0], decad.TwoSided{
 				One: decad.DistanceSide{D: units.Millimeters(30)},
 				Two: decad.DistanceSide{D: units.Millimeters(30)},
-			})
+			}).Do(t.Context())
 			require.NoError(t, err)
 			before := doc.Bodies()
 			ctx, cancel := context.WithCancel(t.Context())

@@ -32,7 +32,7 @@ func Example_refine() {
 		if _, err := s.Solve(ctx); err != nil {
 			return nil, err
 		}
-		wire, err := decad.Extrude(ctx, doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(length), Dir: decad.Along})
+		wire, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(length), Dir: decad.Along}).Do(ctx)
 		if err != nil {
 			return nil, err
 		}

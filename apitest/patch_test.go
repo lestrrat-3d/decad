@@ -24,7 +24,7 @@ func TestPatchIsAPlanarSheet(t *testing.T) {
 	t.Parallel()
 	s, p := plateSketch(t)
 	doc := decad.New()
-	patch, err := decad.PatchProfile(t.Context(), doc, s, p)
+	patch, err := decad.PatchProfile(doc, s, p).Do(t.Context())
 	require.NoError(t, err)
 
 	require.Equal(t, decad.BodySheet, patch.Kind())
@@ -72,7 +72,7 @@ func TestPatchWithHoleNetArea(t *testing.T) {
 	t.Parallel()
 	s, p := rectWithHoleSketch(t)
 	doc := decad.New()
-	patch, err := decad.PatchProfile(t.Context(), doc, s, p)
+	patch, err := decad.PatchProfile(doc, s, p).Do(t.Context())
 	require.NoError(t, err)
 
 	area, err := patch.Area()
@@ -112,7 +112,7 @@ func TestPatchReproducesThroughPlacement(t *testing.T) {
 	t.Parallel()
 	s, p := plateSketch(t)
 	doc := decad.New()
-	patch, err := decad.PatchProfile(t.Context(), doc, s, p)
+	patch, err := decad.PatchProfile(doc, s, p).Do(t.Context())
 	require.NoError(t, err)
 
 	motion, err := r3.Translation(r3.NewVec(50, 0, 0))
@@ -143,7 +143,7 @@ func TestPatchVerifiesUndecided(t *testing.T) {
 	t.Parallel()
 	s, p := plateSketch(t)
 	doc := decad.New()
-	patch, err := decad.PatchProfile(t.Context(), doc, s, p)
+	patch, err := decad.PatchProfile(doc, s, p).Do(t.Context())
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context())
@@ -179,7 +179,7 @@ func TestPatchRejections(t *testing.T) {
 		other, err := w.CreateSketch(w.XZ())
 		require.NoError(t, err)
 		doc := decad.New()
-		_, err = decad.PatchProfile(t.Context(), doc, other, prof)
+		_, err = decad.PatchProfile(doc, other, prof).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrForeignProfile)
 		require.Empty(t, doc.Bodies())
 	})
@@ -191,7 +191,7 @@ func TestPatchRejections(t *testing.T) {
 		s.AddConstraint(sketch.NewDistance(s.Points()[0], s.Points()[1], 55))
 		_, err := s.Solve(t.Context())
 		require.NoError(t, err)
-		_, err = decad.PatchProfile(t.Context(), doc, s, p)
+		_, err = decad.PatchProfile(doc, s, p).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrStaleProfile)
 		require.Empty(t, doc.Bodies())
 	})
@@ -200,7 +200,7 @@ func TestPatchRejections(t *testing.T) {
 		t.Parallel()
 		s, _ := plateSketch(t)
 		doc := decad.New()
-		_, err := decad.PatchProfile(t.Context(), doc, s, nil)
+		_, err := decad.PatchProfile(doc, s, nil).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 		require.Empty(t, doc.Bodies())
 	})
@@ -222,7 +222,7 @@ func TestPatchRejections(t *testing.T) {
 		require.Len(t, profiles, 1)
 
 		doc := decad.New()
-		_, err = decad.PatchProfile(t.Context(), doc, s, profiles[0])
+		_, err = decad.PatchProfile(doc, s, profiles[0]).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.Empty(t, doc.Bodies())
 	})
@@ -237,12 +237,12 @@ func TestPatchContextCancellationLeavesDocumentUnchanged(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 
-	_, err := decad.PatchProfile(ctx, doc, s, p)
+	_, err := decad.PatchProfile(doc, s, p).Do(ctx)
 	require.ErrorIs(t, err, context.Canceled)
 	require.Empty(t, doc.Bodies())
 
 	var nilContext context.Context
-	_, err = decad.PatchProfile(nilContext, doc, s, p)
+	_, err = decad.PatchProfile(doc, s, p).Do(nilContext)
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 	require.Empty(t, doc.Bodies())
 }

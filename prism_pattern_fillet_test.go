@@ -110,7 +110,7 @@ func prismPatternNarrowTabBodies(t *testing.T) (*Document, *Body, *Body, *Body) 
 	require.NoError(t, err)
 	require.Len(t, s.Profiles(), 1)
 	doc := New()
-	section, err := Extrude(t.Context(), doc, s, s.Profiles()[0], Distance{D: units.Millimeters(2), Dir: Along})
+	section, err := Extrude(doc, s, s.Profiles()[0], Distance{D: units.Millimeters(2), Dir: Along}).Do(t.Context())
 	require.NoError(t, err)
 	blankSketch, err := world.CreateSketch(world.XY())
 	require.NoError(t, err)
@@ -119,8 +119,8 @@ func prismPatternNarrowTabBodies(t *testing.T) (*Document, *Body, *Body, *Body) 
 	blankSketch.CreateCircle(c, prismPatternInsetBlank)
 	_, err = blankSketch.Solve(t.Context())
 	require.NoError(t, err)
-	blank, err := Extrude(t.Context(), doc, blankSketch, blankSketch.Profiles()[0],
-		Distance{D: units.Millimeters(2), Dir: Along})
+	blank, err := Extrude(doc, blankSketch, blankSketch.Profiles()[0],
+		Distance{D: units.Millimeters(2), Dir: Along}).Do(t.Context())
 	require.NoError(t, err)
 	turn, err := r3.Rotation(r3.Vec{Z: 1}, units.Radians(math.Pi/2))
 	require.NoError(t, err)
@@ -256,7 +256,7 @@ func prismPatternGearToothBodies(t *testing.T, teeth int, root, base, tip, half,
 	require.Len(t, s.Profiles(), 1)
 	require.Len(t, s.Profiles()[0].Outer, 6)
 	doc := New()
-	tooth, err := Extrude(t.Context(), doc, s, s.Profiles()[0], Distance{D: units.Millimeters(height), Dir: Along})
+	tooth, err := Extrude(doc, s, s.Profiles()[0], Distance{D: units.Millimeters(height), Dir: Along}).Do(t.Context())
 	require.NoError(t, err)
 	blankSketch, err := world.CreateSketch(world.XY())
 	require.NoError(t, err)
@@ -265,8 +265,8 @@ func prismPatternGearToothBodies(t *testing.T, teeth int, root, base, tip, half,
 	blankSketch.CreateCircle(c, root)
 	_, err = blankSketch.Solve(t.Context())
 	require.NoError(t, err)
-	blank, err := Extrude(t.Context(), doc, blankSketch, blankSketch.Profiles()[0],
-		Distance{D: units.Millimeters(height), Dir: Along})
+	blank, err := Extrude(doc, blankSketch, blankSketch.Profiles()[0],
+		Distance{D: units.Millimeters(height), Dir: Along}).Do(t.Context())
 	require.NoError(t, err)
 	return doc, blank, tooth
 }

@@ -57,8 +57,8 @@ These are not implemented:
 
 **§16 owns the one corner mode and the one scale this document admits**: a
 `LineTo`-only path whose joins are cut on a stated join plane
-(`WithMitredJoins()`), and a dimensionless factor per span end that scales the
-section about the span's own axis (`WithSectionScale`), over a `LineSeg`-only
+(`MitredJoins()`), and a dimensionless factor per span end that scales the
+section about the span's own axis (`SectionScale`), over a `LineSeg`-only
 profile. Everything §1 through §14 states about tangent joins, transport and
 the analytic span builders is what that section replaces for its own case and
 leaves unchanged for every other path.
@@ -136,25 +136,25 @@ func (p *Path) Segments() []PathSegment
 
 type SweepOption interface { /* sealed */ }
 
-// WithSweepTwist rotates a profile about the transported tangent. Section 17
+// Twist rotates a profile about the transported tangent. Section 17
 // states the current straight-polygon admission and its proof.
-func WithSweepTwist(angle units.Value) SweepOption
+func Twist(angle units.Value) SweepOption
 
-// WithSurfaceResult omits the two section caps and publishes a sheet body
+// SurfaceResult omits the two section caps and publishes a sheet body
 // instead of a solid (agent-docs/surface-design.md §4). Unlike every other sealed
-// SweepOption, a repeated WithSurfaceResult() is idempotent rather than S12's
+// SweepOption, a repeated SurfaceResult is idempotent rather than S12's
 // stated ErrDegenerate: it carries no payload for a repeat to disagree with.
-func WithSurfaceResult() SurfaceResultOption
+func SurfaceResult SurfaceResultOption
 
-// WithMitredJoins admits a LineTo-only path whose internal joins are corners:
+// MitredJoins admits a LineTo-only path whose internal joins are corners:
 // the two spans meeting at a join are each cut on the join plane §16.3
 // states and share the section polygon on it. §16 owns it.
-func WithMitredJoins() SweepOption
+func MitredJoins() SweepOption
 
-// WithSectionScale states one dimensionless factor per path segment, in path
+// SectionScale states one dimensionless factor per path segment, in path
 // order: factors[k] is the ratio of the section at the END of span k to the
 // authored profile. §16 owns it.
-func WithSectionScale(factors ...units.Value) SweepOption
+func SectionScale(factors ...units.Value) SweepOption
 ```
 
 ```go
@@ -166,7 +166,7 @@ path, err := decad.NewPath(
         End:     r3.NewVec(10, 0, 20),
     },
 )
-body, err := decad.Sweep(ctx, doc, s, profile, path)
+body, err := decad.Sweep(doc, s, profile, path).Do(ctx)
 ```
 
 `Path` is spatial: every point is an `r3.Vec` coordinate in millimetres. It is
@@ -187,7 +187,7 @@ revolution; reversing the axis selects the other directed arc. Exact radius
 and perpendicularity checks reject incompatible inputs without adjustment.
 Sweep applies the same tangent, span, transport and contact gates to either arc.
 
-`WithSweepTwist` is accepted at most once. Its angle is a signed displacement,
+A second `Twist` call replaces the first. Its angle is a signed displacement,
 not a magnitude: a negative value reverses the twist sense. A wrong kind is
 `ErrUnitKind`; a non-finite value is `ErrNotFinite`. Section 17 admits one
 nonzero-twist case; other cases return `ErrUnsupported`.
@@ -273,7 +273,7 @@ The common axis must lie in the source profile plane. The existing full
 profile sweeps a simple solid. `Sweep` evaluates that full revolution from its
 recorded profile and exact circle carrier, then publishes a `sweepPayload` that
 holds the original path and the full-revolution proof. A closed path with a
-nonzero twist, `WithSurfaceResult()`, a corner option, or section scale is
+nonzero twist, `SurfaceResult`, a corner option, or section scale is
 staged. A near match never enters this reduction; §3.4 owns its separate
 closed-path class.
 
@@ -386,13 +386,13 @@ The existing existence rule applies: a requested solid that does not exist is
 | **S3** | non-finite path point, or arc construction overflows before it can state a finite carrier | `ErrNotFinite` for caller input; `ErrUnsupported` for derived range overflow | input rule is permanent; range ceiling is not |
 | **S4** | zero-length line; invalid circular segment inputs under P3 or P3a | `ErrDegenerate` | yes |
 | **S5** | path start is not on the profile plane, or its initial tangent is not codirectional with the positive plane normal | `ErrDegenerate` | yes for this operation's meaning |
-| **S6** | an internal path join is not tangent, and the call does not carry `WithMitredJoins()` | `ErrUnsupported` | no; `WithMitredJoins()` defines the one admitted corner mode, and §16.4 owns what refuses it |
+| **S6** | an internal path join is not tangent, and the call does not carry `MitredJoins()` | `ErrUnsupported` | no; `MitredJoins()` defines the one admitted corner mode, and §16.4 owns what refuses it |
 | **S7** | path is closed but outside §§3.3–3.4's bounded solid reductions: fewer than four spans, an arc that is not an exact quarter or half turn, arcs about more than one coordinate axis, a span off the loop's plane, signed turns that do not sum to one whole turn, or a transported end frame that differs from the start | `ErrUnsupported`; the message names the failed gate | no; general closed-frame holonomy is staged |
 | **S8** | an arc span's rotation axis crosses the transported profile interior, or boundary contact fails Revolve's exact axis-incidence rule | `ErrDegenerate` | yes; the mapped boundary folds or pinches |
 | **S9** | remote patches contact, or neighbours contact beyond their shared boundary | proved contact: `ErrDegenerate`; undecided budget: `ErrUnsupported` | contact is permanent; budget is not |
 | **S10** | profile kind is unsupported by one of the path-span builders | `ErrUnsupported` | follows spline reach |
-| **S11** | nonzero `WithSweepTwist` outside §17's bounded profile and path cases | `ErrUnsupported` | no |
-| **S12** | option repeated, or a foreign type embeds the sealed marker | `ErrDegenerate` | yes; `WithSurfaceResult()` is exempt — a repeat is idempotent (agent-docs/surface-design.md §4.1) |
+| **S11** | nonzero `Twist` outside §17's bounded profile and path cases | `ErrUnsupported` | no |
+| **S12** | retired: a repeated method replaces the earlier value, and the option tier no longer exists | none | none |
 | **S13** | a computed frame, vertex, measurement, or proof bound is non-finite | `ErrUnsupported` | no; numeric ceiling |
 | **S14** | fixed facet, station, exact-predicate, or work budget is exhausted | `ErrUnsupported` | no; resource ceiling |
 | **S15** | a constructed face, edge, or shell collapses from computed-coordinate rounding while the structural input is nondegenerate | `ErrUnsupported` | no; precision ceiling |
@@ -520,7 +520,7 @@ The body has one lump and one outer shell. Profile holes become void passages
 through the sweep; they do not create extra lumps. S9 rejects any mapping that
 would change those claims.
 
-**This is the solid's own shape alone.** `WithSurfaceResult()`
+**This is the solid's own shape alone.** `SurfaceResult`
 (agent-docs/surface-design.md §2.2, §4) omits the two section caps that join a
 holed profile's outer wall tube to its hole wall tube, so a surface-result
 sweep's holed profile reports one `Lump` per tube instead — the same
@@ -568,7 +568,7 @@ prevents a false `Sound` report.
 
 | D | Consumer | Status |
 |---|---|---|
-| **D1** | structural `Verify` + tolerance gate | For a solid, the construction and global audit prove validity and all four readings are judged; §3.3 uses the full `Revolve` proof and §3.4 uses the cyclic span audit. For a `WithSurfaceResult()` sheet, only the one-span straight reduction carries an equivalent construction proof (it IS a prismPayload build, agent-docs/surface-design.md §9.1); the arc reduction and every composite sheet read `Suspect` — the arc build runs no crossing audit of its own, and the composite build's own boundary/vertex-link audit proves assembled topology, not geometric non-self-intersection |
+| **D1** | structural `Verify` + tolerance gate | For a solid, the construction and global audit prove validity and all four readings are judged; §3.3 uses the full `Revolve` proof and §3.4 uses the cyclic span audit. For a `SurfaceResult` sheet, only the one-span straight reduction carries an equivalent construction proof (it IS a prismPayload build, agent-docs/surface-design.md §9.1); the arc reduction and every composite sheet read `Suspect` — the arc build runs no crossing audit of its own, and the composite build's own boundary/vertex-link audit proves assembled topology, not geometric non-self-intersection |
 | **D2** | `Tessellate` / STL / OBJ | One-span sweeps and §3.3's full circle use prism or Revolve. Composite sweeps mesh line, circle, arc and fitted-spline profiles with shared stations; §3.4 identifies the final station with the first. Meridian poles or unmatched stations refuse. Sheets have no occupied-volume proof |
 | **D3** | mesh booleans | one-span solids and §3.3's full circle use their reduction's `volSymDiff`. An admitted composite solid sums span occupied-volume bounds and all join-vertex movement bounds, with `symDiffOK == true`; its mesh can enter `Union`, `Cut` and `Intersect` |
 | **D4** | interference | bounds-disjoint pairs settle at once; an admitted solid sweep reaches the mesh intersection D3 admits. Other pairs stay `Suspect`; no sweep analytic adapter exists |
@@ -853,11 +853,11 @@ SC below, not Table S.
 **A chain section accepts the one `SweepOption` type, and refuses the options
 it cannot honour at run time.** A chain sweep is always a sheet — an open walk
 encloses no region, so there is no cap to omit and no solid to ask for — so
-`WithSurfaceResult()` returns `ErrUnsupported`: accepting it as a no-op would
-give one option two meanings. `WithSweepTwist` returns `ErrUnsupported` for any
+`SurfaceResult` returns `ErrUnsupported`: accepting it as a no-op would
+give one option two meanings. `Twist` returns `ErrUnsupported` for any
 angle, zero included, because §17 admits only a solid polygon profile for
 nonzero twist (Table S row S11) and an open chain has no corresponding solid.
-`WithMitredJoins` and `WithSectionScale` return `ErrUnsupported` as well,
+`MitredJoins` and `SectionScale` return `ErrUnsupported` as well,
 because §16 builds solids from a profile only.
 
 **The option refusal runs after the chain's seam gates (SC2) and before every
@@ -867,7 +867,7 @@ the four above. A foreign, stale, invalid or unrecordable chain therefore still
 reports its seam sentinel when it also carries one of those options, and a
 chain that records but carries one of those options reports `ErrUnsupported`
 even when its path would also fail SC3. A malformed option, such as
-`WithSweepTwist` with a non-angle value, reports its codec sentinel at the same
+`Twist` with a non-angle value, reports its codec sentinel at the same
 point. A refused call commits nothing and leaves `Document.Bodies()` unchanged.
 
 The call takes the sketch beside the chain because a chain's geometry is
@@ -1095,15 +1095,15 @@ exactly planar quad and the body's volume is `Exact`.
 
 The build admits:
 
-- a path of one or more `LineTo` segments, with `WithMitredJoins()` when it
+- a path of one or more `LineTo` segments, with `MitredJoins()` when it
   has more than one; the joins may be corners or straight continuations;
 - a profile whose every segment, on the outer loop and on every hole, is a
   `LineSeg`;
-- `WithSectionScale` with one positive factor per segment, or no scale;
+- `SectionScale` with one positive factor per segment, or no scale;
 - zero twist, and a solid result.
 
 It refuses, with Table SM's rows, a circular segment, a curved or
-free-form profile segment, `WithSurfaceResult()`, a nonzero twist and a closed
+free-form profile segment, `SurfaceResult`, a nonzero twist and a closed
 path. A curved profile segment's image under a span's wall lines is a conic
 section, which no admitted surface variant holds exactly; an arc span has no
 join plane this construction can state. Neither is permanent.
@@ -1111,21 +1111,21 @@ join plane this construction can state. Neither is permanent.
 ### 16.2 The options
 
 ```go
-func WithMitredJoins() SweepOption
-func WithSectionScale(factors ...units.Value) SweepOption
+func MitredJoins() SweepOption
+func SectionScale(factors ...units.Value) SweepOption
 ```
 
-Each is accepted at most once (S12). `WithSectionScale` takes exactly
+A second call of either replaces the first (command-api-design M2). `SectionScale` takes exactly
 `len(path.Segments())` factors, in path order; `factors[k]` is the ratio of
 the section at the end of span `k` to the AUTHORED profile, so a tree branch
 with radius `r_k` at path point `k` passes `r_k / r_0`. A factor is a
 `units.Value` of kind `Dimensionless` (`units.Scalar`): another kind is
 `ErrUnitKind`, a non-finite value is `ErrNotFinite`, a factor at or below zero
 is `ErrDegenerate`, and a count other than the segment count is
-`ErrDegenerate`. An omitted `WithSectionScale` means every factor is `1`.
-`WithSectionScale` on a one-span path needs no `WithMitredJoins()`: it builds
+`ErrDegenerate`. An omitted `SectionScale` means every factor is `1`.
+`SectionScale` on a one-span path needs no `MitredJoins()`: it builds
 a polygonal frustum. On a path of two or more spans it requires
-`WithMitredJoins()` (SM4), because the tangent-join composite builder of §6
+`MitredJoins()` (SM4), because the tangent-join composite builder of §6
 transports a rigid section and has no scale.
 
 ### 16.3 Construction
@@ -1226,15 +1226,15 @@ running SM8 in place of §7's separation audit.
 
 | SM | Condition | Sentinel |
 |---|---|---|
-| **SM1** | `WithMitredJoins()` or `WithSectionScale` with a circular segment | `ErrUnsupported` |
+| **SM1** | `MitredJoins()` or `SectionScale` with a circular segment | `ErrUnsupported` |
 | **SM2** | a profile segment, on any loop, that is not a `LineSeg`, or a `LineSeg` trimmed at a cut parameter, under either option | `ErrUnsupported` |
 | **SM3** | a factor of the wrong kind; a non-finite factor; a factor at or below zero; a factor count other than the segment count | `ErrUnitKind`; `ErrNotFinite`; `ErrDegenerate`; `ErrDegenerate` |
-| **SM4** | `WithSectionScale` on a path of two or more spans without `WithMitredJoins()` | `ErrUnsupported` |
+| **SM4** | `SectionScale` on a path of two or more spans without `MitredJoins()` | `ErrUnsupported` |
 | **SM5** | two consecutive spans exactly reversed | `ErrDegenerate` |
 | **SM6** | a span that does not leave its start plane or reach its end plane forward; a wall line parallel to its end plane, meeting it at or behind its start, or at or past the span's apex | `ErrDegenerate` |
 | **SM7** | a wall quad whose exact area is zero, or a section with two coincident vertices | `ErrDegenerate` |
 | **SM8** | the crossing audit proves two non-adjacent faces cross; its budget runs out first | `ErrDegenerate`; `ErrUnsupported` (S9's split) |
-| **SM9** | `WithSurfaceResult()`, a nonzero `WithSweepTwist`, or a closed path, with either option | `ErrUnsupported` |
+| **SM9** | `SurfaceResult`, a nonzero `Twist`, or a closed path, with either option | `ErrUnsupported` |
 | **SM10** | `F·(F−1)/2` over Table BM's `F` exceeds `proofbound.MaxFacetPairTestsPerCall`, or the span count exceeds §11's span cap | `ErrUnsupported` (S14) |
 
 SM2's trimmed-line arm keeps every section vertex a recorded point: a cut
@@ -1328,8 +1328,8 @@ that growth.
 
 | PR | Lands | Still staged |
 |---|---|---|
-| **M1** | `WithMitredJoins()` and `WithSectionScale` over `LineTo`-only paths and `LineSeg`-only profiles: §16.3's construction, Table SM, Table BM, §16.6's four readings, DM1, DM2, DM7, the executable example, and the `agent-docs/tessellation-design.md` payload row | `WithSurfaceResult()`, arc spans, curved profile segments |
-| **M2** | DM3 and DM4 through `boolean.go`'s segment-anchored witness search: the union-of-two-branches test row | `WithSurfaceResult()`, arc spans, curved profile segments |
+| **M1** | `MitredJoins()` and `SectionScale` over `LineTo`-only paths and `LineSeg`-only profiles: §16.3's construction, Table SM, Table BM, §16.6's four readings, DM1, DM2, DM7, the executable example, and the `agent-docs/tessellation-design.md` payload row | `SurfaceResult`, arc spans, curved profile segments |
+| **M2** | DM3 and DM4 through `boolean.go`'s segment-anchored witness search: the union-of-two-branches test row | `SurfaceResult`, arc spans, curved profile segments |
 
 ### 16.10 Required tests
 
@@ -1381,7 +1381,7 @@ deleted once and watched fail before it is trusted.
 
 ### 17.1 One straight span
 
-`WithSweepTwist` admits one whole, strictly convex polygon with 3–256 straight
+`Twist` admits one whole, strictly convex polygon with 3–256 straight
 edges and no holes, drawn on the origin XY sketch plane. The section may lie
 anywhere relative to the Z axis, which is the twist axis: each section is a
 rigid rotation about that axis, so neither the volume nor any radius bound

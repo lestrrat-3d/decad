@@ -62,7 +62,7 @@ func borePlate(t *testing.T, doc *decad.Document, cut bool) *decad.Body {
 		}
 	}
 	require.NotNil(t, holed)
-	body, err := decad.Extrude(t.Context(), doc, s, holed, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, holed, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }

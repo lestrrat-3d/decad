@@ -25,7 +25,7 @@ func straightSweepForShell(t *testing.T) (*decad.Document, *decad.Body) {
 	path, err := decad.NewPath(r3.Vec{}, decad.LineTo{End: r3.NewVec(0, 0, 10)})
 	require.NoError(t, err)
 	doc := decad.New()
-	body, err := decad.Sweep(t.Context(), doc, s, s.Profiles()[0], path)
+	body, err := decad.Sweep(doc, s, s.Profiles()[0], path).Do(t.Context())
 	require.NoError(t, err)
 	decadtest.MeasuresVolume(t, body, units.CubicMillimeters(4000), decadtest.Exactly())
 	return doc, body
@@ -181,7 +181,7 @@ func TestStraightSweepShellSideOpeningRefusesWholeBoundaryAndHole(t *testing.T) 
 		path, err := decad.NewPath(r3.Vec{}, decad.LineTo{End: r3.NewVec(0, 0, 10)})
 		require.NoError(t, err)
 		doc := decad.New()
-		body, err := decad.Sweep(t.Context(), doc, s, profile, path)
+		body, err := decad.Sweep(doc, s, profile, path).Do(t.Context())
 		require.NoError(t, err)
 		var hole *decad.Face
 		for _, face := range body.Faces() {
@@ -217,7 +217,7 @@ func TestSweepShellSideOpeningRefusesOtherPaths(t *testing.T) {
 			t.Parallel()
 			s, profile := plateSketch(t)
 			doc := decad.New()
-			body, err := decad.Sweep(t.Context(), doc, s, profile, tc.path(t))
+			body, err := decad.Sweep(doc, s, profile, tc.path(t)).Do(t.Context())
 			require.NoError(t, err)
 			var side *decad.Face
 			for _, face := range body.Faces() {

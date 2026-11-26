@@ -93,7 +93,7 @@ func loftVolumePolygonBody(t *testing.T, world *sketch.World, base, upper *sketc
 		require.NoError(t, err)
 		sections[i], profiles[i] = s, s.Profiles()[0]
 	}
-	loft, err := Loft(t.Context(), New(), sections[0], profiles[0], sections[1], profiles[1])
+	loft, err := Loft(New(), sections[0], profiles[0], sections[1], profiles[1]).Do(t.Context())
 	require.NoError(t, err)
 	return loft
 }
@@ -143,8 +143,8 @@ func TestLoftOutputBoundaryRefusesTinyTranslatedSeam(t *testing.T) {
 	s.Fix(rect.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	prism, err := Extrude(t.Context(), New(), s, s.Profiles()[0],
-		Distance{D: units.Millimeters(5), Dir: Along})
+	prism, err := Extrude(New(), s, s.Profiles()[0],
+		Distance{D: units.Millimeters(5), Dir: Along}).Do(t.Context())
 	require.NoError(t, err)
 	wantWorldY := new(big.Rat).Add(big.NewRat(13, 2),
 		new(big.Rat).SetFrac(big.NewInt(1), new(big.Int).Lsh(big.NewInt(1), 52)))
@@ -204,7 +204,7 @@ func TestLoftVolumeSourceRefusesRealTriangleFractionalSeam(t *testing.T) {
 		require.NoError(t, createErr)
 		sections[i], profiles[i] = s, s.Profiles()[0]
 	}
-	loft, err := Loft(t.Context(), New(), sections[0], profiles[0], sections[1], profiles[1])
+	loft, err := Loft(New(), sections[0], profiles[0], sections[1], profiles[1]).Do(t.Context())
 	require.NoError(t, err)
 	s, err := world.CreateSketch(base)
 	require.NoError(t, err)
@@ -218,8 +218,8 @@ func TestLoftVolumeSourceRefusesRealTriangleFractionalSeam(t *testing.T) {
 	s.Fix(prismPoints[0])
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	prism, err := Extrude(t.Context(), New(), s, s.Profiles()[0],
-		Distance{D: units.Millimeters(5), Dir: Along})
+	prism, err := Extrude(New(), s, s.Profiles()[0],
+		Distance{D: units.Millimeters(5), Dir: Along}).Do(t.Context())
 	require.NoError(t, err)
 	for _, tc := range []struct {
 		name          string
@@ -715,7 +715,7 @@ func loftBounded520Operands(t *testing.T) (*Body, *Body) {
 		sections[i], profiles[i] = s, s.Profiles()[0]
 	}
 	d := New()
-	loft, err := Loft(t.Context(), d, sections[0], profiles[0], sections[1], profiles[1])
+	loft, err := Loft(d, sections[0], profiles[0], sections[1], profiles[1]).Do(t.Context())
 	require.NoError(t, err)
 	prismSketch, err := world.CreateSketch(base)
 	require.NoError(t, err)
@@ -723,8 +723,8 @@ func loftBounded520Operands(t *testing.T) (*Body, *Body) {
 	prismSketch.Fix(rect.A)
 	_, err = prismSketch.Solve(t.Context())
 	require.NoError(t, err)
-	prism, err := Extrude(t.Context(), d, prismSketch, prismSketch.Profiles()[0],
-		Distance{D: units.Millimeters(5), Dir: Along})
+	prism, err := Extrude(d, prismSketch, prismSketch.Profiles()[0],
+		Distance{D: units.Millimeters(5), Dir: Along}).Do(t.Context())
 	require.NoError(t, err)
 	return prism, loft
 }
@@ -782,7 +782,7 @@ func TestLoftContactTwoLineCapsRealTrapezoid524(t *testing.T) {
 
 	doc := New()
 	prism := internalBoxBody(t, doc, 0, 0, 10, 10, 5)
-	loft, err := Loft(t.Context(), doc, sections[0], profiles[0], sections[1], profiles[1])
+	loft, err := Loft(doc, sections[0], profiles[0], sections[1], profiles[1]).Do(t.Context())
 	require.NoError(t, err)
 	operation := proofbound.NewWorkBudget(t.Context())
 	boundary, admitted, err := loftdirect.CertifyLoftOutputBoundary(
@@ -899,10 +899,10 @@ func TestLoftContactTwoLineCapsNarrowTranslated524(t *testing.T) {
 	prismProfiles := prismSketch.Profiles()
 	require.Equal(t, 1, len(prismProfiles))
 	require.True(t, prismProfiles[0].Valid)
-	prism, err := Extrude(t.Context(), doc, prismSketch, prismProfiles[0],
-		Distance{D: units.Millimeters(4), Dir: Along})
+	prism, err := Extrude(doc, prismSketch, prismProfiles[0],
+		Distance{D: units.Millimeters(4), Dir: Along}).Do(t.Context())
 	require.NoError(t, err)
-	loft, err := Loft(t.Context(), doc, sections[0], profiles[0], sections[1], profiles[1])
+	loft, err := Loft(doc, sections[0], profiles[0], sections[1], profiles[1]).Do(t.Context())
 	require.NoError(t, err)
 	pp, lp := prism.n.Payload.(prismPayload), loft.n.Payload.(loftPayload)
 	require.True(t, lp.AuthenticatedReconstruction)
@@ -976,8 +976,8 @@ func TestLoftVolumeComposeRealDisplacedNonjunction(t *testing.T) {
 	prismSketch.Fix(prismRect.A)
 	_, err = prismSketch.Solve(t.Context())
 	require.NoError(t, err)
-	prism, err := Extrude(t.Context(), doc, prismSketch, prismSketch.Profiles()[0],
-		Distance{D: units.Millimeters(5), Dir: Along})
+	prism, err := Extrude(doc, prismSketch, prismSketch.Profiles()[0],
+		Distance{D: units.Millimeters(5), Dir: Along}).Do(t.Context())
 	require.NoError(t, err)
 
 	var sections [2]*sketch.Sketch
@@ -995,7 +995,7 @@ func TestLoftVolumeComposeRealDisplacedNonjunction(t *testing.T) {
 		require.NoError(t, createErr)
 		sections[i], profiles[i] = s, s.Profiles()[0]
 	}
-	loft, err := Loft(t.Context(), doc, sections[0], profiles[0], sections[1], profiles[1])
+	loft, err := Loft(doc, sections[0], profiles[0], sections[1], profiles[1]).Do(t.Context())
 	require.NoError(t, err)
 
 	pp, lp := prism.n.Payload.(prismPayload), loft.n.Payload.(loftPayload)

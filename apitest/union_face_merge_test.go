@@ -128,7 +128,7 @@ func xzPrism(t *testing.T, doc *decad.Document, pts [][2]float64, d float64) *de
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	require.Len(t, s.Profiles(), 1)
-	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(d), Dir: decad.Against})
+	body, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(d), Dir: decad.Against}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -248,7 +248,7 @@ func TestUnionFaceMergeThenCut(t *testing.T) {
 	s.CreateCircle(centre, 1)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	pocket, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(2), Dir: decad.Along})
+	pocket, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(2), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 
 	cut, err := decad.Cut(joined, pocket).Do(t.Context())

@@ -45,10 +45,10 @@ func BenchmarkSplitBlockByCircle(b *testing.B) {
 		s.CreateCircle(center, 20)
 		_, err = s.Solve(b.Context())
 		require.NoError(b, err)
-		tool, err := decad.Extrude(b.Context(), doc, s, s.Profiles()[0], decad.TwoSided{
+		tool, err := decad.Extrude(doc, s, s.Profiles()[0], decad.TwoSided{
 			One: decad.DistanceSide{D: units.Millimeters(15)},
 			Two: decad.DistanceSide{D: units.Millimeters(5)},
-		}, decad.WithSurfaceResult())
+		}).SurfaceResult().Do(b.Context())
 		require.NoError(b, err)
 		b.StartTimer()
 		pieces, err := decad.Split(b.Context(), target, tool)
@@ -88,10 +88,10 @@ func BenchmarkSplitBlockByTwoRibbons(b *testing.B) {
 		_, err = s.Solve(b.Context())
 		require.NoError(b, err)
 		require.Len(b, s.Chains(), 1)
-		tool, err := decad.Extrude(b.Context(), doc, s, s.Chains()[0], decad.TwoSided{
+		tool, err := decad.Extrude(doc, s, s.Chains()[0], decad.TwoSided{
 			One: decad.DistanceSide{D: units.Millimeters(15)},
 			Two: decad.DistanceSide{D: units.Millimeters(5)},
-		})
+		}).Do(b.Context())
 		require.NoError(b, err)
 		b.StartTimer()
 		pieces, err := decad.Split(b.Context(), target, tool)

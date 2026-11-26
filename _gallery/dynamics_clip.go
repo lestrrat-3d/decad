@@ -433,7 +433,7 @@ func extrudedBox(ctx context.Context, doc *decad.Document, x0, y0, x1, y1, z0, h
 	if _, err := s.Solve(ctx); err != nil {
 		return nil, err
 	}
-	return decad.Extrude(ctx, doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
+	return decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(height), Dir: decad.Along}).Do(ctx)
 }
 
 // revolvedSphere is the source sphere of the given radius centered on the
@@ -453,8 +453,8 @@ func revolvedSphere(ctx context.Context, doc *decad.Document, radius float64) (*
 	if _, err := s.Solve(ctx); err != nil {
 		return nil, err
 	}
-	return decad.Revolve(ctx, doc, s, s.Profiles()[0],
-		decad.SketchLine{Start: decad.Point2{}, End: decad.Point2{U: 1}}, decad.FullRevolution{})
+	return decad.Revolve(doc, s, s.Profiles()[0],
+		decad.SketchLine{Start: decad.Point2{}, End: decad.Point2{U: 1}}, decad.FullRevolution{}).Do(ctx)
 }
 
 // extrudedCylinder is the source cylinder of the given radius and height,
@@ -471,7 +471,7 @@ func extrudedCylinder(ctx context.Context, doc *decad.Document, radius, height f
 	if _, err := s.Solve(ctx); err != nil {
 		return nil, err
 	}
-	return decad.Extrude(ctx, doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
+	return decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(height), Dir: decad.Along}).Do(ctx)
 }
 
 // tumbleRelease is one tumble body's release: a proper rotation by degrees
@@ -665,7 +665,7 @@ func extrudedPolygon(ctx context.Context, doc *decad.Document, corners [][2]floa
 	if _, err := s.Solve(ctx); err != nil {
 		return nil, err
 	}
-	return decad.Extrude(ctx, doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
+	return decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(height), Dir: decad.Along}).Do(ctx)
 }
 
 // stitchedTetrahedron stitches the tetrahedron with corners a·(1, 0, 0),
@@ -735,7 +735,7 @@ func trianglePatch(ctx context.Context, doc *decad.Document, w *sketch.World, pl
 	if _, err := s.Solve(ctx); err != nil {
 		return nil, err
 	}
-	return decad.PatchProfile(ctx, doc, s, s.Profiles()[0])
+	return decad.PatchProfile(doc, s, s.Profiles()[0]).Do(ctx)
 }
 
 // partsBinOmega is the parts-bin cylinder's spin about −x, in rad/s; it rolls
@@ -921,7 +921,7 @@ func polygonLoft(ctx context.Context, doc *decad.Document) (*decad.Body, error) 
 	if err != nil {
 		return nil, err
 	}
-	return decad.Loft(ctx, doc, s0, p0, s1, p1)
+	return decad.Loft(doc, s0, p0, s1, p1).Do(ctx)
 }
 
 // hexagonSweep sweeps partsBinHexagon 14 mm up a straight path.
@@ -935,7 +935,7 @@ func hexagonSweep(ctx context.Context, doc *decad.Document) (*decad.Body, error)
 	if err != nil {
 		return nil, err
 	}
-	return decad.Sweep(ctx, doc, s, p, path)
+	return decad.Sweep(doc, s, p, path).Do(ctx)
 }
 
 // revolvedBottle is the full revolve about z of a line-and-arc half-profile
@@ -969,8 +969,8 @@ func revolvedBottle(ctx context.Context, doc *decad.Document) (*decad.Body, erro
 	if len(s.Profiles()) != 1 {
 		return nil, fmt.Errorf("bottle: %d profiles, want 1", len(s.Profiles()))
 	}
-	return decad.Revolve(ctx, doc, s, s.Profiles()[0], decad.SketchLine{Start: decad.Point2{}, End: decad.Point2{V: 1}},
-		decad.FullRevolution{})
+	return decad.Revolve(doc, s, s.Profiles()[0], decad.SketchLine{Start: decad.Point2{}, End: decad.Point2{V: 1}},
+		decad.FullRevolution{}).Do(ctx)
 }
 
 // sideCylinder is the source cylinder of the given radius and length lying
@@ -987,6 +987,6 @@ func sideCylinder(ctx context.Context, doc *decad.Document, radius, length float
 	if _, err := s.Solve(ctx); err != nil {
 		return nil, err
 	}
-	return decad.Revolve(ctx, doc, s, s.Profiles()[0], decad.SketchLine{Start: decad.Point2{}, End: decad.Point2{U: 1}},
-		decad.FullRevolution{})
+	return decad.Revolve(doc, s, s.Profiles()[0], decad.SketchLine{Start: decad.Point2{}, End: decad.Point2{U: 1}},
+		decad.FullRevolution{}).Do(ctx)
 }

@@ -35,8 +35,8 @@ func Example_revolve_about_edge() {
 		fmt.Printf("failed to solve: %s\n", err)
 		return
 	}
-	gusset, err := decad.Extrude(context.Background(), doc, gussetSketch, gussetSketch.Profiles()[0],
-		decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	gusset, err := decad.Extrude(doc, gussetSketch, gussetSketch.Profiles()[0],
+		decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return
@@ -65,8 +65,8 @@ func Example_revolve_about_edge() {
 			decad.ParallelTo(r3.NewVec(1, 0, 0)),
 		).Exactly(1),
 	}
-	ring, err := decad.Revolve(context.Background(), doc, ringSketch, ringSketch.Profiles()[0],
-		axis, decad.FullRevolution{})
+	ring, err := decad.Revolve(doc, ringSketch, ringSketch.Profiles()[0],
+		axis, decad.FullRevolution{}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to revolve: %s\n", err)
 		return

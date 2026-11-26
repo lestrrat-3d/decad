@@ -46,7 +46,7 @@ func TestExtrudeChainOneLineRibbon(t *testing.T) {
 	t.Parallel()
 	s, ch := lineChainSketch(t)
 	doc := decad.New()
-	body, err := decad.Extrude(t.Context(), doc, s, ch, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, ch, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 
 	require.Equal(t, decad.BodySheet, body.Kind())
@@ -82,7 +82,7 @@ func TestExtrudeChainRibbonReadsValid(t *testing.T) {
 	t.Parallel()
 	s, ch := lineChainSketch(t)
 	doc := decad.New()
-	body, err := decad.Extrude(t.Context(), doc, s, ch, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, ch, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 
 	rep, err := doc.Verify(t.Context())
@@ -119,7 +119,7 @@ func TestExtrudeChainDiagonalLineAreaBoundEnclosesAnalyticValue(t *testing.T) {
 	require.Len(t, chains, 1)
 
 	doc := decad.New()
-	body, err := decad.Extrude(t.Context(), doc, s, chains[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, chains[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 
 	area, err := body.Area()
@@ -165,7 +165,7 @@ func TestExtrudeChainRejectsUncertifiedFragment(t *testing.T) {
 	require.False(t, ch.Edges[0].TExact, "the untouched spline withholds certification sketch-wide")
 
 	doc := decad.New()
-	_, err = decad.Extrude(t.Context(), doc, s, ch, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	_, err = decad.Extrude(doc, s, ch, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnrecordableProfile)
 	require.Empty(t, doc.Bodies())
 }
@@ -191,12 +191,12 @@ func TestExtrudeChainRejectsStaleChain(t *testing.T) {
 	require.True(t, ch.IsStale(), "the solve should have moved the sketch under the chain")
 
 	doc := decad.New()
-	_, err = decad.Extrude(t.Context(), doc, s, ch, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	_, err = decad.Extrude(doc, s, ch, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrStaleProfile)
 	require.Empty(t, doc.Bodies())
 
 	fresh := s.Chains()[0]
-	_, err = decad.Extrude(t.Context(), doc, s, fresh, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	_, err = decad.Extrude(doc, s, fresh, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 }
 
@@ -220,7 +220,7 @@ func TestExtrudeChainRejectsInvalidChain(t *testing.T) {
 	require.False(t, chains[0].Valid)
 
 	doc := decad.New()
-	_, err = decad.Extrude(t.Context(), doc, s, chains[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	_, err = decad.Extrude(doc, s, chains[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrInvalidProfile)
 	require.Empty(t, doc.Bodies())
 }
@@ -250,7 +250,7 @@ func TestExtrudeChainMultiSegmentWallSet(t *testing.T) {
 	require.Len(t, chains[0].Edges, 3)
 
 	doc := decad.New()
-	body, err := decad.Extrude(t.Context(), doc, s, chains[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, chains[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, body.Faces(), 3)
 
@@ -316,7 +316,7 @@ func TestExtrudeChainRectangleMinusOneSideBuildsThreeWalls(t *testing.T) {
 	require.Len(t, chains[0].Edges, 3)
 
 	doc := decad.New()
-	body, err := decad.Extrude(t.Context(), doc, s, chains[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, chains[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, body.Faces(), 3, "the erased side mints no wall")
 	_, err = body.Volume()
@@ -348,7 +348,7 @@ func TestExtrudeChainOverEachChainOfACutVertex(t *testing.T) {
 
 	doc := decad.New()
 	for _, ch := range chains {
-		body, err := decad.Extrude(t.Context(), doc, s, ch, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+		body, err := decad.Extrude(doc, s, ch, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 		require.NoError(t, err)
 		require.Len(t, body.Faces(), 1)
 	}
@@ -381,7 +381,7 @@ func TestExtrudeChainFreeformWallAreaNeverPublishesTheLengthUnderestimate(t *tes
 
 	const h = 10.0
 	doc := decad.New()
-	body, err := decad.Extrude(t.Context(), doc, s, chains[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, chains[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 
 	area, err := body.Area()
@@ -407,7 +407,7 @@ func TestChainFedRefusals(t *testing.T) {
 	s, ch := lineChainSketch(t)
 	doc := decad.New()
 
-	_, err := decad.Sweep(t.Context(), doc, s, ch, nil)
+	_, err := decad.Sweep(doc, s, ch, nil).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrDegenerate, "a nil path is refused before the staged refusal")
 
 	path, err := decad.NewPath(
@@ -417,7 +417,7 @@ func TestChainFedRefusals(t *testing.T) {
 		decad.ArcThrough{Through: r3.NewVec(1, 0, 23), End: r3.NewVec(2, 0, 24)},
 	)
 	require.NoError(t, err)
-	_, err = decad.Sweep(t.Context(), doc, s, ch, path)
+	_, err = decad.Sweep(doc, s, ch, path).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.ErrorContains(t, err, "span 1 is not an exact quarter or half turn")
 	require.Empty(t, doc.Bodies())
@@ -436,9 +436,9 @@ func TestChainFedRefusals(t *testing.T) {
 	require.Len(t, axisSketch.Chains(), 1)
 	axisChain := axisSketch.Chains()[0]
 
-	_, err = decad.Revolve(t.Context(), doc, axisSketch, axisChain,
+	_, err = decad.Revolve(doc, axisSketch, axisChain,
 		decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}},
-		decad.FullRevolution{})
+		decad.FullRevolution{}).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.ErrorContains(t, err, "both free ends")
 	require.Empty(t, doc.Bodies())
@@ -477,9 +477,9 @@ func TestExtrudeChainRibbonsWeldAtAProvenCoincidentPair(t *testing.T) {
 	ch2 := s2.Chains()[0]
 
 	doc := decad.New()
-	body1, err := decad.Extrude(t.Context(), doc, s1, ch1, decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	body1, err := decad.Extrude(doc, s1, ch1, decad.Distance{D: units.Millimeters(5), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
-	body2, err := decad.Extrude(t.Context(), doc, s2, ch2, decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	body2, err := decad.Extrude(doc, s2, ch2, decad.Distance{D: units.Millimeters(5), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 
 	stitched, err := decad.Stitch(t.Context(), body1, body2)
@@ -515,15 +515,15 @@ func TestChainFedRefusalsStillRunTheSeamGates(t *testing.T) {
 	doc := decad.New()
 	path, err := decad.NewPath(r3.NewVec(0, 0, 0), decad.LineTo{End: r3.NewVec(0, 0, 10)})
 	require.NoError(t, err)
-	_, err = decad.Sweep(t.Context(), doc, s, ch, path)
+	_, err = decad.Sweep(doc, s, ch, path).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrStaleProfile)
 
-	_, err = decad.LoftChain(t.Context(), doc, s, ch, s, ch)
+	_, err = decad.LoftChain(doc, s, ch, s, ch).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrStaleProfile)
 }
 
 // TestExtrudeChainRefusesProfileOnlyOptions pins that a chain extrude always
-// returns a sheet and has no draft build: WithSurfaceResult and WithTaper, at
+// returns a sheet and has no draft build: SurfaceResult and Taper, at
 // any angle and zero included, return ErrUnsupported and leave the document
 // unchanged, while the same call without an option builds the ribbon.
 func TestExtrudeChainRefusesProfileOnlyOptions(t *testing.T) {
@@ -531,23 +531,25 @@ func TestExtrudeChainRefusesProfileOnlyOptions(t *testing.T) {
 	s, ch := lineChainSketch(t)
 	e := decad.Distance{D: units.Millimeters(10), Dir: decad.Along}
 	tests := []struct {
-		name string
-		opt  decad.ExtrudeOption
+		name  string
+		apply func(*decad.ExtrudeCommand)
 	}{
-		{"surface result", decad.WithSurfaceResult()},
-		{"taper", decad.WithTaper(units.Degrees(5))},
-		{"zero taper", decad.WithTaper(units.Degrees(0))},
+		{"surface result", func(c *decad.ExtrudeCommand) { c.SurfaceResult() }},
+		{"taper", func(c *decad.ExtrudeCommand) { c.Taper(units.Degrees(5)) }},
+		{"zero taper", func(c *decad.ExtrudeCommand) { c.Taper(units.Degrees(0)) }},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			doc := decad.New()
-			body, err := decad.Extrude(t.Context(), doc, s, ch, e, tc.opt)
+			refused := decad.Extrude(doc, s, ch, e)
+			tc.apply(refused)
+			body, err := refused.Do(t.Context())
 			require.ErrorIs(t, err, decad.ErrUnsupported)
 			require.Nil(t, body)
 			require.Empty(t, doc.Bodies())
 
-			body, err = decad.Extrude(t.Context(), doc, s, ch, e)
+			body, err = decad.Extrude(doc, s, ch, e).Do(t.Context())
 			require.NoError(t, err)
 			require.Equal(t, decad.BodySheet, body.Kind())
 			require.Len(t, doc.Bodies(), 1)
@@ -565,19 +567,19 @@ func TestExtrudeChainOptionRefusalFollowsTheSeam(t *testing.T) {
 	doc := decad.New()
 	e := decad.Distance{D: units.Millimeters(10), Dir: decad.Along}
 
-	_, err := decad.Extrude(t.Context(), doc, otherSketch, ch, e, decad.WithSurfaceResult())
+	_, err := decad.Extrude(doc, otherSketch, ch, e).SurfaceResult().Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrForeignProfile)
 	require.NotErrorIs(t, err, decad.ErrUnsupported, "the seam error wins over the option refusal")
-	_, err = decad.Extrude(t.Context(), doc, otherSketch, ch, e, decad.WithTaper(units.Degrees(5)))
+	_, err = decad.Extrude(doc, otherSketch, ch, e).Taper(units.Degrees(5)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrForeignProfile)
 	require.NotErrorIs(t, err, decad.ErrUnsupported, "the seam error wins over the option refusal")
 
 	zero := decad.Distance{D: units.Millimeters(0), Dir: decad.Along}
-	_, err = decad.Extrude(t.Context(), doc, s, ch, zero)
+	_, err = decad.Extrude(doc, s, ch, zero).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrDegenerate, "the extent gate refuses a zero distance without the option")
-	_, err = decad.Extrude(t.Context(), doc, s, ch, zero, decad.WithSurfaceResult())
+	_, err = decad.Extrude(doc, s, ch, zero).SurfaceResult().Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported, "the option refusal wins over the extent gate")
-	_, err = decad.Extrude(t.Context(), doc, s, ch, zero, decad.WithTaper(units.Degrees(5)))
+	_, err = decad.Extrude(doc, s, ch, zero).Taper(units.Degrees(5)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported, "the option refusal wins over the extent gate")
 	require.Empty(t, doc.Bodies())
 }

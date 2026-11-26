@@ -38,7 +38,7 @@ func (sc *stripScene) lipSocket(t testing.TB, x4, x6 float64) (*Body, FeatureRef
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	// Against the sketch normal the prism spans y ∈ [0, 18]; shifted by −1 it passes both ends of the block.
-	tool, err := Extrude(t.Context(), sc.doc, s, s.Profiles()[0], Distance{D: units.Millimeters(18), Dir: Against})
+	tool, err := Extrude(sc.doc, s, s.Profiles()[0], Distance{D: units.Millimeters(18), Dir: Against}).Do(t.Context())
 	require.NoError(t, err)
 	move, err := r3.Translation(r3.Vec{Y: -1})
 	require.NoError(t, err)
@@ -215,7 +215,7 @@ func TestRetainedLineChamferExact(t *testing.T) {
 		_, err = xz.Solve(t.Context())
 		require.NoError(t, err)
 		// Along the sketch normal the block spans y ∈ [−35, 0]; shifted by 25 it spans y ∈ [−10, 25].
-		block, err := Extrude(t.Context(), sc.doc, xz, xz.Profiles()[0], Distance{D: units.Millimeters(35), Dir: Along})
+		block, err := Extrude(sc.doc, xz, xz.Profiles()[0], Distance{D: units.Millimeters(35), Dir: Along}).Do(t.Context())
 		require.NoError(t, err)
 		move, err := r3.Translation(r3.Vec{Y: 25})
 		require.NoError(t, err)
@@ -236,7 +236,7 @@ func TestRetainedLineChamferExact(t *testing.T) {
 		_, err = xy.Solve(t.Context())
 		require.NoError(t, err)
 		// Along +Z the prism spans z ∈ [0, 12]; shifted down by 1 it passes both faces of the block.
-		tool, err := Extrude(t.Context(), sc.doc, xy, xy.Profiles()[0], Distance{D: units.Millimeters(12), Dir: Along})
+		tool, err := Extrude(sc.doc, xy, xy.Profiles()[0], Distance{D: units.Millimeters(12), Dir: Along}).Do(t.Context())
 		require.NoError(t, err)
 		down, err := r3.Translation(r3.Vec{Z: -1})
 		require.NoError(t, err)

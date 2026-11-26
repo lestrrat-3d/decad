@@ -21,8 +21,8 @@ func makeRevolvedCylinder(t *testing.T, doc *decad.Document, extent decad.Angula
 	s.Fix(rect.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := decad.Revolve(t.Context(), doc, s, s.Profiles()[0], decad.SketchLine{
-		Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}}, extent)
+	body, err := decad.Revolve(doc, s, s.Profiles()[0], decad.SketchLine{
+		Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}}, extent).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -37,8 +37,8 @@ func makeTorus(t *testing.T, doc *decad.Document) *decad.Body {
 	s.Fix(center)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := decad.Revolve(t.Context(), doc, s, s.Profiles()[0], decad.SketchLine{
-		Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}}, decad.FullRevolution{})
+	body, err := decad.Revolve(doc, s, s.Profiles()[0], decad.SketchLine{
+		Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}}, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }

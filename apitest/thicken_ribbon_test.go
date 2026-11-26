@@ -30,9 +30,9 @@ func thickenRibbonOf(t *testing.T, pts [][2]float64) (*decad.Document, *decad.Bo
 	chains := s.Chains()
 	require.Len(t, chains, 1)
 	doc := decad.New()
-	ribbon, err := decad.Extrude(t.Context(), doc, s, chains[0], decad.Distance{
+	ribbon, err := decad.Extrude(doc, s, chains[0], decad.Distance{
 		D: units.Millimeters(10), Dir: decad.Along,
-	})
+	}).Do(t.Context())
 	require.NoError(t, err)
 	return doc, ribbon
 }

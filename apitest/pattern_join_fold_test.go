@@ -89,7 +89,7 @@ func roundPinAt(t *testing.T, doc *decad.Document, x, y float64) *decad.Body {
 	s.CreateCircle(centre, 3)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	pin, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	pin, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return pin
 }

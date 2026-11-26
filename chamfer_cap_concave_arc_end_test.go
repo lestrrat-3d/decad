@@ -152,7 +152,7 @@ func TestChamferConcaveEndKeepsItsRelief(t *testing.T) {
 			}
 			require.NotNil(t, pr)
 			doc := decad.New(decad.WithGapTolerance(units.Millimeters(c.gap)))
-			body, err := decad.Extrude(ctx, doc, s, pr, decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+			body, err := decad.Extrude(doc, s, pr, decad.Distance{D: units.Millimeters(5), Dir: decad.Along}).Do(ctx)
 			require.NoError(t, err)
 			before := volumeOf(t, body)
 

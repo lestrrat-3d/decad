@@ -130,7 +130,7 @@ func (g twistedGear) loft(t *testing.T, height, twist, radius float64) (*decad.B
 	w := sketch.NewWorld()
 	s0, p0, bottom := g.section(t, w, w.XY(), 0, radius)
 	s1, p1, top := g.section(t, w, splitTopPlane(t, w, height), twist, radius)
-	body, err := decad.Loft(t.Context(), decad.New(), s0, p0, s1, p1)
+	body, err := decad.Loft(decad.New(), s0, p0, s1, p1).Do(t.Context())
 	require.NoError(t, err)
 	return body, bottom, top
 }
@@ -292,7 +292,7 @@ func TestLoftFilletSectionsWithDifferentRecords(t *testing.T) {
 		w := sketch.NewWorld()
 		s0, p0, c0 := squareSection(t, w, w.XY(), 10, 0, radius)
 		s1, p1, c1 := squareSection(t, w, splitTopPlane(t, w, height), size1, twist, radius)
-		body, err := decad.Loft(t.Context(), decad.New(), s0, p0, s1, p1)
+		body, err := decad.Loft(decad.New(), s0, p0, s1, p1).Do(t.Context())
 		require.NoError(t, err)
 		return body, c0, c1
 	}

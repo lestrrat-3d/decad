@@ -106,7 +106,7 @@ func bladeBody(t *testing.T, joined bool) *decad.Body {
 	}
 	require.NotNil(t, pr)
 	// The sketch plane's normal is -y, so Against extrudes along +y.
-	body, err := decad.Extrude(t.Context(), doc, s, pr, decad.Distance{D: units.Millimeters(6), Dir: decad.Against})
+	body, err := decad.Extrude(doc, s, pr, decad.Distance{D: units.Millimeters(6), Dir: decad.Against}).Do(t.Context())
 	require.NoError(t, err)
 	if !joined {
 		return body

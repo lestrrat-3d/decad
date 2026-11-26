@@ -24,7 +24,7 @@ func TestChainGateDiameterCurvedExtrudeVerify(t *testing.T) {
 	chains := s.Chains()
 	require.Len(t, chains, 1)
 	doc := decad.New()
-	body, err := decad.Extrude(t.Context(), doc, s, chains[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, chains[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, decad.BodySheet, body.Kind())
 	require.Len(t, body.Faces(), 1)
@@ -69,9 +69,9 @@ func TestChainGateDiameterFullRevolveVerify(t *testing.T) {
 	chains := s.Chains()
 	require.Len(t, chains, 1)
 	doc := decad.New()
-	body, err := decad.Revolve(t.Context(), doc, s, chains[0],
+	body, err := decad.Revolve(doc, s, chains[0],
 		decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}},
-		decad.FullRevolution{})
+		decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, decad.BodySheet, body.Kind())
 	require.Len(t, body.Faces(), 1)
@@ -104,7 +104,7 @@ func TestChainGateDiameterLoftHasToleranceReference(t *testing.T) {
 	s0, c0 := makeLine(w.XY())
 	s1, c1 := makeLine(top)
 	doc := decad.New()
-	body, err := decad.LoftChain(t.Context(), doc, s0, c0, s1, c1)
+	body, err := decad.LoftChain(doc, s0, c0, s1, c1).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, decad.BodySheet, body.Kind())
 	require.Len(t, body.Faces(), 2)
@@ -122,8 +122,8 @@ func TestChainGateDiameterPartialRevolveHasToleranceReference(t *testing.T) {
 		t.Run(units.Degrees(degrees).String(), func(t *testing.T) {
 			s, chain, axis := coneChainAtRadius(t, 0)
 			doc := decad.New()
-			body, err := decad.Revolve(t.Context(), doc, s, chain, axis,
-				decad.AngleExtent{A: units.Degrees(degrees), Dir: decad.Along})
+			body, err := decad.Revolve(doc, s, chain, axis,
+				decad.AngleExtent{A: units.Degrees(degrees), Dir: decad.Along}).Do(t.Context())
 			require.NoError(t, err)
 			require.Equal(t, decad.BodySheet, body.Kind())
 			report, err := doc.Verify(t.Context())
@@ -138,7 +138,7 @@ func TestChainGateDiameterPartialRevolveHasToleranceReference(t *testing.T) {
 func TestChainGateDiameterPlacedRevolveHasToleranceReference(t *testing.T) {
 	s, chain, axis := coneChainAtRadius(t, 0)
 	doc := decad.New()
-	body, err := decad.Revolve(t.Context(), doc, s, chain, axis, decad.FullRevolution{})
+	body, err := decad.Revolve(doc, s, chain, axis, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	rotation, err := r3.Rotation(r3.NewVec(1, 2, 3), units.Degrees(37))
 	require.NoError(t, err)

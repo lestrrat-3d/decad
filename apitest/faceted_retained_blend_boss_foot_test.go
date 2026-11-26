@@ -61,8 +61,8 @@ func (bf bossFoot) build(t *testing.T) *decad.Body {
 		}
 		_, err = s.Solve(t.Context())
 		require.NoError(t, err)
-		tool, err := decad.Extrude(t.Context(), sc.doc, s, s.Profiles()[0],
-			decad.Distance{D: units.Millimeters(25), Dir: decad.Along})
+		tool, err := decad.Extrude(sc.doc, s, s.Profiles()[0],
+			decad.Distance{D: units.Millimeters(25), Dir: decad.Along}).Do(t.Context())
 		require.NoError(t, err)
 		boss, err = decad.Cut(boss, placed(t, tool, 4)).Do(t.Context())
 		require.NoError(t, err)
@@ -289,7 +289,7 @@ func TestFacetedRetainedBlendBossFoot(t *testing.T) {
 		}
 		_, err = s.Solve(t.Context())
 		require.NoError(t, err)
-		prism, err := decad.Extrude(t.Context(), sc.doc, s, s.Profiles()[0], decad.Symmetric{D: units.Millimeters(10)})
+		prism, err := decad.Extrude(sc.doc, s, s.Profiles()[0], decad.Symmetric{D: units.Millimeters(10)}).Do(t.Context())
 		require.NoError(t, err)
 		shift, err := r3.Translation(r3.Vec{Y: 10})
 		require.NoError(t, err)

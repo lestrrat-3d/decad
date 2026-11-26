@@ -474,11 +474,11 @@ func buildBossPillar(ctx context.Context, d *Document, in bossRequest) (*Body, e
 	if in.outward.Dot(footing.N()) > 0 {
 		dir = Along
 	}
-	var taper []ExtrudeOption
+	var st extrudeSettings
 	if in.draft != 0 {
-		taper = []ExtrudeOption{WithTaper(units.Radians(in.draft))}
+		st = withTaper(units.Radians(in.draft), "")
 	}
-	return Extrude(ctx, d, s, s.Profiles()[0], Distance{D: units.Millimeters(in.height + in.embed), Dir: dir}, taper...)
+	return extrudeTool(ctx, d, s, s.Profiles()[0], Distance{D: units.Millimeters(in.height + in.embed), Dir: dir}, st)
 }
 
 // bossRibRequest is one gusset rib in plain data: its angle about the boss's axis from the
@@ -586,7 +586,7 @@ func buildBossRibs(ctx context.Context, d *Document, in bossRequest) ([]*Body, e
 			return fail(err)
 		}
 		half := units.Millimeters(rib.thickness / 2)
-		tool, err := Extrude(ctx, d, s, s.Profiles()[0], TwoSided{One: DistanceSide{D: half}, Two: DistanceSide{D: half}})
+		tool, err := extrudeTool(ctx, d, s, s.Profiles()[0], TwoSided{One: DistanceSide{D: half}, Two: DistanceSide{D: half}}, extrudeSettings{})
 		if err != nil {
 			return fail(err)
 		}
@@ -669,5 +669,5 @@ func buildTiltedPillar(ctx context.Context, d *Document, in bossRequest) (*Body,
 	if t.axis.Dot(footing.N()) > 0 {
 		dir = Along
 	}
-	return Extrude(ctx, d, s, s.Profiles()[0], Distance{D: units.Millimeters(in.height + t.embed), Dir: dir})
+	return extrudeTool(ctx, d, s, s.Profiles()[0], Distance{D: units.Millimeters(in.height + t.embed), Dir: dir}, extrudeSettings{})
 }

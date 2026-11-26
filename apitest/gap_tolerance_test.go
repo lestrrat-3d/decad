@@ -15,7 +15,7 @@ func gapPlate(t *testing.T, opts ...decad.DocumentOption) *decad.Body {
 	t.Helper()
 	s, p := plateSketch(t)
 	doc := decad.New(opts...)
-	body, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(shellBoxHeight), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(shellBoxHeight), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }

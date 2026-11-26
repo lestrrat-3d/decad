@@ -33,7 +33,7 @@ func forkMeshResult(t *testing.T) *decad.Body {
 	s.CreateCircle(c, 0.4)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	bore, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: mm(8.5), Dir: decad.Along})
+	bore, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: mm(8.5), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	out, err := decad.Cut(fork, bore).Do(t.Context())
 	require.NoError(t, err)

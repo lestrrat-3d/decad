@@ -115,7 +115,7 @@ func TestBodyPatchPlanarHoleFillTessellates(t *testing.T) {
 	}
 	require.NotNil(t, profile)
 	doc := decad.New()
-	sheet, err := decad.PatchProfile(t.Context(), doc, s, profile)
+	sheet, err := decad.PatchProfile(doc, s, profile).Do(t.Context())
 	require.NoError(t, err)
 	filled, err := decad.PatchEdges(t.Context(), sheet, decad.Edges(decad.Free(), decad.Concave()).Exactly(4))
 	require.NoError(t, err)
@@ -131,7 +131,7 @@ func TestBodyPatchCoincidentFacesRefuseVerifiedMesh(t *testing.T) {
 	t.Parallel()
 	s, p := plateSketch(t)
 	doc := decad.New()
-	sheet, err := decad.PatchProfile(t.Context(), doc, s, p)
+	sheet, err := decad.PatchProfile(doc, s, p).Do(t.Context())
 	require.NoError(t, err)
 	doubled, err := decad.PatchEdges(t.Context(), sheet, decad.Edges(decad.Free()).Exactly(4))
 	require.NoError(t, err)

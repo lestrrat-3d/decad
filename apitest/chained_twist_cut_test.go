@@ -94,8 +94,7 @@ func chainBoreTool(t *testing.T, doc *decad.Document, c chainBoreSpec) *decad.Bo
 	require.NoError(t, err)
 	path, err := decad.NewPath(r3.Vec{}, decad.LineTo{End: r3.NewVec(0, 0, c.s1-c.s0)})
 	require.NoError(t, err)
-	tool, err := decad.Sweep(t.Context(), doc, s, s.Profiles()[0], path,
-		decad.WithSweepTwist(units.Radians((c.s1-c.s0)/lam)))
+	tool, err := decad.Sweep(doc, s, s.Profiles()[0], path).Twist(units.Radians((c.s1 - c.s0) / lam)).Do(t.Context())
 	require.NoError(t, err)
 	dir, axial, origin := c.pose()
 	f, err := r3.NewFrame(origin.Add(dir.Scale(c.s0)), axial, chainCross(dir, axial))
@@ -133,8 +132,8 @@ func chainWindow(t *testing.T, doc *decad.Document, section [4][2]float64, turn 
 	}
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(30), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(30), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	if turn == 0 {
 		return body

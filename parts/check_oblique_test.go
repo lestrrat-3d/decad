@@ -74,7 +74,7 @@ func obliqueHubDisc(t *testing.T) (*decad.Document, *decad.Body) {
 	}
 	require.NotNil(t, profile)
 	doc := decad.New()
-	body, err := decad.Extrude(t.Context(), doc, s, profile, decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, profile, decad.Distance{D: units.Millimeters(5), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return doc, body
 }
@@ -102,8 +102,8 @@ func obliqueSideBlock(t *testing.T, doc *decad.Document) *decad.Body {
 	s.Fix(p3)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	b, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	b, err := decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(5), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return b
 }

@@ -194,7 +194,7 @@ func TestFacetedRetainedBlendParallelCylinders(t *testing.T) {
 		s.CreateCircle(c, 3)
 		_, err = s.Solve(t.Context())
 		require.NoError(t, err)
-		cross, err := decad.Extrude(t.Context(), sc.doc, s, s.Profiles()[0], decad.Symmetric{D: units.Millimeters(30)})
+		cross, err := decad.Extrude(sc.doc, s, s.Profiles()[0], decad.Symmetric{D: units.Millimeters(30)}).Do(t.Context())
 		require.NoError(t, err)
 		shift, err := r3.Translation(r3.Vec{X: 20.001})
 		require.NoError(t, err)

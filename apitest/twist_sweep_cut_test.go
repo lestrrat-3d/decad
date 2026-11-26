@@ -33,8 +33,7 @@ func twistBoreTool(t *testing.T, doc *decad.Document, deg float64) *decad.Body {
 	require.NoError(t, err)
 	path, err := decad.NewPath(r3.Vec{}, decad.LineTo{End: r3.NewVec(0, 0, twistBoreSpan)})
 	require.NoError(t, err)
-	body, err := decad.Sweep(t.Context(), doc, s, s.Profiles()[0], path,
-		decad.WithSweepTwist(units.Degrees(deg)))
+	body, err := decad.Sweep(doc, s, s.Profiles()[0], path).Twist(units.Degrees(deg)).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -182,7 +181,7 @@ func twistBoreTube(t *testing.T, doc *decad.Document, outer, inner, height float
 	require.NoError(t, err)
 	for _, p := range s.Profiles() {
 		if len(p.Outer) == 1 && len(p.Holes) == 1 {
-			body, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
+			body, err := decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(height), Dir: decad.Along}).Do(t.Context())
 			require.NoError(t, err)
 			return body
 		}

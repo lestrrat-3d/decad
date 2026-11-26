@@ -49,7 +49,7 @@ func reflexDPlate(t *testing.T, doc *decad.Document) *decad.Body {
 		}
 	}
 	require.NotNil(t, pr)
-	body, err := decad.Extrude(t.Context(), doc, s, pr, decad.Distance{D: units.Millimeters(reflexH), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, pr, decad.Distance{D: units.Millimeters(reflexH), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }

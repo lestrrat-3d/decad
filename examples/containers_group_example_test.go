@@ -30,7 +30,7 @@ func Example_containers_group() {
 		if err := c.AddSketch(s); err != nil {
 			return err
 		}
-		_, err = decad.Extrude(ctx, doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(1), Dir: decad.Along})
+		_, err = decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(1), Dir: decad.Along}).Do(ctx)
 		return err
 	}
 

@@ -36,7 +36,7 @@ func overhangPart(t *testing.T, doc *decad.Document) *decad.Body {
 	}
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(20), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	turn, err := r3.FromBasis(r3.Basis{EX: r3.NewVec(1, 0, 0), EY: r3.NewVec(0, 0, 1), EZ: r3.NewVec(0, -1, 0)},
 		r3.NewVec(0, 20, 0))
@@ -60,7 +60,7 @@ func mitredBranch(t *testing.T, doc *decad.Document, pts []r3.Vec, radii []float
 	}
 	path, err := decad.NewPath(r3.Vec{}, segments...)
 	require.NoError(t, err)
-	body, err := decad.Sweep(t.Context(), doc, s, profile, path, decad.WithMitredJoins(), decad.WithSectionScale(scalars(factors...)...))
+	body, err := decad.Sweep(doc, s, profile, path).MitredJoins().SectionScale(scalars(factors...)...).Do(t.Context())
 	require.NoError(t, err)
 	move, err := r3.Translation(pts[0])
 	require.NoError(t, err)

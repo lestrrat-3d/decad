@@ -294,7 +294,7 @@ func mitred(ctx context.Context, env topo.Env, profile momentinput.Profile, plan
 		}
 	}
 	if cfg.Scaled && !cfg.Mitred && len(path.Segments) > 1 {
-		return nil, fmt.Errorf(`%w: WithSectionScale on a path of %d spans requires WithMitredJoins`,
+		return nil, fmt.Errorf(`%w: SectionScale on a path of %d spans requires MitredJoins`,
 			decaderr.ErrUnsupported, len(path.Segments))
 	}
 	if err := sweepinput.ValidateSweepPathStart(path, plane); err != nil {

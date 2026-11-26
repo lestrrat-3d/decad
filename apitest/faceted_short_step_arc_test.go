@@ -39,16 +39,16 @@ func TestFacetedShortStepArc(t *testing.T) {
 		prev = next
 	}
 	meridian.CreateLine(prev, first)
-	drum, err := decad.Revolve(ctx, doc, meridian, shortStepProfile(t, meridian),
-		decad.ConstructionAxis{Origin: r3.Vec{Z: h}, Dir: r3.Vec{Y: 1}}, decad.FullRevolution{})
+	drum, err := decad.Revolve(doc, meridian, shortStepProfile(t, meridian),
+		decad.ConstructionAxis{Origin: r3.Vec{Z: h}, Dir: r3.Vec{Y: 1}}, decad.FullRevolution{}).Do(ctx)
 	require.NoError(t, err)
 
 	angle := 60 * math.Pi / 180
 	u := r3.Vec{X: math.Cos(angle), Z: math.Sin(angle)}
 	ws := shortStepSketch(t, r3.Vec{Z: h, Y: -16.5}, u, r3.Vec{Y: 1}.Cross(u))
 	shortStepWindow(t, ws, 14, 24, 40*math.Pi/180, 1.0)
-	window, err := decad.Extrude(ctx, doc, ws, shortStepProfile(t, ws),
-		decad.Distance{D: units.Millimeters(6), Dir: decad.Along})
+	window, err := decad.Extrude(doc, ws, shortStepProfile(t, ws),
+		decad.Distance{D: units.Millimeters(6), Dir: decad.Along}).Do(ctx)
 	require.NoError(t, err)
 	body, err := decad.Cut(drum, window).Do(ctx)
 	require.NoError(t, err)
@@ -229,7 +229,7 @@ func shortStepPrism(t *testing.T, doc *decad.Document, o, u, v r3.Vec, xy [][2]f
 		_, err := sketch.CreateFillet(s, lines[(i+n-1)%n], lines[i], pts[i], radii[i])
 		require.NoError(t, err)
 	}
-	b, err := decad.Extrude(t.Context(), doc, s, shortStepProfile(t, s), decad.Distance{D: units.Millimeters(length), Dir: decad.Along})
+	b, err := decad.Extrude(doc, s, shortStepProfile(t, s), decad.Distance{D: units.Millimeters(length), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return b
 }
@@ -238,7 +238,7 @@ func shortStepBox(t *testing.T, doc *decad.Document, x0, x1, y0, y1, z0, z1 floa
 	s := shortStepSketch(t, r3.Vec{Z: z0}, r3.Vec{X: 1}, r3.Vec{Y: 1})
 	r := s.CreateRectangle(x0, y0, x1, y1)
 	s.Fix(r.A)
-	b, err := decad.Extrude(t.Context(), doc, s, shortStepProfile(t, s), decad.Distance{D: units.Millimeters(z1 - z0), Dir: decad.Along})
+	b, err := decad.Extrude(doc, s, shortStepProfile(t, s), decad.Distance{D: units.Millimeters(z1 - z0), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return b
 }

@@ -157,8 +157,8 @@ func obliquePatternUnion(t *testing.T, r, height float64, n int) (*decad.Body, e
 	ds.CreateCircle(ds.Origin(), r)
 	_, err = ds.Solve(t.Context())
 	require.NoError(t, err)
-	disc, err := decad.Extrude(t.Context(), doc, ds, ds.Profiles()[0],
-		decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
+	disc, err := decad.Extrude(doc, ds, ds.Profiles()[0],
+		decad.Distance{D: units.Millimeters(height), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 
 	half := 0.4 * math.Pi / float64(n)
@@ -192,7 +192,7 @@ func obliquePatternUnion(t *testing.T, r, height float64, n int) (*decad.Body, e
 	}
 	s0, q0 := section(p0)
 	s1, q1 := section(p1)
-	lobe, err := decad.Loft(t.Context(), doc, s0, q0, s1, q1)
+	lobe, err := decad.Loft(doc, s0, q0, s1, q1).Do(t.Context())
 	require.NoError(t, err)
 	copies, err := decad.PatternCopies(t.Context(), lobe,
 		decad.CircularPattern{Center: f0.Origin(), Axis: f0.N(), Count: n})
@@ -286,7 +286,7 @@ func slimLobeLoft(t *testing.T, doc *decad.Document, r, half, height float64) *d
 	}
 	s0, p0 := section(w.XY())
 	s1, p1 := section(splitTopPlane(t, w, height))
-	b, err := decad.Loft(t.Context(), doc, s0, p0, s1, p1)
+	b, err := decad.Loft(doc, s0, p0, s1, p1).Do(t.Context())
 	require.NoError(t, err)
 	return b
 }

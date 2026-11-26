@@ -56,7 +56,7 @@ func reflectedDiscBody(t *testing.T, doc *decad.Document, cx, cy, r float64) *de
 	s.CreateCircle(center, r)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(reflectedHeight), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(reflectedHeight), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -82,7 +82,7 @@ func quarterDiscBody(t *testing.T, doc *decad.Document, cx, cy, r float64) *deca
 	require.NoError(t, err)
 	profs := s.Profiles()
 	require.Len(t, profs, 1)
-	body, err := decad.Extrude(t.Context(), doc, s, profs[0], decad.Distance{D: units.Millimeters(reflectedHeight), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, profs[0], decad.Distance{D: units.Millimeters(reflectedHeight), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }

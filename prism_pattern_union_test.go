@@ -91,7 +91,7 @@ func prismPatternTabBodies(t *testing.T, radius float64) (*Document, *Body, *Bod
 	world := sketch.NewWorld()
 	s, profile := loftCylinderTabProfile(t, ctx, world, world.XY(), 0)
 	doc := New()
-	tooth, err := Extrude(ctx, doc, s, profile, Distance{D: units.Millimeters(2), Dir: Along})
+	tooth, err := Extrude(doc, s, profile, Distance{D: units.Millimeters(2), Dir: Along}).Do(ctx)
 	require.NoError(t, err)
 	blankSketch, err := world.CreateSketch(world.XY())
 	require.NoError(t, err)
@@ -101,8 +101,8 @@ func prismPatternTabBodies(t *testing.T, radius float64) (*Document, *Body, *Bod
 	_, err = blankSketch.Solve(ctx)
 	require.NoError(t, err)
 	require.Len(t, blankSketch.Profiles(), 1)
-	blank, err := Extrude(ctx, doc, blankSketch, blankSketch.Profiles()[0],
-		Distance{D: units.Millimeters(2), Dir: Along})
+	blank, err := Extrude(doc, blankSketch, blankSketch.Profiles()[0],
+		Distance{D: units.Millimeters(2), Dir: Along}).Do(ctx)
 	require.NoError(t, err)
 	turn, err := r3.Rotation(r3.Vec{Z: 1}, units.Radians(math.Pi/2))
 	require.NoError(t, err)

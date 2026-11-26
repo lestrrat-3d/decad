@@ -15,7 +15,7 @@ func twistedShellReceiver(t *testing.T, angle units.Value) (*decad.Document, *de
 	path, err := decad.NewPath(r3.Vec{}, decad.LineTo{End: r3.NewVec(0, 0, 5)})
 	require.NoError(t, err)
 	doc := decad.New()
-	body, err := decad.Sweep(t.Context(), doc, s, profile, path, decad.WithSweepTwist(angle))
+	body, err := decad.Sweep(doc, s, profile, path).Twist(angle).Do(t.Context())
 	require.NoError(t, err)
 	return doc, body
 }

@@ -35,8 +35,8 @@ func TestCutExtrudeSeveralProfilesOneFeature(t *testing.T) {
 	plate := boxBody(t, doc, -20, -20, 20, 20, 5)
 	s := cutProfileSketch(t, [4]float64{-10, -10, -6, -6}, [4]float64{6, 6, 10, 10})
 	require.Len(t, s.Profiles(), 2)
-	out, err := decad.CutExtrude(t.Context(), plate, s, s.Profiles(),
-		decad.Distance{D: units.Millimeters(3), Dir: decad.Along})
+	out, err := decad.CutExtrude(plate, s, s.Profiles(),
+		decad.Distance{D: units.Millimeters(3), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, []*decad.Body{out}, doc.Bodies(), "neither the plate nor a tool stays live")
 	ops := doc.OperationHistory().Operations()
@@ -52,8 +52,8 @@ func TestCutExtrudeOverlappingProfilesRemoveOneVolume(t *testing.T) {
 	s := cutProfileSketch(t, [4]float64{-10, -10, 0, 0}, [4]float64{-5, -5, 5, 5})
 	profiles := s.Profiles()
 	require.NotEmpty(t, profiles)
-	out, err := decad.CutExtrude(t.Context(), plate, s, profiles,
-		decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	out, err := decad.CutExtrude(plate, s, profiles,
+		decad.Distance{D: units.Millimeters(5), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	// Two 10 x 10 squares overlapping in a 5 x 5 square leave 175 mm2 of footprint.
 	decadtest.MeasuresVolume(t, out, units.CubicMillimeters(40*40*5-175*5))
@@ -66,16 +66,16 @@ func TestCutExtrudeRefusalLeavesTargetLive(t *testing.T) {
 	s := cutProfileSketch(t, [4]float64{-10, -10, -6, -6})
 	ext := decad.Distance{D: units.Millimeters(3), Dir: decad.Along}
 
-	_, err := decad.CutExtrude(t.Context(), plate, s, nil, ext)
+	_, err := decad.CutExtrude(plate, s, nil, ext).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrDegenerate)
-	_, err = decad.CutExtrude(t.Context(), plate, s, []*sketch.Profile{nil}, ext)
+	_, err = decad.CutExtrude(plate, s, []*sketch.Profile{nil}, ext).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrDegenerate)
-	_, err = decad.CutExtrude(t.Context(), nil, s, s.Profiles(), ext)
+	_, err = decad.CutExtrude(nil, s, s.Profiles(), ext).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 	// A tool that covers the whole plate removes everything.
 	big := cutProfileSketch(t, [4]float64{-30, -30, 30, 30})
-	_, err = decad.CutExtrude(t.Context(), plate, big, big.Profiles(),
-		decad.Distance{D: units.Millimeters(6), Dir: decad.Along})
+	_, err = decad.CutExtrude(plate, big, big.Profiles(),
+		decad.Distance{D: units.Millimeters(6), Dir: decad.Along}).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrBooleanFailed)
 	require.Equal(t, []*decad.Body{plate}, doc.Bodies(), "a refusal leaves the plate live and no tool behind")
 }
@@ -92,7 +92,7 @@ func TestCutRevolveGroove(t *testing.T) {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	axis := decad.SketchLine{Start: decad.Point2{}, End: decad.Point2{V: 1}}
-	out, err := decad.CutRevolve(t.Context(), plate, s, s.Profiles(), axis, decad.FullRevolution{})
+	out, err := decad.CutRevolve(plate, s, s.Profiles(), axis, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, []*decad.Body{out}, doc.Bodies())
 	ops := doc.OperationHistory().Operations()

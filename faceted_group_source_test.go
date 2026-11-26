@@ -29,8 +29,8 @@ func newSourceScene(t *testing.T) *sourceScene {
 	s.Fix(r.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	sc.plate, err = Extrude(t.Context(), sc.doc, s, s.Profiles()[0],
-		Distance{D: units.Millimeters(20), Dir: Along})
+	sc.plate, err = Extrude(sc.doc, s, s.Profiles()[0],
+		Distance{D: units.Millimeters(20), Dir: Along}).Do(t.Context())
 	require.NoError(t, err)
 	return sc
 }
@@ -44,8 +44,8 @@ func (sc *sourceScene) tool(t *testing.T, cx float64) *Body {
 	ts.CreateCircle(c, 4)
 	_, err = ts.Solve(t.Context())
 	require.NoError(t, err)
-	pin, err := Extrude(t.Context(), sc.doc, ts, ts.Profiles()[0],
-		Distance{D: units.Millimeters(60), Dir: Along})
+	pin, err := Extrude(sc.doc, ts, ts.Profiles()[0],
+		Distance{D: units.Millimeters(60), Dir: Along}).Do(t.Context())
 	require.NoError(t, err)
 	move, err := r3.Translation(r3.Vec{Z: -29.999})
 	require.NoError(t, err)

@@ -152,3 +152,99 @@ func TestModifyLeavesNewNamesAlone(t *testing.T) {
 		t.Fatalf("out %q reports %v err %v", out, reports, err)
 	}
 }
+
+func TestFeatures(t *testing.T) {
+	const head = "package p\n\nimport \"github.com/lestrrat-3d/decad\"\n\nfunc f() {\n"
+	tests := []struct{ name, in, want string }{
+		{"extrude", "_, _ = decad.Extrude(ctx, d, s, p, e)", "_, _ = decad.Extrude(d, s, p, e).Do(ctx)"},
+		{"extrude options", "_, _ = decad.Extrude(ctx, d, s, p, e, decad.WithTaper(a), decad.WithSurfaceResult())",
+			"_, _ = decad.Extrude(d, s, p, e).Taper(a).SurfaceResult().Do(ctx)"},
+		{"extrude explicit type argument", "_, _ = decad.Extrude[*sketch.Chain](ctx, d, s, c, e)",
+			"_, _ = decad.Extrude(d, s, c, e).Do(ctx)"},
+		{"revolve", "_, _ = decad.Revolve(ctx, d, s, p, ax, a, decad.WithSurfaceResult())",
+			"_, _ = decad.Revolve(d, s, p, ax, a).SurfaceResult().Do(ctx)"},
+		{"sweep options", "_, _ = decad.Sweep(ctx, d, s, p, path, decad.WithSweepTwist(a), decad.WithMitredJoins(), decad.WithSectionScale(x, y), decad.WithSurfaceResult())",
+			"_, _ = decad.Sweep(d, s, p, path).Twist(a).MitredJoins().SectionScale(x, y).SurfaceResult().Do(ctx)"},
+		{"sweep empty section scale", "_, _ = decad.Sweep(ctx, d, s, p, path, decad.WithSectionScale())",
+			"_, _ = decad.Sweep(d, s, p, path).SectionScale().Do(ctx)"},
+		{"sweep spread section scale", "_, _ = decad.Sweep(ctx, d, s, p, path, decad.WithSectionScale(factors...))",
+			"_, _ = decad.Sweep(d, s, p, path).SectionScale(factors...).Do(ctx)"},
+		{"loft spread alignment", "_, _ = decad.Loft(ctx, d, s0, p0, s1, p1, decad.WithLoftAlignment(offs...))",
+			"_, _ = decad.Loft(d, s0, p0, s1, p1).Alignment(offs...).Do(ctx)"},
+		{"coil", "_, _ = decad.Coil(ctx, d, s, p, ax, pitch, turns, decad.WithLeftHand())",
+			"_, _ = decad.Coil(d, s, p, ax, pitch, turns).LeftHand().Do(ctx)"},
+		{"loft options", "_, _ = decad.Loft(ctx, d, s0, p0, s1, p1, decad.WithLoftAlignment(1, 2), decad.WithLoftSplits(a, b), decad.WithSurfaceResult())",
+			"_, _ = decad.Loft(d, s0, p0, s1, p1).Alignment(1, 2).Splits(a, b).SurfaceResult().Do(ctx)"},
+		{"loft chain", "_, _ = decad.LoftChain(ctx, d, s0, c0, s1, c1)", "_, _ = decad.LoftChain(d, s0, c0, s1, c1).Do(ctx)"},
+		{"loft from point", "_, _ = decad.LoftFromPoint(ctx, d, apex, s, p)", "_, _ = decad.LoftFromPoint(d, apex, s, p).Do(ctx)"},
+		{"patch profile", "_, _ = decad.PatchProfile(ctx, d, s, p)", "_, _ = decad.PatchProfile(d, s, p).Do(ctx)"},
+		{"loft sections", "_, _ = decad.LoftSections(ctx, d, a, b, c)", "_, _ = decad.LoftSections(d, a, b, c).Do(ctx)"},
+		{"loft sections spread", "_, _ = decad.LoftSections(ctx, d, secs...)", "_, _ = decad.LoftSections(d, secs...).Do(ctx)"},
+		{"loft sections circular", "_, _ = decad.LoftSectionsWithCircularCorrespondence(ctx, d, corr, a, b, c)",
+			"_, _ = decad.LoftSections(d, a, b, c).CircularCorrespondence(corr).Do(ctx)"},
+		{"loft sections circular spread", "_, _ = decad.LoftSectionsWithCircularCorrespondence(ctx, d, corr, secs...)",
+			"_, _ = decad.LoftSections(d, secs...).CircularCorrespondence(corr).Do(ctx)"},
+		{"loft faces", "_, _ = decad.LoftFaces(ctx, faces)", "_, _ = decad.LoftFaces(faces).Do(ctx)"},
+		{"loft faces cone", "_, _ = decad.LoftFaces(ctx, faces, decad.WithConeTangentEnd(cone, radial))",
+			"_, _ = decad.LoftFacesToCone(faces, cone, radial).Do(ctx)"},
+		{"emboss", "_, _ = decad.Emboss(ctx, b, s, ps, face, decad.EmbossRaised, h, decad.WithEmbossRimFillet(r), decad.WithEmbossDraft(a))",
+			"_, _ = decad.Emboss(b, s, ps, face, decad.EmbossRaised, h).RimFillet(r).Draft(a).Do(ctx)"},
+		{"web path", "_, _ = decad.WebPath(ctx, b, s, path, t, e, decad.WithRibDraft(a), decad.WithRibOverrun(o))",
+			"_, _ = decad.WebPath(b, s, path, t, e).Draft(a).Overrun(o).Do(ctx)"},
+		{"cut extrude", "_, _ = decad.CutExtrude(ctx, b, s, ps, e, decad.WithTaper(a))", "_, _ = decad.CutExtrude(b, s, ps, e).Taper(a).Do(ctx)"},
+		{"cut revolve", "_, _ = decad.CutRevolve(ctx, b, s, ps, ax, a)", "_, _ = decad.CutRevolve(b, s, ps, ax, a).Do(ctx)"},
+		{"nested", "_, _ = decad.Cut(ctx, mustBody(decad.Extrude(ctx, d, s, p, e)), c)",
+			"_, _ = decad.Cut(ctx, mustBody(decad.Extrude(d, s, p, e).Do(ctx)), c)"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			out, reports, err := rewriteFile("x.go", []byte(head+"\t"+tc.in+"\n}\n"), families["features"], false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(reports) != 0 {
+				t.Fatalf("reports: %v", reports)
+			}
+			if want := head + "\t" + tc.want + "\n}\n"; string(out) != want {
+				t.Fatalf("got\n%s\nwant\n%s", out, want)
+			}
+		})
+	}
+	for name, call := range map[string]string{
+		"spread options":            "decad.Extrude(ctx, d, s, p, e, opts...)",
+		"option variable":           "decad.Revolve(ctx, d, s, p, ax, a, opt)",
+		"cut extrude surface":       "decad.CutExtrude(ctx, b, s, ps, e, decad.WithSurfaceResult())",
+		"option with wrong arity":   "decad.Extrude(ctx, d, s, p, e, decad.WithTaper())",
+		"loft faces option":         "decad.LoftFaces(ctx, faces, opt)",
+		"loft faces spread options": "decad.LoftFaces(ctx, faces, opts...)",
+	} {
+		t.Run("reported "+name, func(t *testing.T) {
+			in := head + "\t_, _ = " + call + "\n}\n"
+			out, reports, err := rewriteFile("x.go", []byte(in), families["features"], false)
+			if err != nil || len(reports) != 1 || string(out) != in {
+				t.Fatalf("out %q reports %v err %v", out, reports, err)
+			}
+		})
+	}
+	t.Run("root bare call", func(t *testing.T) {
+		in := "package decad\n\nfunc f() {\n\t_, _ = Extrude(ctx, d, s, p, e, WithTaper(a))\n}\n"
+		out, _, err := rewriteFile("x_test.go", []byte(in), families["features"], true)
+		if err != nil || string(out) != "package decad\n\nfunc f() {\n\t_, _ = Extrude(d, s, p, e).Taper(a).Do(ctx)\n}\n" {
+			t.Fatalf("out %q err %v", out, err)
+		}
+	})
+	t.Run("root production file reported", func(t *testing.T) {
+		in := "package decad\n\nfunc f() {\n\t_, _ = Extrude(ctx, d, s, p, e)\n}\n"
+		out, reports, err := rewriteFile("x.go", []byte(in), families["features"], true)
+		if err != nil || len(reports) != 1 || string(out) != in {
+			t.Fatalf("out %q reports %v err %v", out, reports, err)
+		}
+	})
+	t.Run("new names are not old-API input", func(t *testing.T) {
+		in := head + "\t_, _ = decad.Extrude(ctx, d, s, p, e, decad.Taper(a))\n}\n"
+		out, reports, err := rewriteFile("x.go", []byte(in), families["features"], false)
+		if err != nil || len(reports) != 1 || string(out) != in {
+			t.Fatalf("out %q reports %v err %v", out, reports, err)
+		}
+	})
+}

@@ -44,7 +44,7 @@ func boxBodySymmetric(t *testing.T, doc *decad.Document, x0, y0, x1, y1, half fl
 	s.Fix(rect.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Symmetric{D: units.Millimeters(half)})
+	body, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Symmetric{D: units.Millimeters(half)}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -69,7 +69,7 @@ func holedBoxSymmetric(t *testing.T, doc *decad.Document, outer, inner, half flo
 		}
 	}
 	require.NotNil(t, prof, `the annulus's holed region should exist`)
-	body, err := decad.Extrude(t.Context(), doc, s, prof, decad.Symmetric{D: units.Millimeters(half)})
+	body, err := decad.Extrude(doc, s, prof, decad.Symmetric{D: units.Millimeters(half)}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -242,7 +242,7 @@ func TestPrismCutCleanNestingKeepsAToolArcEndTheAnglesMiss(t *testing.T) {
 	require.NoError(t, err)
 	profiles := s.Profiles()
 	require.Len(t, profiles, 1)
-	tool, err := decad.Extrude(t.Context(), doc, s, profiles[0], decad.Symmetric{D: units.Millimeters(2 * plateHeight)})
+	tool, err := decad.Extrude(doc, s, profiles[0], decad.Symmetric{D: units.Millimeters(2 * plateHeight)}).Do(t.Context())
 	require.NoError(t, err)
 
 	// Both operands' own answers, read before the cut retires them.
@@ -466,7 +466,7 @@ func TestPrismIntersectG5FallsBackOnDisjointZIntervals(t *testing.T) {
 	s.Fix(rect.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	b, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(3), Dir: decad.Against}) // z: -3..0
+	b, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(3), Dir: decad.Against}).Do(t.Context()) // z: -3..0
 	require.NoError(t, err)
 
 	_, err = decad.Intersect(a, b).Do(t.Context())

@@ -134,8 +134,8 @@ func (p revolveAxisPlacement) revolveAbout(t *testing.T, doc *decad.Document, ou
 	require.NoError(t, err)
 	profiles := s.Profiles()
 	require.Len(t, profiles, 1)
-	body, err := decad.Revolve(t.Context(), doc, s, profiles[0],
-		decad.SketchLine{Start: decad.Point2{}, End: p.axisEnd}, decad.FullRevolution{})
+	body, err := decad.Revolve(doc, s, profiles[0],
+		decad.SketchLine{Start: decad.Point2{}, End: p.axisEnd}, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -188,7 +188,7 @@ func (p revolveAxisPlacement) lug(t *testing.T, doc *decad.Document) *decad.Body
 	require.NoError(t, err)
 	profiles := s.Profiles()
 	require.Len(t, profiles, 1)
-	lug, err := decad.LoftFromPoint(t.Context(), doc, r3.Vec{}, s, profiles[0])
+	lug, err := decad.LoftFromPoint(doc, r3.Vec{}, s, profiles[0]).Do(t.Context())
 	require.NoError(t, err)
 	cut, err := decad.Cut(lug, p.coneTool(t, doc, 7.5)).Do(t.Context())
 	require.NoError(t, err)
@@ -362,8 +362,8 @@ func (p revolveAxisPlacement) boreTool(t *testing.T, doc *decad.Document, radius
 	s.CreateCircle(center, radius)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	tool, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(6), Dir: decad.Along})
+	tool, err := decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(6), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return tool
 }

@@ -57,7 +57,7 @@ func TestTessellatePlate(t *testing.T) {
 	t.Parallel()
 	s, p := plateSketch(t)
 	doc := decad.New()
-	body, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 
 	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.1))
@@ -155,7 +155,7 @@ func TestTessellatePayloadClasses(t *testing.T) {
 
 	t.Run("revolve", func(t *testing.T) {
 		s, p := solidSketch(t)
-		body, err := decad.Revolve(t.Context(), decad.New(), s, p, uAxis, decad.FullRevolution{})
+		body, err := decad.Revolve(decad.New(), s, p, uAxis, decad.FullRevolution{}).Do(t.Context())
 		require.NoError(t, err)
 		mesh, err := body.Tessellate(t.Context(), units.Millimeters(1))
 		require.NoError(t, err)
@@ -267,7 +267,7 @@ func TestTessellateNonConvexOutline(t *testing.T) {
 	require.NoError(t, err)
 
 	doc := decad.New()
-	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(5), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 
 	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.1))
@@ -296,7 +296,7 @@ func TestTessellateQuarterDisk(t *testing.T) {
 	require.NoError(t, err)
 
 	doc := decad.New()
-	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(5), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 
 	tol := 0.1
@@ -320,7 +320,7 @@ func TestTessellatePlacedReflected(t *testing.T) {
 	// outward all the same.
 	s, p := plateSketch(t)
 	doc := decad.New()
-	body, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 
 	mirror, err := r3.NewFrame(r3.NewVec(0, 0, 0), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
@@ -341,7 +341,7 @@ func TestTessellateToleranceValidation(t *testing.T) {
 	t.Parallel()
 	s, p := plateSketch(t)
 	doc := decad.New()
-	body, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 
 	testcases := []struct {
@@ -385,13 +385,13 @@ func TestTessellateBoundIncludesComputedLevelDisplacement(t *testing.T) {
 	)
 	s, plateProfile, pinProfile := plateAndPin(t)
 	doc := decad.New()
-	plate, err := decad.Extrude(t.Context(), doc, s, plateProfile, decad.Distance{D: units.Millimeters(plateHeight), Dir: decad.Along})
+	plate, err := decad.Extrude(doc, s, plateProfile, decad.Distance{D: units.Millimeters(plateHeight), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
-	pin, err := decad.Extrude(t.Context(), doc, s, pinProfile, decad.ToFace{
+	pin, err := decad.Extrude(doc, s, pinProfile, decad.ToFace{
 		Body:   plate,
 		Face:   capEndFace(plate),
 		Offset: units.Millimeters(-shortBy),
-	})
+	}).Do(t.Context())
 	require.NoError(t, err)
 
 	mesh, err := pin.Tessellate(t.Context(), units.Millimeters(tol))
@@ -444,7 +444,7 @@ func testTangentHole(t *testing.T, cx, cy float64) {
 		t.Skip(`the arrangement did not produce a holed region for the tangent circle`)
 	}
 	doc := decad.New()
-	body, err := decad.Extrude(t.Context(), doc, s, prof, decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, prof, decad.Distance{D: units.Millimeters(8), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	_, err = body.Tessellate(t.Context(), units.Millimeters(0.5))
 	require.ErrorIs(t, err, decad.ErrDegenerate)
@@ -577,7 +577,7 @@ func inchPrismBody(t *testing.T, doc *decad.Document, x0, y0, x1, y1, inches flo
 	s.Fix(rect.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Inches(inches), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Inches(inches), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -662,7 +662,7 @@ func TestTessellateFourHoleBoltPatternPlate(t *testing.T) {
 	require.NotNil(t, prof, `the plate section carries four holes`)
 
 	doc := decad.New()
-	body, err := decad.Extrude(t.Context(), doc, s, prof, decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, prof, decad.Distance{D: units.Millimeters(8), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 
 	for _, tol := range []float64{1, 0.3, 0.05} {

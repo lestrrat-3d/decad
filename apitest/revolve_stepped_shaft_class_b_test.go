@@ -38,7 +38,7 @@ func stepRevolve(t *testing.T, sc *retentionScene, radii ...float64) *decad.Body
 		pts = append(pts, [2]float64{stepLen * float64(i+1), r}, [2]float64{stepLen * float64(i), r})
 	}
 	s, profile := polygonSketch(t, pts)
-	shaft, err := decad.Revolve(t.Context(), sc.doc, s, profile, uAxis, decad.FullRevolution{})
+	shaft, err := decad.Revolve(sc.doc, s, profile, uAxis, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	return shaft
 }
@@ -226,8 +226,8 @@ func TestSteppedShaftClassBMisses(t *testing.T) {
 		s.Fix(r.A)
 		_, err = s.Solve(t.Context())
 		require.NoError(t, err)
-		slot, err := decad.Extrude(t.Context(), sc.doc, s, s.Profiles()[0],
-			decad.Distance{D: units.Millimeters(1), Dir: decad.Along})
+		slot, err := decad.Extrude(sc.doc, s, s.Profiles()[0],
+			decad.Distance{D: units.Millimeters(1), Dir: decad.Along}).Do(t.Context())
 		require.NoError(t, err)
 		got, err := decad.Cut(stepRevolve(t, sc, 10, 6), slot).Do(t.Context())
 		requireShaftMeshPath(t, got, err)

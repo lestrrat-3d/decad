@@ -26,8 +26,8 @@ func slabCutter(t *testing.T, sc *retentionScene, z0, z1 float64) *decad.Body {
 	s.Fix(r.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	slab, err := decad.Extrude(t.Context(), sc.doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(z1 - z0), Dir: decad.Along})
+	slab, err := decad.Extrude(sc.doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(z1 - z0), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	move, err := r3.Translation(r3.Vec{Z: z0 + 0.001})
 	require.NoError(t, err)

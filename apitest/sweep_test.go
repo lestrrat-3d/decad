@@ -13,10 +13,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type foreignSweepOption struct {
-	decad.SweepOption
-}
-
 func TestSweepLineBuildsVerifiesAndReevaluatesPlacement(t *testing.T) {
 	t.Parallel()
 
@@ -28,14 +24,13 @@ func TestSweepLineBuildsVerifiesAndReevaluatesPlacement(t *testing.T) {
 	require.NoError(t, err)
 
 	doc := decad.New()
-	body, err := decad.Sweep(t.Context(), doc, s, profile, path, decad.WithSweepTwist(units.Degrees(0)))
+	body, err := decad.Sweep(doc, s, profile, path).Twist(units.Degrees(0)).Do(t.Context())
 	require.NoError(t, err)
 	extrudeDoc := decad.New()
-	extruded, err := decad.Extrude(t.Context(), extrudeDoc,
+	extruded, err := decad.Extrude(extrudeDoc,
 		s,
 		profile,
-		decad.Distance{D: units.Millimeters(10), Dir: decad.Along},
-	)
+		decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	requireSameBodyReadings(t, extruded, body)
 	require.ElementsMatch(t, bodyVertexValues(extruded), bodyVertexValues(body))
@@ -134,7 +129,7 @@ func TestSweepLineStagesModify(t *testing.T) {
 	)
 	require.NoError(t, err)
 	doc := decad.New()
-	body, err := decad.Sweep(t.Context(), doc, s, profile, path)
+	body, err := decad.Sweep(doc, s, profile, path).Do(t.Context())
 	require.NoError(t, err)
 
 	_, err = decad.Fillet(body, decad.Edges().AtLeast(1), units.Millimeters(1)).Do(t.Context())
@@ -164,7 +159,7 @@ func TestSweepLineTiltedFrameCarriesEndpointGap(t *testing.T) {
 	delta := frame.N().Scale(8)
 	path, err := decad.NewPath(r3.NewVec(0, 0, 0), decad.LineTo{End: delta})
 	require.NoError(t, err)
-	body, err := decad.Sweep(t.Context(), decad.New(), s, s.Profiles()[0], path)
+	body, err := decad.Sweep(decad.New(), s, s.Profiles()[0], path).Do(t.Context())
 	require.NoError(t, err)
 
 	start := faceVertexReadings(faceByRole(t, body, "capStart"))
@@ -232,47 +227,22 @@ func TestSweepLineGatesLeaveDocumentUnchanged(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	var nilOption decad.SweepOption
 	emptyPath := &decad.Path{}
 	tests := []struct {
 		name    string
 		sketch  *sketch.Sketch
 		profile *sketch.Profile
 		path    *decad.Path
-		opts    []decad.SweepOption
+		apply   func(*decad.SweepCommand)
 		want    error
 	}{
 		{name: "nil sketch", profile: profile, path: validPath, want: decad.ErrDegenerate},
 		{name: "nil profile", sketch: s, path: validPath, want: decad.ErrDegenerate},
 		{name: "nil path", sketch: s, profile: profile, want: decad.ErrDegenerate},
 		{name: "empty path", sketch: s, profile: profile, path: emptyPath, want: decad.ErrDegenerate},
-		{name: "nil option", sketch: s, profile: profile, path: validPath, opts: []decad.SweepOption{nilOption}, want: decad.ErrDegenerate},
-		{name: "foreign option", sketch: s, profile: profile, path: validPath, opts: []decad.SweepOption{foreignSweepOption{}}, want: decad.ErrDegenerate},
-		{name: "wrong twist unit", sketch: s, profile: profile, path: validPath, opts: []decad.SweepOption{decad.WithSweepTwist(units.Millimeters(1))}, want: decad.ErrUnitKind},
-		{name: "non-finite twist", sketch: s, profile: profile, path: validPath, opts: []decad.SweepOption{decad.WithSweepTwist(units.Degrees(math.Inf(1)))}, want: decad.ErrNotFinite},
-		{name: "over-turn twist", sketch: s, profile: profile, path: validPath, opts: []decad.SweepOption{decad.WithSweepTwist(units.Degrees(400))}, want: decad.ErrUnsupported},
-		{
-			name:    "repeated twist",
-			sketch:  s,
-			profile: profile,
-			path:    validPath,
-			opts: []decad.SweepOption{
-				decad.WithSweepTwist(units.Degrees(0)),
-				decad.WithSweepTwist(units.Degrees(0)),
-			},
-			want: decad.ErrDegenerate,
-		},
-		{
-			name:    "repeated nonzero twist",
-			sketch:  s,
-			profile: profile,
-			path:    validPath,
-			opts: []decad.SweepOption{
-				decad.WithSweepTwist(units.Degrees(1)),
-				decad.WithSweepTwist(units.Degrees(2)),
-			},
-			want: decad.ErrDegenerate,
-		},
+		{name: "wrong twist unit", sketch: s, profile: profile, path: validPath, apply: func(c *decad.SweepCommand) { c.Twist(units.Millimeters(1)) }, want: decad.ErrUnitKind},
+		{name: "non-finite twist", sketch: s, profile: profile, path: validPath, apply: func(c *decad.SweepCommand) { c.Twist(units.Degrees(math.Inf(1))) }, want: decad.ErrNotFinite},
+		{name: "over-turn twist", sketch: s, profile: profile, path: validPath, apply: func(c *decad.SweepCommand) { c.Twist(units.Degrees(400)) }, want: decad.ErrUnsupported},
 		{name: "off-plane start", sketch: s, profile: profile, path: offPlane, want: decad.ErrDegenerate},
 		{name: "reversed tangent", sketch: s, profile: profile, path: reversed, want: decad.ErrDegenerate},
 		{name: "skew tangent", sketch: s, profile: profile, path: skew, want: decad.ErrDegenerate},
@@ -284,15 +254,36 @@ func TestSweepLineGatesLeaveDocumentUnchanged(t *testing.T) {
 	doc := decad.New()
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			_, err := decad.Sweep(t.Context(), doc, test.sketch, test.profile, test.path, test.opts...)
+			cmd := decad.Sweep(doc, test.sketch, test.profile, test.path)
+			if test.apply != nil {
+				test.apply(cmd)
+			}
+			_, err := cmd.Do(t.Context())
 			require.ErrorIs(t, err, test.want)
 			require.Empty(t, doc.Bodies())
 		})
 	}
 
-	body, err := decad.Sweep(t.Context(), doc, s, profile, validPath)
+	body, err := decad.Sweep(doc, s, profile, validPath).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, []*decad.Body{body}, doc.Bodies())
+}
+
+func TestSweepTwistLastCallWins(t *testing.T) {
+	t.Parallel()
+
+	s, profile := plateSketch(t)
+	path, err := decad.NewPath(
+		r3.NewVec(1000, 1000, 0),
+		decad.LineTo{End: r3.NewVec(1000, 1000, 10)},
+	)
+	require.NoError(t, err)
+	// A wrong-unit twist is refused alone; a later call replaces it and its fault.
+	_, err = decad.Sweep(decad.New(), s, profile, path).Twist(units.Millimeters(1)).Do(t.Context())
+	require.ErrorIs(t, err, decad.ErrUnitKind)
+	body, err := decad.Sweep(decad.New(), s, profile, path).Twist(units.Millimeters(1)).Twist(units.Degrees(0)).Do(t.Context())
+	require.NoError(t, err)
+	require.NotNil(t, body)
 }
 
 func bodyVertexValues(body *decad.Body) []r3.Vec {
@@ -331,12 +322,12 @@ func TestSweepContextCancellationLeavesDocumentUnchanged(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 
-	_, err = decad.Sweep(ctx, doc, s, profile, path)
+	_, err = decad.Sweep(doc, s, profile, path).Do(ctx)
 	require.ErrorIs(t, err, context.Canceled)
 	require.Empty(t, doc.Bodies())
 
 	var nilContext context.Context
-	_, err = decad.Sweep(nilContext, doc, s, profile, path)
+	_, err = decad.Sweep(doc, s, profile, path).Do(nilContext)
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 	require.Empty(t, doc.Bodies())
 }
@@ -353,7 +344,7 @@ func TestSweepStagedSurveyNamesPayloadClass(t *testing.T) {
 	path, err := decad.NewPath(r3.NewVec(0, 0, 0), decad.LineTo{End: r3.NewVec(0, 0, 10)})
 	require.NoError(t, err)
 	doc := decad.New()
-	body, err := decad.Sweep(t.Context(), doc, s, profile, path)
+	body, err := decad.Sweep(doc, s, profile, path).Do(t.Context())
 	require.NoError(t, err)
 	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))
 	require.NoError(t, err)

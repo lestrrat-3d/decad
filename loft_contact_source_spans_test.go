@@ -43,7 +43,7 @@ func TestLoftCurvedSourceCapsRealIndependentWedgeRefusesWithoutBoundaryProof(t *
 		require.True(t, found[0].Valid)
 		sections[endCap], profiles[endCap] = s, found[0]
 	}
-	loft, err := Loft(t.Context(), New(), sections[0], profiles[0], sections[1], profiles[1])
+	loft, err := Loft(New(), sections[0], profiles[0], sections[1], profiles[1]).Do(t.Context())
 	require.NoError(t, err)
 	lp := loft.n.Payload.(loftPayload)
 	for _, loop := range []sectionrecord.LoopRecord{lp.Profile0.Outer, lp.Profile1.Outer} {
@@ -67,8 +67,8 @@ func TestLoftCurvedSourceCapsRealIndependentWedgeRefusesWithoutBoundaryProof(t *
 	prismSketch.Fix(rect.A)
 	_, err = prismSketch.Solve(t.Context())
 	require.NoError(t, err)
-	prism, err := Extrude(t.Context(), New(), prismSketch, prismSketch.Profiles()[0],
-		Distance{D: units.Millimeters(12), Dir: Along})
+	prism, err := Extrude(New(), prismSketch, prismSketch.Profiles()[0],
+		Distance{D: units.Millimeters(12), Dir: Along}).Do(t.Context())
 	require.NoError(t, err)
 	require.Zero(t, prism.n.Origin.Producer)
 	require.Zero(t, loft.n.Origin.Producer)
@@ -183,8 +183,8 @@ func TestLoftCurvedSourceCapsRealIndependentWedgeRefusesWithoutBoundaryProof(t *
 			require.True(t, found[0].Valid)
 			arcSections[endCap], arcProfiles[endCap] = s, found[0]
 		}
-		arcLoft, loftErr := Loft(t.Context(), New(), arcSections[0], arcProfiles[0],
-			arcSections[1], arcProfiles[1])
+		arcLoft, loftErr := Loft(New(), arcSections[0], arcProfiles[0],
+			arcSections[1], arcProfiles[1]).Do(t.Context())
 		require.NoError(t, loftErr)
 		arcSource, sourceOK, sourceErr := loftdirect.CertifyLoftSourceSpanCaps(t.Context(),
 			proofbound.NewWallWorkBudgetWithOperation(4096, proofbound.NewWorkBudget(t.Context())),
@@ -265,7 +265,7 @@ func TestLoftCircleSourceCapsRealDiscRefusesWithoutBoundaryProof(t *testing.T) {
 		require.True(t, found[0].Valid)
 		sections[endCap], profiles[endCap] = s, found[0]
 	}
-	loft, err := Loft(t.Context(), doc, sections[0], profiles[0], sections[1], profiles[1])
+	loft, err := Loft(doc, sections[0], profiles[0], sections[1], profiles[1]).Do(t.Context())
 	require.NoError(t, err)
 
 	discSketch, err := world.CreateSketch(world.XY())
@@ -278,8 +278,8 @@ func TestLoftCircleSourceCapsRealDiscRefusesWithoutBoundaryProof(t *testing.T) {
 	discProfiles := discSketch.Profiles()
 	require.Equal(t, 1, len(discProfiles))
 	require.True(t, discProfiles[0].Valid)
-	prism, err := Extrude(t.Context(), doc, discSketch, discProfiles[0],
-		Distance{D: units.Millimeters(12), Dir: Along})
+	prism, err := Extrude(doc, discSketch, discProfiles[0],
+		Distance{D: units.Millimeters(12), Dir: Along}).Do(t.Context())
 	require.NoError(t, err)
 	require.True(t, prism.n.Doc == loft.n.Doc)
 	require.NotEqual(t, prism.n.Origin.Producer, loft.n.Origin.Producer)
@@ -373,7 +373,7 @@ func TestLoftFitSplineSourceCapsRealWedge(t *testing.T) {
 	world, base, top := wedgePlanes(t)
 	lowerSketch, lowerProfile := wedgeSplineSketch(t, world, base)
 	upperSketch, upperProfile := wedgeSplineSketch(t, world, top)
-	loft, err := Loft(t.Context(), New(), lowerSketch, lowerProfile, upperSketch, upperProfile)
+	loft, err := Loft(New(), lowerSketch, lowerProfile, upperSketch, upperProfile).Do(t.Context())
 	require.NoError(t, err)
 
 	prismSketch, err := world.CreateSketch(base)
@@ -382,8 +382,8 @@ func TestLoftFitSplineSourceCapsRealWedge(t *testing.T) {
 	prismSketch.Fix(rect.A)
 	_, err = prismSketch.Solve(t.Context())
 	require.NoError(t, err)
-	prism, err := Extrude(t.Context(), New(), prismSketch, prismSketch.Profiles()[0],
-		Distance{D: units.Millimeters(12), Dir: Along})
+	prism, err := Extrude(New(), prismSketch, prismSketch.Profiles()[0],
+		Distance{D: units.Millimeters(12), Dir: Along}).Do(t.Context())
 	require.NoError(t, err)
 	require.False(t, prism.n.Doc == loft.n.Doc)
 	require.Equal(t, prism.n.Origin.Producer, loft.n.Origin.Producer)

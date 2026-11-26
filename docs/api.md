@@ -163,17 +163,17 @@ a sheet. The `decad.Section` type constraint covers both.
 
 | Function | Builds |
 |---|---|
-| `decad.Extrude` | A prism along the sketch normal, sized by a `decad.Extent`. |
-| `decad.Revolve` | A solid of revolution about a `decad.Axis`, sized by a `decad.AngularExtent`. |
+| `decad.Extrude(d, s, sec, e)` | A prism along the sketch normal, sized by a `decad.Extent`. `ExtrudeCommand.Taper` leans the walls and `ExtrudeCommand.SurfaceResult` builds a sheet. |
+| `decad.Revolve(d, s, sec, axis, a)` | A solid of revolution about a `decad.Axis`, sized by a `decad.AngularExtent`. `RevolveCommand.SurfaceResult` builds a sheet. |
 | `decad.SheetMetal` | A bent strip of flat legs and circular bends as a solid, with its flat pattern length from the K-factor. |
-| `decad.Sweep` | A section moved along a `*decad.Path`. |
-| `decad.Loft` | A ruled solid between two profiles on different planes. |
-| `decad.LoftChain` | A ruled sheet between two open chains. |
-| `decad.LoftSections` | A smooth solid through three or more profiles, including fitted-edge sections that turn about the plane origin and a four-arc circular section transitioning to fitted-edge sections. |
-| `decad.LoftSectionsWithCircularCorrespondence` | A circular-to-spline loft with caller-supplied rational quarter correspondence maps. |
-| `decad.LoftFaces` | A solid through ordered cap faces. `decad.WithConeTangentEnd` ends it with a section tangent to a cone. |
-| `decad.LoftFromPoint` | A solid from an apex point to a profile. |
-| `decad.Coil` | A profile moved along a screw motion, such as a thread or spring. |
+| `decad.Sweep(d, s, sec, path)` | A section moved along a `*decad.Path`. `SweepCommand.Twist` turns the section as it travels, `SweepCommand.MitredJoins` admits corners, `SweepCommand.SectionScale` states a factor per span and `SweepCommand.SurfaceResult` builds a sheet. |
+| `decad.Loft(d, s0, p0, s1, p1)` | A ruled solid between two profiles on different planes. `LoftCommand.Alignment` and `LoftCommand.Splits` state the correspondence, and `LoftCommand.SurfaceResult` builds a sheet. |
+| `decad.LoftChain(d, s0, c0, s1, c1)` | A ruled sheet between two open chains. |
+| `decad.LoftSections(d, sections...)` | A smooth solid through three or more profiles, including fitted-edge sections that turn about the plane origin and a four-arc circular section transitioning to fitted-edge sections. `LoftSectionsCommand.CircularCorrespondence` gives a circular-to-spline loft caller-supplied rational quarter correspondence maps. |
+| `decad.LoftFaces(sections)` | A solid through ordered cap faces. `decad.LoftFacesToCone(sections, cone, radial)` ends it with a section tangent to a cone. |
+| `decad.LoftFromPoint(d, apex, s, p)` | A solid from an apex point to a profile. |
+| `decad.PatchProfile(d, s, p)` | A one-face sheet on the sketch plane from a profile. |
+| `decad.Coil(d, s, p, axis, pitch, turns)` | A profile moved along a screw motion, such as a thread or spring. `CoilCommand.LeftHand` turns it left-handed. |
 | `decad.ConeFromFace(body, face, far)` | The cone that extends a face's straight meridian. |
 
 ### Extents
@@ -192,16 +192,23 @@ Build a sweep path with `decad.NewPath` and `decad.LineTo`, `decad.ArcThrough`, 
 `ArcAround` takes a center, an oriented axis, and an endpoint. The start and end must have exactly equal nonzero
 distances from the center and lie perpendicular to the axis. The positive turn about the axis is less than one full turn.
 
-### Options
+### Feature methods
 
-| Function | Applies to |
+Each command declares its own methods. A method called twice keeps the second call.
+
+| Method | Command |
 |---|---|
-| `decad.WithTaper` | `decad.Extrude` |
-| `decad.WithLoftAlignment`, `decad.WithLoftSplits` | `decad.Loft` |
-| `decad.WithConeTangentEnd` | `decad.LoftFaces` |
-| `decad.WithMitredJoins`, `decad.WithSectionScale`, `decad.WithSweepTwist` | `decad.Sweep` |
-| `decad.WithLeftHand` | `decad.Coil` |
-| `decad.WithSurfaceResult` | Section features: build a sheet instead of a solid. |
+| `Taper` | `ExtrudeCommand`, `CutExtrudeCommand` |
+| `Alignment`, `Splits` | `LoftCommand` |
+| `CircularCorrespondence` | `LoftSectionsCommand` |
+| `MitredJoins`, `SectionScale`, `Twist` | `SweepCommand` |
+| `LeftHand` | `CoilCommand` |
+| `RimFillet`, `Draft` | `EmbossCommand` |
+| `Draft`, `Overrun` | `WebPathCommand` |
+| `SurfaceResult` | `ExtrudeCommand`, `RevolveCommand`, `SweepCommand`, `LoftCommand`: build a sheet instead of a solid. |
+
+`LoftChainCommand`, `LoftFromPointCommand`, `LoftFacesCommand`, `PatchProfileCommand` and `CutRevolveCommand`
+have no method.
 
 ## Modifying bodies
 
@@ -221,10 +228,10 @@ Each of these returns a new body and retires its input.
 | `decad.LookupThread` | Reads a thread designation such as `M10`, `M10x1.25`, `1/4-20`, `#10-24` or `G1/2` into its major diameter and pitch. |
 | `decad.Thread` | Cuts an ISO metric thread, or a trapezoidal one from a `decad.ThreadForm`, with an optional lead-in chamfer, right- or left-handed, into a cylindrical face, a rod or a bore, from its pitch, along the whole face or a stated length of it. |
 | `decad.Boss` | Raises a round boss, optionally braced with gusset ribs from `decad.BossSpec.Ribs` or leaning by `decad.BossSpec.Tilt`, or a rectangular, slot or polygonal one from `decad.BossSpec.Shape`, on a planar (a planar face of a mesh solid tilted from every axis too) or cylindrical face, with an optional blind pilot hole that may carry a counterbore, a countersink or a thread, and a fillet round its root. |
-| `decad.CutExtrude`, `decad.CutRevolve` | Cut a solid by one or more profiles of a sketch swept by an extent or revolved, as one feature with no tool body. Profiles are united and cut once. Results record `OperationCutExtrude` or `OperationCutRevolve`. |
-| `decad.WebPath` | Thickens each line and arc of a run of sketch entities, extrudes it by a `decad.Extent` and joins the ribs to the body in one step. A run of one line or one arc is one rib, and a polyline or a slot-shaped run becomes one rib. `decad.WithRibOverrun` buries the rib ends in the walls, and `decad.WithRibDraft` leans the walls. |
+| `decad.CutExtrude(target, s, profiles, e)`, `decad.CutRevolve(target, s, profiles, axis, a)` | Cut a solid by one or more profiles of a sketch swept by an extent or revolved, as one feature with no tool body. Profiles are united and cut once. Results record `OperationCutExtrude` or `OperationCutRevolve`. |
+| `decad.WebPath(b, s, path, thickness, e)` | Thickens each line and arc of a run of sketch entities, extrudes it by a `decad.Extent` and joins the ribs to the body in one step. A run of one line or one arc is one rib, and a polyline or a slot-shaped run becomes one rib. `WebPathCommand.Overrun` buries the rib ends in the walls, and `WebPathCommand.Draft` leans the walls. |
 | `decad.TextProfiles` | Draws lines of text from a TrueType font (Go Regular by default) as closed sketch profiles for `decad.Emboss`. |
-| `decad.Emboss` | Raises or engraves closed profiles on a planar face (a planar face of a mesh solid tilted from every axis too), or on a cylindrical face from a sketch plane tangent to it. `decad.EmbossRaised` or `decad.EmbossEngraved` picks the mode, `decad.WithEmbossDraft` leans the walls and `decad.WithEmbossRimFillet` rounds the rim. |
+| `decad.Emboss(b, s, profiles, face, mode, height)` | Raises or engraves closed profiles on a planar face (a planar face of a mesh solid tilted from every axis too), or on a cylindrical face from a sketch plane tangent to it. `decad.EmbossRaised` or `decad.EmbossEngraved` picks the mode, `EmbossCommand.Draft` leans the walls and `EmbossCommand.RimFillet` rounds the rim. |
 | `decad.Thicken(b, thickness)` | Turns a sheet into a solid. `ThickenCommand.Side` picks the side. |
 | `decad.QuarterTurn` | Turns a mesh solid by whole quarter turns about a world axis, exchanging coordinates so the result stays exact. |
 | `decad.Offset(b, distance)` | Builds a second sheet at a normal distance and leaves the source live; for a mesh solid whose faces all square to an axis it moves every face and builds a second solid. |
@@ -337,7 +344,7 @@ faceted result that meshes. A tool through the whole target takes the faceted pa
 contact with a `BooleanError` of code `BooleanUnsupportedContact`, as for a round tool tangent to a box's side, or
 build a faceted result, as for one tangent inside a cylinder's wall.
 
-A tapered `decad.Extrude` (`decad.WithTaper`) is an operand when every corner where a circular wall meets its
+A tapered `decad.Extrude` (`ExtrudeCommand.Taper`) is an operand when every corner where a circular wall meets its
 neighbour is tangent. A line and an arc, or two arcs, that meet tangent up to rounding, turning by an angle whose sine
 is at most 2⁻³², count as tangent, and the sliver between them is charged into the result's volume bound. A larger
 turn is refused with `decad.ErrUnsupported`, as is a trimmed segment; the body still meshes for export.

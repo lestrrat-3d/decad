@@ -174,8 +174,8 @@ func bossTop(t *testing.T, bossR float64) *decad.Body {
 	s.CreateCircle(c, bossR)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	boss, err := decad.Extrude(t.Context(), sc.doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(10.5), Dir: decad.Against})
+	boss, err := decad.Extrude(sc.doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(10.5), Dir: decad.Against}).Do(t.Context())
 	require.NoError(t, err)
 	joined, err := decad.Union(blendPlate(t, sc), translated(t, boss, 0, 0, 30.001)).Do(t.Context())
 	require.NoError(t, err)

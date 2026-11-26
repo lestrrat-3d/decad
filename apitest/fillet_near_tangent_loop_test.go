@@ -25,7 +25,7 @@ func roundedHexPrism(t *testing.T, doc *decad.Document, origin r3.Vec, h float64
 	t.Helper()
 	s := shortStepSketch(t, origin, r3.Vec{X: 1}, r3.Vec{Y: 1})
 	addRoundedHex(t, s, hexCircum, hexRound)
-	body, err := decad.Extrude(t.Context(), doc, s, shortStepProfile(t, s), decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, shortStepProfile(t, s), decad.Distance{D: units.Millimeters(h), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -212,7 +212,7 @@ func TestFilletLoopNearTangentHole(t *testing.T) {
 		}
 	}
 	require.NotNil(t, prof)
-	plate, err := decad.Extrude(ctx, doc, s, prof, decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+	plate, err := decad.Extrude(doc, s, prof, decad.Distance{D: units.Millimeters(h), Dir: decad.Along}).Do(ctx)
 	require.NoError(t, err)
 	before, err := plate.Volume()
 	require.NoError(t, err)

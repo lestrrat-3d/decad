@@ -52,7 +52,7 @@ func homotheticPolygonSections(t *testing.T, origin r3.Vec, coords [][2]float64)
 func TestSectionHomotheticConcavePolygonFeedsVerifiedExtrude(t *testing.T) {
 	sections := homotheticPolygonSections(t, r3.Vec{},
 		[][2]float64{{-2, -2}, {2, -2}, {2, 2}, {0, 1}, {-2, 2}})
-	body, err := decad.LoftSections(t.Context(), decad.New(), sections[:]...)
+	body, err := decad.LoftSections(decad.New(), sections[:]...).Do(t.Context())
 	require.NoError(t, err)
 	frame, err := r3.NewFrame(r3.NewVec(0, 0, 2), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	require.NoError(t, err)
@@ -64,8 +64,8 @@ func TestSectionHomotheticConcavePolygonFeedsVerifiedExtrude(t *testing.T) {
 	area, err := measured.Area()
 	require.NoError(t, err)
 	require.LessOrEqual(t, math.Abs(area.Value.Base()-31.5), area.Bound.Base())
-	child, err := decad.Extrude(t.Context(), decad.New(), section, profiles[0],
-		decad.Distance{D: units.Millimeters(1), Dir: decad.Along})
+	child, err := decad.Extrude(decad.New(), section, profiles[0],
+		decad.Distance{D: units.Millimeters(1), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := child.Volume()
 	require.NoError(t, err)
@@ -78,7 +78,7 @@ func TestSectionHomotheticConcavePolygonFeedsVerifiedExtrude(t *testing.T) {
 
 func TestSectionHomotheticThreeSectionLoftFeedsExtrude(t *testing.T) {
 	sections := homotheticTriangleSections(t, r3.Vec{})
-	body, err := decad.LoftSections(t.Context(), decad.New(), sections[:]...)
+	body, err := decad.LoftSections(decad.New(), sections[:]...).Do(t.Context())
 	require.NoError(t, err)
 	frame, err := r3.NewFrame(r3.NewVec(0, 0, 1), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	require.NoError(t, err)
@@ -90,8 +90,8 @@ func TestSectionHomotheticThreeSectionLoftFeedsExtrude(t *testing.T) {
 	area, err := measured.Area()
 	require.NoError(t, err)
 	require.LessOrEqual(t, math.Abs(area.Value.Base()-11.34375), area.Bound.Base())
-	child, err := decad.Extrude(t.Context(), decad.New(), section, profiles[0],
-		decad.Distance{D: units.Millimeters(2), Dir: decad.Along})
+	child, err := decad.Extrude(decad.New(), section, profiles[0],
+		decad.Distance{D: units.Millimeters(2), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := child.Volume()
 	require.NoError(t, err)
@@ -104,7 +104,7 @@ func TestSectionHomotheticThreeSectionLoftFeedsExtrude(t *testing.T) {
 
 func TestSectionHomotheticThreeSectionLoftKeepsTranslatedSourceAndMiddleLevel(t *testing.T) {
 	sections := homotheticTriangleSections(t, r3.NewVec(10, 20, 3))
-	body, err := decad.LoftSections(t.Context(), decad.New(), sections[:]...)
+	body, err := decad.LoftSections(decad.New(), sections[:]...).Do(t.Context())
 	require.NoError(t, err)
 	frame, err := r3.NewFrame(r3.NewVec(10, 20, 5), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	require.NoError(t, err)
@@ -116,8 +116,8 @@ func TestSectionHomotheticThreeSectionLoftKeepsTranslatedSourceAndMiddleLevel(t 
 	area, err := measured.Area()
 	require.NoError(t, err)
 	require.LessOrEqual(t, math.Abs(area.Value.Base()-13.5), area.Bound.Base())
-	child, err := decad.Extrude(t.Context(), decad.New(), section, profiles[0],
-		decad.Distance{D: units.Millimeters(2), Dir: decad.Along})
+	child, err := decad.Extrude(decad.New(), section, profiles[0],
+		decad.Distance{D: units.Millimeters(2), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := child.Volume()
 	require.NoError(t, err)
@@ -130,7 +130,7 @@ func TestSectionHomotheticThreeSectionLoftKeepsTranslatedSourceAndMiddleLevel(t 
 
 func TestSectionHomotheticThreeSectionLoftRefusesUnprovedInputs(t *testing.T) {
 	sections := homotheticTriangleSections(t, r3.Vec{})
-	body, err := decad.LoftSections(t.Context(), decad.New(), sections[:]...)
+	body, err := decad.LoftSections(decad.New(), sections[:]...).Do(t.Context())
 	require.NoError(t, err)
 	for _, tc := range []struct {
 		name   string

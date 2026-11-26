@@ -24,7 +24,7 @@ func sb7Plate(t *testing.T, h float64, draw func(s *sketch.Sketch, fix func(x, y
 	ps.Fix(rect.C)
 	_, err = ps.Solve(t.Context())
 	require.NoError(t, err)
-	plate, err := decad.Extrude(t.Context(), doc, ps, ps.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	plate, err := decad.Extrude(doc, ps, ps.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 
 	plane, err := w.CreateOffsetPlane(w.XY(), 10)
@@ -39,7 +39,7 @@ func sb7Plate(t *testing.T, h float64, draw func(s *sketch.Sketch, fix func(x, y
 	_, err = bs.Solve(t.Context())
 	require.NoError(t, err)
 	require.Len(t, bs.Profiles(), 1)
-	boss, err := decad.Extrude(t.Context(), doc, bs, bs.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+	boss, err := decad.Extrude(doc, bs, bs.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	u, err := decad.Union(plate, boss).Do(t.Context())
 	require.NoError(t, err)

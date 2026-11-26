@@ -29,7 +29,7 @@ func TestChamferRetainedCylinderRim(t *testing.T) {
 	s.AddConstraint(sketch.NewRadius(s.CreateCircle(s.Origin(), 2), 2))
 	_, err = s.Solve(ctx)
 	require.NoError(t, err)
-	boss, err := Extrude(ctx, doc, s, s.Profiles()[0], Distance{D: units.Millimeters(1), Dir: Against})
+	boss, err := Extrude(doc, s, s.Profiles()[0], Distance{D: units.Millimeters(1), Dir: Against}).Do(ctx)
 	require.NoError(t, err)
 	joined, err := Union(stock, boss).Do(ctx)
 	require.NoError(t, err)

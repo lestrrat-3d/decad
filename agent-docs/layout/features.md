@@ -33,18 +33,18 @@ The rules for rows live in `agent-docs/layout.md`.
 | `thread.go` | Public `Thread` and `ThreadSpec`: face and pitch gates, the axis-plane frame, then a private `Coil` and `Cut`. `internal/threadplan/` plans the groove and its sampling density. See thread design. |
 | `path_pattern.go` | Public `PathPattern` and its options `WithPathCount`, `WithPathSpacing`, `WithPathFollow` and `WithPathPivot`: gates, path sampling through `internal/pathsample/`, then one `Copy` per instance. See path-pattern design. |
 | `pattern.go` | Public pattern specs, admission, Copy/Union fallback and publication; `internal/patternassembly/` plans frame-keeping instances and disjoint groups. See mirror-pattern §4.3, §6. |
-| `surface.go` | `WithSurfaceResult` and the sheet refusal. See surface §2–§4, §7, §11. |
-| `feature_options.go` | Public feature option tiers and adapters to `internal/featureoption/`. See surface §4, sweep §2 and loft §2. |
-| `patch.go` | `PatchProfile`: records the profile and builds its face through `patchchain.Build`. See surface §5.1. |
+| `surface.go` | The sheet refusal of Table X. See surface §2–§4, §7, §11. |
+| `feature_options.go` | Shared settings of the sketch-fed commands: `SurfaceResult`, the extrude taper, the constructor nil faults and the section operands. See command-api §4, §6 and surface §4. |
+| `patch.go` | `PatchProfile` and `PatchProfileCommand`: records the profile and builds its face through `patchchain.Build`. See surface §5.1. |
 | `boss.go` | Public `Boss`, `BossSpec` and `BossBore`: face and size gates, the cylinder tool, then a union and the pilot cut through `combineToolSteps`. See boss design. |
-| `cut_profile.go` | Public `CutExtrude` and `CutRevolve`: build one private `Extrude` or `Revolve` tool per profile, then cut the target once through `combineTools`. See cut-profile design. |
+| `cut_profile.go` | `CutExtrude`, `CutRevolve` and their commands: one private `Extrude` or `Revolve` tool per profile, then one cut through `combineTools`. See cut-profile design. |
 | `boss_shape.go` | The non-round section of a `Boss`: reads a `HoleShape` and sketches it, grown for the draft. See boss design §7. |
 | `boss_fillet.go` | Root fillet of a `Boss`: finds the boss's root circle in the result and calls `Fillet`, after a trial on a copy. See boss design §6. |
 | `hole.go` | Public `Hole`, `HoleSpec`, depth, head and shape variants: gates, tool sketches, chained cut and the commit; `internal/holeplan/` computes the tools. See hole design. |
 | `hole_faceted_site.go` | `facetedHoleSite`: the hole site of a convex planar face of an exact-vertex faceted solid, its normal read exactly and rounded once, its outward side from the centroid. See orthogonal Boolean B20. |
-| `rib.go` | Public `WebPath`, `WithRibOverrun` and `WithRibDraft`: line and arc outlines, thickness and extent gates, rib tool extrusion, touch and volume checks. See rib design. |
+| `rib.go` | `WebPath` and `WebPathCommand` with `Draft` and `Overrun`: line and arc outlines, thickness and extent gates, rib tool extrusion, touch and volume checks. See rib design. |
 | `text.go` | Public `TextProfiles` and `TextSpec`: gates, then `internal/glyphs/` lays the text out and the contours are drawn into a sketch and filtered to filled regions. See text design. |
-| `emboss.go` | Public `Emboss`, `EmbossMode`, `WithEmbossDraft` and `WithEmbossRimFillet`: gates, sketch-plane check, tool extrusion, join and volume checks. See emboss design. |
+| `emboss.go` | `Emboss`, `EmbossCommand` with `Draft` and `RimFillet`, and `EmbossMode`: gates, sketch-plane check, tool extrusion, join and volume checks. See emboss design. |
 | `emboss_rim.go` | Rim fillet of an `Emboss` relief: finds the rim edges in the result and calls `Fillet`, after a trial on a copy. See emboss design §7. |
 | `planar_face.go` | Resolves a selector to one analytic planar face and its outward normal; `Hole` and `Emboss` share it. |
 | `tool_combine.go` | Shared by composite features: chains Boolean steps, of one kind (`combineTools`) or several (`combineToolSteps`), over temporary tools, commits once, and retires tools without public history entries. |
@@ -53,21 +53,21 @@ The rules for rows live in `agent-docs/layout.md`.
 | `patch_body.go` | `PatchEdges` selection and commit; the chain gates, level proof and Rule P live in `internal/patchchain/`. See surface §5.2. |
 | `stitch.go` | `Stitch`; builds through `internal/stitchrecord/`. See surface §6.4. |
 | `unstitch.go` | `Unstitch` sheet split; builds through `internal/stitchrecord/`. See surface §6.5. |
-| `extrude.go` | Generic `Extrude` over a profile or chain, `WithTaper`, linear-extent resolution, the chain ribbon entry point. See evaluator §5 and surface §13.2. |
+| `extrude.go` | `Extrude`, `ExtrudeCommand` with `Taper` and `SurfaceResult`, linear-extent resolution and the chain ribbon entry point. See evaluator §5 and surface §13.2. |
 | `extrude_tilted_face.go` | `extrudeToTiltedFace`: `Extrude` to a planar face of an exact-vertex faceted solid that is tilted from the sweep, as an extrusion past the face cut by a prism on the face's own outline. See orthogonal Boolean B19. |
 | `draft.go` | `Draft`, `DraftCommand`, `NeutralPlane`, `Walls` gates, plus the tapered extrude angle and surface-result gates, extent resolution and slab dispatch. See draft §5, §7, §10. |
 | `draft_mesh_prism.go` | `draftMeshPrism`: Draft of every wall of an exact-vertex faceted straight prism, read on the grid and swept with a taper. See orthogonal Boolean B21. |
 | `sheet_metal.go` | Public `SheetMetal`, `SheetMetalSpec` and `SheetMetalReport`: gates, the thickened centreline as a sketch outline, `Extrude`, and the flat pattern. See sheet-metal design. |
-| `sweep.go` | Generic `Sweep` over a profile or chain: nil, option and seam gates, then `internal/sweepbuild/` builds and root commits. Also the mitred options and entry adapters, built through `sweepmitre.Build`. See sweep §3.3, §15.8–§15.9, §16. |
-| `coil.go` | `Coil`, `CoilOption`, Table CS gates. Root `coilPayload` aliases `coilshell.Payload`. See helix §2, §4, §5.6. |
-| `revolve.go` | Generic `Revolve` over a profile or chain: `Axis` variants, options, angular extents, and the public axis adapter to `internal/revolveaxis/`. See evaluator §6 and surface §13.2. |
+| `sweep.go` | `Sweep` and `SweepCommand`: nil and seam gates, then `internal/sweepbuild/` builds and root commits. Also the mitred join and section scale methods, built through `sweepmitre.Build`. See sweep §3.3, §15.8–§15.9, §16. |
+| `coil.go` | `Coil`, `CoilCommand` with `LeftHand`, and the Table CS gates. Root `coilPayload` aliases `coilshell.Payload`. See helix §2, §4, §5.6. |
+| `revolve.go` | `Revolve`, `RevolveCommand` with `SurfaceResult`, the `Axis` variants, angular extents and the public axis adapter to `internal/revolveaxis/`. See evaluator §6 and surface §13.2. |
 | `stops.go` | Body-relative stop resolution: live stop bodies, face selection and angular stops; `internal/extent` admits a `ToFace` or `ToFaceAngular` face and computes its stop, and resolves through-all stops. See evaluator §5/§6/§11. |
 | `internal/extent/stop_revolve.go` | Exact `ToFace` level for a planar Revolve wall or angular cap. See evaluator §5. |
-| `loft.go` | Loft and LoftChain entry points and options. Builds through `loftrecord.FromProfiles` and `FromChains`. See loft §2/§4/§10/§16. |
-| `loft_sections.go` | Public smooth-section loft entry point and source-face assembly. See loft-sections design. |
+| `loft.go` | `Loft`, `LoftChain` and their commands, with `Alignment`, `Splits` and `SurfaceResult`. Builds through `loftrecord.FromProfiles` and `FromChains`. See loft §2/§4/§10/§16. |
+| `loft_sections.go` | `LoftSections` and `LoftSectionsCommand` with `CircularCorrespondence`, and the source-face assembly. See loft-sections design. |
 | `cone_from_face.go` | `ConeFromFace` and `ConeFromFaceCommand`: the full tool cone one float step off a Revolve blank's selected conical face. See loft-face-sections design. |
-| `loft_faces.go` | `LoftFaces`, its `LoftFacesOption` tier and `WithConeTangentEnd`; the commit of the loft `internal/revolveloftfaces` assembles and proves; shared rational helpers and map aliases. See loft-face-sections design. |
-| `loft_point.go` | Admits a point-section Loft from Sketch and publishes the `internal/pointloft/` payload. See loft-point design. |
+| `loft_faces.go` | `LoftFaces`, `LoftFacesToCone` and `LoftFacesCommand`; the commit of the loft `internal/revolveloftfaces` assembles and proves; shared rational helpers. See loft-face-sections design. |
+| `loft_point.go` | `LoftFromPoint` and its command: admits a point-section Loft from Sketch and publishes the `internal/pointloft/` payload. See loft-point design. |
 
 ### Cap-loop chamfer
 

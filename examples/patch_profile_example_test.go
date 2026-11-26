@@ -29,7 +29,7 @@ func Example_patch_profile() {
 	// Fill the profile with a face. The result is a sheet with one face and
 	// four free edges, its outline.
 	doc := decad.New()
-	face, err := decad.PatchProfile(context.Background(), doc, s, s.Profiles()[0])
+	face, err := decad.PatchProfile(doc, s, s.Profiles()[0]).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to patch: %s\n", err)
 		return

@@ -108,7 +108,7 @@ func TestIGESWritesACurvedSolidAndACavity(t *testing.T) {
 	s.CreateCircle(s.CreatePoint(0, 0), 5)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	cylinder, err := decad.Extrude(t.Context(), decad.New(), s, s.Profiles()[0], decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
+	cylinder, err := decad.Extrude(decad.New(), s, s.Profiles()[0], decad.Distance{D: units.Millimeters(8), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	got := requireRoundTrip(t, cylinder)
 	volume, err := got.Volume()

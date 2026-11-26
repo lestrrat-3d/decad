@@ -58,7 +58,7 @@ func lineChordRect(r0, r1, z0, z1 float64) [][2]float64 {
 func lineChordWedgeCoil(t *testing.T, d *decad.Document, r0, r1, spanDeg float64) *decad.Body {
 	t.Helper()
 	s, p := lineChordMeridian(t, lineChordRect(r0, r1, -5.4, 0))
-	b, err := decad.Coil(t.Context(), d, s, p, lineChordAxis, units.Millimeters(4*360/spanDeg), units.Scalar(spanDeg/360))
+	b, err := decad.Coil(d, s, p, lineChordAxis, units.Millimeters(4*360/spanDeg), units.Scalar(spanDeg/360)).Do(t.Context())
 	require.NoError(t, err)
 	return b
 }
@@ -136,7 +136,7 @@ func lineChordWedgeJoinsRing(t *testing.T, r0, r1, ringR0, ringR1, spanDeg float
 	frame, err := r3.NewFrame(r3.Vec{Z: -0.4}, r3.Vec{X: 1}, r3.Vec{Y: 1})
 	require.NoError(t, err)
 	s, p := lineChordSketch(t, frame, [][2]float64{{-30, -30}, {30, -30}, {30, 30}, {-30, 30}})
-	slab, err := decad.Extrude(ctx, d, s, p, decad.Distance{D: units.Millimeters(5.4), Dir: decad.Along})
+	slab, err := decad.Extrude(d, s, p, decad.Distance{D: units.Millimeters(5.4), Dir: decad.Along}).Do(ctx)
 	require.NoError(t, err)
 	trimmed, err := decad.Intersect(wedge, slab).Do(ctx)
 	require.NoError(t, err)
@@ -147,7 +147,7 @@ func lineChordWedgeJoinsRing(t *testing.T, r0, r1, ringR0, ringR1, spanDeg float
 	requireLineChordEncloses(t, vol, units.CubicMillimeter, half*theta*(2+0.4), "trimmed wedge volume")
 
 	s, p = lineChordMeridian(t, lineChordRect(ringR0, ringR1, -2, 0))
-	ring, err := decad.Revolve(ctx, d, s, p, lineChordAxis, decad.FullRevolution{})
+	ring, err := decad.Revolve(d, s, p, lineChordAxis, decad.FullRevolution{}).Do(ctx)
 	require.NoError(t, err)
 	joined, err := decad.Union(ring, trimmed).Do(ctx)
 	require.NoError(t, err)
@@ -192,8 +192,7 @@ func TestCoilSteepLongSpanStaysInsideTheAuditCeiling(t *testing.T) {
 	fall := 4 * span / 3.5
 	s, p := lineChordMeridian(t, lineChordRect(r0, r1, -5.4, 0))
 	axis := decad.SketchLine{Start: decad.Point2{V: 1}, End: decad.Point2{}}
-	b, err := decad.Coil(t.Context(), decad.New(), s, p, axis, units.Millimeters(fall*360/span), units.Scalar(span/360),
-		decad.WithLeftHand())
+	b, err := decad.Coil(decad.New(), s, p, axis, units.Millimeters(fall*360/span), units.Scalar(span/360)).LeftHand().Do(t.Context())
 	require.NoError(t, err)
 	box, err := b.Bounds()
 	require.NoError(t, err)

@@ -27,7 +27,7 @@ func shellBox(t *testing.T) (*decad.Document, *decad.Body) {
 	t.Helper()
 	s, p := plateSketch(t)
 	doc := decad.New()
-	body, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(shellBoxHeight), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(shellBoxHeight), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return doc, body
 }
@@ -58,7 +58,7 @@ func holedBox(t *testing.T, x0, y0, x1, y1 float64) *decad.Body {
 	}
 	require.NotNil(t, prof)
 	doc := decad.New()
-	box, err := decad.Extrude(t.Context(), doc, s, prof, decad.Distance{D: units.Millimeters(shellBoxHeight), Dir: decad.Along})
+	box, err := decad.Extrude(doc, s, prof, decad.Distance{D: units.Millimeters(shellBoxHeight), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return box
 }
@@ -168,7 +168,7 @@ func TestShellContextCancellationDuringKernelSetupLeavesReceiverLive(t *testing.
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	doc := decad.New()
-	disk, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	disk, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(20), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	ctx := &operationCancelContext{Context: t.Context(), target: "NewWallKernelBudget"}
 
@@ -329,7 +329,7 @@ func TestShellTubeInwardCylinder(t *testing.T) {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	doc := decad.New()
-	disk, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+	disk, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 
 	body, err := decad.Shell(disk, bothCaps(), units.Millimeters(th)).Do(t.Context())
@@ -495,7 +495,7 @@ func circleHoledBox(t testing.TB, holes ...[3]float64) (*decad.Document, *decad.
 	}
 	require.NotNil(t, prof)
 	doc := decad.New()
-	box, err := decad.Extrude(t.Context(), doc, s, prof, decad.Distance{D: units.Millimeters(shellBoxHeight), Dir: decad.Along})
+	box, err := decad.Extrude(doc, s, prof, decad.Distance{D: units.Millimeters(shellBoxHeight), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return doc, box
 }
@@ -795,7 +795,7 @@ func TestShellRefusals(t *testing.T) {
 		}
 		require.NotNil(t, prof)
 		doc := decad.New()
-		box, err := decad.Extrude(t.Context(), doc, s, prof, decad.Distance{D: units.Millimeters(shellBoxHeight), Dir: decad.Along})
+		box, err := decad.Extrude(doc, s, prof, decad.Distance{D: units.Millimeters(shellBoxHeight), Dir: decad.Along}).Do(t.Context())
 		require.NoError(t, err)
 		// The 5 mm inward wall leaves the radius-10 hole (2t = 10 < 20 diameter),
 		// so the hole survives the offset and the shell is 1 + k = 2 disjoint
@@ -903,7 +903,7 @@ func TestShellInwardSectionWorkBudget(t *testing.T) {
 	}
 	s, profile := polygonSketch(t, pts)
 	doc := decad.New()
-	box, err := decad.Extrude(t.Context(), doc, s, profile, decad.Distance{D: units.Millimeters(shellBoxHeight), Dir: decad.Along})
+	box, err := decad.Extrude(doc, s, profile, decad.Distance{D: units.Millimeters(shellBoxHeight), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	before := snapshotDocument(t, doc)
 
@@ -954,7 +954,7 @@ func TestShellCupDownstream(t *testing.T) {
 		_, err = decad.Transform(t.Context(), cup1, far)
 		require.NoError(t, err)
 		s2, p2 := plateSketch(t)
-		box2, err := decad.Extrude(t.Context(), doc, s2, p2, decad.Distance{D: units.Millimeters(shellBoxHeight), Dir: decad.Along})
+		box2, err := decad.Extrude(doc, s2, p2, decad.Distance{D: units.Millimeters(shellBoxHeight), Dir: decad.Along}).Do(t.Context())
 		require.NoError(t, err)
 		_, err = decad.Shell(box2, topCap(box2), units.Millimeters(th)).Do(t.Context())
 		require.NoError(t, err)
@@ -1008,7 +1008,7 @@ func cylinderCup(t *testing.T, R, h, th float64) (*decad.Document, *decad.Body) 
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	doc := decad.New()
-	disk, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+	disk, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	cup, err := decad.Shell(disk, topCap(disk), units.Millimeters(th)).Do(t.Context())
 	require.NoError(t, err)
@@ -1138,7 +1138,7 @@ func TestShellCupWallQualifyingPinch(t *testing.T) {
 	// proves a violation.
 	s, p := polygonSketch(t, [][2]float64{{0, 0}, {100, 0}, {100, 10}})
 	doc := decad.New()
-	body, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(20), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	_, err = decad.Shell(body, topCap(body), units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
@@ -1171,7 +1171,7 @@ func TestShellCupWallOutwardCavityQualifyingPinch(t *testing.T) {
 		{0, 100},
 	})
 	doc := decad.New()
-	body, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(20), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	_, err = decad.Shell(body,
 		topCap(body),
@@ -1430,7 +1430,7 @@ func diskHoledCup(t *testing.T, R, rh, h float64) (*decad.Document, *decad.Body)
 	}
 	require.NotNil(t, prof)
 	doc := decad.New()
-	body, err := decad.Extrude(t.Context(), doc, s, prof, decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, prof, decad.Distance{D: units.Millimeters(h), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return doc, body
 }
@@ -1667,13 +1667,13 @@ func TestShellCupSeparatesComputedOpenAndExactFloorBounds(t *testing.T) {
 	)
 	s, plateProfile, pinProfile := plateAndPin(t)
 	doc := decad.New()
-	plate, err := decad.Extrude(t.Context(), doc, s, plateProfile, decad.Distance{D: units.Millimeters(plateHeight), Dir: decad.Along})
+	plate, err := decad.Extrude(doc, s, plateProfile, decad.Distance{D: units.Millimeters(plateHeight), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
-	pin, err := decad.Extrude(t.Context(), doc, s, pinProfile, decad.ToFace{
+	pin, err := decad.Extrude(doc, s, pinProfile, decad.ToFace{
 		Body:   plate,
 		Face:   capEndFace(plate),
 		Offset: units.Millimeters(-shortBy),
-	})
+	}).Do(t.Context())
 	require.NoError(t, err)
 	cup, err := decad.Shell(pin, capEndFace(pin), units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
@@ -1715,7 +1715,7 @@ func TestShellCupWallThicknessCarriesConversionDelta(t *testing.T) {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	doc := decad.New()
-	disk, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(12), Dir: decad.Along})
+	disk, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(12), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	_, err = decad.Shell(disk, topCap(disk), units.Inches(0.2)).Do(t.Context())
 	require.NoError(t, err)
@@ -1761,7 +1761,7 @@ func TestShellOutwardSmallThicknessArcRadiiRoundApart(t *testing.T) {
 			_, err = s.Solve(t.Context())
 			require.NoError(t, err)
 			doc := decad.New()
-			box, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+			box, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along}).Do(t.Context())
 			require.NoError(t, err)
 
 			body, err := decad.Shell(box, topCap(box), units.Millimeters(th)).Sense(decad.Outward).Do(t.Context())

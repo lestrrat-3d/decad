@@ -27,8 +27,8 @@ func TestLinearRevolveDThroughBore(t *testing.T) {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	require.Len(t, s.Profiles(), 1)
-	host, err := decad.Revolve(t.Context(), doc, s, s.Profiles()[0],
-		decad.ConstructionAxis{Dir: r3.Vec{Z: 1}}, decad.FullRevolution{})
+	host, err := decad.Revolve(doc, s, s.Profiles()[0],
+		decad.ConstructionAxis{Dir: r3.Vec{Z: 1}}, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	tool := steppedBoreTool(t, doc, w, "D")
 	density := units.KilogramsPerCubicMillimeter(0.001)

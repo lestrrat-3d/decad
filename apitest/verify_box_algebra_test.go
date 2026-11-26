@@ -27,7 +27,7 @@ func lapBox(t *testing.T, doc *decad.Document, x0, y0, x1, y1, z0 float64) *deca
 	s.CreateRectangle(x0, y0, x1, y1)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(6), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(6), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }

@@ -65,7 +65,7 @@ func (sc *tcScene) prism(t *testing.T, origin, u, v r3.Vec, segs []tcSeg, ext de
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	require.Len(t, s.Profiles(), 1)
-	b, err := decad.Extrude(t.Context(), sc.doc, s, s.Profiles()[0], ext)
+	b, err := decad.Extrude(sc.doc, s, s.Profiles()[0], ext).Do(t.Context())
 	require.NoError(t, err)
 	return b
 }
@@ -319,7 +319,7 @@ func tcSolvedPrism(t *testing.T, sc *tcScene, s *sketch.Sketch) *decad.Body {
 	_, err := s.Solve(t.Context())
 	require.NoError(t, err)
 	require.Len(t, s.Profiles(), 1)
-	b, err := decad.Extrude(t.Context(), sc.doc, s, s.Profiles()[0], decad.Symmetric{D: units.Millimeters(10)})
+	b, err := decad.Extrude(sc.doc, s, s.Profiles()[0], decad.Symmetric{D: units.Millimeters(10)}).Do(t.Context())
 	require.NoError(t, err)
 	return b
 }

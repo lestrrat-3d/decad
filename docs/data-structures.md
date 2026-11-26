@@ -125,7 +125,7 @@ configuration option.
 | `decad.EdgeAxis` | struct | A linear edge of a body, selected by query. | The caller |
 | `decad.LoftSection` | struct | One recorded section of a smooth `decad.LoftSections` feature, including its sketch and profile. | The caller |
 | `decad.CircularLoftCorrespondence` | struct | Four exact rational Bernstein maps for a circular loft's cardinal quarters. | The caller |
-| `decad.LoftSplit` | struct | One recorded segment of one loop and the parameter fractions at which `decad.WithLoftSplits` cuts it. | The caller |
+| `decad.LoftSplit` | struct | One recorded segment of one loop and the parameter fractions at which `LoftCommand.Splits` cuts it. | The caller |
 | `decad.ClosestPoint` | struct | The nearest point of a body or face to a query point, its distance reading and how far it can lie from the true surface. | `Body.ClosestPoint`, `Face.ClosestPoint` |
 | `decad.MeshBody` | struct | An imported triangle mesh: vertices, triangles and what they say. Not a `decad.Body`. | `decad.ReadSTL`, `decad.ReadOBJ`, `decad.ReadThreeMF`, `decad.ReadSTEP`, `decad.NewMeshBody` |
 | `decad.MeshImportOption` | option set | A limit on `decad.ReadSTL`, `decad.ReadOBJ`, `decad.ReadThreeMF`, `decad.ReadSTEP` or `decad.ReadIGES`: `decad.WithMaxMeshTriangles` or `decad.WithMaxMeshBytes`. | The caller |
@@ -166,7 +166,6 @@ configuration option.
 | `decad.TextSpec` | struct | A line of lettering: the text, the font size, where its baseline starts, an optional tolerance, an optional font and an optional arc to set it along. | The caller |
 | `decad.TextArc` | struct | A circle to set lettering along: centre, radius, start angle and the way round. | `decad.TextSpec` |
 | `decad.EmbossMode` | enum | `decad.EmbossRaised` or `decad.EmbossEngraved`. | The caller |
-| `decad.EmbossOption` | option set | A setting on `decad.Emboss`: `decad.WithEmbossDraft` leans the relief's walls and `decad.WithEmbossRimFillet` rounds its rim. | The caller |
 | `decad.Countersink` | struct | A conical recess with an included angle. | The caller |
 
 ### Selection, patterns and placement
@@ -323,6 +322,20 @@ returns `decad.ErrConsumed`.
 | `decad.ThickenCommand` | struct | The sheet, the thickness and the `ThickenCommand.Side` side. `Do` returns `*decad.Body`. | `decad.Thicken` |
 | `decad.MoveFaceCommand` | struct | The body, the face selector and the signed distance. `Do` returns `*decad.Body`. | `decad.MoveFace` |
 | `decad.ConeFromFaceCommand` | struct | The Revolve body, the face selector and the far plane. `Do` returns the cone and leaves the Revolve live. | `decad.ConeFromFace` |
+| `decad.ExtrudeCommand` | struct | The document, sketch, section, extent and the `ExtrudeCommand.Taper` and `ExtrudeCommand.SurfaceResult` settings. `Do` returns `*decad.Body`. | `decad.Extrude` |
+| `decad.RevolveCommand` | struct | The document, sketch, section, axis, angular extent and the `RevolveCommand.SurfaceResult` setting. `Do` returns `*decad.Body`. | `decad.Revolve` |
+| `decad.SweepCommand` | struct | The document, sketch, section, path and the `SweepCommand.Twist`, `SweepCommand.MitredJoins`, `SweepCommand.SectionScale` and `SweepCommand.SurfaceResult` settings. `Do` returns `*decad.Body`. | `decad.Sweep` |
+| `decad.CoilCommand` | struct | The document, sketch, profile, axis, pitch, turns and the `CoilCommand.LeftHand` setting. `Do` returns `*decad.Body`. | `decad.Coil` |
+| `decad.LoftCommand` | struct | The document, the two sketches and profiles and the `LoftCommand.Alignment`, `LoftCommand.Splits` and `LoftCommand.SurfaceResult` settings. `Do` returns `*decad.Body`. | `decad.Loft` |
+| `decad.LoftChainCommand` | struct | The document and the two sketches and open chains. `Do` returns `*decad.Body`, always a sheet. | `decad.LoftChain` |
+| `decad.LoftFromPointCommand` | struct | The document, the apex, the sketch and the profile. `Do` returns `*decad.Body`. | `decad.LoftFromPoint` |
+| `decad.LoftSectionsCommand` | struct | The document, the sections and the `LoftSectionsCommand.CircularCorrespondence` maps. `Do` returns `*decad.Body`. | `decad.LoftSections` |
+| `decad.LoftFacesCommand` | struct | The cap faces and, for a cone-tangent end, the cone and its radial direction. `Do` returns `*decad.Body`. | `decad.LoftFaces`, `decad.LoftFacesToCone` |
+| `decad.PatchProfileCommand` | struct | The document, the sketch and the profile. `Do` returns a one-face sheet. | `decad.PatchProfile` |
+| `decad.EmbossCommand` | struct | The body, the sketch, the profiles, the face selector, the mode, the height and the `EmbossCommand.RimFillet` and `EmbossCommand.Draft` settings. `Do` returns `*decad.Body`. | `decad.Emboss` |
+| `decad.WebPathCommand` | struct | The body, the sketch, the path entities, the thickness, the extent and the `WebPathCommand.Draft` and `WebPathCommand.Overrun` settings. `Do` returns `*decad.Body`. | `decad.WebPath` |
+| `decad.CutExtrudeCommand` | struct | The target, the sketch, the profiles, the extent and the `CutExtrudeCommand.Taper` setting. `Do` returns `*decad.Body`. | `decad.CutExtrude` |
+| `decad.CutRevolveCommand` | struct | The target, the sketch, the profiles, the axis and the angular extent. `Do` returns `*decad.Body`. | `decad.CutRevolve` |
 
 ### Options
 
@@ -331,15 +344,7 @@ other sections return them.
 
 | Type | Configures |
 |---|---|
-| `decad.ExtrudeOption` | `decad.Extrude` |
-| `decad.RevolveOption` | `decad.Revolve` |
-| `decad.SweepOption` | `decad.Sweep` |
-| `decad.LoftOption`, `decad.ChainLoftOption` | `decad.Loft`, `decad.LoftChain` |
-| `decad.LoftFacesOption` | `decad.LoftFaces` |
-| `decad.CoilOption` | `decad.Coil` |
-| `decad.RibOption` | `decad.WebPath` |
 | `decad.CopyOption`, `decad.MirrorOption` | `decad.Copy`, `decad.Mirrored` |
-| `decad.SurfaceResultOption` | Every feature that `decad.WithSurfaceResult` reaches. |
 | `decad.TessellateOption` | `Body.Tessellate` |
 | `decad.Verification` | How much of the tessellation proof runs, set by `decad.WithVerification`. |
 | `decad.VerifyOption`, `decad.WallOption` | `Document.Verify`, `decad.WithMinWallThickness` |

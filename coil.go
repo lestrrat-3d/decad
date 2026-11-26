@@ -7,6 +7,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/coil"
 	"github.com/lestrrat-3d/decad/internal/coilshell"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/opcommand"
 	"github.com/lestrrat-3d/decad/internal/sectioncert"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -24,69 +25,13 @@ import (
 // ceiling bounds the build's time and memory before anything is allocated.
 const maxCoilFacets = 1 << 20
 
-// CoilOption configures Coil. Sealed: WithLeftHand is the one option.
-// WithSurfaceResult does not implement it, so a coil is always a solid
-// (Table CS row CS11).
-type CoilOption interface {
-	coilOption()
-}
-
-type leftHandOption struct{}
-
-func (leftHandOption) coilOption() {}
-
-// stationsPerTurnOption is private to derived operations such as Thread. The
-// public Coil contract keeps the documented fixed density.
-type stationsPerTurnOption int64
-
-func (stationsPerTurnOption) coilOption() {}
-
-// wholeLinesOption is private to derived operations such as Thread, which
-// bound their departure through the station density: it keeps every profile
-// line as one chord (agent-docs/helix-design.md §5.3).
-type wholeLinesOption struct{}
-
-func (wholeLinesOption) coilOption() {}
-
-// coilConfig is the decoded CoilOption set.
+// coilConfig is the folded Coil input set. Thread, which derives a coil,
+// fills it with a station density and whole lines the public Coil keeps at
+// its documented fixed density.
 type coilConfig struct {
 	leftHand        bool
 	stationsPerTurn int64
 	wholeLines      bool
-}
-
-// WithLeftHand turns the section left-handed about the axis direction while
-// it advances along it. The default is right-handed. Passing it twice is
-// ErrDegenerate.
-func WithLeftHand() CoilOption {
-	return leftHandOption{}
-}
-
-func decodeCoilOptions(opts []CoilOption) (coilConfig, error) {
-	cfg := coilConfig{stationsPerTurn: int64(coilshell.StationsPerTurn)}
-	stationsSet := false
-	for _, raw := range opts {
-		if raw == nil {
-			return coilConfig{}, fmt.Errorf(`%w: a nil option names nothing to apply`, ErrDegenerate)
-		}
-		switch option := raw.(type) {
-		case leftHandOption:
-			if cfg.leftHand {
-				return coilConfig{}, fmt.Errorf(`%w: WithLeftHand was passed more than once`, ErrDegenerate)
-			}
-			cfg.leftHand = true
-		case stationsPerTurnOption:
-			if stationsSet || option <= 0 {
-				return coilConfig{}, fmt.Errorf(`%w: invalid coil station density`, ErrDegenerate)
-			}
-			cfg.stationsPerTurn, stationsSet = int64(option), true
-		case wholeLinesOption:
-			cfg.wholeLines = true
-		default:
-			return coilConfig{}, fmt.Errorf(`%w: the coil option is not a decad coil option (%T)`, ErrDegenerate, raw)
-		}
-	}
-	return cfg, nil
 }
 
 // Coil moves the closed profile p of sketch s along the screw motion about
@@ -120,11 +65,47 @@ func decodeCoilOptions(opts []CoilOption) (coilConfig, error) {
 // segment spanning every turn, read through Table CM's closed forms and, on
 // an arc, agent-docs/helix-design.md §11.1's area bracket. A failed call leaves
 // the document untouched.
-func Coil(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.Profile, axis Axis, pitch, turns units.Value, opts ...CoilOption) (*Body, error) {
-	// CS1: nils, owned options and option arity.
-	if ctx == nil {
-		return nil, fmt.Errorf(`%w: a nil context cannot control a coil`, ErrDegenerate)
-	}
+func Coil(d *Document, s *sketch.Sketch, p *sketch.Profile, axis Axis, pitch, turns units.Value) *CoilCommand {
+	c := &CoilCommand{d: d, s: s, p: p, axis: copyAxis(axis), pitch: pitch, turns: turns}
+	recordNilFaults(&c.state, "Coil", d, sketchArg(s), profileArg(p))
+	return c
+}
+
+// CoilCommand moves a profile along a screw motion. Build it with [Coil].
+type CoilCommand struct {
+	state opcommand.State // consumed flag and first recorded fault
+	d     *Document       // stored as given
+	s     *sketch.Sketch  // stored as given
+	p     *sketch.Profile // stored as given
+	axis  Axis            // copied at Coil, with the selector of an EdgeAxis
+	pitch units.Value     // gated at Do
+	turns units.Value     // gated at Do
+	left  bool            // set by LeftHand
+}
+
+// LeftHand turns the section left-handed about the axis direction while it
+// advances along it. The default is right-handed. Calling it twice is the same
+// as calling it once. A coil is always a solid: it has no SurfaceResult (Table
+// CS row CS11).
+func (c *CoilCommand) LeftHand() *CoilCommand { c.left = true; return c }
+
+// Do moves the profile, registers the new body and returns it, or returns the
+// error of the first gate that refuses, leaving the document unchanged. A nil
+// ctx is ErrDegenerate, and a second call returns ErrConsumed.
+func (c *CoilCommand) Do(ctx context.Context) (*Body, error) {
+	return runCommand(ctx, &c.state, OperationCoil, c.run)
+}
+
+func (c *CoilCommand) run(ctx context.Context) (*Body, error) {
+	cfg := coilConfig{leftHand: c.left, stationsPerTurn: int64(coilshell.StationsPerTurn)}
+	return coilBody(ctx, c.d, c.s, c.p, c.axis, c.pitch, c.turns, cfg)
+}
+
+// coilBody is Coil's implementation. ctx is not nil, and the errors it returns
+// carry no operation tag (agent-docs/command-api-design.md §11).
+func coilBody(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.Profile, axis Axis,
+	pitch, turns units.Value, cfg coilConfig) (*Body, error) {
+	// CS1: nils and the axis.
 	if d == nil {
 		return nil, fmt.Errorf(`%w: a nil document owns no model`, ErrDegenerate)
 	}
@@ -135,9 +116,8 @@ func Coil(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.Profile,
 	if err != nil {
 		return nil, err
 	}
-	cfg, err := decodeCoilOptions(opts)
-	if err != nil {
-		return nil, err
+	if cfg.stationsPerTurn <= 0 {
+		return nil, fmt.Errorf(`%w: invalid coil station density`, ErrDegenerate)
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err

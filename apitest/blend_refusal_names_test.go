@@ -29,7 +29,7 @@ func turnedShaftWithCrossPin(t *testing.T) *decad.Body {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	axis := decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}}
-	shaft, err := decad.Revolve(t.Context(), doc, s, s.Profiles()[0], axis, decad.FullRevolution{})
+	shaft, err := decad.Revolve(doc, s, s.Profiles()[0], axis, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 
 	plane, err := w.CreateOffsetPlane(w.XY(), -15)
@@ -41,7 +41,7 @@ func turnedShaftWithCrossPin(t *testing.T) *decad.Body {
 	hs.CreateCircle(centre, 3)
 	_, err = hs.Solve(t.Context())
 	require.NoError(t, err)
-	pin, err := decad.Extrude(t.Context(), doc, hs, hs.Profiles()[0], decad.Distance{D: units.Millimeters(45), Dir: decad.Along})
+	pin, err := decad.Extrude(doc, hs, hs.Profiles()[0], decad.Distance{D: units.Millimeters(45), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	joined, err := decad.Union(shaft, pin).Do(t.Context())
 	require.NoError(t, err)

@@ -16,7 +16,7 @@ import (
 func circularUnionPair(t *testing.T, doc *decad.Document, centerX float64) (*decad.Body, *decad.Body) {
 	t.Helper()
 	s, profile := semicircleSketchAt(t, -1, 2)
-	half, err := decad.Extrude(t.Context(), doc, s, profile, decad.Distance{D: units.Millimeters(2), Dir: decad.Along})
+	half, err := decad.Extrude(doc, s, profile, decad.Distance{D: units.Millimeters(2), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	rod := xCylinder(t, doc, -2, 4, .5, .5, .25)
 	target, err := decad.Union(half, rod).Do(t.Context())

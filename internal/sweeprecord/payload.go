@@ -19,7 +19,7 @@ import (
 // dispatch on this payload and refuse instead of treating the analytic
 // reduction as proof for the original operation.
 //
-// SurfaceResult is WithSurfaceResult's own flag, held here too rather than
+// SurfaceResult is SurfaceResult's own flag, held here too rather than
 // read only off prism/revolve: every finishing step in finish.go overwrites the
 // built body's payload with this struct, so a flag that rode only the reduced
 // prism/revolve payload would still reach Kind()/solid correctly on first

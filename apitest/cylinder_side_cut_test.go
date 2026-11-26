@@ -38,7 +38,7 @@ func TestCutRegisteredPrismArc(t *testing.T) {
 		return nil
 	}
 	extrude := func(s *sketch.Sketch, h float64, dir decad.Direction) *decad.Body {
-		b, e := decad.Extrude(ctx, d, s, profile(s), decad.Distance{D: units.Millimeters(h), Dir: dir})
+		b, e := decad.Extrude(d, s, profile(s), decad.Distance{D: units.Millimeters(h), Dir: dir}).Do(ctx)
 		require.NoError(t, e)
 		return b
 	}
@@ -87,13 +87,13 @@ func TestCutRegisteredPrismArc(t *testing.T) {
 	}
 	fl, fp := section(-1.06, 2.74)
 	fh, fq := section(-.78, 3.02)
-	first, err := decad.Loft(ctx, d, fl, fp, fh, fq)
+	first, err := decad.Loft(d, fl, fp, fh, fq).Do(ctx)
 	require.NoError(t, err)
 	joined, err = decad.Cut(joined, first).Do(ctx)
 	require.NoError(t, err)
 	l, lp := section(-.63, 3.02)
 	h, hp := section(.06, 2.74)
-	tool, e := decad.Loft(ctx, d, l, lp, h, hp)
+	tool, e := decad.Loft(d, l, lp, h, hp).Do(ctx)
 	require.NoError(t, e)
 	before, e := joined.Tessellate(ctx, units.Millimeters(.5), decad.WithVerification(decad.VerifyAll))
 	require.NoError(t, e)

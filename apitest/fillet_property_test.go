@@ -100,7 +100,7 @@ func pickProfile(t *testing.T, s *sketch.Sketch, nOuter, nHoles int) *sketch.Pro
 func filletExtrude(t *testing.T, s *sketch.Sketch, p *sketch.Profile, k float64) (*decad.Document, *decad.Body) {
 	t.Helper()
 	doc := decad.New()
-	body, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(filletCaseHeight(k)), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(filletCaseHeight(k)), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return doc, body
 }
@@ -528,7 +528,7 @@ func FuzzFillet(f *testing.F) {
 			t.Skip() // an un-solvable degenerate rectangle is not the target
 		}
 		doc := decad.New()
-		body, err := decad.Extrude(t.Context(), doc, s, pickProfile(t, s, 4, 0), decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+		body, err := decad.Extrude(doc, s, pickProfile(t, s, 4, 0), decad.Distance{D: units.Millimeters(20), Dir: decad.Along}).Do(t.Context())
 		require.NoError(t, err)
 
 		filleted, err := decad.Fillet(body, convexLateral(), units.Millimeters(r)).Do(t.Context())

@@ -44,8 +44,8 @@ func Example_loft_arc_sections() {
 	}
 
 	doc := decad.New()
-	wedge, err := decad.Loft(context.Background(), doc,
-		sketches[0], sketches[0].Profiles()[0], sketches[1], sketches[1].Profiles()[0])
+	wedge, err := decad.Loft(doc,
+		sketches[0], sketches[0].Profiles()[0], sketches[1], sketches[1].Profiles()[0]).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to loft: %s\n", err)
 		return

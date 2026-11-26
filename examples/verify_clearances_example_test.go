@@ -30,8 +30,8 @@ func Example_verify_clearances() {
 			fmt.Printf("failed to solve: %s\n", err)
 			return
 		}
-		if _, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
-			decad.Distance{D: units.Millimeters(10), Dir: decad.Along}); err != nil {
+		if _, err := decad.Extrude(doc, s, s.Profiles()[0],
+			decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(context.Background()); err != nil {
 			fmt.Printf("failed to extrude: %s\n", err)
 			return
 		}

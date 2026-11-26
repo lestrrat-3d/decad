@@ -86,8 +86,8 @@ func wavyOutlineBody(t *testing.T, lobes, pointsPerSpline, holes int) *decad.Bod
 		}
 	}
 	require.NotNil(t, profile)
-	body, err := decad.Extrude(t.Context(), decad.New(), s, profile,
-		decad.Distance{D: units.Millimeters(8)})
+	body, err := decad.Extrude(decad.New(), s, profile,
+		decad.Distance{D: units.Millimeters(8)}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }

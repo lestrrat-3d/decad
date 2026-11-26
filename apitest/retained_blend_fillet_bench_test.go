@@ -37,8 +37,8 @@ func BenchmarkFacetedRetainedBlendFourSideFillet(b *testing.B) {
 		if _, err = s.Solve(b.Context()); err != nil {
 			b.Fatal(err)
 		}
-		post, err := decad.Extrude(b.Context(), sc.doc, s, s.Profiles()[0],
-			decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
+		post, err := decad.Extrude(sc.doc, s, s.Profiles()[0],
+			decad.Distance{D: units.Millimeters(8), Dir: decad.Along}).Do(b.Context())
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -95,8 +95,8 @@ func benchRetainedRect(b *testing.B, sc *retentionScene, x0, y0, x1, y1, h float
 	if _, err = s.Solve(b.Context()); err != nil {
 		b.Fatal(err)
 	}
-	out, err := decad.Extrude(b.Context(), sc.doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+	out, err := decad.Extrude(sc.doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(h), Dir: decad.Along}).Do(b.Context())
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -159,8 +159,8 @@ func benchRetainedLipSocket(b *testing.B, sc *retentionScene) *decad.Body {
 	}
 	// The prism runs from y = 0 to 18 against the sketch normal; shifted down by 1
 	// it spans y ∈ [−1, 17], past both ends of the block.
-	tool, err := decad.Extrude(b.Context(), sc.doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(18), Dir: decad.Against})
+	tool, err := decad.Extrude(sc.doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(18), Dir: decad.Against}).Do(b.Context())
 	if err != nil {
 		b.Fatal(err)
 	}

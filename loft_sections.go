@@ -9,6 +9,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/opcommand"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/sectioncert"
@@ -56,22 +57,54 @@ type CircularLoftCorrespondence struct {
 // A four-quarter-arc circle may also transition to four-edge sections of one
 // fitted edge and three lines, with a certified rational wall.
 // Other shapes refuse.
-func LoftSections(ctx context.Context, d *Document, sections ...LoftSection) (*Body, error) {
-	return loftSections(ctx, d, nil, false, false, sections...)
+func LoftSections(d *Document, sections ...LoftSection) *LoftSectionsCommand {
+	c := &LoftSectionsCommand{d: d, sections: slices.Clone(sections)}
+	if d == nil {
+		c.state.Record("d", errLoftSectionsCount)
+	}
+	if len(sections) < 3 {
+		c.state.Record("sections", errLoftSectionsCount)
+	}
+	return c
 }
 
-// LoftSectionsWithCircularCorrespondence builds a circular-to-spline loft
-// using explicit cardinal-quarter parameter maps. The maps and the source
-// sections must satisfy the exact admission and continuity proofs in
-// agent-docs/loft-sections-design.md §14.
-func LoftSectionsWithCircularCorrespondence(ctx context.Context, d *Document,
-	correspondence CircularLoftCorrespondence, sections ...LoftSection) (*Body, error) {
-	if ctx == nil || d == nil || len(sections) < 3 {
-		return nil, fmt.Errorf("%w: LoftSections needs a context, document and at least three sections", ErrDegenerate)
-	}
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
+// errLoftSectionsCount is the refusal of a missing document or fewer than
+// three sections, which LoftSections reports right after the nil ctx check.
+var errLoftSectionsCount = fmt.Errorf("%w: LoftSections needs a document and at least three sections", ErrDegenerate)
+
+// LoftSectionsCommand builds one solid through three or more profiles. Build it
+// with [LoftSections].
+type LoftSectionsCommand struct {
+	state      opcommand.State                           // consumed flag and first recorded fault
+	d          *Document                                 // stored as given
+	sections   []LoftSection                             // copied at LoftSections
+	correspond opcommand.Slot[circularCorrespondenceMap] // set by CircularCorrespondence
+}
+
+// circularCorrespondenceMap is the validated form of a CircularLoftCorrespondence:
+// one rational map per cardinal quarter, and the two band flags.
+type circularCorrespondenceMap struct {
+	maps                          [][]*big.Rat
+	smoothCircularBands, emerging bool
+}
+
+// CircularCorrespondence builds a circular-to-spline loft using explicit
+// cardinal-quarter parameter maps. The maps and the source sections must
+// satisfy the exact admission and continuity proofs in
+// agent-docs/loft-sections-design.md §14. A map that does not give two to six
+// strictly increasing controls from zero to the denominator is
+// [ErrUnsupported], returned by Do. A second call replaces the first.
+func (c *LoftSectionsCommand) CircularCorrespondence(correspondence CircularLoftCorrespondence) *LoftSectionsCommand {
+	maps, err := circularMaps(correspondence)
+	c.correspond.Set(circularCorrespondenceMap{
+		maps: maps, smoothCircularBands: correspondence.SmoothCircularBands, emerging: correspondence.EmergingFlat,
+	}, err)
+	return c
+}
+
+// circularMaps validates correspondence and converts each quarter to its
+// rational control list. It reads nothing but the value.
+func circularMaps(correspondence CircularLoftCorrespondence) ([][]*big.Rat, error) {
 	maps := make([][]*big.Rat, 4)
 	for quarter, controls := range correspondence.Numerators {
 		denominator := correspondence.Denominators[quarter]
@@ -87,16 +120,48 @@ func LoftSectionsWithCircularCorrespondence(ctx context.Context, d *Document,
 			maps[quarter][i] = big.NewRat(value, denominator)
 		}
 	}
-	return loftSections(ctx, d, maps, correspondence.SmoothCircularBands, correspondence.EmergingFlat, sections...)
+	return maps, nil
 }
 
-func loftSections(ctx context.Context, d *Document, maps [][]*big.Rat, smoothCircularBands, emergingFlat bool, sections ...LoftSection) (*Body, error) {
-	if ctx == nil || d == nil || len(sections) < 3 {
-		return nil, fmt.Errorf("%w: LoftSections needs a context, document and at least three sections", ErrDegenerate)
+// Do builds the loft, registers the new body and returns it, or returns the
+// error of the first gate that refuses, leaving the document unchanged. A nil
+// ctx is ErrDegenerate, and a second call returns ErrConsumed.
+func (c *LoftSectionsCommand) Do(ctx context.Context) (*Body, error) {
+	return runCommand(ctx, &c.state, OperationLoftSections, c.run)
+}
+
+func (c *LoftSectionsCommand) run(ctx context.Context) (*Body, error) {
+	var corr loftCorrespondence
+	if c.correspond.IsSet() {
+		corr.set = true
+		corr.m, corr.err = c.correspond.Get()
+	}
+	return loftSections(ctx, c.d, corr, c.sections)
+}
+
+// loftCorrespondence is what LoftSections's implementation reads of the
+// CircularCorrespondence method: whether it was called, its maps and the error
+// validating them.
+type loftCorrespondence struct {
+	set bool
+	m   circularCorrespondenceMap
+	err error
+}
+
+// loftSections is LoftSections's implementation. ctx is not nil, and the
+// errors it returns carry no operation tag, except the refusal of a stored
+// method value (agent-docs/command-api-design.md §11).
+func loftSections(ctx context.Context, d *Document, corr loftCorrespondence, sections []LoftSection) (*Body, error) {
+	if d == nil || len(sections) < 3 {
+		return nil, errLoftSectionsCount
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	if corr.err != nil {
+		return nil, subjectError(OperationLoftSections, "CircularCorrespondence", corr.err)
+	}
+	maps, smoothCircularBands, emergingFlat := corr.m.maps, corr.m.smoothCircularBands, corr.m.emerging
 	sketches := make([]*sketch.Sketch, len(sections))
 	for i, section := range sections {
 		sketches[i] = section.Sketch

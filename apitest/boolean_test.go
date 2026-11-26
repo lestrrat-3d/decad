@@ -30,7 +30,7 @@ func diskBody(t *testing.T, doc *decad.Document, cx, cy, r float64) *decad.Body 
 	s.CreateCircle(center, r)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(20), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -69,7 +69,7 @@ func wedgePrism(t *testing.T, doc *decad.Document, w *sketch.World, plane *sketc
 	}
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Symmetric{D: units.Millimeters(half)})
+	body, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Symmetric{D: units.Millimeters(half)}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -97,7 +97,7 @@ func discBodySymmetric(t testing.TB, doc *decad.Document, cx, r, half float64) *
 	s.CreateCircle(center, r)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Symmetric{D: units.Millimeters(half)})
+	body, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Symmetric{D: units.Millimeters(half)}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -125,7 +125,7 @@ func washerBodySymmetric(t testing.TB, doc *decad.Document, outer, inner, half f
 		}
 	}
 	require.NotNil(t, prof, `the washer's holed region should exist`)
-	body, err := decad.Extrude(t.Context(), doc, s, prof, decad.Symmetric{D: units.Millimeters(half)})
+	body, err := decad.Extrude(doc, s, prof, decad.Symmetric{D: units.Millimeters(half)}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -742,7 +742,7 @@ func coneSegment(t *testing.T, doc *decad.Document, a, b r3.Vec, ra, rb float64)
 	t.Helper()
 	l := b.Sub(a).Len()
 	s, p := polygonSketch(t, [][2]float64{{0, 0}, {0, ra}, {l, rb}, {l, 0}})
-	body, err := decad.Revolve(t.Context(), doc, s, p, uAxis, decad.FullRevolution{})
+	body, err := decad.Revolve(doc, s, p, uAxis, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	d, ok := b.Sub(a).Normalize()
 	require.True(t, ok)
@@ -1112,7 +1112,7 @@ func polyPrism(t *testing.T, doc *decad.Document, w *sketch.World, plane *sketch
 	}
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Symmetric{D: units.Millimeters(half)})
+	body, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Symmetric{D: units.Millimeters(half)}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }

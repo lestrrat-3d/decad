@@ -122,7 +122,7 @@ type HoleThread struct {
 
 ## 9. Drafted holes
 
-`HoleSpec.Draft` leans the round bore's wall. It passes `WithTaper` to the `Extrude` that builds the bore tool, as
+`HoleSpec.Draft` leans the round bore's wall. It passes `Taper` to the `Extrude` that builds the bore tool, as
 `agent-docs/modify-design.md` Part D §2 states it.
 
 | Decision | Rule |
