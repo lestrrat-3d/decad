@@ -95,9 +95,30 @@ func New(cfg Config) *Encoder {
 		e.opaque[t] = struct{}{}
 	}
 	for _, t := range cfg.IDs {
+		if !signedInteger(t) {
+			panic(fmt.Sprintf("statedigest: IDs type %s is not a signed integer", t))
+		}
 		e.ids[t] = struct{}{}
 	}
+	for t, fields := range cfg.IDFields {
+		for name, idType := range fields {
+			f, ok := t.FieldByName(name)
+			if !ok || !signedInteger(f.Type) || !signedInteger(idType) {
+				panic(fmt.Sprintf("statedigest: IDFields %s.%s and its identity type must be a field and a type "+
+					"of signed integer kind", t, name))
+			}
+		}
+	}
 	return e
+}
+
+// signedInteger reports whether t has a signed integer kind, the only kind the walker reads with reflect.Value.Int.
+func signedInteger(t reflect.Type) bool {
+	switch t.Kind() {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return true
+	}
+	return false
 }
 
 type nodeKey struct {

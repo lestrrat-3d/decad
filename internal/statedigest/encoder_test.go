@@ -306,3 +306,28 @@ func TestEncoderStrayNodeCopyStaysSeparate(t *testing.T) {
 	h3.n.Owner = h3
 	require.Equal(t, sum(t, e, &pair{A: &h3.n, B: &h3.n}), g2, "the handle's own node still folds")
 }
+
+func TestNewRejectsUnsignedIDFields(t *testing.T) {
+	type uintLineage struct {
+		A    id
+		Copy uint
+	}
+	type uid uint
+	require.Panics(t, func() {
+		statedigest.New(statedigest.Config{
+			IDs:      []reflect.Type{reflect.TypeFor[id]()},
+			IDFields: map[reflect.Type]map[string]reflect.Type{reflect.TypeFor[uintLineage](): {"Copy": reflect.TypeFor[id]()}},
+		})
+	}, "an unsigned field would panic in the walker")
+	require.Panics(t, func() {
+		statedigest.New(statedigest.Config{
+			IDFields: map[reflect.Type]map[string]reflect.Type{reflect.TypeFor[lineage](): {"Copy": reflect.TypeFor[uid]()}},
+		})
+	}, "an unsigned identity type is refused")
+	require.Panics(t, func() { statedigest.New(statedigest.Config{IDs: []reflect.Type{reflect.TypeFor[uid]()}}) })
+	require.Panics(t, func() {
+		statedigest.New(statedigest.Config{
+			IDFields: map[reflect.Type]map[string]reflect.Type{reflect.TypeFor[lineage](): {"Missing": reflect.TypeFor[id]()}},
+		})
+	}, "a field that does not exist is refused")
+}

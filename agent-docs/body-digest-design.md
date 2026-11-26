@@ -111,6 +111,6 @@ A refused body has no digest, and a caller that wants one proof per pair proves 
 
 ## 6. Limits
 
-- `PairDigest` covers `Intersect`-like evaluations. The paired and blind Cut routes read `consumers`, which the
+- `PairDigest` covers `Intersect` evaluations. The paired and blind Cut routes read `consumers`, which the
   digest leaves out, so equal pair digests do not promise equal `Cut` answers.
 - A global map in an internal package, keyed by a body, is not caught by the type tests. The evaluator has none.

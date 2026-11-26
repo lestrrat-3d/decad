@@ -59,22 +59,16 @@ func containsIdentity(t types.Type, seen map[types.Type]struct{}) bool {
 	return false
 }
 
-// comparesToPositiveConstant reports an == or != of an identity against a constant above 0, which names one
-// particular id and so is not relabel-safe.
-func comparesToPositiveConstant(info *types.Info, n *ast.BinaryExpr) bool {
-	for _, pair := range [][2]ast.Expr{{n.X, n.Y}, {n.Y, n.X}} {
-		if !isIdentityType(info.TypeOf(pair[0])) {
-			continue
-		}
-		tv, ok := info.Types[pair[1]]
-		if !ok || tv.Value == nil {
-			continue
-		}
-		if v, ok := constant.Int64Val(tv.Value); ok && v > 0 {
-			return true
-		}
+// isPositiveIDConstant reports whether e is a constant expression of an identity type with a value above 0. Such a
+// constant names one particular id, whether it is compared, passed as an implicit argument, stored in a composite
+// literal, declared as a typed constant or assigned to a variable.
+func isPositiveIDConstant(info *types.Info, e ast.Expr) bool {
+	tv, ok := info.Types[e]
+	if !ok || tv.Value == nil || !isIdentityType(tv.Type) {
+		return false
 	}
-	return false
+	v, ok := constant.Int64Val(constant.ToInt(tv.Value))
+	return ok && v > 0
 }
 
 // passesIdentityToInterface reports a call that hands an identity to an interface-typed parameter, which boxes it.
@@ -108,8 +102,8 @@ func passesIdentityToInterface(info *types.Info, n *ast.CallExpr) bool {
 }
 
 // scanIdentityArithmetic lists every operation outside == and != on an identity type, every conversion of one to
-// another type, every use of one as an index, every comparison of one with a positive constant, min and max over
-// ids, a switch on an id, an id boxed into an interface parameter, and a generic instantiated with a type that
+// another type, every use of one as an index or slice bound, every constant of an id type above 0, min, max and
+// make over ids, a range over one, a switch on an id, an id boxed into an interface parameter, and a generic instantiated with a type that
 // holds an id.
 func scanIdentityArithmetic(ms *moduleSource) []identityUse {
 	var uses []identityUse
@@ -137,14 +131,42 @@ func declName(d ast.Decl) string {
 	return fd.Name.Name
 }
 
+// scanBuiltinIDArgs reports min and max over ids, and make with an id as a length or capacity.
+func scanBuiltinIDArgs(info *types.Info, name string, args []ast.Expr, add func()) {
+	switch name {
+	case "min", "max":
+	case "make":
+		if len(args) > 0 {
+			args = args[1:]
+		}
+	default:
+		return
+	}
+	for _, a := range args {
+		if isIdentityType(info.TypeOf(a)) {
+			add()
+		}
+	}
+}
+
 func scanIdentityNode(info *types.Info, n ast.Node, add func()) {
 	typeOf := func(e ast.Expr) types.Type { return info.TypeOf(e) }
+	if e, ok := n.(ast.Expr); ok && isPositiveIDConstant(info, e) {
+		add()
+	}
 	switch n := n.(type) {
-	case *ast.BinaryExpr:
-		if n.Op == token.EQL || n.Op == token.NEQ {
-			if comparesToPositiveConstant(info, n) {
+	case *ast.SliceExpr:
+		for _, e := range []ast.Expr{n.Low, n.High, n.Max} {
+			if e != nil && isIdentityType(typeOf(e)) {
 				add()
 			}
+		}
+	case *ast.RangeStmt:
+		if isIdentityType(typeOf(n.X)) {
+			add()
+		}
+	case *ast.BinaryExpr:
+		if n.Op == token.EQL || n.Op == token.NEQ {
 			return
 		}
 		if isIdentityType(typeOf(n.X)) || isIdentityType(typeOf(n.Y)) {
@@ -176,6 +198,11 @@ func scanIdentityNode(info *types.Info, n ast.Node, add func()) {
 			add()
 		}
 	case *ast.Ident:
+		if c, ok := info.Defs[n].(*types.Const); ok && isIdentityType(c.Type()) {
+			if v, ok := constant.Int64Val(constant.ToInt(c.Val())); ok && v > 0 {
+				add()
+			}
+		}
 		inst, ok := info.Instances[n]
 		if !ok || n.Name == "TypeFor" { // reflect.TypeFor reads only the type
 			return
@@ -190,12 +217,8 @@ func scanIdentityNode(info *types.Info, n ast.Node, add func()) {
 			add()
 		}
 		if id, ok := ast.Unparen(n.Fun).(*ast.Ident); ok {
-			if b, ok := info.Uses[id].(*types.Builtin); ok && (b.Name() == "min" || b.Name() == "max") {
-				for _, a := range n.Args {
-					if isIdentityType(typeOf(a)) {
-						add()
-					}
-				}
+			if b, ok := info.Uses[id].(*types.Builtin); ok {
+				scanBuiltinIDArgs(info, b.Name(), n.Args, add)
 			}
 		}
 		tv, ok := info.Types[n.Fun]
@@ -237,6 +260,7 @@ var identityArithmeticAllowList = map[string]string{
 	"operation_history.go nextProducer":                               "reads the document counter, which names only the uncommitted result",
 	"internal/topo/document.go MintCurve":                             "advances the curve counter",
 	"internal/topo/document.go MintLevel":                             "advances the level counter",
+	"internal/topo/document.go WithTransientIDs":                      "seeds a private transient counter from the document counters",
 	"pattern.go Patterned":                                            "offsets from the counter by instance index",
 	"pattern.go buildInstances":                                       "offsets from the counter by instance index",
 	"tool_combine.go combineTools":                                    "offsets from the counter by step",
@@ -255,6 +279,21 @@ var identityArithmeticAllowList = map[string]string{
 	"internal/surfacetrim/ops.go splitPointPlane":                     "env ref plus one",
 	"internal/surfacetrim/split_revolve.go SplitRevolve":              "env ref plus piece index",
 	"internal/unionmany/prism_chain.go PrismChain":                    "env ref plus pair index",
+
+	// A constant above 0 of an id type: a span or step count of 1, passed to advanceProducer or returned as a span.
+	// Each function was read and passes a count only, never the id of an input.
+	"boolean_group_blind.go commitBlindGroupCut": "advanceProducer(ctx, 1) passes a span of one",
+	"boolean_many.go unionManyBodies":            "returns a span of 1 for the orthogonal route",
+	"document.go commitIn":                       "advanceProducer(ctx, 1) passes a span of one",
+	"document.go commitOperationIn":              "passes a span of 1 to commitOperationSpanIn",
+	"internal/unionmany/routes.go Routes":        "returns a span of 1 for a single-route result",
+	"union_refined.go UnionRefined":              "passes a span of 1 to commitUnionMany",
+
+	// A fixture constant: the producer id every kit body carries. Only the tests of internal/trimgraph,
+	// internal/trimrebuild and internal/trimshell import the package, so no Intersect path reaches it.
+	"internal/trimtest/trimtest.go <package>":  "test kit: fixed producer id 9 for fixture bodies",
+	"internal/trimtest/trimtest.go Env":        "test kit: builds an env with the fixed producer id",
+	"internal/trimtest/trimtest.go PlaneGroup": "test kit: stamps fixture origins with the fixed producer id",
 
 	// A comparison with a constant above 0 names one id. Only tests reach it, never the Intersect path.
 	"internal/loftcontact/quarter_held_pair.go quarterPairLive": "tests-only helper, off the Intersect path; compares a producer with a constant",
