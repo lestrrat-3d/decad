@@ -93,11 +93,17 @@ func draftMeshPrism(ctx context.Context, d *Document, b *Body, neutral *Face, se
 	if len(profiles) != 1 {
 		return nil, false, nil
 	}
+	// A step may retire only a body it built, so a refusal comes before the tool is made.
+	if _, err := d.stepGate(ctx, nil, []*Body{b}); err != nil {
+		return nil, false, err
+	}
 	out, err := extrudeTool(ctx, d, s, profiles[0],
 		Distance{D: units.Millimeters(prepared.Distance), Dir: Along}, withTaper(angle, ""))
 	if err != nil {
 		return nil, false, nil //nolint:nilerr // an extrude the route cannot build leaves the caller's refusal
 	}
-	removeTools([]*Body{b})
+	if err := removeConsumed(ctx, b); err != nil {
+		return nil, false, err
+	}
 	return out, true, nil
 }

@@ -214,13 +214,13 @@ func emboss(ctx context.Context, b *Body, s *sketch.Sketch, profiles []*sketch.P
 	if err != nil {
 		return nil, err
 	}
-	defer removeTools([]*Body{probe})
+	defer removeTools(ctx, []*Body{probe})
 	probed, err := run(probe)
 	if err != nil {
 		return nil, err
 	}
 	filleted, perr := filletEmbossRim(ctx, probed, plane, outward.Value, h, mode, rimRadius)
-	removeTools([]*Body{probed, filleted})
+	removeTools(ctx, []*Body{probed, filleted})
 	if perr != nil {
 		return nil, perr
 	}
@@ -236,7 +236,7 @@ func emboss(ctx context.Context, b *Body, s *sketch.Sketch, profiles []*sketch.P
 func embossOnto(ctx context.Context, d *Document, target *Body, s *sketch.Sketch, profiles []*sketch.Profile,
 	mode EmbossMode, extent TwoSided, st extrudeSettings) (*Body, error) {
 	var tools []*Body
-	defer func() { removeTools(tools) }()
+	defer func() { removeTools(ctx, tools) }()
 	toolCtx, capture := privateConstructionContext(ctx)
 	for _, p := range profiles {
 		if p == nil {
@@ -402,7 +402,7 @@ func embossCurvedReach(ctx context.Context, d *Document, s *sketch.Sketch, profi
 			return 0, err
 		}
 		box, err := probe.Bounds()
-		removeTools([]*Body{probe})
+		removeTools(ctx, []*Body{probe})
 		if err != nil {
 			return 0, err
 		}

@@ -98,3 +98,29 @@ func stepsPrints(t *testing.T, doc *Document) []stepsPrint {
 	}
 	return out
 }
+
+// stepsMeshBlock builds the faceted block lo..hi as a mesh solid. A mesh block is a prism Draft reads from its mesh
+// (agent-docs/orthogonal-design.md B21), which is the route that retires its input through removeConsumed.
+func stepsMeshBlock(ctx context.Context, doc *Document, lo, hi r3.Vec) (*Body, error) {
+	v := []r3.Vec{
+		{X: lo.X, Y: lo.Y, Z: lo.Z}, {X: hi.X, Y: lo.Y, Z: lo.Z}, {X: hi.X, Y: hi.Y, Z: lo.Z}, {X: lo.X, Y: hi.Y, Z: lo.Z},
+		{X: lo.X, Y: lo.Y, Z: hi.Z}, {X: hi.X, Y: lo.Y, Z: hi.Z}, {X: hi.X, Y: hi.Y, Z: hi.Z}, {X: lo.X, Y: hi.Y, Z: hi.Z},
+	}
+	var tris [][3]int
+	for _, q := range [][4]int{{0, 3, 2, 1}, {4, 5, 6, 7}, {0, 1, 5, 4}, {3, 7, 6, 2}, {0, 4, 7, 3}, {1, 2, 6, 5}} {
+		tris = append(tris, [3]int{q[0], q[1], q[2]}, [3]int{q[0], q[2], q[3]})
+	}
+	m, err := NewMeshBody(ctx, v, tris)
+	if err != nil {
+		return nil, err
+	}
+	return SolidFromMesh(doc, m).Do(ctx)
+}
+
+// stepsDraftBlock drafts every wall of a mesh block about its bottom, the call that takes the mesh prism route.
+func stepsDraftBlock(ctx context.Context, block *Body) (*Body, error) {
+	walls := Faces(Facing(r3.NewVec(1, 0, 0))).Or(Facing(r3.NewVec(-1, 0, 0))).
+		Or(Facing(r3.NewVec(0, 1, 0))).Or(Facing(r3.NewVec(0, -1, 0)))
+	bottom := NeutralFace{Body: block, Face: Faces(Facing(r3.NewVec(0, 0, -1)))}
+	return Draft(block, walls, bottom, units.Degrees(5)).Do(ctx)
+}

@@ -10,7 +10,8 @@ for every worker count and every run. The public contract is in `docs/api.md` (C
 A step is a `Step{Name, Build}`. `Build` receives a ctx that carries the step (`topo.WithStep`). Every decad call a
 step makes goes through that ctx, one call at a time. Commits go straight into the shared document under `LiveMu`.
 There is no journal and no finished body is rewritten. When every step has finished, `topo.Document.EndRun` sorts the
-live set and `Document.sortOperationsByStepLocked` sorts the operation list into step order.
+live set and `Document.settleOperationsLocked` sorts the operation list into step order, then resets every
+`Operation.step` to -1 so the next run sees all of them as pre-run.
 
 ## Determinism invariants
 
@@ -80,8 +81,13 @@ source both start at the same cursor, so their ids overlap. Nothing commits a tr
 `stepGate(ctx, inputs, consumed)` runs in every commit path before the document changes. It returns the step, or nil
 outside a run, and refuses with `ErrStepScope`: a ctx that names no step of the active run (and marks the run
 failed), a finished step, an input body tagged with another step, a consumed body that was live before the run, and a
-consumed body tagged with another step. `TestStepCommitPathsGate` fails when a function that publishes does not call
-it.
+consumed body tagged with another step. Every one of these refusals also marks the run failed, so a step that
+swallows the refusal still makes `RunSteps` return `ErrStepScope`. `TestStepCommitPathsGate` fails when a function
+that publishes or retires does not call it, and when a commit that lists a consumed input passes no consumed bodies.
+
+A feature that retires its input body when it finishes (`Infill` with a skin, the mesh prism route of `Draft`) gates
+the input before it builds anything and retires it through `removeConsumed`. `removeTools` takes ctx and retires
+through the same gate.
 
 `Remove(b).Do(ctx)` passes through the same gate, so a step may retire a body it built and nothing else.
 
@@ -89,7 +95,9 @@ it.
 
 An aggregate read of the live set or the history makes a step's result depend on what other steps have committed so
 far. Each goes through a view: the bodies and operations from before the run, plus the step's own. Outside a run the
-view is the whole document. `TestLiveSetReadsGoThroughViews` fails on a call of `Live()` outside `internal/topo`.
+view is the whole document. `TestLiveSetReadsGoThroughViews` fails on a call of `Live()`, a method value of `Live`, or a use of the `LiveSet`
+field outside `internal/topo`, except in the functions it lists. It reads syntax only, so a method value reached
+through a local alias of the node is not seen.
 
 | Read | View |
 |---|---|
@@ -129,9 +137,13 @@ can commit. `WithStepIdentities` exists for tests and for a caller that wants a 
 | Nested `RunSteps` | `BeginRun` compare-and-swap on `Run` | `ErrStepScope` |
 | Block used up | `AdvanceProducer`, the sticky flag | `ErrStepIdentities` |
 | Two goroutines in one step; steps sharing Go variables | the race detector | CI runs every test under `-race` |
+| An id minted off the step goroutine in a way that reaches a committed body | nothing | No detector remains. The determinism test (`TestRunStepsDispatchOrderDoesNotChangeResults`) is the check. |
+| A full snapshot restored during a run | nothing at the restore | It wipes the steps' work, so it is misuse. Do not restore a snapshot while steps run; the run is marked failed. |
 
 ## Failure and cancellation
 
 `RunSteps` runs every step, also when one fails, and returns the failures joined in step order, each wrapped with the
-step's name. A canceled ctx stops steps that have not started. The document holds what the steps committed, in step
+step's name. A canceled ctx stops steps that have not started. Each `Build` runs on a goroutine of its own, so a panic becomes
+that step's error, and a `Build` that ends its goroutine with `runtime.Goexit` is reported as an error. A worker
+always returns from a step, so the dispatcher never blocks and `EndRun` always runs. The document holds what the steps committed, in step
 order; a caller discards it as it would a failed serial build.

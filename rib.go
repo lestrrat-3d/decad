@@ -222,7 +222,7 @@ func joinRibs(ctx context.Context, rs ribSetup, b *Body, s *sketch.Sketch,
 		return nil, err
 	}
 	var tools []*Body
-	defer func() { removeTools(tools) }()
+	defer func() { removeTools(ctx, tools) }()
 	toolCtx, history := privateConstructionContext(ctx)
 	for _, outline := range outlines {
 		tool, err := ribTool(toolCtx, rs.d, rs.frame, outline, e, taper)

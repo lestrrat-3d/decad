@@ -118,6 +118,7 @@ func (s *Step) RewindProducer(p provenance.Producer) { s.producer.Store(int64(p)
 // ran past its block, and ErrStepScope when the step has finished.
 func (s *Step) AdvanceProducer(n provenance.Producer) error {
 	if s.done.Load() || s.run.doc.Run.Load() != s.run {
+		s.run.Fail("a step's context was used after its step finished")
 		return fmt.Errorf("%w: the step's context was used after its step finished", decaderr.ErrStepScope)
 	}
 	if s.exhausted.Load() {

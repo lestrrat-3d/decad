@@ -90,7 +90,7 @@ func footprintTurned(ctx context.Context, b *Body, step float64) (angle, width, 
 			if m, err = boundMillimetres(c); err == nil {
 				err = berr
 			}
-			removeTools([]*Body{c})
+			removeTools(ctx, []*Body{c})
 			if err != nil {
 				return 0, 0, 0, 0, err
 			}

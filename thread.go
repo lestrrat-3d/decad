@@ -227,7 +227,7 @@ func thread(ctx context.Context, b *Body, spec threadSpec) (*Body, error) {
 			return nil, err
 		}
 		tools := []*Body{coil}
-		defer removeTools(tools)
+		defer removeTools(ctx, tools)
 		return combineTools(ctx, d, OperationThread, target, meshbool.OpCut, tools, false, nil, capture, consumed...)
 	}
 	if !spec.leadSet {
@@ -277,12 +277,12 @@ func thread(ctx context.Context, b *Body, spec threadSpec) (*Body, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer removeTools([]*Body{probe})
+	defer removeTools(ctx, []*Body{probe})
 	chamfered, err := bevel(probe)
 	if err != nil {
 		return nil, err
 	}
-	defer removeTools([]*Body{chamfered})
+	defer removeTools(ctx, []*Body{chamfered})
 	return cut(chamfered, OperationInput{Body: b, Role: operationRoleSource, Use: InputConsumed})
 }
 

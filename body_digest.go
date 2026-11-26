@@ -160,6 +160,8 @@ func appendErrText(out []byte, err error) []byte {
 var digestSkipFields = map[reflect.Type][]string{
 	reflect.TypeFor[topo.Body](): {"PlanarConvexity", "PlanarSnapshot", "PlanarHints", "Tess", "SweepRadii"},
 	reflect.TypeFor[Body]():      {"pairReports", "digest"},
+	// step names the build step that committed the operation, which is not part of what the body is.
+	reflect.TypeFor[Operation](): {"step"},
 	// cache holds a tessellation bound to the body and operation that built it.
 	reflect.TypeFor[blindGroupProof](): {"cache"},
 	// grid indexes Sites, and every constructor builds it from them.

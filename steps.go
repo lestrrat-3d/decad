@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"maps"
 	"runtime"
+	"runtime/debug"
 	"slices"
 	"sync"
 
@@ -147,7 +148,7 @@ func RunSteps(ctx context.Context, doc *Document, steps []Step, opts ...RunSteps
 	}
 	close(jobs)
 	wg.Wait()
-	doc.n.EndRun(run, doc.sortOperationsByStepLocked)
+	doc.n.EndRun(run, doc.settleOperationsLocked)
 	var failed []error
 	for i, e := range errs {
 		if e != nil {
@@ -177,19 +178,42 @@ func stepLabel(i int, s Step) string {
 	return fmt.Sprintf("%q", s.Name)
 }
 
-// runStep runs one step on its own ctx and marks it finished. A canceled ctx stops a step that has not started.
+// runStep runs one step's Build on a goroutine of its own, marks the step finished and returns Build's error. A
+// panic in Build becomes an error, and so does a Build that ends its goroutine with runtime.Goexit (for example
+// through t.FailNow), so the worker that waits here always returns and the dispatcher never blocks. A canceled ctx
+// stops a step that has not started.
 func runStep(ctx context.Context, s *topo.Step, step Step) error {
-	defer s.Finish()
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	return step.Build(topo.WithStep(ctx, s))
+	done := make(chan error, 1)
+	go func() {
+		var err error
+		returned := false
+		defer func() {
+			if r := recover(); r != nil {
+				err = fmt.Errorf("decad: the build panicked: %v\n%s", r, debug.Stack())
+			} else if !returned {
+				err = errors.New("decad: the build ended its goroutine without returning (runtime.Goexit)")
+			}
+			s.Finish()
+			done <- err
+		}()
+		if err = ctx.Err(); err != nil {
+			returned = true
+			return
+		}
+		err = step.Build(topo.WithStep(ctx, s))
+		returned = true
+	}()
+	return <-done
 }
 
-// sortOperationsByStepLocked puts the operation list in step order: operations committed before the run first,
-// then step 0's in commit order, and so on. The caller holds LiveMu.
-func (d *Document) sortOperationsByStepLocked() {
+// settleOperationsLocked ends a run's bookkeeping on the operation list: it puts the list in step order
+// (operations committed before the run first, then step 0's in commit order, and so on) and then marks every
+// operation as committed outside a step, so the next run sees them all as pre-run. The caller holds LiveMu.
+func (d *Document) settleOperationsLocked() {
 	slices.SortStableFunc(d.operations, func(a, b *Operation) int { return a.step - b.step })
+	for _, op := range d.operations {
+		op.step = -1
+	}
 }
 
 func stepIndex(s *topo.Step) int {
@@ -197,6 +221,13 @@ func stepIndex(s *topo.Step) int {
 		return -1
 	}
 	return s.Index()
+}
+
+// failRun marks run failed with reason and returns the ErrStepScope refusal for it, so a caller that swallows the
+// refusal still gets an error from RunSteps.
+func failRun(run *topo.Run, reason string) error {
+	run.Fail(reason)
+	return errStepScope("%s", reason)
 }
 
 func errStepScope(format string, args ...any) error {
@@ -208,8 +239,9 @@ func errStepScope(format string, args ...any) error {
 // retires. It takes LiveMu for reading, so the caller MUST NOT hold it.
 //
 // A call without its step's ctx while a run is active, or with a step ctx used after its step finished, is
-// ErrStepScope, and the first also marks the run failed. A body another step built, as input of any kind, is
-// ErrStepScope; so is a consumed body that was live before the run.
+// ErrStepScope. A body another step built, as input of any kind, is ErrStepScope; so is a consumed body that was
+// live before the run. Every one of these refusals also marks the run failed, so RunSteps returns ErrStepScope
+// even when the step swallows the refusal.
 func (d *Document) stepGate(ctx context.Context, inputs []OperationInput, consumed []*Body) (*topo.Step, error) {
 	run := d.n.ActiveRun()
 	s := d.n.StepOf(ctx)
@@ -224,7 +256,7 @@ func (d *Document) stepGate(ctx context.Context, inputs []OperationInput, consum
 		return nil, errStepScope("an operation changed the document while steps run, without its step's context")
 	}
 	if s.Done() {
-		return nil, errStepScope("a step's context was used after its step finished")
+		return nil, failRun(run, "a step's context was used after its step finished")
 	}
 	d.n.LiveMu.RLock()
 	defer d.n.LiveMu.RUnlock()
@@ -233,7 +265,7 @@ func (d *Document) stepGate(ctx context.Context, inputs []OperationInput, consum
 			continue
 		}
 		if i, ok := d.n.StepTag[bodyNode(in.Body)]; ok && i != s.Index() {
-			return nil, errStepScope("an input body was built by another step")
+			return nil, failRun(run, "an input body was built by another step")
 		}
 	}
 	for _, b := range consumed {
@@ -242,10 +274,10 @@ func (d *Document) stepGate(ctx context.Context, inputs []OperationInput, consum
 		}
 		i, ok := d.n.StepTag[bodyNode(b)]
 		if !ok {
-			return nil, errStepScope("a step consumed a body that was live before the steps began")
+			return nil, failRun(run, "a step consumed a body that was live before the steps began")
 		}
 		if i != s.Index() {
-			return nil, errStepScope("a consumed body was built by another step")
+			return nil, failRun(run, "a consumed body was built by another step")
 		}
 	}
 	return s, nil

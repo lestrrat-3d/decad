@@ -324,13 +324,13 @@ func boss(ctx context.Context, b *Body, spec bossSpec) (*Body, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer removeTools([]*Body{probe})
+	defer removeTools(ctx, []*Body{probe})
 	probed, err := bossCombine(ctx, d, probe, in)
 	if err != nil {
 		return nil, err
 	}
 	filleted, err := filletBossRoot(ctx, probed, in, radius)
-	removeTools([]*Body{probed, filleted})
+	removeTools(ctx, []*Body{probed, filleted})
 	if err != nil {
 		return nil, err
 	}
@@ -350,7 +350,7 @@ func bossCombine(ctx context.Context, d *Document, b *Body, in bossRequest) (*Bo
 		return nil, err
 	}
 	tools := []*Body{pillar}
-	defer func() { removeTools(tools) }()
+	defer func() { removeTools(ctx, tools) }()
 	steps := []toolStep{{op: meshbool.OpUnion, tool: pillar}}
 	if len(in.ribs) > 0 {
 		ribs, err := buildBossRibs(toolCtx, d, in)
@@ -726,7 +726,7 @@ func buildBossRibs(ctx context.Context, d *Document, in bossRequest) ([]*Body, e
 	radius := in.diameter / 2
 	var tools []*Body
 	fail := func(err error) ([]*Body, error) {
-		removeTools(tools)
+		removeTools(ctx, tools)
 		return nil, err
 	}
 	for _, rib := range in.ribs {
