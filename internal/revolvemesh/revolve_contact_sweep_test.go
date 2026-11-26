@@ -187,6 +187,28 @@ func TestRevolveContactCandidatesMatchBruteForce(t *testing.T) {
 	}
 }
 
+// TestRevolveContactCandidatesStopsAtBudget checks the tree build and query
+// through different budget limits, including limits reached during sorting.
+func TestRevolveContactCandidatesStopsAtBudget(t *testing.T) {
+	m := revolveLikeMesh(t)
+	for _, limit := range []int{1, 240, 500, 1500} {
+		steps := 0
+		budget := &proofbound.WorkBudget{
+			StepFn: func() error {
+				steps++
+				if steps > limit {
+					return proofbound.ErrWallWorkBudget
+				}
+				return nil
+			},
+			ErrFn: func() error { return nil },
+		}
+		_, err := revolveContactCandidates(budget, m.data, m.tris, 0)
+		require.ErrorIs(t, err, proofbound.ErrWallWorkBudget, "limit %d", limit)
+		require.Equal(t, limit+1, steps, "limit %d", limit)
+	}
+}
+
 func TestRevolveVertexIsolatedCachedMatchesUncached(t *testing.T) {
 	for name, m := range sweepMeshes(t) {
 		for _, delta := range sweepDeltas {

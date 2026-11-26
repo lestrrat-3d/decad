@@ -518,13 +518,22 @@ Before building any slice, derive the candidate facet count from every walk's
 chord count and the global angular count with checked integer arithmetic. Refuse
 if that attempt exceeds `maxFacetsPerMesh`, or if adding it would exceed
 `maxFacetWorkPerCall`. Once the triangles exist, the revolve contact audit
-orders their boxes on one coordinate and builds only pairs that can still touch
-under the charged displacement. Each sweep probe and candidate pair consumes
+indexes their boxes in a balanced spatial tree and builds only pairs that can still touch
+under the charged displacement. Each tree-node visit and candidate pair consumes
 the cumulative `MaxFacetPairTestsPerCall` budget. The whole candidate list and
 its exact-test allowance fit that budget before any exact pair predicate starts;
 exceeding it refuses before the next scan or predicate. The exact audit uses
 the same predicates and required-contact rules as before. Overflow or a finer
 request than any cap admits → `ErrUnsupported`.
+
+The ordinary contact-audit tree holds the coordinate-wise union of its descendants' facet boxes. A
+node excluded by the same downward-rounded box-gap predicate excludes every
+descendant. Leaves check individual boxes. A separate incidence walk includes
+every shared-vertex pair regardless of its boxes. Sort and deduplicate the resulting rows by
+facet index before the exact audit, preserving the first failing pair. Charge
+tree construction and node visits to the cumulative work budget. The tree
+applies to finite facet boxes at every verification level that runs the ordinary audit. The
+composite-sweep caller retains its one-visit-per-pair sweep, and separately bounded replay keeps its own traversal.
 
 **`MaxFacetPairTestsPerCall` is charged only when the audit it bounds will
 run.** A level that declines the contact audit does no pair work and is charged

@@ -3286,3 +3286,4 @@
 12	0.00	TestRunStepsMatchesAlone
 11	20.00	TestRunStepsFeaturesMatchSerial
 11	12.00	TestRunStepsFeaturesRefusePreRunBody
+12	0.00	TestSectionOutlineOfSphereCutByExtrudedDisk
