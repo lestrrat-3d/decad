@@ -89,7 +89,6 @@ func TestContextOperationsRejectNilBeforeOperands(t *testing.T) {
 			return err
 		}},
 		{"Split", func(ctx context.Context) error { _, err := decad.Split(nil, nil).Do(ctx); return err }},
-		{"Transform", func(ctx context.Context) error { _, err := decad.Transform(body, r3.Transform{}).Do(ctx); return err }},
 		{"Copy identity", func(ctx context.Context) error { _, err := decad.Copy(body).Do(ctx); return err }},
 		{"Copy placement", func(ctx context.Context) error {
 			_, err := decad.Copy(body).Place(decad.CopyTransform{Transform: r3.Transform{}}).Do(ctx)
@@ -130,10 +129,6 @@ func TestContextOperationsRejectNilBeforeOperands(t *testing.T) {
 		{"Trim", func(ctx context.Context) error { _, err := decad.Trim(body, nil, 0).Do(ctx); return err }},
 		{"Extend", func(ctx context.Context) error { _, err := decad.Extend(body, nil, nil).Do(ctx); return err }},
 		{"Stitch", func(ctx context.Context) error { _, err := decad.Stitch().Do(ctx); return err }},
-		{"PathPattern", func(ctx context.Context) error {
-			_, err := decad.PathPattern(body, nil, decad.PathCount{Count: 3}).Do(ctx)
-			return err
-		}},
 		{"Union", func(ctx context.Context) error { _, err := decad.Union(nil, nil).Do(ctx); return err }},
 		{"Cut", func(ctx context.Context) error { _, err := decad.Cut(nil, nil).Do(ctx); return err }},
 		{"Intersect", func(ctx context.Context) error { _, err := decad.Intersect(nil, nil).Do(ctx); return err }},

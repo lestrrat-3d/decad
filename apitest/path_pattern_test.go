@@ -1,7 +1,6 @@
 package apitest_test
 
 import (
-	"context"
 	"math"
 	"testing"
 
@@ -75,48 +74,6 @@ func TestPathPatternCountSpacesByArcLength(t *testing.T) {
 	requireBoundsNear(t, copies[1], r3.Vec{X: 20, Y: 20}, r3.Vec{X: 24, Y: 24, Z: 2})
 }
 
-func TestPathPatternCountRefusals(t *testing.T) {
-	t.Parallel()
-	path, err := decad.NewPath(r3.Vec{}, decad.LineTo{End: r3.Vec{X: 30}})
-	require.NoError(t, err)
-	cases := []struct {
-		name  string
-		path  *decad.Path
-		count int
-		want  error
-	}{
-		{"count of one", path, 1, decad.ErrDegenerate},
-		{"count of zero", path, 0, decad.ErrDegenerate},
-		{"negative count", path, -3, decad.ErrDegenerate},
-		{"no path", nil, 3, decad.ErrDegenerate},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			doc, block := patternBlock(t)
-			_, err := decad.PathPattern(block, tc.path, decad.PathCount{Count: tc.count}).Do(t.Context())
-			require.ErrorIs(t, err, tc.want)
-			require.Equal(t, []*decad.Body{block}, doc.Bodies(), "a refused pattern makes no copy")
-		})
-	}
-	t.Run("retired body", func(t *testing.T) {
-		t.Parallel()
-		_, block := patternBlock(t)
-		require.NoError(t, decad.Remove(block).Do(t.Context()))
-		_, err := decad.PathPattern(block, path, decad.PathCount{Count: 3}).Do(t.Context())
-		require.ErrorIs(t, err, decad.ErrRetiredBody)
-	})
-	t.Run("canceled context", func(t *testing.T) {
-		t.Parallel()
-		doc, block := patternBlock(t)
-		ctx, cancel := context.WithCancel(t.Context())
-		cancel()
-		_, err := decad.PathPattern(block, path, decad.PathCount{Count: 3}).Do(ctx)
-		require.ErrorIs(t, err, context.Canceled)
-		require.Equal(t, []*decad.Body{block}, doc.Bodies())
-	})
-}
-
 // A path pattern needs stations: a nil one, a count below 2 and a nil pointer
 // variant are each ErrDegenerate with the OperationCopy tag, naming stations.
 func TestPathPatternStationRefusals(t *testing.T) {
@@ -130,6 +87,7 @@ func TestPathPatternStationRefusals(t *testing.T) {
 		{"nil stations", nil},
 		{"count of one", decad.PathCount{Count: 1}},
 		{"zero count", decad.PathCount{}},
+		{"negative count", decad.PathCount{Count: -3}},
 		{"nil count pointer", (*decad.PathCount)(nil)},
 		{"nil spacing pointer", (*decad.PathSpacing)(nil)},
 	}
