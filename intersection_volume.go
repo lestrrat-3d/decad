@@ -30,6 +30,9 @@ func (d *Document) intersectionVolume(ctx context.Context, a, b *Body) (Measurem
 	if ctx == nil {
 		return Measurement{}, fmt.Errorf(`%w: a nil context cannot control a boolean`, ErrDegenerate)
 	}
+	if a == nil {
+		return Measurement{}, fmt.Errorf(`%w: the first operand belongs to no document`, ErrDegenerate)
+	}
 	ctx = d.queryContext(ctx)
 	if err := d.requireLive(a); err != nil {
 		return Measurement{}, err

@@ -220,8 +220,12 @@ func laterOperations(t *testing.T, d *decad.Document, a, b *decad.Body) []string
 		require.NoError(t, verr)
 		bb, berr := body.Bounds()
 		require.NoError(t, berr)
+		var origins []string
+		for _, f := range body.Faces() {
+			origins = append(origins, fmt.Sprint(f.Origins()))
+		}
 		return []string{label + ":" + outcomeKey(v, nil), fmt.Sprintf("bounds=%v", bb),
-			fmt.Sprintf("faces=%d", len(body.Faces())), meshHash(t, body)}
+			fmt.Sprintf("faces=%d", len(body.Faces())), meshHash(t, body), fmt.Sprint(origins)}
 	}
 	ops := func() string { return fmt.Sprintf("ops=%d", len(d.OperationHistory().Operations())) }
 

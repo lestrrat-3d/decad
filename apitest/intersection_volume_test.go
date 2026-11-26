@@ -60,7 +60,7 @@ func TestIntersectionVolumeCommitsNothing(t *testing.T) {
 
 			// Intersect on the queried document succeeds or is refused as it is on the twin that ran no query,
 			// answers the same volume, and adds one operation to the history. TestIntersectionVolumeLaterOperations
-			// compares the numbering and the later results in full.
+			// compares the later results in full: outcome, volume, bounds, faces, face origins and tessellation.
 			got, err := decad.Intersect(t.Context(), a, b)
 			want, werr := decad.Intersect(t.Context(), ta, tb)
 			require.Equal(t, werr == nil, err == nil)
@@ -115,8 +115,12 @@ func TestIntersectionVolumeGates(t *testing.T) {
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 	_, err = doc.IntersectionVolume(t.Context(), nil, b)
 	require.ErrorIs(t, err, decad.ErrDegenerate)
+	_, want := decad.Intersect(t.Context(), nil, b)
+	require.EqualError(t, err, want.Error())
 	_, err = doc.IntersectionVolume(t.Context(), a, nil)
 	require.ErrorIs(t, err, decad.ErrDegenerate)
+	_, want = decad.Intersect(t.Context(), a, nil)
+	require.EqualError(t, err, want.Error())
 	_, err = doc.IntersectionVolume(t.Context(), a, a)
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 	_, err = doc.IntersectionVolume(t.Context(), a, foreign)
