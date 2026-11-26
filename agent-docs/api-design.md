@@ -1575,7 +1575,9 @@ func ScaledAt(ctx context.Context, b *Body, anchor r3.Vec, factor units.Value) (
 ```
 
 `Arrange(ctx, bodies, bed)` places several bodies on a flat bed by one `Transform` each (two for a body that `WithArrangeTurns` turns), in shelves of their bounding
-boxes, and `agent-docs/arrange-design.md` owns its rules.
+boxes, and `agent-docs/arrange-design.md` owns its rules. With `WithArrangeAngle`, each probe copy also records one
+`Copy` history entry, and the helper that retires the probes records no `Remove` entry: three blocks give nine
+history entries, not six.
 
 This is the whole of the "explicit transforms" story: a body is positioned by an
 argument the caller states — an `r3.Transform`, a rigid motion (§5.2) — never by

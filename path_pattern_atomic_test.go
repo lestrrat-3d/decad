@@ -3,81 +3,122 @@ package decad
 import (
 	"context"
 	"errors"
-	"sync/atomic"
 	"testing"
-	"time"
 
 	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
 
-// cancelAfterChecks is a context that reports itself canceled once Err has
-// been called more than limit times, so a sweep over limit stops an operation
-// at every one of its cancellation checks in turn.
-type cancelAfterChecks struct {
-	limit int64
-	calls atomic.Int64
-	done  chan struct{}
-}
-
-func newCancelAfterChecks(limit int) *cancelAfterChecks {
-	return &cancelAfterChecks{limit: int64(limit), done: make(chan struct{})}
-}
-
-func (c *cancelAfterChecks) Deadline() (time.Time, bool) { return time.Time{}, false }
-func (c *cancelAfterChecks) Done() <-chan struct{}       { return c.done }
-func (c *cancelAfterChecks) Value(any) any               { return nil }
-func (c *cancelAfterChecks) Err() error {
-	if c.calls.Add(1) > c.limit {
-		return context.Canceled
-	}
-	return nil
-}
-
 // documentState is the part of a document an atomic operation must leave
-// alone: its live bodies, operation history, producer counter and the boxes of
-// the bodies a test names.
+// alone: its live bodies, operation history, producer counter, container
+// membership and the sizes of the internal indexes a commit writes.
 type documentState struct {
-	live  []*Body
-	ops   []*Operation
-	next  producerID
-	boxes []r3.Vec
+	live       []*Body
+	ops        []*Operation
+	next       producerID
+	containers []*Container
+	members    [][]*Body
+	index      map[string]int
 }
 
-func captureDocumentState(t *testing.T, doc *Document, operands ...*Body) documentState {
+func captureDocumentState(ctx context.Context, t *testing.T, doc *Document) documentState {
 	t.Helper()
 	state := documentState{
-		live: doc.Bodies(),
-		ops:  doc.OperationHistory().Operations(),
-		next: doc.producerAt(t.Context()),
+		live:       doc.Bodies(),
+		ops:        doc.OperationHistory().Operations(),
+		next:       doc.producerAt(ctx),
+		containers: append([]*Container{doc.Root()}, doc.Root().Children()...),
+		index: map[string]int{
+			"producers":          len(doc.producers),
+			"consumers":          len(doc.consumers),
+			"container entries":  len(doc.groups.ofBody),
+			"circle builds":      len(doc.circleBuilds),
+			"circle placements":  len(doc.circlePlacements),
+			"identity placement": len(doc.identityPlacements),
+		},
 	}
-	for _, b := range operands {
-		box, err := b.Bounds()
-		require.NoError(t, err)
-		state.boxes = append(state.boxes, box.Min, box.Max)
+	for _, c := range state.containers {
+		state.members = append(state.members, c.Bodies())
 	}
 	return state
 }
 
-// requireDocumentState compares by pointer and by count so a failure prints
-// bounded data, never a body graph.
-func requireDocumentState(t *testing.T, want documentState, doc *Document, operands ...*Body) {
+// requireSameBodies compares bodies by pointer and prints only list positions
+// and producer numbers, never a body graph.
+func requireSameBodies(t *testing.T, want, got []*Body, what string) {
 	t.Helper()
-	got := captureDocumentState(t, doc, operands...)
-	require.Len(t, got.live, len(want.live), "live body count")
-	for i := range want.live {
-		require.Same(t, want.live[i], got.live[i], "live body %d", i)
+	require.Len(t, got, len(want), "%s count", what)
+	for i := range want {
+		require.True(t, want[i] == got[i], "%s %d: want producer %d, got producer %d",
+			what, i, want[i].n.Origin.Producer, got[i].n.Origin.Producer)
 	}
+}
+
+// requireDocumentState compares by pointer and by count so a failure prints
+// bounded data. Every operand must sit in the container it started in.
+func requireDocumentState(ctx context.Context, t *testing.T, want documentState, doc *Document, operands ...*Body) {
+	t.Helper()
+	got := captureDocumentState(ctx, t, doc)
+	requireSameBodies(t, want.live, got.live, "live body")
 	require.Len(t, got.ops, len(want.ops), "history length")
 	for i := range want.ops {
-		require.Same(t, want.ops[i], got.ops[i], "history entry %d", i)
+		require.True(t, want.ops[i] == got.ops[i], "history entry %d is not the entry recorded before the call", i)
 	}
 	require.Equal(t, want.next, got.next, "next producer id")
-	require.Equal(t, want.boxes, got.boxes, "operand placement")
+	require.Equal(t, want.index, got.index, "internal index sizes")
+	require.Len(t, got.containers, len(want.containers), "container count")
+	for i := range want.containers {
+		require.True(t, want.containers[i] == got.containers[i], "container %d", i)
+		requireSameBodies(t, want.members[i], got.members[i], "container member")
+	}
 	for _, b := range operands {
 		consumers, err := doc.OperationHistory().Consumers(b)
 		require.NoError(t, err)
 		require.Empty(t, consumers, "no operation consumed the operand")
+	}
+}
+
+// cancelPoints are the numbers of Err polls a call lets pass before it is
+// canceled: the first few, about ten evenly spaced ones, and the last few
+// before the call would have finished (agent-docs/command-api-design.md
+// section 14).
+func cancelPoints(checks int) []int {
+	stride := max(1, checks/10)
+	seen := map[int]struct{}{}
+	var points []int
+	add := func(p int) {
+		if _, dup := seen[p]; dup || p < 0 || p >= checks {
+			return
+		}
+		seen[p] = struct{}{}
+		points = append(points, p)
+	}
+	for _, p := range []int{0, 1, 2} {
+		add(p)
+	}
+	for p := stride; p < checks; p += stride {
+		add(p)
+	}
+	add(checks - 2)
+	add(checks - 1)
+	return points
+}
+
+// sweepCancellation builds a fresh document with fresh() and runs the trial it
+// returns once without cancellation to count its context polls, then once per
+// cancel point on a new document. A trial returns true when its call
+// succeeded; it asserts the whole document state itself when the call was
+// canceled.
+func sweepCancellation(t *testing.T, fresh func() func(ctx context.Context) bool) {
+	t.Helper()
+	counter := &countdownContext{Context: t.Context(), left: 1 << 30}
+	require.True(t, fresh()(counter), "an uncanceled call succeeds")
+	checks := (1 << 30) - counter.left
+	require.Greater(t, checks, 3, "the call polls the context")
+	for _, p := range cancelPoints(checks) {
+		require.False(t, fresh()(&countdownContext{Context: t.Context(), left: p}),
+			"a cancel after %d of %d polls stops the call", p, checks)
 	}
 }
 
@@ -106,12 +147,12 @@ func TestPathPatternRefusedCopyLeavesTheDocumentUnchanged(t *testing.T) {
 	// leg are made and the first copy past the turn has no shortest turn.
 	path, err := NewPath(r3.Vec{}, LineTo{End: r3.Vec{X: 10}}, LineTo{End: r3.Vec{X: 2}})
 	require.NoError(t, err)
-	before := captureDocumentState(t, doc, block)
+	before := captureDocumentState(t.Context(), t, doc)
 	copies, err := PathPattern(t.Context(), block, path, WithPathCount(6), WithPathFollow())
 	require.ErrorIs(t, err, ErrDegenerate)
 	require.Equal(t, OperationCopy, operationKindOf(t, err))
 	require.Nil(t, copies)
-	requireDocumentState(t, before, doc, block)
+	requireDocumentState(t.Context(), t, before, doc, block)
 	// The refused call used no producer number, so the next copy takes the
 	// number the first copy of the refused call would have taken.
 	again, err := Copy(t.Context(), block)
@@ -121,21 +162,48 @@ func TestPathPatternRefusedCopyLeavesTheDocumentUnchanged(t *testing.T) {
 
 func TestPathPatternCanceledMidwayLeavesTheDocumentUnchanged(t *testing.T) {
 	t.Parallel()
-	succeeded := false
-	for limit := 0; limit < 20000 && !succeeded; limit++ {
-		doc := New()
-		block := internalBoxBody(t, doc, 0, 0, 4, 4, 2)
-		before := captureDocumentState(t, doc, block)
-		copies, err := PathPattern(newCancelAfterChecks(limit), block, straightPath(t), WithPathCount(4))
-		if err == nil {
-			require.Len(t, copies, 3)
-			succeeded = true
-			continue
-		}
-		require.ErrorIs(t, err, context.Canceled)
-		requireDocumentState(t, before, doc, block)
+	cases := []struct {
+		name  string
+		build func(t *testing.T, doc *Document) *Body
+		child bool
+	}{
+		{"root box", func(t *testing.T, doc *Document) *Body { return internalBoxBody(t, doc, 0, 0, 4, 4, 2) }, false},
+		{"child circle", func(t *testing.T, doc *Document) *Body {
+			return internalCircleBody(t, doc, 0, 2, 0, Distance{D: units.Millimeters(2), Dir: Along})
+		}, true},
 	}
-	require.True(t, succeeded, "the sweep reached a call that no cancellation stopped")
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			sweepCancellation(t, func() func(ctx context.Context) bool {
+				doc := New()
+				block := tc.build(t, doc)
+				path := straightPath(t)
+				if tc.child {
+					child, err := doc.Root().NewChild("parts")
+					require.NoError(t, err)
+					require.NoError(t, child.AddBody(block))
+				}
+				before := captureDocumentState(t.Context(), t, doc)
+				return func(ctx context.Context) bool {
+					copies, err := PathPattern(ctx, block, path, WithPathCount(4))
+					if err == nil {
+						require.Len(t, copies, 3)
+						return true
+					}
+					require.ErrorIs(t, err, context.Canceled)
+					requireDocumentState(context.WithoutCancel(ctx), t, before, doc, block)
+					if tc.child {
+						got, cerr := doc.ContainerOf(block)
+						require.NoError(t, cerr)
+						require.True(t, got == before.containers[1], "the operand is back in its child container")
+						requireSameBodies(t, []*Body{block}, got.Bodies(), "child member")
+					}
+					return false
+				}
+			})
+		})
+	}
 }
 
 func TestPathPatternSuccessRecordsOneCopyEntryPerInstance(t *testing.T) {

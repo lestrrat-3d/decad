@@ -204,6 +204,8 @@ them (api-design §2). `PathPattern` and `Arrange` publish several results throu
 `Copy` and `Transform`, so each takes a `Document` snapshot (`document.go`) before its first publication and restores
 it when the call fails or is canceled. The restore returns the live set in its order, the producer counter, the
 operation history with its producer and consumer indexes, and the container placement. No command is an exception.
+A reader that runs concurrently with such a call (already forbidden for mutators, §8) can observe copies and history
+entries that the restore later withdraws, and the next call reuses their producer numbers.
 
 ## 10. A forgotten `Do`
 

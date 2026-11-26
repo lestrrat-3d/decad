@@ -428,7 +428,7 @@ func (d *Document) restore(s *documentSnapshot) {
 			}
 			recorded := d.consumers[input.Body]
 			if n := len(recorded); n > 0 && recorded[n-1] == operation {
-				recorded = recorded[:n-1]
+				recorded = slices.Delete(recorded, n-1, n)
 			}
 			if len(recorded) == 0 {
 				delete(d.consumers, input.Body)
