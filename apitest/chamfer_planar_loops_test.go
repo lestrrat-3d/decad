@@ -324,19 +324,23 @@ func windowedCoverWithBoss(t *testing.T) *decad.Body {
 // end of the 3 mm walls, and a selection that holds only part of a loop.
 func TestChamferWindowLoopsRefusals(t *testing.T) {
 	t.Parallel()
+	// Both refusals are atomic, so the one cover serves both subtests and each leaves the document as it found it.
+	cover := windowedCoverWithBoss(t)
+	doc := cover.Document()
+	live := doc.Bodies()
+	require.True(t, slicesEqualBodies([]*decad.Body{cover}, live), "the cover is the document's one live body")
+	// The subtests run one after another: two Chamfer.Do calls must not run at once on one document.
 	t.Run("setback reaches the far end of the walls", func(t *testing.T) {
-		t.Parallel()
-		cover := windowedCoverWithBoss(t)
 		q, n := planeLoopEdges(t, cover, 0, func(l *decad.Loop, e []*decad.Edge) bool { return !l.IsOuter() && len(e) > 1 })
 		_, err := decad.Chamfer(cover, q.Exactly(n), units.Millimeters(3)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
+		require.True(t, slicesEqualBodies(live, doc.Bodies()), "the refusal leaves the cover live")
 	})
 	t.Run("part of a loop", func(t *testing.T) {
-		t.Parallel()
-		cover := windowedCoverWithBoss(t)
 		q, n := planeLoopEdgesUpTo(t, cover, 0, func(l *decad.Loop, e []*decad.Edge) bool { return !l.IsOuter() && len(e) > 1 }, 11)
 		require.Equal(t, 11, n)
 		_, err := decad.Chamfer(cover, q.Exactly(n), units.Millimeters(0.5)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
+		require.True(t, slicesEqualBodies(live, doc.Bodies()), "the refusal leaves the cover live")
 	})
 }

@@ -452,44 +452,85 @@ func (c *cancelAfter) Err() error {
 
 // A cancel that lands inside the build returns context.Canceled by identity,
 // not a sentinel wrapping it (agent-docs/command-api-design.md section 3). The
-// sweep moves the cancel one check later each run until the command finishes.
+// sweep moves the cancel one check later each run, or by the member's stride
+// where its build polls so often that one check at a time would cost minutes
+// (section 14), until the command finishes. Every canceled run leaves the
+// document unchanged, so the fixture is built once and each run makes a fresh
+// command over it. A strided sweep still runs the first few check points one
+// at a time, and after its first success it builds the fixture again and steps one
+// check at a time from the last canceled one, so the final polls are canceled too.
 func TestModifyCommandsReturnMidBuildCancellationByIdentity(t *testing.T) {
 	t.Parallel()
 	const maxChecks = 4000
+	const denseHead = 4
+	type runner = func() func(context.Context) (*decad.Body, error)
 	for _, tc := range []struct {
-		name  string
-		build func(t *testing.T) func(context.Context) (*decad.Body, error)
+		name string
+		// stride moves the cancel by this many checks after the first
+		// denseHead runs; below two it moves one check.
+		stride int64
+		build  func(t *testing.T) (runner, *decad.Document)
 	}{
-		{"ShellOpen", func(t *testing.T) func(context.Context) (*decad.Body, error) {
-			_, block := blockSolid(t, r3.NewVec(0, 0, 0), r3.NewVec(10, 8, 6))
+		{name: "ShellOpen", build: func(t *testing.T) (runner, *decad.Document) {
+			doc, block := blockSolid(t, r3.NewVec(0, 0, 0), r3.NewVec(10, 8, 6))
 			top := decad.Faces(decad.Facing(r3.NewVec(0, 0, 1)))
-			return decad.Shell(block, top, units.Millimeters(1)).Do
+			return func() func(context.Context) (*decad.Body, error) {
+				return decad.Shell(block, top, units.Millimeters(1)).Do
+			}, doc
 		}},
-		{"ShellClosed", func(t *testing.T) func(context.Context) (*decad.Body, error) {
-			_, block := blockSolid(t, r3.NewVec(0, 0, 0), r3.NewVec(10, 8, 6))
-			return decad.ShellClosed(block, units.Millimeters(1)).Do
+		{name: "ShellClosed", build: func(t *testing.T) (runner, *decad.Document) {
+			doc, block := blockSolid(t, r3.NewVec(0, 0, 0), r3.NewVec(10, 8, 6))
+			return func() func(context.Context) (*decad.Body, error) {
+				return decad.ShellClosed(block, units.Millimeters(1)).Do
+			}, doc
 		}},
-		{"Offset", func(t *testing.T) func(context.Context) (*decad.Body, error) {
-			_, block := blockSolid(t, r3.NewVec(0, 0, 0), r3.NewVec(10, 8, 6))
-			return decad.Offset(block, units.Millimeters(1)).Do
+		// Offset polls 406 times, so it takes the stride of about N/10.
+		{name: "Offset", stride: 40, build: func(t *testing.T) (runner, *decad.Document) {
+			doc, block := blockSolid(t, r3.NewVec(0, 0, 0), r3.NewVec(10, 8, 6))
+			return func() func(context.Context) (*decad.Body, error) {
+				return decad.Offset(block, units.Millimeters(1)).Do
+			}, doc
 		}},
-		{"MoveFace", func(t *testing.T) func(context.Context) (*decad.Body, error) {
-			_, block := blockSolid(t, r3.NewVec(0, 0, 0), r3.NewVec(10, 8, 6))
+		{name: "MoveFace", build: func(t *testing.T) (runner, *decad.Document) {
+			doc, block := blockSolid(t, r3.NewVec(0, 0, 0), r3.NewVec(10, 8, 6))
 			top := decad.Faces(decad.Facing(r3.NewVec(0, 0, 1)))
-			return decad.MoveFace(block, top, units.Millimeters(2)).Do
+			return func() func(context.Context) (*decad.Body, error) {
+				return decad.MoveFace(block, top, units.Millimeters(2)).Do
+			}, doc
 		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			for n := range int64(maxChecks) {
-				got, err := tc.build(t)(newCancelAfter(t.Context(), n))
+			next, doc := tc.build(t)
+			before := doc.Bodies()
+			// tail is set once a strided run has succeeded: that success retired the block, so the fixture is
+			// built again and n steps one check at a time from the last canceled n, to reach the final polls
+			// (the build's commit poll among them) that the stride jumped over.
+			tail := false
+			var last int64
+			for n := int64(0); n < maxChecks; {
+				got, err := next()(newCancelAfter(t.Context(), n))
 				if err == nil {
 					require.NotNil(t, got)
 					require.Greater(t, n, int64(1), "the cancel never reached the build")
-					return
+					if tail || tc.stride < 2 {
+						return
+					}
+					tail = true
+					next, doc = tc.build(t)
+					before = doc.Bodies()
+					n = last + 1
+					continue
 				}
 				require.Equal(t, context.Canceled, err, "cancel after %d checks", n)
 				require.Nil(t, got)
+				require.True(t, slicesEqualBodies(before, doc.Bodies()), "cancel after %d checks leaves the document unchanged", n)
+				last = n
+				if tail || n+1 < denseHead || tc.stride < 2 {
+					n++
+					continue
+				}
+				n += tc.stride
 			}
 			require.FailNow(t, "the command still polled the context", "after %d checks", maxChecks)
 		})
