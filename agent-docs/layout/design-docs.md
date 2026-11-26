@@ -12,7 +12,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `agent-docs/container-design.md` | `Container`: grouping of sketches, planes and bodies, result placement, `AddBody`, `ErrCrossContainer`. |
 | `agent-docs/api-design.md` | Public API contract for modeling, features, selectors, and verification. |
 | `agent-docs/body-digest-design.md` | `Body.Digest` and `Document.PairDigest`: what the walk covers, id relabeling, refusals and the C1-C5 soundness tests. |
-| `agent-docs/command-api-design.md` | Operation commands: constructor and method rules, the `Do` run order, error tags, lint, family verdicts and the migration stack. |
+| `agent-docs/command-api-design.md` | Operation commands: constructor and method rules, the `Do` run order, error tags, lint, family verdicts, the shared infrastructure and what a new command carries. |
 | `docs/api.md` | User-facing API reference by task; `apitest/api_reference_test.go` checks its names exist. |
 | `docs/data-structures.md` | User-facing type index and structure guide; `apitest/api_reference_test.go` checks it lists every exported type. |
 | `agent-docs/sketch-seam-design.md` | `sketch` recording: `TExact`, `CurveSegment`, and `ErrUnrecordableProfile`. |
