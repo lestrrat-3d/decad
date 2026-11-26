@@ -384,7 +384,8 @@ func heldBoxArea(boxes [][2]r3.Vec, facets []int) float64 {
 		box[1].X, box[1].Y, box[1].Z = max(box[1].X, o[1].X), max(box[1].Y, o[1].Y), max(box[1].Z, o[1].Z)
 	}
 	dx, dy, dz := box[1].X-box[0].X, box[1].Y-box[0].Y, box[1].Z-box[0].Z
-	return dx*dy + dy*dz + dz*dx
+	// Explicit float64 conversions block FMA fusion, so near-ties split the same way on every architecture.
+	return float64(dx*dy) + float64(dy*dz) + float64(dz*dx)
 }
 
 // heldBoxOrderKey is the coordinate on axis that selectHeldBoxMedian orders

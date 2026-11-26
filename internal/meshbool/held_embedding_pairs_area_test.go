@@ -2,6 +2,7 @@ package meshbool
 
 import (
 	"fmt"
+	"math"
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -102,6 +103,8 @@ func TestHeldScanTreeMatchesLowerCornerTree(t *testing.T) {
 					old.slotWorld[s] = e.triBox(facet)
 				}
 			}
+			requireHeldTreeSound(t, &scan, scan.boxes)
+			requireHeldTreeSound(t, &old, old.boxes)
 			require.Len(t, scan.facets, len(old.facets))
 			require.Len(t, scan.nodes, len(old.nodes))
 
@@ -134,5 +137,98 @@ func TestHeldScanTreeMatchesLowerCornerTree(t *testing.T) {
 			require.Equal(t, want, run(&scan, tasks, (*heldEmbedding).cleanSelfPairs),
 				fmt.Sprintf("%s: accept/refuse answer", mesh.name))
 		})
+	}
+}
+
+func heldContains(outer, inner [2]r3.Vec) bool {
+	return outer[0].X <= inner[0].X && outer[0].Y <= inner[0].Y && outer[0].Z <= inner[0].Z &&
+		outer[1].X >= inner[1].X && outer[1].Y >= inner[1].Y && outer[1].Z >= inner[1].Z
+}
+
+// requireHeldTreeSound checks that every node box contains its children's boxes
+// and the boxes of the facets it owns, that tree.facets holds each non-NaN
+// input facet exactly once, and that the stored leaf-order boxes match. It
+// reports only counts and indices.
+func requireHeldTreeSound(t *testing.T, tree *heldBoxTree, boxes [][2]r3.Vec) {
+	t.Helper()
+	want := 0
+	for _, b := range boxes {
+		if !heldBoxHasNaN(b) {
+			want++
+		}
+	}
+	require.Len(t, tree.facets, want, "facet count")
+	seen := make([]int, len(boxes))
+	for _, f := range tree.facets {
+		require.True(t, f >= 0 && f < len(boxes), "facet index %d out of range", f)
+		seen[f]++
+	}
+	for i, n := range seen {
+		if heldBoxHasNaN(boxes[i]) {
+			require.Zero(t, n, "NaN facet %d kept", i)
+		} else {
+			require.Equal(t, 1, n, "facet %d occurrences", i)
+		}
+	}
+	for i, node := range tree.nodes {
+		if node.leafStart < 0 {
+			for _, c := range [2]int{node.left, node.right} {
+				require.True(t, c >= 0 && c < len(tree.nodes), "node %d child %d out of range", i, c)
+				require.True(t, heldContains(node.box, tree.nodes[c].box), "node %d does not contain child %d", i, c)
+			}
+			continue
+		}
+		require.LessOrEqual(t, node.leafStart+node.leafCount, len(tree.facets), "node %d leaf range", i)
+		for s := node.leafStart; s < node.leafStart+node.leafCount; s++ {
+			require.True(t, heldContains(node.box, boxes[tree.facets[s]]), "node %d does not contain facet %d", i, tree.facets[s])
+		}
+	}
+	if tree.slotBoxes != nil {
+		require.Len(t, tree.slotBoxes, len(tree.facets))
+		for s, f := range tree.facets {
+			require.True(t, tree.slotBoxes[s] == boxes[f], "slot %d box differs from facet %d", s, f)
+		}
+	}
+	if tree.slotWorld != nil {
+		require.Len(t, tree.slotWorld, len(tree.facets))
+		for s := range tree.slotWorld {
+			require.False(t, heldBoxHasNaN(tree.slotWorld[s]), "slot %d world box has NaN", s)
+		}
+	}
+}
+
+// TestHeldTreeTiesAndInfiniteBoxes builds both tree kinds on boxes with tied
+// centres, and on boxes with an infinite extent and a NaN box, twice each. The
+// two builds must agree on facet order and the tree must stay sound.
+func TestHeldTreeTiesAndInfiniteBoxes(t *testing.T) {
+	t.Parallel()
+	inf := math.Inf(1)
+	tied := make([][2]r3.Vec, 0, 80)
+	for i := range 80 {
+		// Every box is centred at the origin, so every split key ties.
+		h := float64(1 + i%4)
+		tied = append(tied, [2]r3.Vec{r3.NewVec(-h, -h, -h), r3.NewVec(h, h, h)})
+	}
+	infinite := make([][2]r3.Vec, 0, 70)
+	for i := range 70 {
+		x := float64(i % 7)
+		infinite = append(infinite, [2]r3.Vec{r3.NewVec(x, x, 0), r3.NewVec(x+1, x+1, 1)})
+	}
+	infinite[3] = [2]r3.Vec{r3.NewVec(-inf, 0, 0), r3.NewVec(inf, 1, 1)}
+	infinite[10] = [2]r3.Vec{r3.NewVec(0, 0, 0), r3.NewVec(inf, inf, inf)}
+	infinite[20] = [2]r3.Vec{r3.NewVec(math.NaN(), 0, 0), r3.NewVec(1, 1, 1)}
+	for name, boxes := range map[string][][2]r3.Vec{"tied": tied, "infinite": infinite} {
+		for _, byArea := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/area=%v", name, byArea), func(t *testing.T) {
+				first := buildBoxTreeSplit(boxes, true, byArea)
+				second := buildBoxTreeSplit(boxes, true, byArea)
+				requireHeldTreeSound(t, &first, boxes)
+				requireHeldTreeSound(t, &second, boxes)
+				require.Equal(t, len(first.facets), len(second.facets))
+				for s := range first.facets {
+					require.Equal(t, first.facets[s], second.facets[s], "slot %d differs between builds", s)
+				}
+			})
+		}
 	}
 }
