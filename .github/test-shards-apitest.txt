@@ -3259,8 +3259,6 @@
 12	1.00	TestCompositeCommandsRefuseMethodFaultsAtTheirGate
 12	2.00	TestCompositeMethodsLastCallWins
 12	2.00	TestCompositeCommandsCopyTheirArguments
-12	4.00	TestCompositeCommandsKeepTheirGeometry
-12	0.10	TestInfillTagsNestedRefusalsWithItsKind
 12	0.50	TestCompositeMethodsRefuseAnExplicitZeroValue
 12	0.10	TestCompositeShapedConstructorsRefuseANilShape
 12	0.30	TestInfillRestoresHistoryAfterARefusal
