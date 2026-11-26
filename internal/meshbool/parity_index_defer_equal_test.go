@@ -33,6 +33,11 @@ func TestParityIndexAnswersEqualAcrossTheDeferThreshold(t *testing.T) {
 				pm := NewParityMesh(fx.verts, fx.tris)
 				for i := range count {
 					qi := (i * 7) % len(queries)
+					// A query completes a plain scan only when finite and box
+					// filtered, so the threshold is read from the counter, not i.
+					// Only axis 0 is certain to be queried: a later axis is
+					// skipped once an earlier axis decides the answer.
+					before := pm.plainScans
 					require.Equal(t, want[qi], answerOf(MeshParityAllContext(ctx, queries[qi], pm)),
 						`count %d query %d (point %d)`, count, i, qi)
 					for axis := range 3 {
@@ -40,6 +45,14 @@ func TestParityIndexAnswersEqualAcrossTheDeferThreshold(t *testing.T) {
 						if pm.indexBuilt[axis] {
 							require.Equal(t, ParityIndexDeferScans, pm.plainScans[axis],
 								`count %d query %d axis %d: built before the threshold`, count, i, axis)
+						}
+						if axis == 0 && before[axis] >= ParityIndexDeferScans {
+							require.True(t, pm.indexBuilt[axis],
+								`count %d query %d axis %d: index not built after the threshold`, count, i, axis)
+							if len(fx.tris) >= ParityIndexMinFacets {
+								require.NotNil(t, pm.index[axis],
+									`count %d query %d axis %d: no index after the threshold`, count, i, axis)
+							}
 						}
 					}
 				}

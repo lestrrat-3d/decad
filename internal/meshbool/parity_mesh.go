@@ -515,9 +515,9 @@ func (prepared *ParityMesh) classifyFacet(p proof.Xpt, pa Xp2, axis, u, v, dir, 
 // completed finite, box-filtered plain scans on that axis (the mesh is
 // single-goroutine). Those scans, and every query before them, use the plain
 // facet scan; a later sweep may use the index. The deferral pays off because a
-// mesh that answers only a few queries on an axis never repays the grid. The index lists, per grid cell, only
-// the facets that can do more than continue; it
-// is skipped for meshes under ParityIndexMinFacets and for any projection the
+// mesh that answers only a few queries on an axis never repays the grid. The
+// index lists, per grid cell, only the facets that can do more than continue;
+// it is skipped for meshes under ParityIndexMinFacets and for any projection the
 // grid cannot place. A listed facet runs the unchanged box filter and
 // classifyFacet in ascending order. Three kinds of facet are left out of a
 // cell, each because it ends strictly outside in the exact scan:
