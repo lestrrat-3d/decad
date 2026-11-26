@@ -192,6 +192,9 @@ func offsetSolid(ctx context.Context, d *Document, b *Body, side OffsetSide, dmm
 	}
 	result, err := solidFromMeshBody(ctx, d, mesh)
 	if err != nil {
+		if cerr := ctx.Err(); cerr != nil {
+			return nil, cerr
+		}
 		return nil, fmt.Errorf("%w: the offset solid is not one the evaluator can prove: %s", ErrUnsupported, err)
 	}
 	if err := d.requireLive(b); err != nil {

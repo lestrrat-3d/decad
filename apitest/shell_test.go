@@ -265,7 +265,7 @@ func TestShellSenseDispatch(t *testing.T) {
 		body, err := decad.Shell(box, topCap(box), units.Millimeters(5)).Sense(decad.ShellSense(3)).Do(t.Context())
 		require.Nil(t, body)
 		require.ErrorIs(t, err, decad.ErrDegenerate)
-		require.ErrorContains(t, err, "unknown shell sense 3")
+		require.ErrorContains(t, err, "unknown shell sense 3 (SX1)")
 		require.Equal(t, []*decad.Body{box}, doc.Bodies())
 	})
 }

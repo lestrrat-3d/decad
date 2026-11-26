@@ -76,13 +76,13 @@ type rule func(c *callSite) (string, string)
 
 var families = map[string]map[string]rule{
 	"modify": {
-		"Fillet":       ruleModify("Fillet", 3, optionMethods{"TangentChain": {"TangentChain", 0}}),
-		"Chamfer":      ruleModify("Chamfer", 3, optionMethods{"TangentChain": {"TangentChain", 0}, "Asymmetric": {"Asymmetric", 2}}),
+		"Fillet":       ruleModify("Fillet", 3, optionMethods{"WithTangentChain": {"TangentChain", 0}}),
+		"Chamfer":      ruleModify("Chamfer", 3, optionMethods{"WithTangentChain": {"TangentChain", 0}, "WithAsymmetricChamfer": {"Asymmetric", 2}}),
 		"FilletChord":  ruleModify("FilletChord", 3, nil),
 		"ChamferAngle": ruleModify("ChamferAngle", 5, nil),
 		"Draft":        ruleModify("Draft", 4, nil),
-		"Offset":       ruleModify("Offset", 2, optionMethods{"Side": {"Side", 1}}),
-		"Thicken":      ruleModify("Thicken", 2, optionMethods{"Side": {"Side", 1}}),
+		"Offset":       ruleModify("Offset", 2, optionMethods{"WithOffsetSide": {"Side", 1}}),
+		"Thicken":      ruleModify("Thicken", 2, optionMethods{"WithThickenSide": {"Side", 1}}),
 		"MoveFace":     ruleModify("MoveFace", 3, nil),
 		"ConeFromFace": ruleModify("ConeFromFace", 3, nil),
 		"Shell":        ruleShell,
@@ -316,7 +316,11 @@ type optionMethods map[string]struct {
 	nargs  int
 }
 
-// ruleModify: Fillet(ctx, b, sel, r, decad.TangentChain()) ->
+// The option names the rules match are the pre-migration ones, such as
+// WithTangentChain, because the tool migrates code written against the old
+// API (agent-docs/command-api-design.md section 14).
+//
+// ruleModify: Fillet(ctx, b, sel, r, decad.WithTangentChain()) ->
 // Fillet(b, sel, r).TangentChain().Do(ctx). mandatory counts the arguments
 // after ctx that become constructor arguments; every later argument must be a
 // call of one of the options in methods, with the argument count the method
@@ -351,17 +355,17 @@ func (c *callSite) optionChain(name string, opts []ast.Expr, methods optionMetho
 }
 
 // ruleShell: Shell(ctx, b, sel, t, opts...) -> Shell(b, sel, t)...Do(ctx).
-// ShellClosed() turns the call into ShellClosed(b, t), which takes no
+// WithNoOpenings() turns the call into ShellClosed(b, t), which takes no
 // selector, so the selector argument must be the literal nil.
 func ruleShell(c *callSite) (string, string) {
 	if c.ellipsis || len(c.args) < 4 {
 		return "", "Shell call with a spread option list or too few arguments"
 	}
-	methods := optionMethods{"Sense": {"Sense", 1}, "FaceThickness": {"FaceThickness", 2}}
+	methods := optionMethods{"WithShellSense": {"Sense", 1}, "WithShellFaceThickness": {"FaceThickness", 2}}
 	var rest []ast.Expr
 	closed := false
 	for _, opt := range c.args[4:] {
-		if oname, _, args, ok := c.option(opt); ok && oname == "ShellClosed" && len(args) == 0 {
+		if oname, _, args, ok := c.option(opt); ok && oname == "WithNoOpenings" && len(args) == 0 {
 			closed = true
 			continue
 		}

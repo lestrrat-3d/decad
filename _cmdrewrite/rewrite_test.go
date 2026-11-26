@@ -73,23 +73,23 @@ func TestModify(t *testing.T) {
 	const head = "package p\n\nimport \"github.com/lestrrat-3d/decad\"\n\nfunc f() {\n"
 	tests := []struct{ name, in, want string }{
 		{"fillet", "_, _ = decad.Fillet(ctx, b, sel, r)", "_, _ = decad.Fillet(b, sel, r).Do(ctx)"},
-		{"fillet chain", "_, _ = decad.Fillet(ctx, b, sel, r, decad.TangentChain())",
+		{"fillet chain", "_, _ = decad.Fillet(ctx, b, sel, r, decad.WithTangentChain())",
 			"_, _ = decad.Fillet(b, sel, r).TangentChain().Do(ctx)"},
-		{"chamfer both options", "_, _ = decad.Chamfer(ctx, b, sel, d, decad.TangentChain(), decad.Asymmetric(ref, o))",
+		{"chamfer both options", "_, _ = decad.Chamfer(ctx, b, sel, d, decad.WithTangentChain(), decad.WithAsymmetricChamfer(ref, o))",
 			"_, _ = decad.Chamfer(b, sel, d).TangentChain().Asymmetric(ref, o).Do(ctx)"},
 		{"fillet chord", "_, _ = decad.FilletChord(ctx, b, sel, c)", "_, _ = decad.FilletChord(b, sel, c).Do(ctx)"},
 		{"chamfer angle", "_, _ = decad.ChamferAngle(ctx, b, sel, d, ref, a)", "_, _ = decad.ChamferAngle(b, sel, d, ref, a).Do(ctx)"},
 		{"shell", "_, _ = decad.Shell(ctx, b, sel, t)", "_, _ = decad.Shell(b, sel, t).Do(ctx)"},
-		{"shell options", "_, _ = decad.Shell(ctx, b, sel, t, decad.Sense(decad.Outward), decad.FaceThickness(n, u))",
+		{"shell options", "_, _ = decad.Shell(ctx, b, sel, t, decad.WithShellSense(decad.Outward), decad.WithShellFaceThickness(n, u))",
 			"_, _ = decad.Shell(b, sel, t).Sense(decad.Outward).FaceThickness(n, u).Do(ctx)"},
-		{"shell closed", "_, _ = decad.Shell(ctx, b, nil, t, decad.ShellClosed())",
+		{"shell closed", "_, _ = decad.Shell(ctx, b, nil, t, decad.WithNoOpenings())",
 			"_, _ = decad.ShellClosed(b, t).Do(ctx)"},
-		{"shell closed sense", "_, _ = decad.Shell(ctx, b, nil, t, decad.Sense(decad.Centered), decad.ShellClosed())",
+		{"shell closed sense", "_, _ = decad.Shell(ctx, b, nil, t, decad.WithShellSense(decad.Centered), decad.WithNoOpenings())",
 			"_, _ = decad.ShellClosed(b, t).Sense(decad.Centered).Do(ctx)"},
 		{"draft", "_, _ = decad.Draft(ctx, b, sel, n, a)", "_, _ = decad.Draft(b, sel, n, a).Do(ctx)"},
-		{"offset side", "_, _ = decad.Offset(ctx, b, d, decad.Side(decad.OffsetNegative))",
+		{"offset side", "_, _ = decad.Offset(ctx, b, d, decad.WithOffsetSide(decad.OffsetNegative))",
 			"_, _ = decad.Offset(b, d).Side(decad.OffsetNegative).Do(ctx)"},
-		{"thicken side", "_, _ = decad.Thicken(ctx, b, d, decad.Side(decad.ThickenCentered))",
+		{"thicken side", "_, _ = decad.Thicken(ctx, b, d, decad.WithThickenSide(decad.ThickenCentered))",
 			"_, _ = decad.Thicken(b, d).Side(decad.ThickenCentered).Do(ctx)"},
 		{"move face", "_, _ = decad.MoveFace(ctx, b, sel, d)", "_, _ = decad.MoveFace(b, sel, d).Do(ctx)"},
 		{"cone from face", "_, _ = decad.ConeFromFace(ctx, b, sel, far)", "_, _ = decad.ConeFromFace(b, sel, far).Do(ctx)"},
@@ -113,8 +113,8 @@ func TestModify(t *testing.T) {
 	for name, call := range map[string]string{
 		"spread options":          "decad.Shell(ctx, b, sel, t, opts...)",
 		"option variable":         "decad.Fillet(ctx, b, sel, r, opt)",
-		"closed with a selector":  "decad.Shell(ctx, b, sel, t, decad.ShellClosed())",
-		"option with wrong arity": "decad.Chamfer(ctx, b, sel, d, decad.Asymmetric(ref))",
+		"closed with a selector":  "decad.Shell(ctx, b, sel, t, decad.WithNoOpenings())",
+		"option with wrong arity": "decad.Chamfer(ctx, b, sel, d, decad.WithAsymmetricChamfer(ref))",
 		"draft option":            "decad.Draft(ctx, b, sel, n, a, opt)",
 	} {
 		t.Run("reported "+name, func(t *testing.T) {
@@ -126,7 +126,7 @@ func TestModify(t *testing.T) {
 		})
 	}
 	t.Run("multi-line option arguments keep their breaks", func(t *testing.T) {
-		in := head + "\t_, _ = decad.Chamfer(ctx, b,\n\t\tsel,\n\t\td,\n\t\tdecad.Asymmetric(\n\t\t\tref,\n\t\t\to))\n}\n"
+		in := head + "\t_, _ = decad.Chamfer(ctx, b,\n\t\tsel,\n\t\td,\n\t\tdecad.WithAsymmetricChamfer(\n\t\t\tref,\n\t\t\to))\n}\n"
 		want := head + "\t_, _ = decad.Chamfer(b,\n\t\tsel,\n\t\td).Asymmetric(ref,\n\t\to).Do(ctx)\n}\n"
 		out, reports, err := rewriteFile("x.go", []byte(in), families["modify"], false)
 		if err != nil || len(reports) != 0 || string(out) != want {
@@ -134,10 +134,21 @@ func TestModify(t *testing.T) {
 		}
 	})
 	t.Run("root bare call", func(t *testing.T) {
-		in := "package decad\n\nfunc f() {\n\t_, _ = Shell(ctx, b, nil, t, ShellClosed())\n}\n"
+		in := "package decad\n\nfunc f() {\n\t_, _ = Shell(ctx, b, nil, t, WithNoOpenings())\n}\n"
 		out, _, err := rewriteFile("x_test.go", []byte(in), families["modify"], true)
 		if err != nil || string(out) != "package decad\n\nfunc f() {\n\t_, _ = ShellClosed(b, t).Do(ctx)\n}\n" {
 			t.Fatalf("out %q err %v", out, err)
 		}
 	})
+}
+
+// The new method names are not old-API input, so the tool leaves a call that
+// already uses them alone.
+func TestModifyLeavesNewNamesAlone(t *testing.T) {
+	const head = "package p\n\nimport \"github.com/lestrrat-3d/decad\"\n\nfunc f() {\n"
+	in := head + "\t_, _ = decad.Fillet(ctx, b, sel, r, decad.TangentChain())\n}\n"
+	out, reports, err := rewriteFile("x.go", []byte(in), families["modify"], false)
+	if err != nil || len(reports) != 1 || string(out) != in {
+		t.Fatalf("out %q reports %v err %v", out, reports, err)
+	}
 }

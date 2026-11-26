@@ -130,6 +130,8 @@ func TestModifyMethodsLastCallWins(t *testing.T) {
 		_, err := decad.Chamfer(box, cornerEdge(), units.Millimeters(3)).
 			Asymmetric(ref, units.Millimeters(5)).Asymmetric(ref, units.Millimeters(0)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrDegenerate)
+		diagnostics := requireOperationKind(t, err, decad.OperationChamfer)
+		require.Equal(t, "Asymmetric", diagnostics[0].Subject.Name)
 		require.Equal(t, []*decad.Body{box}, doc.Bodies())
 	})
 	t.Run("SenseTakesTheLastCall", func(t *testing.T) {
@@ -147,6 +149,9 @@ func TestModifyMethodsLastCallWins(t *testing.T) {
 		_, err := decad.Shell(box, decad.Faces(decad.FaceCreatedBy(decad.CapEnd(box))), units.Millimeters(5)).
 			Sense(decad.Outward).Sense(decad.ShellSense(9)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrDegenerate)
+		require.ErrorContains(t, err, "SX1")
+		diagnostics := requireOperationKind(t, err, decad.OperationShell)
+		require.Equal(t, "Sense", diagnostics[0].Subject.Name)
 		require.Equal(t, []*decad.Body{box}, doc.Bodies())
 	})
 	t.Run("TangentChainTwiceIsOnce", func(t *testing.T) {

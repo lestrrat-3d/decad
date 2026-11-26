@@ -95,6 +95,11 @@ command's unexported implementation owns steps 4–6.
 - **Cancellation passes through unwrapped.** `Do` returns `ctx.Err()` itself, so `err == context.Canceled`
   holds (`apitest/context_test.go`). `operationError` already passes `context.Canceled` and
   `context.DeadlineExceeded` through untagged.
+- **A wrapper that maps a ctx-taking call's error to a sentinel checks `ctx.Err()` first.** A cancel can land
+  inside the call, so mapping its error to `ErrUnsupported` with `%s` would hide `context.Canceled`:
+  `if cerr := ctx.Err(); cerr != nil { return nil, cerr }` comes before the mapping (`move_face.go`). A
+  pre-canceled `ctx` stops at the first poll and never reaches such a wrapper, so a test of cancellation by
+  identity cancels in the middle of the build (§14).
 - **Every other error carries the command's `OperationKind`** (§7).
 
 ## 4. Arguments — copy, store, record
@@ -103,7 +108,7 @@ command's unexported implementation owns steps 4–6.
 |---|---|
 | A1 | **Constructors and methods only store copied values.** They never read document state, body liveness, a profile's staleness, `ctx`, or another argument. |
 | A2 | A slice argument is copied with `slices.Clone` at the call. A variadic slot is copied too, so a caller's later write to its slice changes nothing. |
-| A3 | A selector query is deep-copied at the call, branch by branch, as `ChamferCommand.Asymmetric` copies its reference (`modify_options.go`, `copyFaceQuery` in `selector.go`): `Or`, `Exactly` and `AtLeast` change a query in place (`selector.go`). A selector that is not a decad query is stored as given; the selector gate refuses it at `Do` without calling it. |
+| A3 | A selector query is deep-copied at the call, branch by branch, as `ChamferCommand.Asymmetric` copies its reference (`modify_options.go`, `copyFaceQuery` in `selector.go`): `Or`, `Exactly` and `AtLeast` change a query in place (`selector.go`). A selector that is not a decad query is stored as given; the selector gate refuses it at `Do` without calling it. A sealed argument that holds a selector is copied at the call with that selector deep-copied: `NeutralFace.Face` inside the `NeutralPlane` of `Draft` (a `NeutralFace` value or a non-nil `*NeutralFace`), and the same for each later argument that holds one (`ToFace` and the angular stops inside an extent, `MirrorFace`, a spec struct). |
 | A4 | Bodies, sketches, profiles, chains, paths and meshes are stored as pointers. Liveness, foreign-document, stale-profile and selector-resolution checks run at `Do` against the live document (`agent-docs/modify-design.md` §4 order). A profile is never snapshotted at build time. |
 | A5 | **A constructor or method records a fault only when both hold.** Its own argument shows the fault without reading anything else (A1), and the operation's documented gate order reports that fault ahead of every check that reads document state, liveness, `ctx.Err()` or another argument. Example: `Union` with fewer than two bodies is recorded, because `Union` refuses the count right after the nil-ctx check today. |
 | A6 | Every other invalid value is stored and refused by the operation's own gate at `Do`, in today's position. Example: a negative `Fillet` radius is stored, and S15 refuses it after the S17 liveness gate. |
@@ -242,6 +247,12 @@ them (api-design §2). `PathPattern` and `Arrange` do not meet this today: `Path
   file, and the author moves it onto the implementation by hand.
 - The implementation returns untagged errors. Only the public `Do` applies `operationError`, once.
   `SelectionError` and `BooleanError` keep their own kinds, as `operationError` does today.
+- **The one exception is the refusal of a stored method value.** The implementation refuses it with
+  `subjectError(kind, subject, err)` (§7), so that error is tagged and names its subject. The subject travels in
+  the implementation's settings record, next to the value and its error (`chamferSettings.asymSubject`). The
+  command's `run` sets the method name. A composite that calls the implementation with a value it computed sets the
+  name of the constructor argument that value comes from, or leaves the subject empty, so a diagnostic never names
+  a method the composite's own command does not have (`ChamferAngle` names `d`, not `Asymmetric`).
 - The implementation takes a non-nil `ctx`; `Do` refused a nil one.
 
 ## 12. Family verdicts
@@ -307,12 +318,22 @@ its option tier and its `With...` constructors in the same PR, and no wrapper su
   (`_gallery/go.mod` `replace`), so it breaks in the same PR otherwise.
 - Tests asserting the §3 order for each member: a second `Do` is `ErrConsumed`, a nil `ctx` precedes every operand
   fault, cancellation returns `ctx.Err()` by identity, and the operation's own refusal table holds unchanged.
+- A cancellation test that cancels in the middle of the build, not only a pre-canceled `ctx` (§3). The test
+  passes a context whose `Err` turns to `context.Canceled` after n checks and moves n one later per run until
+  `Do` succeeds. Every run before that returns `context.Canceled` by identity
+  (`TestModifyCommandsReturnMidBuildCancellationByIdentity`).
+- A per-member test of where each stored method fault is refused: after the retired-body gate and the sheet
+  refusal, before the magnitude gate, and after a nil `ctx`. Every member gets a retired-body row, and each
+  member with a validating method gets rows for the method fault against the gates around it
+  (`TestModifyCommandsRefuseMethodFaultsAtTheirGate`).
 - The family's constructors in `unusedresult.funcs` (§10).
 - `.github/test-shards.txt` and `.github/test-shards-apitest.txt` updated for renamed or removed tests
   (`agent-docs/testing.md`).
 - The rewrite tool's rules for the family, run over `apitest/`, `examples/`, the root tests and `_gallery/`. The tool
   is `_cmdrewrite/`, its own nested module recorded in `agent-docs/modules.md`, because `gofmt -r` cannot match a
-  variadic option list.
+  variadic option list. The rules match the pre-migration names, such as `WithTangentChain` and
+  `WithNoOpenings`, and the tool's tests feed old-API code and assert the rewritten output, because the tool must
+  migrate calls that land on `main` while the stack is open. A new-name call is not input.
 - The Module boundary gate evidence (`agent-docs/module-boundary.md`) in the PR body.
 
 ## 15. Shared infrastructure

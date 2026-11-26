@@ -20,7 +20,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `operation_history.go` | Immutable public operation snapshots, body dependency indexes, and face-successor query values. See operation-history-design. |
 | `operation_kind.go` | Shared public operation-kind vocabulary and stable string tokens. See operation-history-design and operation-diagnostics-design. |
 | `operation_diagnostics.go` | Public operation diagnostic values, typed error accessors and body warning snapshots. See operation-diagnostics-design. |
-| `operation_command.go` | `runCommand`, the shared `Do` of every operation command, and `subjectError`. See command-api-design §3, §15. |
+| `operation_command.go` | `runCommand`, the shared `Do` of every operation command, `subjectError` and `errNilBody`. See command-api-design §3, §15. |
 | `params.go` | `WithParams`, `Document.Params`, `Param`, `Expr`, `ParamInt`, `Bindings`. See param-binding §2. |
 | `chain_tolerance.go` | `WithChainTolerance`, the document option that moves the chain-depth refusal. See faceted-vertex-bounds §5. |
 | `rim_split.go` | `WithRimSplit`, the document option that keeps a rim's bound beside the rim. See faceted-vertex-bounds §3.7. |

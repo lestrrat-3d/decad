@@ -51,7 +51,7 @@ import (
 // document and its provenance numbering unchanged.
 func ConeFromFace(body *Body, face FaceSelector, far units.Value) *ConeFromFaceCommand {
 	c := &ConeFromFaceCommand{body: body, face: copyFaceSelector(face), far: far}
-	if body == nil || body.n.Doc == nil {
+	if body == nil {
 		c.state.Record("body", fmt.Errorf(`%w: ConeFromFace names no body of a document`, ErrDegenerate))
 	}
 	return c

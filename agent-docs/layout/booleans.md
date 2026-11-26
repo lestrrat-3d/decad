@@ -32,7 +32,7 @@ Boolean files and modify operations. The rules for rows live in `agent-docs/layo
 | Path | Responsibility |
 |---|---|
 | `fillet.go` | `Fillet` and `FilletCommand`: the `TangentChain` method, selector and thickness gates, then `internal/brepmodify/` builds the fillet. See modify §6. |
-| `chamfer.go` | `Chamfer` and `ChamferCommand`: the `TangentChain` and `Asymmetric` methods, selector, tangent chain (extended without the method too), asymmetric reference and setback gates, then `internal/brepmodify/` builds the chamfer. See modify §7. Whole cap-loop runs: modify-reach §8.3.2. Chains across planes: retained-modify-reach §15b. |
+| `chamfer.go` | `Chamfer` and `ChamferCommand`: method, selector, chain, reference and setback gates, then `internal/brepmodify/`. See modify §7, modify-reach §8.3.2, retained-modify-reach §15b. |
 | `rim_extension.go` | Publishes a straight Chamfer ending on a tangent cylindrical support. See modify design. |
 | `rim_extension_history.go` | Binds held faces to their original extrusions and ruled cutting tool for a straight Chamfer. See modify design. |
 | `rim_outer_native.go` | Binds the terminal profile arc on the original flange when the cap joins a concentric cone heel. |
@@ -49,7 +49,7 @@ Boolean files and modify operations. The rules for rows live in `agent-docs/layo
 | `fillet_chord.go` | Public `FilletChord` and `FilletChordCommand`: reads the chord, gates each edge as right-angled, then calls the `Fillet` implementation with the radius. See fillet-chord design. |
 | `edge_dihedral.go` | `Edge.planarDihedral`, the angle across the corner of a convex or concave planar edge that `ChamferAngle` and `FilletChord` share. |
 | `chamfer_angle.go` | Public `ChamferAngle` and `ChamferAngleCommand`: reads the angle, gates each edge as right-angled, then calls the `Chamfer` implementation with the second setback. See chamfer-angle design. |
-| `modify_options.go` | The `TangentChain` and `Asymmetric` settings the Fillet and Chamfer commands share, `errNilBody` and asymmetric reference resolution (SX3). See modify-reach §2, §6. |
+| `modify_options.go` | The `TangentChain` and `Asymmetric` settings the Fillet and Chamfer commands share, and asymmetric reference resolution (SX3). See modify-reach §2, §6. |
 | `move_face.go` | Public `MoveFace` and `MoveFaceCommand`: gates on a faceted receiver and one selected face, then `internal/orthoshell/` presses the face and `solidFromMeshBody` makes the result. See orthogonal-move design. |
 | `quarter_turn.go` | Public `QuarterTurn`: exact quarter turns of a faceted solid about a world axis by exchanging coordinates, each sum proved exact. See orthogonal-boolean design B10. |
 | `boolean_orthogonal.go` | Pair handle and result adapters for `internal/booleandispatch`; many-body admission and `internal/orthoshell/` grid assembly. See orthogonal-boolean design. |

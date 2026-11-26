@@ -708,8 +708,8 @@ tube alike. A hollow **closed** body — the one shape whose inner skin is a
 genuine void shell — would be a shell that removes *no* face, and the selector
 vocabulary cannot ask for it at all: S16 makes an empty match an error, and a
 cardinality assertion takes a positive count. It is **unspellable** through the
-removal selector, not staged: there is no face to name. `ShellClosed()`
-spells it instead — the one nil-selector shell (§14).
+removal selector, not staged: there is no face to name. `ShellClosed(b, t)`
+spells it instead; it takes no selector (§14).
 
 ## 9. Table B — the result
 
@@ -947,7 +947,7 @@ Part R resolves the former reach questions:
   existing undecided pair result — reach DX6, whose reader is staged for the
   cap-loop chamfer: boxes may still decide a pair, and every other requested
   pair reads `Suspect` until that reader lands;
-- `ShellClosed()` spells a closed shell and is the only nil-selector shell;
+- `ShellClosed(b, t)` spells a closed shell and takes no selector;
 - consuming modify results do not inherit ancestor face roles;
 - `Asymmetric` carries a reference face + second distance;
 - `TangentChain` expands only through proven analytic G1 continuations;
@@ -1029,14 +1029,15 @@ func ShellClosed(b *Body, thickness units.Value) *ShellClosedCommand
 
 `Asymmetric` copies its reference selector at the call. The selectors resolve against the receiver at `Do`;
 resolved faces and topology indices are never retained. Each method stores its value, and `Do` folds the values
-into a private record (`internal/modifyoption/`): `FilletConfig{TangentChain}`,
-`ChamferConfig{TangentChain, Asymmetric}` and `ShellConfig{Sense, NoOpenings, FaceThickness}`. A shell with
+into a private record: `internal/modifyoption.FilletConfig{TangentChain}`, the root
+`chamferSettings` (tangent chain, `Asymmetric`) and
+`internal/modifyoption.ShellConfig{Sense, NoOpenings, FaceThickness}`. A shell with
 openings states a removed-face query and a thickness; `ShellClosed` states a thickness and
 `ShellConfig{NoOpenings: true}`.
 
 A method called again replaces its earlier value (`agent-docs/command-api-design.md` M2). `TangentChain` called twice
 is called once, a later `Sense` replaces an earlier one, and a later `Asymmetric` replaces the earlier reference and
-distance. A `Sense` value that names no sense is SX1, returned by `Do` at the gate that reads the method values, and
+distance. A `Sense` value that names no sense is SX1 (the message names it), returned by `Do` at the gate that reads the method values, and
 names `Sense` as its subject. The other distance of `Asymmetric` passes the positional distance's magnitude gates at
 that same gate, and names `Asymmetric` as its subject: base S15 for a wrong `Kind`, a non-finite or a negative
 value, and `ErrDegenerate` for zero, since §6 requires both distances strictly positive.
@@ -3003,8 +3004,9 @@ Every implementation PR MUST add geometry assertions, not run-only coverage.
 
 #### Options
 
-- option nil/duplicate/conflict gates;
-- `ShellClosed` nil-selector exception and non-nil conflict;
+- a repeated method replaces the earlier call;
+- an invalid last method call is refused;
+- `ShellClosed` takes no selector;
 - tangent-chain seed cardinality before expansion;
 - asymmetric nested selector deep-copy;
 - repeated calls select the same seeds, expansion, reference faces, and result;
@@ -12233,7 +12235,7 @@ negative taper and a holed section refuse.
 
 | Fixture | Asserts |
 |---|---|
-| D1 equivalence | `Draft(ctx, b, Faces(Walls(b)), NeutralFace{b, Faces(FaceCreatedBy(CapStart(b)))}, 5°)` of F1's untapered box equals F1's body: same volume, area, centroid, vertex coordinates and face count, bit for bit |
+| D1 equivalence | `Draft(b, Faces(Walls(b)), NeutralFace{b, Faces(FaceCreatedBy(CapStart(b)))}, 5°).Do(ctx)` of F1's untapered box equals F1's body: same volume, area, centroid, vertex coordinates and face count, bit for bit |
 | D2 other cap | the neutral face `CapEnd`: the far cap is `capStart`, at `z0`; volume as F1 |
 | D3 negative | `−5°` widens: volume as F5 |
 | D4 retire | the operand is retired; the result is live; the document holds one body |

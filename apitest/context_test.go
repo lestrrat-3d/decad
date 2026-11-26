@@ -96,6 +96,30 @@ func TestContextOperationsRejectNilBeforeOperands(t *testing.T) {
 		{"Body.Fillet", func(ctx context.Context) error { _, err := decad.Fillet(body, nil, units.Value{}).Do(ctx); return err }},
 		{"Body.Chamfer", func(ctx context.Context) error { _, err := decad.Chamfer(body, nil, units.Value{}).Do(ctx); return err }},
 		{"Body.Shell", func(ctx context.Context) error { _, err := decad.Shell(body, nil, units.Value{}).Do(ctx); return err }},
+		{"Body.FilletChord", func(ctx context.Context) error {
+			_, err := decad.FilletChord(body, nil, units.Value{}).Do(ctx)
+			return err
+		}},
+		{"Body.ChamferAngle", func(ctx context.Context) error {
+			_, err := decad.ChamferAngle(body, nil, units.Value{}, nil, units.Value{}).Do(ctx)
+			return err
+		}},
+		{"Body.ShellClosed", func(ctx context.Context) error {
+			_, err := decad.ShellClosed(body, units.Value{}).Do(ctx)
+			return err
+		}},
+		{"Body.Draft", func(ctx context.Context) error {
+			_, err := decad.Draft(body, nil, decad.NeutralFace{}, units.Value{}).Do(ctx)
+			return err
+		}},
+		{"Body.MoveFace", func(ctx context.Context) error {
+			_, err := decad.MoveFace(body, nil, units.Value{}).Do(ctx)
+			return err
+		}},
+		{"Body.ConeFromFace", func(ctx context.Context) error {
+			_, err := decad.ConeFromFace(body, nil, units.Value{}).Do(ctx)
+			return err
+		}},
 		{"Thicken", func(ctx context.Context) error { _, err := decad.Thicken(body, units.Value{}).Do(ctx); return err }},
 		{"Offset", func(ctx context.Context) error { _, err := decad.Offset(body, units.Value{}).Do(ctx); return err }},
 		{"Unstitch", func(ctx context.Context) error { _, err := decad.Unstitch(ctx, body); return err }},

@@ -219,7 +219,7 @@ func (c *ChamferCommand) Do(ctx context.Context) (*Body, error) {
 
 func (c *ChamferCommand) run(ctx context.Context) (*Body, error) {
 	a, err := c.asym.slot.Get()
-	o := chamferSettings{tangentChain: c.chain.on, asymErr: err}
+	o := chamferSettings{tangentChain: c.chain.on, asymErr: err, asymSubject: "Asymmetric"}
 	if c.asym.slot.IsSet() {
 		o.asym = &a
 	}
@@ -227,11 +227,15 @@ func (c *ChamferCommand) run(ctx context.Context) (*Body, error) {
 }
 
 // chamferSettings is the folded form of a chamfer's methods. asymErr is the
-// fault of the Asymmetric call, refused where the option decode refused it.
+// fault of the second setback, refused where the option decode refused it, and
+// asymSubject names what the diagnostic points at: the Asymmetric method when
+// the caller made the call, and the argument the composite computed it from
+// when a composite did (agent-docs/command-api-design.md section 11).
 type chamferSettings struct {
 	tangentChain bool
 	asym         *asymmetricChamferOpts
 	asymErr      error
+	asymSubject  string
 }
 
 // chamfer is Chamfer's implementation. ctx is not nil, and the errors it
@@ -252,7 +256,7 @@ func chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value, o ch
 		return nil, err
 	}
 	if o.asymErr != nil {
-		return nil, subjectError(OperationChamfer, "Asymmetric", o.asymErr)
+		return nil, subjectError(OperationChamfer, o.asymSubject, o.asymErr)
 	}
 	// Convert the requested length to millimeters. Keep the conversion's error
 	// bound too, so later geometry checks do not assume the number is exact.

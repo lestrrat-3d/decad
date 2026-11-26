@@ -176,7 +176,7 @@ func Thread(ctx context.Context, b *Body, spec ThreadSpec) (result *Body, retErr
 	if len(ends) == 0 {
 		return nil, fmt.Errorf(`%w: the threaded face has no convex circular end to chamfer for a lead-in`, ErrDegenerate)
 	}
-	chamfer := func(target *Body) (*Body, error) {
+	bevel := func(target *Body) (*Body, error) {
 		if leadAngle == 0 {
 			out, err := chamfer(ctx, target, edgesQuery(ends), units.Millimeters(leadIn), chamferSettings{})
 			return out, operationError(OperationChamfer, err)
@@ -191,7 +191,7 @@ func Thread(ctx context.Context, b *Body, spec ThreadSpec) (result *Body, retErr
 		return nil, err
 	}
 	defer removeTools([]*Body{probe})
-	chamfered, err := chamfer(probe)
+	chamfered, err := bevel(probe)
 	if err != nil {
 		return nil, err
 	}

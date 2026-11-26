@@ -115,5 +115,5 @@ func chamferAngle(ctx context.Context, b *Body, sel EdgeSelector, d units.Value,
 		}
 	}
 	asym, asymErr := newAsymmetricChamfer(reference, units.Millimeters(second))
-	return chamfer(ctx, b, sel, d, chamferSettings{asym: &asym, asymErr: asymErr})
+	return chamfer(ctx, b, sel, d, chamferSettings{asym: &asym, asymErr: asymErr, asymSubject: "d"})
 }

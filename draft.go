@@ -97,11 +97,31 @@ var errNilNeutralPlane = fmt.Errorf(`%w: nil neutral plane`, ErrDegenerate)
 // Every measurement of the result is Approximate: the tangent of the angle is
 // only ever enclosed.
 func Draft(b *Body, sel FaceSelector, neutral NeutralPlane, angle units.Value) *DraftCommand {
-	c := &DraftCommand{b: b, sel: copyFaceSelector(sel), neutral: neutral, angle: angle}
+	c := &DraftCommand{b: b, sel: copyFaceSelector(sel), neutral: copyNeutralPlane(neutral), angle: angle}
 	if b == nil {
 		c.state.Record("body", errNilBody)
 	}
 	return c
+}
+
+// copyNeutralPlane copies a NeutralFace, or the one a non-nil *NeutralFace
+// points to, with its selector deep-copied, so a later change to the caller's
+// query reaches nothing (agent-docs/command-api-design.md rule A3). Any other
+// plane is stored as given.
+func copyNeutralPlane(n NeutralPlane) NeutralPlane {
+	switch p := n.(type) {
+	case NeutralFace:
+		p.Face = copyFaceSelector(p.Face)
+		return p
+	case *NeutralFace:
+		if p == nil {
+			return p
+		}
+		cp := *p
+		cp.Face = copyFaceSelector(cp.Face)
+		return &cp
+	}
+	return n
 }
 
 // DraftCommand leans walls of a body about a neutral plane. Build it with
@@ -110,7 +130,7 @@ type DraftCommand struct {
 	state   opcommand.State // consumed flag and first recorded fault
 	b       *Body           // stored as given
 	sel     FaceSelector    // copied at Draft
-	neutral NeutralPlane    // stored as given
+	neutral NeutralPlane    // copied at Draft, with its face selector
 	angle   units.Value     // the draft angle, gated at Do
 }
 

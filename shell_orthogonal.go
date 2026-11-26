@@ -83,6 +83,9 @@ func commitShellWalls(ctx context.Context, d *Document, b *Body, wallVerts []r3.
 	}
 	walls, err := solidFromMeshBody(ctx, d, mesh)
 	if err != nil {
+		if cerr := ctx.Err(); cerr != nil {
+			return nil, true, cerr
+		}
 		return nil, true, fmt.Errorf("%w: the shell's walls are not a solid the evaluator can prove: %s", ErrUnsupported, err)
 	}
 	out, err := commitModifyResult(ctx, OperationShell, b, walls)

@@ -552,7 +552,7 @@ The full proof of (ii)–(iii) and Table TL land in trim §5 with Task 11. A con
 | 6 | `Draft` | each drafted plane rotated about its line on the neutral plane; a cylinder parallel to the pull becomes a `Cone`; neighbours re-trimmed by Component 3 |
 | 7 | `Chamfer` of a general edge | setback curves `T_i ∩ pipe(edge, d)`, chamfer face ruled between them (new ruled tag) |
 | 8 | Blend trimming and vertex blends | a strip that meets another face is trimmed by `pipe ∩ T_g`; three equal-radius blends at a valence-3 vertex end on a `Sphere`; two end on `pipe ∩ pipe` |
-| 9 | Variable-radius `Fillet` | `WithRadiusAt`; spine points `c` with `dist(c, T_i) = r(λ(c))`, `λ` the chord projection between the edge's end vertices; canal blend tag |
+| 9 | Variable-radius `Fillet` | `FilletCommand.RadiusAt`; spine points `c` with `dist(c, T_i) = r(λ(c))`, `λ` the chord projection between the edge's end vertices; canal blend tag |
 | 10 | `FilletFaces` full round | two faces separated by one face strip that the ball removes whole |
 | 11 | Boolean refresh | a restating operand whose faces lift is re-meshed from its graph at the pair tolerance instead of restating its held mesh |
 | 12 | Lift of analytic payloads | prism, brep, revolve, loft and sweep receivers lift from their own tessellation, as the trim-graph fallback after their routes decline |
@@ -566,7 +566,7 @@ The full proof of (ii)–(iii) and Table TL land in trim §5 with Task 11. A con
 | 5 | `Curve` variant `Intersection3{Bound units.Value}`: the edge lies on both faces' surfaces; `Bound` is the held chain's proven distance from it | same |
 | 6 | none; `Draft` builds on more receivers | `draft.go` doc, `docs/api.md` |
 | 7 | `Surface` variant `Ruled{}` (`KindRuled`) | same as 4 |
-| 9 | `func WithRadiusAt(p r3.Vec, r units.Value) FilletOption`: radius `r` at the selected edges' end vertex whose stored position equals `p` component-wise (as `EndpointAt`); `Surface` variant `Canal{MinRadius, MaxRadius units.Value}` | same |
+| 9 | `func (*FilletCommand) RadiusAt(p r3.Vec, r units.Value) *FilletCommand`: radius `r` at the selected edges' end vertex whose stored position equals `p` component-wise (as `EndpointAt`); `Surface` variant `Canal{MinRadius, MaxRadius units.Value}` | same |
 | 10 | `func FilletFaces(ctx context.Context, b *Body, first, second FaceSelector, r units.Value) (*Body, error)`, `OperationFilletFaces` | same, plus `operation_kind.go` |
 
 ### Table TG — refusals

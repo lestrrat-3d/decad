@@ -7,6 +7,11 @@ import (
 	"github.com/lestrrat-3d/decad/internal/opcommand"
 )
 
+// errNilBody is the refusal of a nil body, which a constructor with a body
+// operand records, because the operation reports it right after the nil ctx
+// check.
+var errNilBody = fmt.Errorf(`%w: the body belongs to no document`, ErrDegenerate)
+
 // runCommand is the shared Do of every operation command
 // (agent-docs/command-api-design.md §3). It consumes the command, refuses a
 // nil ctx, returns a fault a constructor or method recorded, and only then

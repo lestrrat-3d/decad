@@ -819,7 +819,7 @@ boundary component, such as a `Cut` by a wholly embedded tool. `Extrude` and
 open-path `Sweep` does the same. A partial `Revolve` opens its groove at the
 angular caps. Those bodies have one connected, non-void shell. The `Shell`
 operation that removes a face leaves an opening, so its inner and outer skins
-connect. `Shell` accepts the closed `ShellClosed()` form, which builds a closed hollow
+connect. `ShellClosed(b, t)` builds a closed hollow
 body for a full-turn `Revolve` and a straight prism; `agent-docs/modify-design.md`
 Part R §9 and `Shell`'s doc comment name the receivers it builds and the calls it
 refuses. Sheet shells

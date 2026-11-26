@@ -3231,3 +3231,7 @@
 12	0.10	TestModifyCommandsCopyTheirSelector
 12	0.10	TestSideMethodsLastCallWins
 12	0.10	TestShellClosedAndShellShareTheirMethods
+12	0.50	TestModifyCommandsReturnMidBuildCancellationByIdentity
+12	0.50	TestDraftCopiesItsNeutralFaceSelector
+12	0.50	TestModifyCommandsRefuseMethodFaultsAtTheirGate
+12	0.50	TestChamferAngleNamesTheArgumentOfAComputedFault

@@ -95,8 +95,3 @@ func resolveAsymmetricReference(b *Body, a *asymmetricChamferOpts, edges []*Edge
 	}
 	return refs, nil
 }
-
-// errNilBody is the refusal of a nil body, which every modify command's
-// constructor records because the operation reports it right after the nil
-// ctx check.
-var errNilBody = fmt.Errorf(`%w: the body belongs to no document`, ErrDegenerate)

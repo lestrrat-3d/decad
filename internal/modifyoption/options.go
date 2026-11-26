@@ -17,20 +17,6 @@ const (
 	ShellCentered
 )
 
-// ShellSenseName renders a sense number for diagnostics.
-func ShellSenseName(s int) string {
-	switch s {
-	case ShellInward:
-		return "Inward"
-	case ShellOutward:
-		return "Outward"
-	case ShellCentered:
-		return "Centered"
-	default:
-		return fmt.Sprintf("ShellSense(%d)", s)
-	}
-}
-
 // Asymmetric records a copied reference selector and the second setback.
 // ValidateAsymmetric fills OtherMM and OtherDelta from Other.
 type Asymmetric[Q any] struct {
@@ -51,12 +37,6 @@ type FaceThickness struct {
 // FilletConfig is the Fillet setting set.
 type FilletConfig struct {
 	TangentChain bool
-}
-
-// ChamferConfig is the Chamfer setting set.
-type ChamferConfig[Q any] struct {
-	TangentChain bool
-	Asymmetric   *Asymmetric[Q]
 }
 
 // ShellConfig is the Shell setting set.
@@ -84,7 +64,7 @@ func ValidateAsymmetric[Q any](a Asymmetric[Q]) (Asymmetric[Q], error) {
 // ValidateShellSense refuses a sense number that names no wall sense.
 func ValidateShellSense(s int) error {
 	if s != ShellInward && s != ShellOutward && s != ShellCentered {
-		return fmt.Errorf(`%w: unknown shell sense %d`, decaderr.ErrDegenerate, s)
+		return fmt.Errorf(`%w: unknown shell sense %d (SX1)`, decaderr.ErrDegenerate, s)
 	}
 	return nil
 }
