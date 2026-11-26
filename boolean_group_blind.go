@@ -229,8 +229,8 @@ func commitBlindGroupCut(ctx context.Context, d *Document, target, tool, result 
 		return ErrCrossContainer
 	}
 	dest := targetContainer
-	if d.resultC != nil {
-		dest = d.resultC
+	if r := d.resultInOf(ctx); r != nil {
+		dest = r
 	}
 	live := make([]*topo.Body, 0, len(d.n.LiveSet))
 	targetCount, toolCount := 0, 0

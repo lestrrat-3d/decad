@@ -96,7 +96,7 @@ func commitPairedCut(ctx context.Context, d *Document, target, tool, body *Body,
 		return original
 	}
 	d.n.NextProducer += span
-	dest := d.destinationLocked(nil, []*Body{target, tool})
+	dest := d.destinationLocked(ctx, nil, []*Body{target, tool})
 	d.retire(target)
 	d.retire(tool)
 	d.n.LiveSet = append(d.n.LiveSet, &body.n)

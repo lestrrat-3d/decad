@@ -118,7 +118,7 @@ func ConeFromFace(ctx context.Context, body *Body, face FaceSelector, far units.
 	if err != nil {
 		return nil, err
 	}
-	defer d.resultIn(d.bodyContainer(body))()
+	ctx = d.resultIn(ctx, d.bodyContainer(body))
 	if err := commitExactPointConeFrom(ctx, d, body, cone); err != nil {
 		return nil, err
 	}
@@ -148,7 +148,7 @@ func commitExactPointCone(ctx context.Context, d *Document, cone *Body) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	d.commit(cone)
+	d.commit(ctx, cone)
 	return nil
 }
 
