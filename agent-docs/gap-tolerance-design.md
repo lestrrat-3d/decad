@@ -36,8 +36,8 @@ one construction choice made up front, the partial chamfer's corner relief (§5.
   repaired among the float-box corners of each exact point (`agent-docs/evaluator-design.md` §9). A second stage
   lets each movable vertex of a failing pair also sit up to the reach from its exact point.
 - The shifted Boolean retry (§5.2): the second operand is moved or grown by up to the reach.
-- The partial chamfer's corner relief (§5.4): a prism's chamfer run that ends at a concave corner stops 0.004 mm
-  short of it when the reach is at least that.
+- The partial chamfer's corner relief (§5.4): a chamfer run on a prism or a faceted receiver that ends at a concave
+  corner stops 0.004 mm short of it when the reach is at least that.
 
 With reach zero none runs, and the refusal is the one the exact path gives.
 
@@ -346,9 +346,10 @@ exact stitch.
 
 A partial cap-loop chamfer (`agent-docs/modify-design.md` Part R §8.3) ends a run at a concave corner by stopping the
 bevel on the next wall's plane. Its cutter, clipped there, lies flush with the next wall along the corner's vertical
-edge, and the Cut refuses that touch and takes §5.2's shift. On a prism whose document tolerance is at least
-0.004 mm, the clip instead also removes a polygon inscribed in the circle of radius 0.004 mm about the corner
-(`partialCornerRelief`), so the cutter clears the next wall and the Cut needs no shift.
+edge, and the Cut refuses that touch and takes §5.2's shift. On a faceted receiver whose next wall carries a facet
+bound, beside a turn of 5.6 degrees, the shifted retry is refused as well. On a prism or a faceted receiver whose
+document tolerance is at least 0.004 mm, the clip instead also removes a polygon inscribed in the circle of radius
+0.004 mm about the corner (`partialCornerRelief`), so the cutter clears the next wall and the Cut needs no shift.
 
 What a relieved result states, and what it does not:
 
@@ -367,8 +368,8 @@ What a relieved result states, and what it does not:
 - The relief is a construction choice within the reach, not a move of a decided geometry: no predicate is widened and
   nothing is welded (§3).
 
-A document whose tolerance is under 0.004 mm, an `ExactOnly` one included, and a faceted receiver take no relief, and
-their Cut takes §5.2's shift where the tolerance allows it.
+A document whose tolerance is under 0.004 mm, an `ExactOnly` one included, takes no relief, and its Cut takes §5.2's
+shift where the tolerance allows it.
 
 ## 6. What stays refused
 
@@ -421,6 +422,9 @@ owns that refusal in the same change.
 | `apitest.TestVerifyGapToleranceDecidesAFlushPair` | `Verify` reads a rounded flush pair's overlap with a covering bound, leaves it staged under `ExactOnly`, and reports an invalid tolerance. |
 | `examples.Example_gap_tolerance` | The documented use. |
 | `TestChamferConcaveEndKeepsItsRelief` | A concave chamfer end under a 0.01 mm tolerance takes the relief and no shift, and its volume is the chamfer's without the relief plus at most the stated amount; under 0.003 mm it takes the shift. |
+| `TestChamferCapRunShallowConcaveEnd` | A tongue's run between two concave ends turned 5.625 degrees, on a prism and on a mesh Boolean result whose faces carry a bound, takes the relief and no shift, and its volume is the chamfer's without the relief plus at most the stated amount. |
 | `TestChamferConcaveArcEndHoldsItsBound` | An arc run into a 10 degree concave end takes no shift, and its box bound stays under 0.01 mm. |
 | `brepmodify.TestEndClipReliefRing` | The relieved end clip is a simple, closed ring for turns from 1e-7 to 90 degrees in both senses and clip radii under and over the relief. |
+| `brepmodify.TestEndClipKeepsToTheLinesBand` | Beside a line the end clip keeps within the cutter's reach of the line: its ring holds that edge as a straight side, and a tongue's top and other side inside its sector stay out of it. |
+| `brepmodify.TestClipWidthHoldsTheTaperStretch` | A smooth stretch that bends deeper into the sector within the taper's length widens the clip to hold its band. |
 | `brepmodify.TestEndClipReliefPolygon` | `inClip` claims a point outside the sector only within the relief polygon's inradius, and none without a relief. |
