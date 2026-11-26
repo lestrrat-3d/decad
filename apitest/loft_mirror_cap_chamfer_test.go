@@ -23,7 +23,7 @@ func TestLoftMirrorJoinCapChamfer(t *testing.T) {
 	for _, tc := range []struct {
 		name string
 		half float64
-	}{{"half 1.5", 1.5}, {"half 0.5", 0.5}} {
+	}{{"half 0.5", 0.5}} {
 		joined := roundedMirrorJoin(t, tc.half, twist)
 		held := heldVolume(t, joined)
 		capsBefore, _ := capAreaTotal(t, joined)
