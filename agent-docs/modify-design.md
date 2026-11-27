@@ -6814,8 +6814,10 @@ A face with a denoted patch (every Revolve wall and end face, `topo.Face.Denoted
 is read only where its tag IS the surface its record denotes, decided by
 `stitchflux.TagIsDenoted` on recorded data by exact equality: every leaf of the
 patch is a point, the axis frame is exactly orthonormal in rationals, and the
-tag equals the denoted cylinder or plane exactly. Nothing is admitted on a
-residual. Only a `Plane` or `Cylinder` tag is considered here: R1–R5 refuse a
+tag equals the denoted cylinder or plane exactly. A retained plane's Boolean-created
+intersection curves do not describe the original revolution's rims, so the
+record check excludes those curves while still checking the plane and original
+rims. Nothing is admitted on a residual. Only a `Plane` or `Cylinder` tag is considered here: R1–R5 refuse a
 `Cone`, `Sphere` or `Torus` tag before they ask `TagIsDenoted`. A widened patch,
 a partial-sweep cap, a rotated placement and an off-axis sketch line fail the
 test and stay SR1. An admitted face is read as a retained `Plane` or `Cylinder`
