@@ -322,7 +322,7 @@ func stitchRoundBudgeted(ctx context.Context, shared *PairCutsBudget, work *proo
 	// Closure audit: each directed edge exactly once, each with its reverse.
 	// A closed boundary has three edge uses per triangle and two per key.
 	// Open boundaries may grow the table; this hint admits no geometry.
-	var edges map[[2]int]uint8
+	var edges *EdgeTable
 	if shared != nil && shared.replay != nil {
 		ok, err := stitchEdgesPairedReplay(ctx, tris, shared.replay)
 		if err != nil {
@@ -332,7 +332,7 @@ func stitchRoundBudgeted(ctx context.Context, shared *PairCutsBudget, work *proo
 			return nil, errReplayTheStitchedBoundaryDoesNotClose
 		}
 	} else {
-		edges = make(map[[2]int]uint8, len(tris)+len(tris)/2)
+		edges = NewEdgeTable(len(tris) + len(tris)/2)
 		if !stitchEdgesPaired(tris, edges) {
 			return nil, errReplayTheStitchedBoundaryDoesNotClose
 		}
@@ -566,9 +566,9 @@ func stitchRoundBudgeted(ctx context.Context, shared *PairCutsBudget, work *proo
 		}
 	} else {
 		if edges == nil {
-			edges = make(map[[2]int]uint8, len(out.Tris)+len(out.Tris)/2)
+			edges = NewEdgeTable(len(out.Tris) + len(out.Tris)/2)
 		} else {
-			clear(edges)
+			edges.Clear()
 		}
 		if !stitchEdgesPaired(out.Tris, edges) {
 			return nil, errReplayTheRoundedBoundaryDoesNotClose

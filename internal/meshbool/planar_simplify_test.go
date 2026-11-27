@@ -237,7 +237,7 @@ func TestSimplifyPlanarSeamVertex(t *testing.T) {
 		in.Src = append(in.Src, s)
 		in.FacetBound = append(in.FacetBound, 0)
 	}
-	edges := make(map[[2]int]uint8)
+	edges := NewEdgeTable(0)
 	require.True(t, stitchEdgesPaired(in.Tris, edges), "the fixture is closed")
 	out, changed, err := SimplifyPlanarFaces(t.Context(), in)
 	require.NoError(t, err)
@@ -246,7 +246,7 @@ func TestSimplifyPlanarSeamVertex(t *testing.T) {
 	for _, p := range out.Approx {
 		require.False(t, p == (r3.Vec{X: 1, Z: 2}), "the crease vertex is gone from both faces")
 	}
-	require.True(t, stitchEdgesPaired(out.Tris, make(map[[2]int]uint8)))
+	require.True(t, stitchEdgesPaired(out.Tris, NewEdgeTable(0)))
 }
 
 // TestSimplifyPlanarFallback pins §7.1 step 6: a refusal on the simplified
@@ -382,7 +382,7 @@ func tentWithCollinearFirst() PlanarMesh {
 
 func TestSimplifyPlanarCollinearFirstFacet(t *testing.T) {
 	in := tentWithCollinearFirst()
-	require.True(t, stitchEdgesPaired(in.Tris, map[[2]int]uint8{}), "fixture closed")
+	require.True(t, stitchEdgesPaired(in.Tris, NewEdgeTable(0)), "fixture closed")
 	_, changed, err := SimplifyPlanarFaces(t.Context(), in)
 	require.NoError(t, err)
 	require.False(t, changed)
@@ -422,14 +422,14 @@ func TestSimplifyPlanarCoplanarFacesSeam(t *testing.T) {
 	add(4, [3]int{2, 3, 10}, [3]int{2, 10, 6}, [3]int{3, 7, 10})
 	// left wall x=0
 	add(5, [3]int{3, 0, 4}, [3]int{3, 4, 7})
-	require.True(t, stitchEdgesPaired(in.Tris, map[[2]int]uint8{}), "fixture closed")
+	require.True(t, stitchEdgesPaired(in.Tris, NewEdgeTable(0)), "fixture closed")
 	out, changed, err := SimplifyPlanarFaces(t.Context(), in)
 	require.NoError(t, err)
 	require.True(t, changed)
 	for _, p := range out.Approx {
 		require.False(t, p == (r3.Vec{X: 1, Y: 1, Z: 2}))
 	}
-	require.True(t, stitchEdgesPaired(out.Tris, map[[2]int]uint8{}))
+	require.True(t, stitchEdgesPaired(out.Tris, NewEdgeTable(0)))
 	require.Equal(t, signedVol(in), signedVol(out))
 }
 
@@ -473,7 +473,7 @@ func TestSimplifyPlanarTouchingBodyWithRemovable(t *testing.T) {
 		in.Src = append(in.Src, 50+k)
 		in.FacetBound = append(in.FacetBound, 0)
 	}
-	require.True(t, stitchEdgesPaired(in.Tris, map[[2]int]uint8{}), "fixture closed")
+	require.True(t, stitchEdgesPaired(in.Tris, NewEdgeTable(0)), "fixture closed")
 	_, changed, err := SimplifyPlanarFaces(t.Context(), in)
 	require.NoError(t, err)
 	require.False(t, changed)

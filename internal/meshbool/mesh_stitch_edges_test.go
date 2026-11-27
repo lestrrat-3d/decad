@@ -31,7 +31,7 @@ func TestStitchEdgeDirectionsMatchDirectedCensus(t *testing.T) {
 	check := func(tris [][3]int) {
 		t.Helper()
 		want := directedCensusClosed(tris)
-		got := stitchEdgesPaired(tris, make(map[[2]int]uint8))
+		got := stitchEdgesPaired(tris, NewEdgeTable(0))
 		require.Equal(t, want, got, "triangle count %d", len(tris))
 	}
 	check(nil)
@@ -59,4 +59,55 @@ func TestStitchEdgeDirectionsMatchDirectedCensus(t *testing.T) {
 		}
 		check(tris)
 	}
+}
+
+// stitchEdgesPairedMap is the map-based stitchEdgesPaired that the EdgeTable
+// version replaced, kept as the differential reference.
+func stitchEdgesPairedMap(tris [][3]int, edges map[[2]int]uint8) bool {
+	for _, tri := range tris {
+		for k, a := range tri {
+			b := tri[(k+1)%3]
+			var direction uint8 = 1
+			if a > b {
+				a, b = b, a
+				direction = 2
+			} else if a == b {
+				direction = 3
+			}
+			key := [2]int{a, b}
+			seen := edges[key]
+			if seen&direction != 0 {
+				return false
+			}
+			edges[key] = seen | direction
+		}
+	}
+	for _, seen := range edges {
+		if seen != 3 {
+			return false
+		}
+	}
+	return true
+}
+
+// closedStitchFixture returns a random closed triangulated surface: a
+// tetrahedron whose faces are repeatedly split, so every directed edge is
+// paired. Vertex ids start at base.
+func closedStitchFixture(rng *rand.Rand, base, splits int) [][3]int {
+	tris := [][3]int{{0, 2, 1}, {0, 1, 3}, {0, 3, 2}, {1, 2, 3}}
+	next := 4
+	for range splits {
+		i := rng.IntN(len(tris))
+		t := tris[i]
+		c := next
+		next++
+		tris[i] = [3]int{t[0], t[1], c}
+		tris = append(tris, [3]int{t[1], t[2], c}, [3]int{t[2], t[0], c})
+	}
+	for i := range tris {
+		for k := range tris[i] {
+			tris[i][k] += base
+		}
+	}
+	return tris
 }
