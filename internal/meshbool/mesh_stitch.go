@@ -8,6 +8,7 @@ import (
 	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
+	"github.com/lestrrat-3d/decad/internal/edgetable"
 	"github.com/lestrrat-3d/decad/internal/gaptol"
 	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -231,7 +232,7 @@ func finishStitch(ctx context.Context, xverts []proof.Xpt, approx []r3.Vec, xbet
 	// Closure audit: each directed edge exactly once, each with its reverse.
 	// A closed boundary has three edge uses per triangle and two per key.
 	// Open boundaries may grow the table; this hint admits no geometry.
-	edges := NewEdgeTable(len(tris) + len(tris)/2)
+	edges := edgetable.New(len(tris) + len(tris)/2)
 	if !stitchEdgesPaired(tris, edges) {
 		return nil, fmt.Errorf(`%w: the stitched boundary does not close`, decaderr.ErrBooleanFailed)
 	}
@@ -267,7 +268,7 @@ func finishStitch(ctx context.Context, xverts []proof.Xpt, approx []r3.Vec, xbet
 // held mesh embedded and closed. edges is a table the rounded audit may
 // clear and reuse, or nil.
 func roundStitched(ctx context.Context, xverts []proof.Xpt, approx []r3.Vec, xbeta []float64,
-	tris [][3]int, src []int, edges *EdgeTable) (*StitchedMesh, error) {
+	tris [][3]int, src []int, edges *edgetable.Table) (*StitchedMesh, error) {
 	// Round to float64, welding vertices whose roundings coincide — two exact
 	// points closer than an ulp become one held vertex — and drop the facets
 	// that collapse under the weld: a collapsed facet's two real directed
@@ -373,7 +374,7 @@ func roundStitched(ctx context.Context, xverts []proof.Xpt, approx []r3.Vec, xbe
 	out.DropArea = proofbound.PerturbedAreaUpper(out.Verts, droppedTris, out.Round)
 
 	if edges == nil {
-		edges = NewEdgeTable(len(out.Tris) + len(out.Tris)/2)
+		edges = edgetable.New(len(out.Tris) + len(out.Tris)/2)
 	} else {
 		edges.Clear()
 	}
@@ -387,7 +388,7 @@ func roundStitched(ctx context.Context, xverts []proof.Xpt, approx []r3.Vec, xbe
 // reverse. edges must be empty. Each undirected key records the two directions
 // as bits; a repeated bit fails immediately, so a third use cannot cancel a
 // duplicate in the opposite direction. No reverse-key lookup is needed.
-func stitchEdgesPaired(tris [][3]int, edges *EdgeTable) bool {
+func stitchEdgesPaired(tris [][3]int, edges *edgetable.Table) bool {
 	// open counts the keys whose direction bits are not yet both set. Bits only
 	// grow, so the final all-keys-are-3 check is open == 0, with no iteration.
 	open := 0

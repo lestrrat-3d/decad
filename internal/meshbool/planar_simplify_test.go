@@ -9,6 +9,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/lestrrat-3d/decad/internal/edgetable"
 	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
@@ -237,7 +238,7 @@ func TestSimplifyPlanarSeamVertex(t *testing.T) {
 		in.Src = append(in.Src, s)
 		in.FacetBound = append(in.FacetBound, 0)
 	}
-	edges := NewEdgeTable(0)
+	edges := edgetable.New(0)
 	require.True(t, stitchEdgesPaired(in.Tris, edges), "the fixture is closed")
 	out, changed, err := SimplifyPlanarFaces(t.Context(), in)
 	require.NoError(t, err)
@@ -246,7 +247,7 @@ func TestSimplifyPlanarSeamVertex(t *testing.T) {
 	for _, p := range out.Approx {
 		require.False(t, p == (r3.Vec{X: 1, Z: 2}), "the crease vertex is gone from both faces")
 	}
-	require.True(t, stitchEdgesPaired(out.Tris, NewEdgeTable(0)))
+	require.True(t, stitchEdgesPaired(out.Tris, edgetable.New(0)))
 }
 
 // TestSimplifyPlanarFallback pins §7.1 step 6: a refusal on the simplified
@@ -382,7 +383,7 @@ func tentWithCollinearFirst() PlanarMesh {
 
 func TestSimplifyPlanarCollinearFirstFacet(t *testing.T) {
 	in := tentWithCollinearFirst()
-	require.True(t, stitchEdgesPaired(in.Tris, NewEdgeTable(0)), "fixture closed")
+	require.True(t, stitchEdgesPaired(in.Tris, edgetable.New(0)), "fixture closed")
 	_, changed, err := SimplifyPlanarFaces(t.Context(), in)
 	require.NoError(t, err)
 	require.False(t, changed)
@@ -422,14 +423,14 @@ func TestSimplifyPlanarCoplanarFacesSeam(t *testing.T) {
 	add(4, [3]int{2, 3, 10}, [3]int{2, 10, 6}, [3]int{3, 7, 10})
 	// left wall x=0
 	add(5, [3]int{3, 0, 4}, [3]int{3, 4, 7})
-	require.True(t, stitchEdgesPaired(in.Tris, NewEdgeTable(0)), "fixture closed")
+	require.True(t, stitchEdgesPaired(in.Tris, edgetable.New(0)), "fixture closed")
 	out, changed, err := SimplifyPlanarFaces(t.Context(), in)
 	require.NoError(t, err)
 	require.True(t, changed)
 	for _, p := range out.Approx {
 		require.False(t, p == (r3.Vec{X: 1, Y: 1, Z: 2}))
 	}
-	require.True(t, stitchEdgesPaired(out.Tris, NewEdgeTable(0)))
+	require.True(t, stitchEdgesPaired(out.Tris, edgetable.New(0)))
 	require.Equal(t, signedVol(in), signedVol(out))
 }
 
@@ -473,7 +474,7 @@ func TestSimplifyPlanarTouchingBodyWithRemovable(t *testing.T) {
 		in.Src = append(in.Src, 50+k)
 		in.FacetBound = append(in.FacetBound, 0)
 	}
-	require.True(t, stitchEdgesPaired(in.Tris, NewEdgeTable(0)), "fixture closed")
+	require.True(t, stitchEdgesPaired(in.Tris, edgetable.New(0)), "fixture closed")
 	_, changed, err := SimplifyPlanarFaces(t.Context(), in)
 	require.NoError(t, err)
 	require.False(t, changed)
@@ -582,7 +583,7 @@ func TestPlanarCandidateMatchesPerCorner(t *testing.T) {
 		{"two interior", twoInterior},
 		{"collinear tent", tentWithCollinearFirst()},
 	} {
-		owner := NewEdgeTable(3 * len(fx.in.Tris))
+		owner := edgetable.New(3 * len(fx.in.Tris))
 		for f, tri := range fx.in.Tris {
 			for k := range 3 {
 				owner.Set(tri[k], tri[(k+1)%3], f)
@@ -629,7 +630,7 @@ func TestPlanarCandidateMatchesPerCorner(t *testing.T) {
 			top = append(top, f)
 		}
 	}
-	_, _, ok, err := planarCandidate(t.Context(), proofbound.NewWorkBudget(t.Context()), tent, NewEdgeTable(0), top, 1)
+	_, _, ok, err := planarCandidate(t.Context(), proofbound.NewWorkBudget(t.Context()), tent, edgetable.New(0), top, 1)
 	require.NoError(t, err)
 	require.False(t, ok, "a collinear first facet gives no plane")
 }

@@ -1,4 +1,6 @@
-package meshbool
+// Package edgetable holds a flat open-addressing map keyed by a directed edge.
+// It imports nothing from decad, so geometry packages at any level can share it.
+package edgetable
 
 import "math"
 
@@ -6,7 +8,7 @@ import "math"
 // 2^31, so its top bit is clear and it can never equal edgeEmpty.
 const edgeEmpty = ^uint64(0)
 
-// EdgeTable is an open-addressing map from a directed edge [2]int to an
+// Table is an open-addressing map from a directed edge [2]int to an
 // int, with the same lookup results as map[[2]int]int: Set overwrites (last
 // write wins), Get reports presence, Delete removes. It exists because the
 // Go map's 128-bit key hashing and probing dominates adjacency building on
@@ -17,9 +19,9 @@ const edgeEmpty = ^uint64(0)
 // behaves exactly as the map would. Each edge is stored in exactly one place.
 //
 // The table exposes no iteration, so nothing can depend on its layout. A nil
-// *EdgeTable is an empty table for Get and Len. It is not safe for concurrent
+// *Table is an empty table for Get and Len. It is not safe for concurrent
 // writes; concurrent reads of a table nobody writes are safe.
-type EdgeTable struct {
+type Table struct {
 	keys  []uint64
 	vals  []int32
 	mask  uint64
@@ -32,9 +34,9 @@ type EdgeTable struct {
 	tris [][3]int
 }
 
-// NewEdgeTable returns an empty table sized for n edges without growth.
-func NewEdgeTable(n int) *EdgeTable {
-	t := &EdgeTable{}
+// New returns an empty table sized for n edges without growth.
+func New(n int) *Table {
+	t := &Table{}
 	t.alloc(edgeCapacity(n))
 	return t
 }
@@ -49,7 +51,7 @@ func edgeCapacity(n int) int {
 	return c
 }
 
-func (t *EdgeTable) alloc(c int) {
+func (t *Table) alloc(c int) {
 	t.keys = make([]uint64, c)
 	for i := range t.keys {
 		t.keys[i] = edgeEmpty
@@ -72,12 +74,12 @@ func pack(a, b int) (uint64, bool) {
 	return uint64(a)<<32 | uint64(b), true
 }
 
-func (t *EdgeTable) slot(key uint64) uint64 {
+func (t *Table) slot(key uint64) uint64 {
 	return (key * 0x9E3779B97F4A7C15) >> t.shift
 }
 
 // Len returns the number of distinct edges stored.
-func (t *EdgeTable) Len() int {
+func (t *Table) Len() int {
 	if t == nil {
 		return 0
 	}
@@ -85,7 +87,7 @@ func (t *EdgeTable) Len() int {
 }
 
 // Get returns the value stored for edge (a, b).
-func (t *EdgeTable) Get(a, b int) (int, bool) {
+func (t *Table) Get(a, b int) (int, bool) {
 	if t == nil {
 		return 0, false
 	}
@@ -111,7 +113,7 @@ func (t *EdgeTable) Get(a, b int) (int, bool) {
 }
 
 // Set stores v for edge (a, b), replacing any earlier value.
-func (t *EdgeTable) Set(a, b, v int) {
+func (t *Table) Set(a, b, v int) {
 	key, ok := pack(a, b)
 	if !ok || v < math.MinInt32 || v > math.MaxInt32 {
 		if ok {
@@ -145,7 +147,7 @@ func (t *EdgeTable) Set(a, b, v int) {
 }
 
 // Clear removes every edge, keeping the allocated capacity.
-func (t *EdgeTable) Clear() {
+func (t *Table) Clear() {
 	for i := range t.keys {
 		t.keys[i] = edgeEmpty
 	}
@@ -154,7 +156,7 @@ func (t *EdgeTable) Clear() {
 }
 
 // Delete removes edge (a, b); it reports whether the edge was present.
-func (t *EdgeTable) Delete(a, b int) bool {
+func (t *Table) Delete(a, b int) bool {
 	key, ok := pack(a, b)
 	if !ok {
 		_, had := t.side[[2]int{a, b}]
@@ -172,7 +174,7 @@ func (t *EdgeTable) Delete(a, b int) bool {
 
 // deleteFlat removes key from the flat arrays by backward-shift deletion, so
 // no tombstones accumulate and probe chains stay unbroken.
-func (t *EdgeTable) deleteFlat(key uint64) bool {
+func (t *Table) deleteFlat(key uint64) bool {
 	i := t.slot(key)
 	for {
 		k := t.keys[i]
@@ -205,7 +207,7 @@ func (t *EdgeTable) deleteFlat(key uint64) bool {
 	return true
 }
 
-func (t *EdgeTable) grow() {
+func (t *Table) grow() {
 	oldKeys, oldVals := t.keys, t.vals
 	t.alloc(2 * len(oldKeys))
 	for i, k := range oldKeys {
@@ -221,9 +223,12 @@ func (t *EdgeTable) grow() {
 	}
 }
 
-// describes reports whether the table was built over exactly this triangle
-// slice (same backing array and length).
-func (t *EdgeTable) describes(tris [][3]int) bool {
+// SetSource records the triangle slice the table was built from.
+func (t *Table) SetSource(tris [][3]int) { t.tris = tris }
+
+// DescribesSource reports whether the table was recorded, by SetSource, over
+// exactly this triangle slice (same backing array and length).
+func (t *Table) DescribesSource(tris [][3]int) bool {
 	if t == nil || len(tris) != len(t.tris) {
 		return false
 	}

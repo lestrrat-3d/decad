@@ -6,6 +6,7 @@ import (
 	"slices"
 	"unsafe"
 
+	"github.com/lestrrat-3d/decad/internal/edgetable"
 	"github.com/lestrrat-3d/decad/internal/gaptol"
 	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -322,7 +323,7 @@ func stitchRoundBudgeted(ctx context.Context, shared *PairCutsBudget, work *proo
 	// Closure audit: each directed edge exactly once, each with its reverse.
 	// A closed boundary has three edge uses per triangle and two per key.
 	// Open boundaries may grow the table; this hint admits no geometry.
-	var edges *EdgeTable
+	var edges *edgetable.Table
 	if shared != nil && shared.replay != nil {
 		ok, err := stitchEdgesPairedReplay(ctx, tris, shared.replay)
 		if err != nil {
@@ -332,7 +333,7 @@ func stitchRoundBudgeted(ctx context.Context, shared *PairCutsBudget, work *proo
 			return nil, errReplayTheStitchedBoundaryDoesNotClose
 		}
 	} else {
-		edges = NewEdgeTable(len(tris) + len(tris)/2)
+		edges = edgetable.New(len(tris) + len(tris)/2)
 		if !stitchEdgesPaired(tris, edges) {
 			return nil, errReplayTheStitchedBoundaryDoesNotClose
 		}
@@ -566,7 +567,7 @@ func stitchRoundBudgeted(ctx context.Context, shared *PairCutsBudget, work *proo
 		}
 	} else {
 		if edges == nil {
-			edges = NewEdgeTable(len(out.Tris) + len(out.Tris)/2)
+			edges = edgetable.New(len(out.Tris) + len(out.Tris)/2)
 		} else {
 			edges.Clear()
 		}

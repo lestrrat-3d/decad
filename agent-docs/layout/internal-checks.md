@@ -17,6 +17,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `internal/sectioncert/` | Private bounded-section Sketch provenance, guarded Extrude recording, and `RecordProfile`, the Sketch-profile recording seam. See section design, sketch-seam §1–§2. |
 | `internal/exactrotation/` | Exact rigid motion recorded at Copy time: an orthogonal rational rotation or an exact lift translation, with the reject-only gap against r3's float transform. See mirror-pattern §4.4-§4.5. |
 | `internal/proofbound/` | Certified bounds, intervals, work budgets and trig. See file comments. |
+| `internal/edgetable/` | Flat open-addressing map from a directed edge `[2]int` to an `int`, with the lookup results of a Go map and no iteration. Imports nothing from decad. |
 | `internal/prooflineage/` | Compact source-volume, centroid, and immutable contained-Cut V/P/Q evidence retained for certified quantity calculations. See operation-history-design and contained-cut-moments-design. |
 | `internal/compositemesh/` | Plans shared composite Sweep stations, maps reduced span rings and source roles, and assembles a transient mesh node with its numeric audits. See sweep Table D. |
 | `internal/compositesweep/` | Composite Sweep limits, span assembly (cap pairing, rim sewing, cap removal), boundary and vertex-link audits, bounded and body measurements, separation, body-extent and cross-span facet audits, rim-join certificate, side-role and cap-role rewrites. See sweep §7, §9. |
