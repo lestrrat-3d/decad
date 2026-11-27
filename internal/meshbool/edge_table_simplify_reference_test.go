@@ -19,7 +19,7 @@ import (
 func mapRefSimplifyPlanarFaces(ctx context.Context, budget *proofbound.WorkBudget, in PlanarMesh) (PlanarMesh, bool, error) {
 	// An open input is left to the closure audit: removing the vertices of a
 	// crack could close it with new surface.
-	if !stitchEdgesPaired(in.Tris, make(map[[2]int]uint8, len(in.Tris)+len(in.Tris)/2)) {
+	if !stitchEdgesPairedMap(in.Tris, make(map[[2]int]uint8, len(in.Tris)+len(in.Tris)/2)) {
 		return in, false, nil
 	}
 	owner := make(map[[2]int]int, 3*len(in.Tris))
@@ -166,7 +166,7 @@ func mapRefSimplifyPlanarFaces(ctx context.Context, budget *proofbound.WorkBudge
 		out.Tris[i] = [3]int{remap[t[0]], remap[t[1]], remap[t[2]]}
 	}
 	edges := make(map[[2]int]uint8, len(out.Tris)+len(out.Tris)/2)
-	if !stitchEdgesPaired(out.Tris, edges) {
+	if !stitchEdgesPairedMap(out.Tris, edges) {
 		return in, false, nil
 	}
 	return out, true, nil
