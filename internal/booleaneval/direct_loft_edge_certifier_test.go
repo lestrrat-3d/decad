@@ -69,7 +69,7 @@ func TestDirectLoftEdgeCertifierCapAndWall(t *testing.T) {
 	require.True(t, cert.capFacetsInPlane(lp, f.loftFacet, f.loftEdge))
 	// The cap's plane is z = 0, so a facet lifted off it is refused.
 	f.loftBool.Verts = append([]r3.Vec(nil), f.loftBool.Verts...)
-	capFacet, _ := capSide(t, f)
+	capFacet := capSide(t, f)
 	f.loftBool.Verts[f.loftBool.Tris[capFacet][0]].Z = 1e-300
 	require.False(t, cert.capFacetsInPlane(lp, f.loftFacet, f.loftEdge))
 }

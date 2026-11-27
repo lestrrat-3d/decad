@@ -34,17 +34,17 @@ func certifierFor(t *testing.T, f directLoftEdgeFixture) *directLoftEdgeCertifie
 }
 
 // capSide returns the start-cap facet beside the fixture's wall edge.
-func capSide(t *testing.T, f directLoftEdgeFixture) (facet, edge int) {
+func capSide(t *testing.T, f directLoftEdgeFixture) int {
 	t.Helper()
 	facet, ok := f.loftBool.TwinFacet(f.loftFacet, f.loftEdge)
 	require.True(t, ok)
 	for e := range 3 {
 		if twin, ok := f.loftBool.TwinFacet(facet, e); ok && twin == f.loftFacet {
-			return facet, e
+			return facet
 		}
 	}
 	require.Fail(t, "cap edge")
-	return 0, 0
+	return 0
 }
 
 func makeDirectLoftEdgeFixture(t *testing.T) directLoftEdgeFixture {

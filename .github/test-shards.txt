@@ -426,3 +426,4 @@
 14	0.01	TestUnionFaceMergeFlushBoxes
 14	3.81	TestUnionFlushCapCarriedByDrive
 14	6.07	TestUnionFlushCapFarPostAcrossPlane
+14	0.00	TestLoftContinuationHistoryAndCommitGuards

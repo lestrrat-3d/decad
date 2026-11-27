@@ -48,11 +48,11 @@ func loftPocketProfile(t *testing.T, station, flare float64) (*sketch.Sketch, *s
 	return s, s.Profiles()[0]
 }
 
-func loftPocketBody(t *testing.T) (*decad.Document, *decad.Body) {
+func loftPocketBody(t *testing.T, options ...decad.DocumentOption) (*decad.Document, *decad.Body) {
 	t.Helper()
 	const r = 2.5
 	a := r * math.Sqrt(3) / 2
-	doc := decad.New(decad.WithChainTolerance(units.Millimeters(0.01)))
+	doc := decad.New(append([]decad.DocumentOption{decad.WithChainTolerance(units.Millimeters(0.01))}, options...)...)
 	body := slabCylinder(t, doc, r3.NewVec(0, 0, -10), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0), 11, 20)
 	w := sketch.NewWorld()
 	frame, err := r3.NewFrame(r3.NewVec(0, 0, 6), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
@@ -162,6 +162,19 @@ func loftPocketTaper(t *testing.T, doc *decad.Document, flare float64) *decad.Bo
 	taper, err := decad.Loft(doc, s0, p0, s1, p1).Do(t.Context())
 	require.NoError(t, err)
 	return taper
+}
+
+func sectionContainsPoint(outline decad.SectionOutline, point r3.Vec) bool {
+	inside := false
+	for _, loop := range outline.Loops {
+		for i, a := range loop {
+			b := loop[(i+1)%len(loop)]
+			if (a.Y > point.Y) != (b.Y > point.Y) && point.X < (b.X-a.X)*(point.Y-a.Y)/(b.Y-a.Y)+a.X {
+				inside = !inside
+			}
+		}
+	}
+	return inside
 }
 
 // A taper that narrows into the slot lies in the pocket's void and touches the target only along the junction

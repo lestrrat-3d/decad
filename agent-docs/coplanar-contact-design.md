@@ -1304,3 +1304,52 @@ The mesh classifier reads both triangles beside each shared edge and refuses a f
 It classifies the strict local half-planes using exact arithmetic. The Boolean refuses a local result with any number
 of kept facets other than zero or two. Every other contact retains the existing checks. This route does not admit a
 shifted operand, an unmatched source triangle, a curved cell, or a result with an unproved local arrangement.
+
+## 23. Matching loft and prism sections
+
+An original direct loft and an original prism have the same end and start section only when their source seals still
+match their bodies, both use the identity placement, the prism starts at zero with zero axial displacement, and its
+frame equals the loft's second-section frame. Both profiles must have one outer loop, no holes, and identical ordered
+whole line or circular-arc records. The prism must extend in the positive section-normal direction. Compare records
+exactly under a bounded work budget; a mismatch, stale source, or unsupported segment refuses the proof.
+
+This proves only that the two recorded section boundaries and filled profiles coincide. It does not identify a face
+of a later cut, align held meshes, or admit their contact. A consumer must prove those relationships separately.
+
+When both loft frames have identical U and V axes and their origin difference is an exactly positive multiple of
+their exact cross product, the loft lies between its two section planes. The prism's held extrusion direction must
+also have a strictly positive exact dot product with that cross product. The prism then extends from the second plane
+in the positive normal direction. Their true interiors are therefore separated by that plane. Exact dyadic cross and dot
+products decide this restricted arrangement; a zero, reversed, or nonparallel separation refuses the proof.
+
+## 24. A joined tool's unchanged loft start
+
+An unshifted Union of the separated loft and prism in §23 equals their set union. The prism is separated from the
+loft's first section by the positive distance between the two section planes. In a neighborhood of the loft's first
+section, the Union therefore equals the loft, including its incident walls and occupied side.
+
+To use §21–22 at that section, authenticate the joined body's public Union history and both original source bodies.
+Bind the joined operand and the original loft to their verified, unshifted prepared meshes. Match a joined facet to
+an original facet only when their three ordered coordinates agree exactly and the original facet passes the §21
+source seal. Match an edge only when both of its joined incident facets match the original facets on the same edge;
+their edge endpoints and twin relationship must agree. A cap-face proximity proof may name a joined face only when
+every one of its prepared facets matches an original start-cap facet. A shared-edge proof additionally uses the
+original loft's §22 source certificate and the joined mesh's own wedge and manifold checks.
+
+These checks certify only the unchanged first section and its local incident faces. They do not certify arbitrary
+joined-tool facets or apply to shifted, copied, stale, or unauthenticated inputs. All other pairs retain their
+original refusal, and a bounded search that cannot establish a unique correspondence declines the route.
+
+## 25. Continue an exact loft cut
+
+When an unshifted Cut produced `T minus L`, and the next Cut's tool `P` satisfies §23 with `L`, the regularized set
+identity `(T minus L) minus P = T minus (L union P)` permits a private two-step evaluation. Authenticate the prior
+Cut and both inputs through the document's sealed operation history. Run `L union P`, then cut `T` by that result,
+passing the §24 source proof to the second step. Neither private step may move geometry; a refusal, movement warning,
+unproved source, or failed result audit declines this route and preserves the original operation's outcome.
+
+Try this route when the ordinary Cut refuses or its accepted result moved an operand. Successful ordinary unshifted
+Cuts do not change. Keep both private operations out of public history, reserve their producer identities, and
+publish only the requested Cut. At commit, recheck the authenticated prior Cut and the two live public inputs while
+holding the document's mutation lock. A stale snapshot declines the commit rather than publishing a result based on
+different history. Replay and matching-face Cuts keep their existing routes.
