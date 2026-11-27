@@ -1207,3 +1207,100 @@ near the outlines; with it, `TestUnionFlushCapCutPrismAndLoft`'s result holds a 
 `internal/meshbool/local_cap_side_internal_test.go` covers the seam directions and the tags `exactRuledTag` refuses;
 `internal/facetedrecord/cap_side_record_test.go` covers the binding; `TestFlushOutline` covers the seam radius and
 its fallback to §4.3's corner radius.
+
+## 21. Exact loft segment containment
+
+`loftrecord.DirectSectionLineWithinEdge` compares a specified whole straight segment of an authenticated, unchanged direct
+loft section with a retained straight Boolean edge whose endpoints have zero bound. It lifts the recorded section
+endpoints through their frame in exact rational arithmetic. Both lifted points must lie on the finite target edge.
+The direct-section seal must match the loft body and its source producer. Non-finite, degenerate, partial, displaced,
+or unauthenticated inputs are refused.
+
+This answers only segment containment. The caller must establish that the edge belongs to its target, bind each mesh
+contact to the source edges, and prove the surrounding contact arrangement before admitting any Boolean. No Boolean
+route is changed by this comparison.
+
+`loftrecord.DirectSectionLineContainsPoints` checks two distinct held points against the named authenticated whole
+section line using exact rational collinearity and interval comparisons. It identifies no mesh edge and does not
+classify contact; its caller must bind both points to the original loft facets separately.
+
+`loftrecord.DirectSectionLineSupportsBoundary` checks an authenticated section's entire line-and-arc boundary
+against a named whole line. Every other line must stay on one side and meet it only at the named line's endpoints.
+Every arc's full circle must stay on that side, with any tangent point pinned to a named endpoint, and its two pins
+must have exactly the same radius. Exact rational determinants and squared distances decide the comparisons. This
+proves a boundary support line only; a consumer must separately establish the filled-region and face relationships.
+
+`loftrecord.DirectCellSourceSegment` reads a private copy of the original loft builder's outer-loop cell-to-segment
+map. The builder binds it to the original body and its authenticated direct sections after assembling the loft. The
+map holds at most 8192 cells, and every entry names an existing first-section segment. A copied or changed body,
+changed section, unsealed map, or out-of-range cell is refused. Mutating the payload's public station map cannot
+change the private copy. A caller must separately prove that a mesh wall facet is the named original body cell;
+this lookup alone does not classify contact.
+
+The original builder also seals its two cap face identities and ordered wall face identities, after checking the
+assembly's outer-loop cell and side indices. `DirectWallFaceSourceSegment` requires the named original face, cell,
+and triangle side to match that seal before reading the cell's source segment. `DirectCapFaceMatches` identifies
+the original cap by pointer. Both checks refuse rewritten or unsealed bodies. They identify source faces only; a
+consumer must still bind a mesh facet to one and prove the contact before changing a Boolean.
+
+The face seal also copies each wall triangle's three held coordinates after checking them against the face's loop.
+`DirectWallFacetSourceSegment` requires the verified mesh's source face and ordered triangle coordinates, and the
+prepared triangle's coordinates, to match that original wall. This binds that held facet to the authenticated cell;
+it does not prove the facet's contact with another operand or admit a Boolean.
+
+The seal also copies the original ordered cap triangles from the authenticated builder. `DirectCapFacetMatches`
+requires the verified mesh's cap face, original facet index and ordered coordinates, and the prepared coordinates
+to match that record. The two cap ranges each hold no more triangles than the bounded outer-loop cell count. This
+identifies a held cap facet; it does not establish its contact or prove that the facet's plane is the true cap plane.
+
+`meshbool.RetainedEdgeAtMeshEdge` reads a verified operand mesh and its prepared copy. It finds the two source faces
+beside a mesh edge and requires them to share exactly one retained `Line3` with zero-bound endpoints. Exact rational
+collinearity and interval tests must place both mesh-edge vertices on that finite topological edge. The mesh and its
+prepared copy must agree on the two facets and their edge vertices. The result identifies a true edge containing the
+held segment; it does not establish any contact with the other operand or permit a Boolean by itself.
+
+`booleaneval.directLoftSharedEdge` combines those checks for a target mesh edge and a loft wall edge. It also requires
+the wall edge's twin to be an authenticated original start-cap facet, verifies that the prepared wall and cap match
+their source facets, and checks that the two held edge intervals overlap by a positive length. The common target edge
+alone is insufficient: two disjoint held segments can lie on it. This comparison proves only the shared source-edge
+relationship. It does not prove the adjacent face arrangement or admit a Boolean by itself.
+
+`booleaneval.directLoftTargetFaceMeetsCapAtEdge` adds an exact target-face check: the verified target mesh must give
+the face zero source-bound, and every prepared facet of that face must still match the source mesh. Exact plane tests
+require all its vertices to lie on one side of the loft's original first-section plane; every vertex on the plane must
+lie on the shared retained edge. Every triangle is convex, so the exact face meets that plane only on the edge. The
+function does not establish the loft cap's filled region or admit a Boolean by itself.
+
+`booleaneval.directLoftCapEdgeSupport` additionally requires the held wall edge to equal the entire source segment.
+It checks every original start-cap facet, including its source and its unshifted prepared coordinates. The cap's held
+vertices must lie in the source plane and on one side of the line, and vertices on the line must lie in the segment.
+The authenticated source boundary also meets the support line only on that segment. A bounded filled profile with a
+boundary wholly on one side cannot enter the open opposite half-plane: a path from an interior point there to infinity
+would cross the boundary in that open half-plane. Its points on the support line are therefore boundary points, and
+they lie on the named segment. The held cap's triangles give the same conclusion by convexity. The true and held
+target faces meet the cap's plane only on the retained edge, which contains the entire source segment. Both cap rims
+contain the segment. Hence the exact target face and the loft cap meet along exactly that segment in both the true and
+held models. This face-pair statement does not classify the neighboring wall faces or make a Boolean result manifold.
+
+For an unshifted ordinary `Cut`, `directLoftCapContactEvidence` searches for that certificate when the proximity gate
+would otherwise refuse a face pair. A shared strict work and byte budget bounds the search. A successful certificate
+defers this one pair to the mesh classifier; all other pairs retain the original gate. Replay, moved operands, fixed
+tools and the cone-trim route do not use it. The mesh classifier still refuses an unsupported edge graze.
+
+## 22. Shared straight edges of a direct loft
+
+For an unshifted ordinary cut, a shared-edge classifier may use an authenticated direct loft's start-cap edge only
+when it proves the two held edge intervals lie on the same retained target edge and overlap. The target's two
+incident facets must match their source mesh, and each must lie in a proven exact source plane. The original cap and
+its source boundary must have the one-sided support established in §21.
+
+The incident loft wall must be a line-to-line cell's original first triangle. Its three held vertices must equal,
+in exact lifted source coordinates, the first section line's two endpoints and the paired second section line's
+end. Both source lines must be whole and their recorded following segments must start at their respective endpoints.
+The builder's cell and face seals bind that triangle to its source cell. These conditions prove that the true and
+held wall triangle coincide; a bound on distance to a plane alone does not prove its angle at the shared edge.
+
+The mesh classifier reads both triangles beside each shared edge and refuses a flat, tangent, or near-tangent wedge.
+It classifies the strict local half-planes using exact arithmetic. The Boolean refuses a local result with any number
+of kept facets other than zero or two. Every other contact retains the existing checks. This route does not admit a
+shifted operand, an unmatched source triangle, a curved cell, or a result with an unproved local arrangement.

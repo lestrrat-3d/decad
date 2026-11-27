@@ -337,6 +337,9 @@ func meshBooleanStats(ctx context.Context, op OperationKind, ma, mb *BoolMesh, m
 		return nil, Stats{}, err
 	}
 
+	if err := refuseNonManifoldSharedEdges(cuts.SharedEdges, wantA, wantB); err != nil {
+		return nil, Stats{}, err
+	}
 	if err := ctx.Err(); err != nil {
 		return nil, Stats{}, err
 	}
