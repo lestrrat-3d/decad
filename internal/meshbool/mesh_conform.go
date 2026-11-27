@@ -33,7 +33,13 @@ func conformOnceApprox(ctx context.Context, verts []proof.Xpt, approx []r3.Vec, 
 	// under it, and the along-edge ordering: the candidate vertices a single
 	// facet edge sweeps are the candidate operations §7.2 counts, not the
 	// facets.
-	budget := proofbound.NewWorkBudget(ctx)
+	return conformOnceBudget(ctx, proofbound.NewWorkBudget(ctx), verts, approx, tris, src, bounds, xbeta)
+}
+
+// conformOnceBudget is conformOnceApprox charging the given budget. The
+// budget must poll ctx.
+func conformOnceBudget(ctx context.Context, budget *proofbound.WorkBudget, verts []proof.Xpt, approx []r3.Vec,
+	tris *[][3]int, src *[]int, bounds *[]float64, xbeta []float64) (bool, error) {
 	if err := budget.Err(); err != nil {
 		return false, err
 	}
@@ -42,6 +48,7 @@ func conformOnceApprox(ctx context.Context, verts []proof.Xpt, approx []r3.Vec, 
 		return false, err
 	}
 
+	memo := newConformEdgeMemo(len(*tris))
 	var outTris [][3]int
 	var outSrc []int
 	var outBounds []float64
@@ -53,7 +60,7 @@ func conformOnceApprox(ctx context.Context, verts []proof.Xpt, approx []r3.Vec, 
 		inserted := [3][]int{}
 		for k := range 3 {
 			a, b := tri[k], tri[(k+1)%3]
-			hits, err := scan.EdgeInteriorHits(budget, a, b, tri)
+			hits, err := scan.edgeInteriorHitsMemo(budget, memo, a, b, tri)
 			if err != nil {
 				return false, err
 			}
@@ -282,6 +289,12 @@ func (s *ConformScan) EdgeInteriorHits(budget *proofbound.WorkBudget, a, b int, 
 	}
 	// Every tree candidate steps the budget before rejection. Order the hits
 	// by grid cell and vertex index, independently of tree traversal order.
+	s.sortHits(hits)
+	return hits, nil
+}
+
+// sortHits orders hits by grid cell and vertex index, a total order.
+func (s *ConformScan) sortHits(hits []int) {
 	sort.Slice(hits, func(i, j int) bool {
 		a, b := hits[i], hits[j]
 		for axis := range 3 {
@@ -291,7 +304,6 @@ func (s *ConformScan) EdgeInteriorHits(budget *proofbound.WorkBudget, a, b int, 
 		}
 		return a < b
 	})
-	return hits, nil
 }
 
 func conformSegmentQueryBox(pa, pb r3.Vec, tau2 float64) [2]r3.Vec {
