@@ -82,6 +82,14 @@ func RefuseUndecidableProximity(ctx context.Context, ma, mb *topo.Mesh, bmA, bmB
 // RefuseProximityWithPlaneEvidence permits exact plane separation only for source-aligned operands.
 func RefuseProximityWithPlaneEvidence(ctx context.Context, ma, mb *topo.Mesh, bmA, bmB *BoolMesh,
 	memo *ContactMemo, capFace, coneFace *topo.Face, planeBudget *proofbound.WorkBudget) error {
+	return RefuseProximityWithFaceEvidence(ctx, ma, mb, bmA, bmB, memo, capFace, coneFace, planeBudget, nil)
+}
+
+// RefuseProximityWithFaceEvidence defers a face pair only when evidence proves
+// the held and true contacts agree. The mesh pass must still classify it.
+func RefuseProximityWithFaceEvidence(ctx context.Context, ma, mb *topo.Mesh, bmA, bmB *BoolMesh,
+	memo *ContactMemo, capFace, coneFace *topo.Face, planeBudget *proofbound.WorkBudget,
+	evidence func(*topo.Face, *topo.Face) (bool, error)) error {
 	// One counter spans the grouping and the pair scan it feeds: the grouping
 	// walks every facet and every new source face's edges, which is work the
 	// §7.2 interval covers just as the pair scan is.
@@ -188,6 +196,12 @@ func RefuseProximityWithPlaneEvidence(ctx context.Context, ma, mb *topo.Mesh, bm
 			}
 			if deep {
 				return nil
+			}
+		}
+		if evidence != nil {
+			matched, err := evidence(ga.source, gb.source)
+			if err != nil || matched {
+				return err
 			}
 		}
 		if err := ctx.Err(); err != nil {

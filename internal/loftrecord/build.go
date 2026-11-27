@@ -395,6 +395,17 @@ func buildPaired(ctx context.Context, env topo.Env, pl Payload, budget *proofbou
 	for i := range pairs {
 		pl.Segment[i] = append([]int(nil), pairs[i].Segment...)
 	}
+	if originalSections {
+		if err := sealDirectCellSegments(pl.SourceIdentity.direct, pl.Segment, len(pl.Profile0.Outer.Segments), budget); err != nil {
+			return nil, err
+		}
+		if len(pl.BlendSegs) == 0 {
+			if err := sealDirectFaces(pl.SourceIdentity.direct, body, [2]*topo.Face{capStart, capEnd}, walls,
+				a.Cell, a.Side, a.Verts, a.Tris, a.CapStartCount, budget); err != nil {
+				return nil, err
+			}
+		}
+	}
 	if pl.RetainTwistAreaCells {
 		pl.TwistAreaCells = make([][]TwistAreaCellClaims, len(pairs))
 		for i, pair := range pairs {

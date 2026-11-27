@@ -809,7 +809,12 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 			if inset, ok := meshes.(*radialInsetMesher); ok && !hasShifts && fixed == nil {
 				planeBudget = inset.budget.WorkBudget(ctx)
 			}
-			proximityErr = meshbool.RefuseProximityWithPlaneEvidence(ctx, ma, mbDecide, bmA, bmB, memo, capFace, coneFace, planeBudget)
+			var faceEvidence func(*topo.Face, *topo.Face) (bool, error)
+			if op == meshbool.OpCut && !hasShifts && fixed == nil && capFace == nil && coneFace == nil {
+				faceEvidence = directLoftCapContactEvidence(ctx, ma, bmA, b, mbDecide, bmB)
+			}
+			proximityErr = meshbool.RefuseProximityWithFaceEvidence(ctx, ma, mbDecide, bmA, bmB, memo,
+				capFace, coneFace, planeBudget, faceEvidence)
 		}
 	}
 	if err := proximityErr; err != nil {
@@ -866,6 +871,13 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 		kept, maxRim, coplanarKeys, err = meshbool.MeshBooleanReplayWithKeys(ctx, op, bmA, bmB, memo, replay, replayKeys)
 	} else {
 		var stats meshbool.Stats
+		if op == meshbool.OpCut && !hasShifts && fixed == nil && capFace == nil && coneFace == nil && mbDecide == mb {
+			// An unshifted ordinary Cut may classify an edge its target shares with a direct loft
+			// when source records prove it (agent-docs/coplanar-contact-design.md §22).
+			if cert := newDirectLoftEdgeCertifier(ma, bmA, b, mb, bmB); cert != nil {
+				memo.SharedEdges = cert
+			}
+		}
 		kept, stats, err = meshbool.MeshBooleanStats(ctx, op, bmA, bmB, memo)
 		maxRim = stats.MaxRim
 		coplanarKeys = stats.Coplanar

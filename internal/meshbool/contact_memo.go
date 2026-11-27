@@ -68,6 +68,9 @@ type ContactMemo struct {
 	nextTry     int
 	// blockArenaLimit overrides ContactMemoBlockArenaLimit when non-zero.
 	blockArenaLimit int
+	// SharedEdges, when set, vouches for a shared edge of the two operands so
+	// the mesh pass may classify it (agent-docs/coplanar-contact-design.md §22).
+	SharedEdges SharedEdgeCertifier
 }
 
 const (

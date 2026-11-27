@@ -41,6 +41,9 @@ type pairCutsResult struct {
 	// the same operands, kept for the manifold audit (§5); nil when Owned is
 	// empty.
 	Legacy error
+	// SharedEdges holds the verdict of every shared edge the pass accepted
+	// (agent-docs/coplanar-contact-design.md §22); nil when it accepted none.
+	SharedEdges map[sharedEdgeKey]sharedEdgeVerdict
 }
 
 func pairCuts(ctx context.Context, ma, mb *BoolMesh, memo *ContactMemo, keyOf func(proof.Xpt) string) (pairCutsResult, error) {
@@ -235,6 +238,35 @@ func pairCuts(ctx context.Context, ma, mb *BoolMesh, memo *ContactMemo, keyOf fu
 	// is a real rim of the result.
 	blockedA := map[[2]int]struct{}{}
 	blockedB := map[[2]int]struct{}{}
+	// acceptShared classifies a contact that runs along an edge of each operand
+	// when the certifier vouches for the edge and the exact local arrangement
+	// is a strict wedge pair (agent-docs/coplanar-contact-design.md §22). The
+	// edge blocks flood fill on both operands; the verdict reaches the
+	// manifold check.
+	var shared map[sharedEdgeKey]sharedEdgeVerdict
+	acceptShared := func(p PairContact) (bool, error) {
+		if memo == nil || memo.SharedEdges == nil || p.C.Kind != ContactSegment || p.C.EdgeA < 0 || p.C.EdgeB < 0 {
+			return false, nil
+		}
+		key := sharedEdgeKey{a: edgeKeyOf(ma, p.I, p.C.EdgeA), b: edgeKeyOf(mb, p.J, p.C.EdgeB)}
+		if _, ok := shared[key]; !ok {
+			vouched, err := memo.SharedEdges.CertifySharedEdge(ctx, p.I, p.C.EdgeA, p.J, p.C.EdgeB)
+			if err != nil || !vouched {
+				return false, err
+			}
+			verdict, ok := sharedEdgeWedge(ma, mb, p.I, p.C.EdgeA, p.J, p.C.EdgeB)
+			if !ok {
+				return false, nil
+			}
+			if shared == nil {
+				shared = map[sharedEdgeKey]sharedEdgeVerdict{}
+			}
+			shared[key] = verdict
+		}
+		blockedA[key.a] = struct{}{}
+		blockedB[key.b] = struct{}{}
+		return true, nil
+	}
 	// grazes collects the facets of the first operand at every graze, so the
 	// refusal can say where the operands touch.
 	var grazes []TouchContact
@@ -274,6 +306,19 @@ func pairCuts(ctx context.Context, ma, mb *BoolMesh, memo *ContactMemo, keyOf fu
 				// Both rims lie in the plane that separates the operands (agent-docs/coplanar-contact-design.md §19.6).
 				cp.acceptSeparated(p, keyOf)
 				skipCut, grazed = true, true
+			} else if side == EdgeGraze {
+				accepted, err := acceptShared(p)
+				if err != nil {
+					return pairCutsResult{}, err
+				}
+				if accepted {
+					continue
+				}
+				if len(grazes) < maxTouchContacts {
+					grazes = append(grazes, touchOf(ma, p.I, p.J))
+				}
+				realGraze = true
+				continue
 			} else if side != EdgeCrossing {
 				if len(grazes) < maxTouchContacts {
 					grazes = append(grazes, touchOf(ma, p.I, p.J))
@@ -304,6 +349,19 @@ func pairCuts(ctx context.Context, ma, mb *BoolMesh, memo *ContactMemo, keyOf fu
 			} else if side == EdgeGraze && p.C.EdgeA >= 0 && separatedEdge(mb, p.J, p.C.EdgeB) {
 				cp.acceptSeparated(p, keyOf)
 				skipCut, grazed = true, true
+			} else if side == EdgeGraze {
+				accepted, err := acceptShared(p)
+				if err != nil {
+					return pairCutsResult{}, err
+				}
+				if accepted {
+					continue
+				}
+				if len(grazes) < maxTouchContacts {
+					grazes = append(grazes, touchOf(ma, p.I, p.J))
+				}
+				realGraze = true
+				continue
 			} else if side != EdgeCrossing {
 				if len(grazes) < maxTouchContacts {
 					grazes = append(grazes, touchOf(ma, p.I, p.J))
@@ -418,6 +476,7 @@ func pairCuts(ctx context.Context, ma, mb *BoolMesh, memo *ContactMemo, keyOf fu
 		res.Owned = cp.owned
 		res.Legacy = cp.legacy(coplanar)
 	}
+	res.SharedEdges = shared
 	return res, nil
 }
 

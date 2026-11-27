@@ -3289,3 +3289,5 @@
 14	0.01	TestWallSphereCentreOffAxisUndecided
 14	0.01	TestWallSphericalZoneReadsFlats
 14	0.00	TestSectionOutlineOfSphereCutByExtrudedDisk
+14	0.00	TestLoftCutAtPentagonalPocketJunction
+14	0.00	TestLoftCutNarrowingTaperAtPocketJunctionStaysRefused
