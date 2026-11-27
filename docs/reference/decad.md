@@ -330,6 +330,7 @@ package.
 - [func ReduceMesh](<#ReduceMesh>)
 - [func ReduceMeshWithin](<#ReduceMeshWithin>)
 - [func RepairMesh](<#RepairMesh>)
+- [func RunSteps](<#RunSteps>)
 - [func TextProfiles](<#TextProfiles>)
 - [type AngleExtent](<#AngleExtent>)
 - [type AngleSide](<#AngleSide>)
@@ -893,6 +894,9 @@ package.
   - [func (\*RevolveCommand) Do](<#RevolveCommand.Do>)
   - [func (\*RevolveCommand) SurfaceResult](<#RevolveCommand.SurfaceResult>)
 - [type RigidDriftSegment](<#RigidDriftSegment>)
+- [type RunStepsOption](<#RunStepsOption>)
+  - [func WithStepIdentities](<#WithStepIdentities>)
+  - [func WithStepWorkers](<#WithStepWorkers>)
 - [type ScalarOutcome](<#ScalarOutcome>)
 - [type ScalarReading](<#ScalarReading>)
 - [type ScaledAtCommand](<#ScaledAtCommand>)
@@ -942,6 +946,7 @@ package.
   - [func Split](<#Split>)
   - [func (\*SplitCommand) Do](<#SplitCommand.Do>)
 - [type Status](<#Status>)
+- [type Step](<#Step>)
 - [type StitchCommand](<#StitchCommand>)
   - [func Stitch](<#Stitch>)
   - [func (\*StitchCommand) Do](<#StitchCommand.Do>)
@@ -1429,6 +1434,23 @@ answer. A stale profile's boundary is the old geometry; sweeping it would
 silently build the wrong part. The caller rebuilds with s.Profiles() and
 passes a current one.
 
+<a name="ErrStepIdentities"></a>
+
+<pre>var ErrStepIdentities = decaderr.ErrStepIdentities</pre>
+
+ErrStepIdentities is returned when a step used up its identity block ([WithStepIdentities](<#WithStepIdentities>)). The operation
+that ran out leaves the document unchanged.
+
+<a name="ErrStepScope"></a>
+
+<pre>var ErrStepScope = decaderr.ErrStepScope</pre>
+
+ErrStepScope is returned when a document is running build steps ([RunSteps](<#RunSteps>)) and a call breaks the step rules:
+an operation on the document made without its step's context, a step using a body another step built, a step
+consuming a body that was live before the steps began, a call that cannot name its step (a [Container](<#Container>) mutation,
+Param, Expr or ParamInt) while steps run, a step context used after its step finished, or RunSteps on a
+document already running steps. A refused call leaves the document unchanged.
+
 <a name="ErrUnitKind"></a>
 
 <pre>var ErrUnitKind = decaderr.ErrUnitKind</pre>
@@ -1566,6 +1588,34 @@ ctx and m MUST NOT be nil, each otherwise ErrDegenerate. A weld distance that
 is negative is ErrNegativeMagnitude, one that is not a length is ErrUnitKind,
 and an option given twice or a nil option is ErrDegenerate. A mesh left with
 no triangle is ErrDegenerate. A canceled context returns its error.
+
+<a name="RunSteps"></a>
+### func RunSteps
+
+<pre>func RunSteps(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, doc *<a href="#Document">Document</a>, steps []<a href="#Step">Step</a>, opts ...<a href="#RunStepsOption">RunStepsOption</a>) <a href="https://pkg.go.dev/builtin#error">error</a></pre>
+
+RunSteps runs steps on doc and returns when every step has finished.
+
+Each step runs as if alone on doc as it stood when RunSteps began: it sees the bodies live then and the bodies
+it built itself, never another step's. A step may run every operation and every query that takes a ctx (Verify,
+VerifyMotion, ContactPair and the like) on those bodies, but it may only consume (retire) the bodies it built.
+Breaking a rule is [ErrStepScope](<#ErrStepScope>).
+
+[Step](<#Step>) k draws its producer, level and curve identities from block k, so results do not depend on the worker
+count or on timing. When RunSteps returns, Bodies(), [OperationHistory](<#OperationHistory>)() and every [Container](<#Container>) list the bodies
+live before RunSteps, then step 0's in commit order, then step 1's, and so on.
+
+While steps run, a call without a step's ctx reads doc as it stood when RunSteps began: Bodies,
+[OperationHistory](<#OperationHistory>), VerifyContainers, [Container](<#Container>).Bodies and a Verify from outside the steps see no step's work. An
+operation on doc without a step's ctx is refused with ErrStepScope and makes RunSteps fail too. Changing the
+parameter table (Params().Set) while steps run is a data race the document cannot see: do not.
+
+RunSteps runs every step, also when one fails, unless ctx is canceled. It returns the failures joined in step
+order (errors.Join), each wrapped with its step's Name. After a failure the document holds what the steps
+committed, in step order; discard it as a failed serial build would be discarded.
+
+ctx and doc MUST NOT be nil (ErrDegenerate), and neither may a step's Build. An empty steps runs nothing and
+returns nil.
 
 <a name="TextProfiles"></a>
 ### func TextProfiles
@@ -6064,9 +6114,9 @@ LineTo joins the preceding path point to End by one straight segment.
     Count <a href="https://pkg.go.dev/builtin#int">int</a>
 }</pre>
 
-LinearPattern places instance i at i·Step along Dir, i = 0..Count-1.
+LinearPattern places instance i at i·[Step](<#Step>) along Dir, i = 0..Count-1.
 Instance 0 is the receiver itself. Dir is a direction (dimensionless,
-non-zero, not normalised by the caller); Step is a length magnitude, and
+non-zero, not normalised by the caller); [Step](<#Step>) is a length magnitude, and
 its sense is Dir's.
 
 <a name="Link"></a>
@@ -8261,7 +8311,7 @@ The gates are Copy's — a nil context or a nil b is ErrDegenerate, a body
 this evaluator did not build is ErrUnsupported, a retired or foreign b is
 refused — plus the spec's own: a nil spec or a Count below 2 is
 ErrDegenerate; a non-finite Dir, [Axis](<#Axis>) or Center is ErrNotFinite and a zero
-Dir or [Axis](<#Axis>) ErrDegenerate; a Step that is not a length is ErrUnitKind, a
+Dir or [Axis](<#Axis>) ErrDegenerate; a [Step](<#Step>) that is not a length is ErrUnitKind, a
 negative one ErrNegativeMagnitude and a zero one ErrDegenerate. Every
 instance is built before any is registered, so a refusal or a canceled
 context leaves the document unchanged.
@@ -8732,6 +8782,34 @@ is the same as calling it once.
 <pre>type RigidDriftSegment = report.<a href="report.md#RigidDriftSegment">RigidDriftSegment</a></pre>
 
 RigidDriftSegment moves a center linearly while its orientation rotates.
+
+<a name="RunStepsOption"></a>
+### type RunStepsOption
+
+<pre>type RunStepsOption interface {
+    option.Interface
+    // contains filtered or unexported methods
+}</pre>
+
+RunStepsOption configures [RunSteps](<#RunSteps>). [WithStepWorkers](<#WithStepWorkers>) and [WithStepIdentities](<#WithStepIdentities>) are its options. An option from
+another package cannot implement this sealed tier.
+
+<a name="WithStepIdentities"></a>
+#### func WithStepIdentities
+
+<pre>func WithStepIdentities(n <a href="https://pkg.go.dev/builtin#int">int</a>) <a href="#RunStepsOption">RunStepsOption</a></pre>
+
+WithStepIdentities gives every step a block of n identities of each kind (producer, level, curve). The default
+is 1 \<\< 32. An n below 1, or a block total past the identity range, is ErrDegenerate when RunSteps evaluates
+the option.
+
+<a name="WithStepWorkers"></a>
+#### func WithStepWorkers
+
+<pre>func WithStepWorkers(n <a href="https://pkg.go.dev/builtin#int">int</a>) <a href="#RunStepsOption">RunStepsOption</a></pre>
+
+WithStepWorkers runs at most n steps at a time. The default is runtime.GOMAXPROCS(0). An n below 1 is
+ErrDegenerate when RunSteps evaluates the option. The worker count never changes a result.
 
 <a name="ScalarOutcome"></a>
 ### type ScalarOutcome
@@ -9412,6 +9490,19 @@ call returns [ErrConsumed](<#ErrConsumed>).
 <pre>type Status = report.<a href="report.md#Status">Status</a></pre>
 
 Status is a verification verdict. See agent-docs/verification-design.md §6.
+
+<a name="Step"></a>
+### type Step
+
+<pre>type Step struct {
+    // Name labels the step in errors. It need not be unique.
+    Name <a href="https://pkg.go.dev/builtin#string">string</a>
+    // Build makes the step&#39;s bodies. It MUST make every decad call on the document through ctx, one call at a
+    // time, and MUST NOT share mutable state with another step&#39;s Build.
+    Build func(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>) <a href="https://pkg.go.dev/builtin#error">error</a>
+}</pre>
+
+Step is one independent part of a model build. [RunSteps](<#RunSteps>) may run it beside the other steps of the same call.
 
 <a name="StitchCommand"></a>
 ### type StitchCommand
