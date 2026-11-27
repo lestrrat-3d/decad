@@ -1035,6 +1035,15 @@ facet interiors meet only on their shared vertex/edge paths; every
 non-adjacent pair is disjoint. Shared vertices and shared edges are the only
 admitted contacts.
 
+The revolve candidate search chooses between a one-axis sweep and a spatial
+tree. Both retain every pair whose boxes cannot be separated, and every pair
+sharing a vertex. A histogram estimates the sweep's visits before choosing it;
+the estimate affects only the work strategy, never a contact verdict. The
+histogram and the chosen search charge the same cumulative work budget. The
+sweep is chosen only when its estimated visits leave 600,000 of the fixed
+ceiling for shared-vertex and exact-pair work; otherwise the tree is used.
+Either search may still refuse when its complete audit exceeds the budget.
+
 The revolve audit reads each exact sign and separating-axis gap through a
 float pre-test first (`internal/revolvemesh/tessellate_revolve_filter.go`). The pre-test encloses
 the same expression over the same stored floats in an interval rounded outward

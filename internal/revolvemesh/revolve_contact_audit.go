@@ -296,7 +296,7 @@ func RevolveContactAudit(budget *proofbound.WorkBudget, data []RevolveAuditTri, 
 	if !(margin >= 0) {
 		return revolveContactAuditAllPairs(budget, data, tris, delta, margin)
 	}
-	rows, err := revolveContactCandidates(budget, data, tris, margin)
+	rows, err := adaptiveContactCandidates(budget, data, tris, margin)
 	if err != nil {
 		return err
 	}
@@ -342,7 +342,7 @@ func RevolveContactAuditBoundedWithBudget(budget *proofbound.WorkBudget, data []
 		},
 		ErrFn: budget.Err,
 	}
-	rows, err := revolveContactCandidates(scan, data, tris, margin)
+	rows, err := adaptiveContactCandidates(scan, data, tris, margin)
 	if errors.Is(err, proofbound.ErrWallWorkBudget) {
 		return scanned, revolveFacetPairWorkLimit()
 	}
@@ -569,6 +569,84 @@ func sweepContactCandidates(budget *proofbound.WorkBudget, data []RevolveAuditTr
 		rows[i] = slices.Compact(row)
 	}
 	return rows, nil
+}
+
+// adaptiveContactCandidates chooses between two searches that return the same
+// complete set of candidate pairs. The choice affects work, never admission.
+func adaptiveContactCandidates(budget *proofbound.WorkBudget, data []RevolveAuditTri, tris [][3]int, margin float64) ([][]int32, error) {
+	sweep, err := preferContactSweep(budget, data, margin)
+	if err != nil {
+		return nil, err
+	}
+	if sweep {
+		return sweepContactCandidates(budget, data, tris, margin)
+	}
+	return revolveContactCandidates(budget, data, tris, margin)
+}
+
+// preferContactSweep estimates one-dimensional sweep visits using bins of low
+// coordinates. A bin includes earlier starts too, so the count normally
+// overestimates the sweep's visits. It is only a strategy choice; both searches
+// apply the same full three-dimensional box and shared-vertex tests. Reserve
+// 600,000 of the fixed eight-million-work budget for incident and audit work.
+func preferContactSweep(budget *proofbound.WorkBudget, data []RevolveAuditTri, margin float64) (bool, error) {
+	const bins = 4096
+	if len(data) == 0 {
+		return false, nil
+	}
+	if _, err := budget.StepN(3 * uint64(len(data))); err != nil {
+		return false, err
+	}
+	axis := revolveSweepAxis(data)
+	lo, hi := math.Inf(1), math.Inf(-1)
+	for _, t := range data {
+		if err := budget.Step(); err != nil {
+			return false, err
+		}
+		lo = min(lo, boxCoord(t.Box[0], axis))
+		hi = max(hi, boxCoord(t.Box[1], axis))
+	}
+	extent := hi - lo
+	if !(extent > 0) || proofbound.IsNonFinite(extent) {
+		return false, nil
+	}
+	bin := func(x float64) int {
+		f := (x - lo) / extent * float64(bins)
+		if !(f >= 0) {
+			return 0
+		}
+		if f >= bins {
+			return bins - 1
+		}
+		return int(f)
+	}
+	var counts [bins + 1]int
+	for _, t := range data {
+		if err := budget.Step(); err != nil {
+			return false, err
+		}
+		counts[bin(boxCoord(t.Box[0], axis))+1]++
+	}
+	for i := 1; i <= bins; i++ {
+		if err := budget.Step(); err != nil {
+			return false, err
+		}
+		counts[i] += counts[i-1]
+	}
+	var projected uint64
+	for _, t := range data {
+		if err := budget.Step(); err != nil {
+			return false, err
+		}
+		a := bin(boxCoord(t.Box[0], axis))
+		b := min(bins-1, bin(boxCoord(t.Box[1], axis)+margin)+1)
+		visits := uint64(counts[b+1]-counts[a]) + 1
+		if visits > 7_400_000-projected {
+			return false, nil
+		}
+		projected += visits
+	}
+	return true, nil
 }
 
 type revolveBoxNode struct {
