@@ -9,9 +9,12 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/boolchain"
 	"github.com/lestrrat-3d/decad/internal/booleandispatch"
+	"github.com/lestrrat-3d/decad/internal/booleaneval"
 	"github.com/lestrrat-3d/decad/internal/booloperand"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
+	"github.com/lestrrat-3d/decad/internal/loftrecord"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/rimsplit"
 	"github.com/lestrrat-3d/decad/internal/topo"
 )
@@ -115,6 +118,150 @@ func commitPairedCut(ctx context.Context, d *Document, target, tool, body *Body,
 }
 
 type pairedHistorySource struct{ h *OperationHistory }
+
+// withJoinedLoftSource binds the tool's public operation history to the
+// node-only proof in booleaneval. Root owns the authenticated history snapshot.
+func withJoinedLoftSource(ctx context.Context, d *Document, tool *Body) context.Context {
+	if _, suppressed := ctx.Value(operationHistorySuppressedKey{}).(*operationHistoryCapture); suppressed || tool == nil {
+		return ctx
+	}
+	if _, ok := tool.n.Payload.(facetedrecord.Payload); !ok {
+		return ctx
+	}
+	d.n.LiveMu.RLock()
+	op := d.producers[tool]
+	isUnion := false
+	if op != nil && op.kind == OperationUnion && len(op.inputs) == 2 && op.inputs[0].Body != nil && op.inputs[1].Body != nil {
+		_, firstLoft := op.inputs[0].Body.n.Payload.(loftrecord.Payload)
+		_, secondLoft := op.inputs[1].Body.n.Payload.(loftrecord.Payload)
+		_, firstPrism := op.inputs[0].Body.n.Payload.(prismrecord.Payload)
+		_, secondPrism := op.inputs[1].Body.n.Payload.(prismrecord.Payload)
+		isUnion = firstLoft && secondPrism || secondLoft && firstPrism
+	}
+	d.n.LiveMu.RUnlock()
+	if !isUnion {
+		return ctx
+	}
+	source := pairedHistorySource{h: d.historyAt(ctx)}
+	if !source.authenticated(tool) {
+		return ctx
+	}
+	kind, inputs, ok := boolchain.Expandable(source, &tool.n)
+	if !ok || kind != meshbool.OpUnion || len(inputs) != 2 {
+		return ctx
+	}
+	for i := range 2 {
+		if _, ok := inputs[i].Payload.(loftrecord.Payload); !ok {
+			continue
+		}
+		if _, ok := inputs[1-i].Payload.(prismrecord.Payload); ok {
+			return booleaneval.WithLoftUnionSource(ctx, &tool.n, inputs[i], inputs[1-i])
+		}
+	}
+	return ctx
+}
+
+type loftContinuationAncestry struct {
+	stock, loft *Body
+	prior       *Operation
+}
+
+// loftContinuationSnapshot authenticates the previous Cut and its consumed
+// inputs. Root owns the operation history and its identity seals.
+func loftContinuationSnapshot(h *OperationHistory, target, tool *Body) (loftContinuationAncestry, bool) {
+	source := pairedHistorySource{h: h}
+	if !source.authenticated(target) || !source.authenticated(tool) {
+		return loftContinuationAncestry{}, false
+	}
+	kind, inputs, ok := boolchain.Expandable(source, &target.n)
+	if !ok || kind != meshbool.OpCut || len(inputs) != 2 {
+		return loftContinuationAncestry{}, false
+	}
+	if _, ok := inputs[1].Payload.(loftrecord.Payload); !ok {
+		return loftContinuationAncestry{}, false
+	}
+	if _, ok := tool.n.Payload.(prismrecord.Payload); !ok {
+		return loftContinuationAncestry{}, false
+	}
+	return loftContinuationAncestry{stock: bodyHandle(inputs[0]), loft: bodyHandle(inputs[1]), prior: h.producers[target]}, true
+}
+
+// loftCutContinuation binds authenticated public history to the node-only
+// two-step plan in booleandispatch. It does not publish either private step.
+func loftCutContinuation(ctx context.Context, d *Document, target, tool *Body, cfg booleanConfig) (*Body, loftContinuationAncestry, bool, error) {
+	var empty loftContinuationAncestry
+	if _, suppressed := ctx.Value(operationHistorySuppressedKey{}).(*operationHistoryCapture); suppressed {
+		return nil, empty, false, nil
+	}
+	if _, ok := target.n.Payload.(facetedrecord.Payload); !ok {
+		return nil, empty, false, nil
+	}
+	if _, ok := tool.n.Payload.(prismrecord.Payload); !ok {
+		return nil, empty, false, nil
+	}
+	ancestry, ok := loftContinuationSnapshot(d.historyAt(ctx), target, tool)
+	if !ok {
+		return nil, empty, false, nil
+	}
+	base := d.producerAt(ctx)
+	if base < 0 || base > producerID(math.MaxInt)-2 {
+		return nil, empty, false, nil
+	}
+	evalCtx, err := d.evalContext(ctx)
+	if err != nil {
+		return nil, empty, false, err
+	}
+	n, ok, err := booleandispatch.ContinueLoftCut(evalCtx, envOf(documentNode(d), base),
+		&ancestry.stock.n, &ancestry.loft.n, &tool.n, booleanHooks(cfg), regroupSurfaces)
+	if err != nil || !ok {
+		return nil, empty, false, err
+	}
+	return bodyHandle(n), ancestry, true, nil
+}
+
+// commitLoftContinuation rechecks the history and public inputs before
+// publishing the requested Cut with the private plan's producer span.
+func commitLoftContinuation(ctx context.Context, d *Document, target, tool, body *Body, base producerID,
+	ancestry loftContinuationAncestry) error {
+	inputs := operationInputsForBoolean(meshbool.OpCut, target, tool)
+	operation := d.operation(OperationCut, inputs, body)
+	if err := d.validateOperation(operation, []*Body{target, tool}); err != nil {
+		return err
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	st, err := d.stepGate(ctx, inputs, []*Body{target, tool})
+	if err != nil {
+		return err
+	}
+	d.n.LiveMu.Lock()
+	defer d.n.LiveMu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if !slices.Contains(d.n.LiveSet, &target.n) || !slices.Contains(d.n.LiveSet, &tool.n) || d.producerAt(ctx) != base {
+		return ErrBooleanFailed
+	}
+	h := &OperationHistory{doc: &d.n, operations: d.operations, producers: d.producers, consumers: d.consumers}
+	current, ok := loftContinuationSnapshot(h, target, tool)
+	if !ok || current != ancestry {
+		return ErrBooleanFailed
+	}
+	if err := d.advanceProducer(ctx, 2); err != nil {
+		return err
+	}
+	operation.step = stepIndex(st)
+	d.n.TagLocked(st, &body.n)
+	dest := d.destinationLocked(ctx, nil, []*Body{target, tool})
+	d.retire(target)
+	d.retire(tool)
+	d.n.LiveSet = append(d.n.LiveSet, &body.n)
+	d.placeLocked(&body.n, dest)
+	stampOperationWarningKind(body, OperationCut)
+	d.appendOperationLocked(operation)
+	return nil
+}
 
 func (s pairedHistorySource) authenticated(body *Body) bool {
 	if body == nil || body.n.Doc != s.h.doc {

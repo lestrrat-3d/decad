@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/lestrrat-3d/decad/internal/boolchain"
 	"github.com/lestrrat-3d/decad/internal/booleandispatch"
 	"github.com/lestrrat-3d/decad/internal/booleaneval"
 	"github.com/lestrrat-3d/decad/internal/booloperand"
@@ -391,6 +392,8 @@ type booleanBuild struct {
 	pairedUsed bool
 	cause      error
 	budget     *proofbound.ReplayBudget
+	loftUsed   bool
+	loftSource loftContinuationAncestry
 }
 
 // buildBoolean runs the geometry evaluation of a boolean on gated operands and
@@ -401,6 +404,9 @@ type booleanBuild struct {
 // the operation does.
 func buildBoolean(ctx context.Context, d *Document, op meshbool.OperationKind, a, b *Body,
 	cfg booleanConfig) (booleanBuild, error) {
+	if op == meshbool.OpCut && !cfg.matchingFaces {
+		ctx = withJoinedLoftSource(ctx, d, b)
+	}
 	if op == meshbool.OpCut && cheekCutCandidate(d, a) && directCheekLoft(b) {
 		ctx = withNativeCutBounds(ctx, a, b)
 	}
@@ -424,6 +430,18 @@ func buildBoolean(ctx context.Context, d *Document, op meshbool.OperationKind, a
 	}
 	body, err := booleanBodyWith(ctx, op, a, b, d.producerAt(ctx), cfg)
 	span := producerID(1)
+	var loftSource loftContinuationAncestry
+	loftUsed := false
+	if op == meshbool.OpCut && !cfg.matchingFaces &&
+		(errors.Is(err, ErrUnsupported) || err == nil && body != nil && !boolchain.WarningsMoveNoGeometry(&body.n)) {
+		candidate, source, ok, continuationErr := loftCutContinuation(ctx, d, a, b, cfg)
+		if continuationErr != nil {
+			return booleanBuild{}, continuationErr
+		}
+		if ok {
+			body, loftSource, loftUsed, span, err = candidate, source, true, 2, nil
+		}
+	}
 	var paired pairedCutAncestry
 	pairedUsed := false
 	if err != nil && coarseTargetCut(op, cfg, err) {
@@ -460,7 +478,7 @@ func buildBoolean(ctx context.Context, d *Document, op meshbool.OperationKind, a
 		return booleanBuild{}, err
 	}
 	return booleanBuild{ctx: ctx, route: routeSpan, body: body, span: span, paired: paired, pairedUsed: pairedUsed,
-		cause: err}, nil
+		cause: err, loftUsed: loftUsed, loftSource: loftSource}, nil
 }
 
 // commitBoolean writes a built boolean result into the document, retiring both
@@ -483,6 +501,13 @@ func commitBoolean(d *Document, op meshbool.OperationKind, a, b *Body, build boo
 	if build.pairedUsed {
 		base := body.n.Origin.Producer - build.span + 1
 		if err := commitPairedCut(ctx, d, a, b, body, build.span, base, build.paired, build.cause); err != nil {
+			return nil, err
+		}
+		return body, nil
+	}
+	if build.loftUsed {
+		base := body.n.Origin.Producer - build.span + 1
+		if err := commitLoftContinuation(ctx, d, a, b, body, base, build.loftSource); err != nil {
 			return nil, err
 		}
 		return body, nil

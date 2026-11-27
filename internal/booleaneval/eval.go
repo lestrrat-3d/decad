@@ -775,6 +775,20 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 	if matchedStations && !hasShifts && fixed == nil && replay == nil {
 		ctx = meshbool.WithAxialRims(ctx, bmA, bmB, ma, mb, station.rims, station.budget)
 	}
+	var loftUnion *loftUnionFacets
+	if source, ok := ctx.Value(loftUnionSourceKey{}).(loftUnionSource); ok && op == meshbool.OpCut &&
+		!hasShifts && fixed == nil && replay == nil && capFace == nil && coneFace == nil && mbDecide == mb {
+		loftUnion, err = prepareLoftUnionBinding(ctx, source, b, mb, bmB, meshes, chordB)
+		if err != nil {
+			if ctx.Err() != nil {
+				return Evaluation{}, ctx.Err()
+			}
+			if !errors.Is(err, decaderr.ErrUnsupported) {
+				return Evaluation{}, err
+			}
+			loftUnion = nil
+		}
+	}
 	localCut := false
 	if ctx.Value(wholeCutTrialKey{}) == true && op == meshbool.OpCut && !hasShifts && ordered == nil && fixed == nil && replay == nil && capFace == nil && coneFace == nil {
 		localCut, err = bindWholeCut(ctx, a, b, ma, mb, bmA)
@@ -812,6 +826,9 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 			var faceEvidence func(*topo.Face, *topo.Face) (bool, error)
 			if op == meshbool.OpCut && !hasShifts && fixed == nil && capFace == nil && coneFace == nil {
 				faceEvidence = directLoftCapContactEvidence(ctx, ma, bmA, b, mbDecide, bmB)
+				if faceEvidence == nil && loftUnion != nil {
+					faceEvidence = loftUnionCapEvidence(ctx, loftUnion, ma, bmA, proofbound.NewStrictReplayBudget().WorkBudget(ctx))
+				}
 			}
 			proximityErr = meshbool.RefuseProximityWithFaceEvidence(ctx, ma, mbDecide, bmA, bmB, memo,
 				capFace, coneFace, planeBudget, faceEvidence)
@@ -876,6 +893,10 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 			// when source records prove it (agent-docs/coplanar-contact-design.md §22).
 			if cert := newDirectLoftEdgeCertifier(ma, bmA, b, mb, bmB); cert != nil {
 				memo.SharedEdges = cert
+			} else if loftUnion != nil {
+				if source := newDirectLoftEdgeCertifier(ma, bmA, loftUnion.loftBody, loftUnion.original, loftUnion.oldBool); source != nil {
+					memo.SharedEdges = &mappedLoftEdgeCertifier{binding: loftUnion, source: source}
+				}
 			}
 		}
 		kept, stats, err = meshbool.MeshBooleanStats(ctx, op, bmA, bmB, memo)

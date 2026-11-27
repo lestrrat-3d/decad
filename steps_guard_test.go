@@ -121,7 +121,7 @@ func TestStepCommitPathsGate(t *testing.T) {
 // after review.
 var liveSetOwners = map[string]struct{}{
 	"remove": {}, "commitOperationSpanPrefixIn": {}, "commitOperationManyFacesIn": {}, "commitIn": {},
-	"snapshot": {}, "restore": {}, "retire": {}, "commitPairedCut": {}, "removeConsumed": {},
+	"snapshot": {}, "restore": {}, "retire": {}, "commitPairedCut": {}, "commitLoftContinuation": {}, "removeConsumed": {},
 	"viewSizesLocked": {}, "stepSnapshotLocked": {}, "restoreStepLocked": {}, "commitBlindGroupCut": {},
 	"Bodies": {}, "VerifyContainers": {},
 }
