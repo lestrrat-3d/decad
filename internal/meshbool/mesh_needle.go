@@ -46,10 +46,10 @@ func FlipNeedles(ctx context.Context, verts []proof.Xpt, tris [][3]int, src []in
 // flipNeedlesHeld is FlipNeedles with held[i] = verts[i].Vec() supplied by
 // the caller; it only reads held.
 func flipNeedlesHeld(ctx context.Context, verts []proof.Xpt, held []r3.Vec, tris [][3]int, src []int, bounds []float64) (int, error) {
-	edges := make(map[[2]int]int, 3*len(tris))
+	edges := NewEdgeTable(3 * len(tris))
 	for t, tri := range tris {
 		for k := range 3 {
-			edges[[2]int{tri[k], tri[(k+1)%3]}] = t
+			edges.Set(tri[k], tri[(k+1)%3], t)
 		}
 	}
 	flips := 0
@@ -67,7 +67,7 @@ func flipNeedlesHeld(ctx context.Context, verts []proof.Xpt, held []r3.Vec, tris
 			}
 			tri := tris[t]
 			u, w, b := tri[k], tri[(k+1)%3], tri[(k+2)%3]
-			o, ok := edges[[2]int{w, u}]
+			o, ok := edges.Get(w, u)
 			if !ok || o == t || src[o] != src[t] {
 				continue
 			}
@@ -81,10 +81,10 @@ func flipNeedlesHeld(ctx context.Context, verts []proof.Xpt, held []r3.Vec, tris
 			if d < 0 || d == b {
 				continue
 			}
-			if _, exists := edges[[2]int{b, d}]; exists {
+			if _, exists := edges.Get(b, d); exists {
 				continue
 			}
-			if _, exists := edges[[2]int{d, b}]; exists {
+			if _, exists := edges.Get(d, b); exists {
 				continue
 			}
 			left, right := [3]int{u, d, b}, [3]int{d, w, b}
@@ -98,14 +98,14 @@ func flipNeedlesHeld(ctx context.Context, verts []proof.Xpt, held []r3.Vec, tris
 				continue
 			}
 			for _, e := range [][2]int{{u, w}, {w, b}, {b, u}, {w, u}, {u, d}, {d, w}} {
-				delete(edges, e)
+				edges.Delete(e[0], e[1])
 			}
 			tris[t], tris[o] = left, right
 			bound := max(bounds[t], bounds[o])
 			bounds[t], bounds[o] = bound, bound
 			for k := range 3 {
-				edges[[2]int{left[k], left[(k+1)%3]}] = t
-				edges[[2]int{right[k], right[(k+1)%3]}] = o
+				edges.Set(left[k], left[(k+1)%3], t)
+				edges.Set(right[k], right[(k+1)%3], o)
 			}
 			flips++
 			changed = true

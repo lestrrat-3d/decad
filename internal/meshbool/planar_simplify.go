@@ -63,7 +63,7 @@ func simplifyPlanarFaces(ctx context.Context, budget *proofbound.WorkBudget, in 
 	if !stitchEdgesPaired(in.Tris, make(map[[2]int]uint8, len(in.Tris)+len(in.Tris)/2)) {
 		return in, false, nil
 	}
-	owner := make(map[[2]int]int, 3*len(in.Tris))
+	owner := NewEdgeTable(3 * len(in.Tris))
 	incident := make([][]int, len(in.Xverts))
 	byFace := map[int][]int{}
 	var faceOrder []int
@@ -77,7 +77,7 @@ func simplifyPlanarFaces(ctx context.Context, budget *proofbound.WorkBudget, in 
 			}
 		}
 		for k := range 3 {
-			owner[[2]int{tri[k], tri[(k+1)%3]}] = f
+			owner.Set(tri[k], tri[(k+1)%3], f)
 			incident[tri[k]] = append(incident[tri[k]], f)
 		}
 		s := in.Src[f]
@@ -215,7 +215,7 @@ func simplifyPlanarFaces(ctx context.Context, budget *proofbound.WorkBudget, in 
 
 // planarCandidate reads §7.1 step 1 for source face s: exactly planar, every
 // vertex claim zero, and every connected region bounded by one loop.
-func planarCandidate(ctx context.Context, budget *proofbound.WorkBudget, in PlanarMesh, owner map[[2]int]int, facets []int, s int) (proof.Xpt, []planarRegion, bool, error) {
+func planarCandidate(ctx context.Context, budget *proofbound.WorkBudget, in PlanarMesh, owner *EdgeTable, facets []int, s int) (proof.Xpt, []planarRegion, bool, error) {
 	var none proof.Xpt
 	first := in.Tris[facets[0]]
 	a, b, c := in.Xverts[first[0]], in.Xverts[first[1]], in.Xverts[first[2]]
@@ -275,7 +275,7 @@ func planarCandidate(ctx context.Context, budget *proofbound.WorkBudget, in Plan
 			r.facets = append(r.facets, g)
 			t := in.Tris[g]
 			for k := range 3 {
-				if twin, ok := owner[[2]int{t[(k+1)%3], t[k]}]; ok && in.Src[twin] == s {
+				if twin, ok := owner.Get(t[(k+1)%3], t[k]); ok && in.Src[twin] == s {
 					if _, seen := region[twin]; !seen {
 						region[twin] = id
 						queue = append(queue, twin)
@@ -292,7 +292,7 @@ func planarCandidate(ctx context.Context, budget *proofbound.WorkBudget, in Plan
 			t := in.Tris[f]
 			for k := range 3 {
 				u, w := t[k], t[(k+1)%3]
-				if twin, ok := owner[[2]int{w, u}]; ok && in.Src[twin] == s {
+				if twin, ok := owner.Get(w, u); ok && in.Src[twin] == s {
 					continue
 				}
 				if _, dup := next[u]; dup {
@@ -334,7 +334,7 @@ func planarCandidate(ctx context.Context, budget *proofbound.WorkBudget, in Plan
 }
 
 // removableVertices is §7.1 step 2 over the current candidate set.
-func removableVertices(in PlanarMesh, owner map[[2]int]int, incident [][]int, regions map[int][]planarRegion) []bool {
+func removableVertices(in PlanarMesh, owner *EdgeTable, incident [][]int, regions map[int][]planarRegion) []bool {
 	removable := make([]bool, len(in.Xverts))
 	for v, fs := range incident {
 		if len(fs) == 0 {
@@ -375,7 +375,7 @@ func removableVertices(in PlanarMesh, owner map[[2]int]int, incident [][]int, re
 // collinearSeamVertex reports whether v, whose facets fs carry exactly two
 // source ids, has exactly two boundary edges between them and lies strictly
 // between their other ends, collinear with them.
-func collinearSeamVertex(in PlanarMesh, owner map[[2]int]int, fs []int, v int) bool {
+func collinearSeamVertex(in PlanarMesh, owner *EdgeTable, fs []int, v int) bool {
 	var ends []int
 	for _, f := range fs {
 		t := in.Tris[f]
@@ -385,10 +385,10 @@ func collinearSeamVertex(in PlanarMesh, owner map[[2]int]int, fs []int, v int) b
 			}
 			// The edge leaving v and the edge entering it.
 			out, enter := t[(k+1)%3], t[(k+2)%3]
-			if twin, ok := owner[[2]int{out, v}]; ok && in.Src[twin] != in.Src[f] {
+			if twin, ok := owner.Get(out, v); ok && in.Src[twin] != in.Src[f] {
 				ends = append(ends, out)
 			}
-			if twin, ok := owner[[2]int{v, enter}]; ok && in.Src[twin] != in.Src[f] {
+			if twin, ok := owner.Get(v, enter); ok && in.Src[twin] != in.Src[f] {
 				ends = append(ends, enter)
 			}
 		}
