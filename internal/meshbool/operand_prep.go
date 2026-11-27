@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
+	"github.com/lestrrat-3d/decad/internal/edgetable"
 	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
@@ -40,8 +41,8 @@ func PrepContext(ctx context.Context, verts []r3.Vec, tris [][3]int, src []int) 
 	bm.Fnorms = make([]r3.Vec, len(tris))
 	bm.FnormsReady = make([]bool, len(tris))
 	bm.Boxes = make([][2]r3.Vec, len(tris))
-	bm.Owner = NewEdgeTable(3 * len(tris))
-	bm.Owner.tris = tris
+	bm.Owner = edgetable.New(3 * len(tris))
+	bm.Owner.SetSource(tris)
 	for i, tri := range tris {
 		if i%256 == 0 {
 			if err := ctx.Err(); err != nil {
@@ -177,8 +178,8 @@ func prepContextBudgeted(ctx context.Context, verts []r3.Vec, tris [][3]int, src
 	bm.Fnorms = make([]r3.Vec, len(tris))
 	bm.FnormsReady = make([]bool, len(tris))
 	bm.Boxes = make([][2]r3.Vec, len(tris))
-	bm.Owner = NewEdgeTable(3 * len(tris))
-	bm.Owner.tris = tris
+	bm.Owner = edgetable.New(3 * len(tris))
+	bm.Owner.SetSource(tris)
 	for i, tri := range tris {
 		if err := budget.SpendWork(ctx, 4); err != nil {
 			return nil, err

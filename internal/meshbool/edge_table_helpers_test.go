@@ -10,14 +10,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// edgeKeyPool mixes ordinary indices with values at and beyond the flat
-
-// table's range limits, so every edge class is exercised.
-
-var edgeKeyPool = []int{
-	0, 1, 2, 3, 7, 100, 1 << 20, 1<<31 - 2, 1<<31 - 1, 1 << 31, 1 << 32, math.MaxInt, -1, -5, math.MinInt,
-}
-
 // referenceAdjacency is the map-based construction FacetAdjacencyContext used
 
 // before the flat table.

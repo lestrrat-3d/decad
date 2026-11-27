@@ -7,6 +7,7 @@ import (
 	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
+	"github.com/lestrrat-3d/decad/internal/edgetable"
 	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
@@ -60,10 +61,10 @@ func SimplifyPlanarFacesBudget(ctx context.Context, budget *proofbound.WorkBudge
 func simplifyPlanarFaces(ctx context.Context, budget *proofbound.WorkBudget, in PlanarMesh) (PlanarMesh, bool, error) {
 	// An open input is left to the closure audit: removing the vertices of a
 	// crack could close it with new surface.
-	if !stitchEdgesPaired(in.Tris, NewEdgeTable(len(in.Tris)+len(in.Tris)/2)) {
+	if !stitchEdgesPaired(in.Tris, edgetable.New(len(in.Tris)+len(in.Tris)/2)) {
 		return in, false, nil
 	}
-	owner := NewEdgeTable(3 * len(in.Tris))
+	owner := edgetable.New(3 * len(in.Tris))
 	incident := make([][]int, len(in.Xverts))
 	byFace := map[int][]int{}
 	var faceOrder []int
@@ -206,7 +207,7 @@ func simplifyPlanarFaces(ctx context.Context, budget *proofbound.WorkBudget, in 
 	for i, t := range out.Tris {
 		out.Tris[i] = [3]int{remap[t[0]], remap[t[1]], remap[t[2]]}
 	}
-	edges := NewEdgeTable(len(out.Tris) + len(out.Tris)/2)
+	edges := edgetable.New(len(out.Tris) + len(out.Tris)/2)
 	if !stitchEdgesPaired(out.Tris, edges) {
 		return in, false, nil
 	}
@@ -215,7 +216,7 @@ func simplifyPlanarFaces(ctx context.Context, budget *proofbound.WorkBudget, in 
 
 // planarCandidate reads §7.1 step 1 for source face s: exactly planar, every
 // vertex claim zero, and every connected region bounded by one loop.
-func planarCandidate(ctx context.Context, budget *proofbound.WorkBudget, in PlanarMesh, owner *EdgeTable, facets []int, s int) (proof.Xpt, []planarRegion, bool, error) {
+func planarCandidate(ctx context.Context, budget *proofbound.WorkBudget, in PlanarMesh, owner *edgetable.Table, facets []int, s int) (proof.Xpt, []planarRegion, bool, error) {
 	var none proof.Xpt
 	first := in.Tris[facets[0]]
 	a, b, c := in.Xverts[first[0]], in.Xverts[first[1]], in.Xverts[first[2]]
@@ -334,7 +335,7 @@ func planarCandidate(ctx context.Context, budget *proofbound.WorkBudget, in Plan
 }
 
 // removableVertices is §7.1 step 2 over the current candidate set.
-func removableVertices(in PlanarMesh, owner *EdgeTable, incident [][]int, regions map[int][]planarRegion) []bool {
+func removableVertices(in PlanarMesh, owner *edgetable.Table, incident [][]int, regions map[int][]planarRegion) []bool {
 	removable := make([]bool, len(in.Xverts))
 	for v, fs := range incident {
 		if len(fs) == 0 {
@@ -375,7 +376,7 @@ func removableVertices(in PlanarMesh, owner *EdgeTable, incident [][]int, region
 // collinearSeamVertex reports whether v, whose facets fs carry exactly two
 // source ids, has exactly two boundary edges between them and lies strictly
 // between their other ends, collinear with them.
-func collinearSeamVertex(in PlanarMesh, owner *EdgeTable, fs []int, v int) bool {
+func collinearSeamVertex(in PlanarMesh, owner *edgetable.Table, fs []int, v int) bool {
 	var ends []int
 	for _, f := range fs {
 		t := in.Tris[f]

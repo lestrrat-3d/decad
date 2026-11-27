@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/lestrrat-3d/decad/internal/edgetable"
 )
 
 // directedCensusClosed is the original closure rule, evaluated over separate
@@ -31,7 +33,7 @@ func TestStitchEdgeDirectionsMatchDirectedCensus(t *testing.T) {
 	check := func(tris [][3]int) {
 		t.Helper()
 		want := directedCensusClosed(tris)
-		got := stitchEdgesPaired(tris, NewEdgeTable(0))
+		got := stitchEdgesPaired(tris, edgetable.New(0))
 		require.Equal(t, want, got, "triangle count %d", len(tris))
 	}
 	check(nil)
@@ -61,7 +63,7 @@ func TestStitchEdgeDirectionsMatchDirectedCensus(t *testing.T) {
 	}
 }
 
-// stitchEdgesPairedMap is the map-based stitchEdgesPaired that the EdgeTable
+// stitchEdgesPairedMap is the map-based stitchEdgesPaired that the edge table
 // version replaced, kept as the differential reference.
 func stitchEdgesPairedMap(tris [][3]int, edges map[[2]int]uint8) bool {
 	for _, tri := range tris {

@@ -1,6 +1,7 @@
 package meshbool
 
 import (
+	"github.com/lestrrat-3d/decad/internal/edgetable"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
 
@@ -26,7 +27,7 @@ import (
 //   - Order: each use sorts its own list by the same total order as before.
 type conformEdgeMemo struct {
 	// steps maps the undirected edge (lo, hi) to the steps its walk charged.
-	steps *EdgeTable
+	steps *edgetable.Table
 	// hits maps (lo, hi) to the hit lists of edges that have any.
 	hits map[[2]int]conformEdgeHits
 }
@@ -38,7 +39,7 @@ type conformEdgeHits struct {
 }
 
 func newConformEdgeMemo(tris int) *conformEdgeMemo {
-	return &conformEdgeMemo{steps: NewEdgeTable(tris*3/2 + 8)}
+	return &conformEdgeMemo{steps: edgetable.New(tris*3/2 + 8)}
 }
 
 // edgeInteriorHitsMemo returns what EdgeInteriorHits(budget, a, b, tri)

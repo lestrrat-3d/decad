@@ -8,6 +8,7 @@ import (
 	"math/big"
 	"slices"
 
+	"github.com/lestrrat-3d/decad/internal/edgetable"
 	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
@@ -109,7 +110,7 @@ type BoolMesh struct {
 	// needs it: whether an in-plane edge grazes the other operand or crosses
 	// it is a property of the edge's TWO adjacent facets, which no facet pair
 	// can see (agent-docs/evaluator-design.md §9).
-	Owner *EdgeTable
+	Owner *edgetable.Table
 	// parity caches this operand's vertex projections for the exact ray-parity
 	// kernel, which every uncut-component seed, unanchored region probe and
 	// near-miss depth witness of one operation asks about THIS operand. The
@@ -606,7 +607,7 @@ func keepSideWith(ctx context.Context, m, other *BoolMesh, cuts map[int][]Xseg, 
 	}
 	var adj [][]int
 	var err error
-	if m.Owner.describes(m.Tris) {
+	if m.Owner.DescribesSource(m.Tris) {
 		// PrepContext built Owner over this very slice, so it holds the
 		// table FacetAdjacencyContext would build.
 		adj, err = facetAdjacencyFromOwner(ctx, m.Tris, m.Owner)
@@ -741,7 +742,7 @@ func FacetAdjacencyContext(ctx context.Context, tris [][3]int) ([][]int, error) 
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	owner := NewEdgeTable(3 * len(tris))
+	owner := edgetable.New(3 * len(tris))
 	for i, tri := range tris {
 		if i%256 == 0 {
 			if err := ctx.Err(); err != nil {
@@ -758,7 +759,7 @@ func FacetAdjacencyContext(ctx context.Context, tris [][3]int) ([][]int, error) 
 // facetAdjacencyFromOwner reads each facet's neighbors from owner, which must
 // map every directed edge of tris to the last facet that walks it. Each
 // facet's neighbors come in edge order k = 0, 1, 2.
-func facetAdjacencyFromOwner(ctx context.Context, tris [][3]int, owner *EdgeTable) ([][]int, error) {
+func facetAdjacencyFromOwner(ctx context.Context, tris [][3]int, owner *edgetable.Table) ([][]int, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/edgetable"
 	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 )
@@ -46,7 +47,7 @@ func FlipNeedles(ctx context.Context, verts []proof.Xpt, tris [][3]int, src []in
 // flipNeedlesHeld is FlipNeedles with held[i] = verts[i].Vec() supplied by
 // the caller; it only reads held.
 func flipNeedlesHeld(ctx context.Context, verts []proof.Xpt, held []r3.Vec, tris [][3]int, src []int, bounds []float64) (int, error) {
-	edges := NewEdgeTable(3 * len(tris))
+	edges := edgetable.New(3 * len(tris))
 	for t, tri := range tris {
 		for k := range 3 {
 			edges.Set(tri[k], tri[(k+1)%3], t)

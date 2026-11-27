@@ -8,9 +8,11 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/lestrrat-3d/decad/internal/edgetable"
 )
 
-// TestStitchEdgesPairedTableMatchesMap compares the EdgeTable audit with the
+// TestStitchEdgesPairedTableMatchesMap compares the edge table audit with the
 // retained map audit on closed, open, duplicated, flipped, self-edge,
 // non-manifold and out-of-range-index inputs.
 func TestStitchEdgesPairedTableMatchesMap(t *testing.T) {
@@ -40,7 +42,7 @@ func TestStitchEdgesPairedTableMatchesMap(t *testing.T) {
 		want := stitchEdgesPairedMap(tris, make(map[[2]int]uint8))
 		// Size hints must not change the result: too small forces growth.
 		for _, hint := range []int{0, len(tris) + len(tris)/2} {
-			require.Equal(t, want, stitchEdgesPaired(tris, NewEdgeTable(hint)), "seed %d hint %d", seed, hint)
+			require.Equal(t, want, stitchEdgesPaired(tris, edgetable.New(hint)), "seed %d hint %d", seed, hint)
 		}
 	}
 }
@@ -50,7 +52,7 @@ func TestStitchEdgesPairedTableMatchesMap(t *testing.T) {
 func TestStitchEdgesPairedTableReuseAfterClear(t *testing.T) {
 	t.Parallel()
 	rng := rand.New(rand.NewPCG(7, 11))
-	edges := NewEdgeTable(0)
+	edges := edgetable.New(0)
 	for range 20 {
 		tris := closedStitchFixture(rng, 0, rng.IntN(30))
 		if rng.IntN(2) == 0 {
