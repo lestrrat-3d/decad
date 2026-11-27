@@ -40,7 +40,8 @@ func PrepContext(ctx context.Context, verts []r3.Vec, tris [][3]int, src []int) 
 	bm.Fnorms = make([]r3.Vec, len(tris))
 	bm.FnormsReady = make([]bool, len(tris))
 	bm.Boxes = make([][2]r3.Vec, len(tris))
-	bm.Owner = make(map[[2]int]int, 3*len(tris))
+	bm.Owner = NewEdgeTable(3 * len(tris))
+	bm.Owner.tris = tris
 	for i, tri := range tris {
 		if i%256 == 0 {
 			if err := ctx.Err(); err != nil {
@@ -56,7 +57,7 @@ func PrepContext(ctx context.Context, verts []r3.Vec, tris [][3]int, src []int) 
 		bm.Norms[i] = n
 		bm.Boxes[i] = TriBox(bm.Verts, tri)
 		for k := range 3 {
-			bm.Owner[[2]int{tri[k], tri[(k+1)%3]}] = i
+			bm.Owner.Set(tri[k], tri[(k+1)%3], i)
 		}
 	}
 	bm.setDepthNormals()
@@ -176,7 +177,8 @@ func prepContextBudgeted(ctx context.Context, verts []r3.Vec, tris [][3]int, src
 	bm.Fnorms = make([]r3.Vec, len(tris))
 	bm.FnormsReady = make([]bool, len(tris))
 	bm.Boxes = make([][2]r3.Vec, len(tris))
-	bm.Owner = make(map[[2]int]int, 3*len(tris))
+	bm.Owner = NewEdgeTable(3 * len(tris))
+	bm.Owner.tris = tris
 	for i, tri := range tris {
 		if err := budget.SpendWork(ctx, 4); err != nil {
 			return nil, err
@@ -206,7 +208,7 @@ func prepContextBudgeted(ctx context.Context, verts []r3.Vec, tris [][3]int, src
 		bm.Norms[i] = n
 		bm.Boxes[i] = TriBox(verts, tri)
 		for k := range 3 {
-			bm.Owner[[2]int{tri[k], tri[(k+1)%3]}] = i
+			bm.Owner.Set(tri[k], tri[(k+1)%3], i)
 		}
 	}
 	bm.setDepthNormals()

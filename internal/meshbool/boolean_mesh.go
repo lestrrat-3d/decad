@@ -109,7 +109,7 @@ type BoolMesh struct {
 	// needs it: whether an in-plane edge grazes the other operand or crosses
 	// it is a property of the edge's TWO adjacent facets, which no facet pair
 	// can see (agent-docs/evaluator-design.md §9).
-	Owner map[[2]int]int
+	Owner *EdgeTable
 	// parity caches this operand's vertex projections for the exact ray-parity
 	// kernel, which every uncut-component seed, unanchored region probe and
 	// near-miss depth witness of one operation asks about THIS operand. The
@@ -133,7 +133,7 @@ type BoolMesh struct {
 // watertight mesh's reversed directed edge names.
 func (bm *BoolMesh) TwinFacet(f, k int) (int, bool) {
 	tri := bm.Tris[f]
-	t, ok := bm.Owner[[2]int{tri[(k+1)%3], tri[k]}]
+	t, ok := bm.Owner.Get(tri[(k+1)%3], tri[k])
 	return t, ok && t != f
 }
 
@@ -604,7 +604,15 @@ func keepSideWith(ctx context.Context, m, other *BoolMesh, cuts map[int][]Xseg, 
 	for i := range comp {
 		comp[i] = -1
 	}
-	adj, err := FacetAdjacencyContext(ctx, m.Tris)
+	var adj [][]int
+	var err error
+	if m.Owner.describes(m.Tris) {
+		// PrepContext built Owner over this very slice, so it holds the
+		// table FacetAdjacencyContext would build.
+		adj, err = facetAdjacencyFromOwner(ctx, m.Tris, m.Owner)
+	} else {
+		adj, err = FacetAdjacencyContext(ctx, m.Tris)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -733,7 +741,7 @@ func FacetAdjacencyContext(ctx context.Context, tris [][3]int) ([][]int, error) 
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	owner := make(map[[2]int]int, 3*len(tris))
+	owner := NewEdgeTable(3 * len(tris))
 	for i, tri := range tris {
 		if i%256 == 0 {
 			if err := ctx.Err(); err != nil {
@@ -741,9 +749,16 @@ func FacetAdjacencyContext(ctx context.Context, tris [][3]int) ([][]int, error) 
 			}
 		}
 		for k := range 3 {
-			owner[[2]int{tri[k], tri[(k+1)%3]}] = i
+			owner.Set(tri[k], tri[(k+1)%3], i)
 		}
 	}
+	return facetAdjacencyFromOwner(ctx, tris, owner)
+}
+
+// facetAdjacencyFromOwner reads each facet's neighbors from owner, which must
+// map every directed edge of tris to the last facet that walks it. Each
+// facet's neighbors come in edge order k = 0, 1, 2.
+func facetAdjacencyFromOwner(ctx context.Context, tris [][3]int, owner *EdgeTable) ([][]int, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -756,7 +771,7 @@ func FacetAdjacencyContext(ctx context.Context, tris [][3]int) ([][]int, error) 
 			}
 		}
 		for k := range 3 {
-			if twin, ok := owner[[2]int{tri[(k+1)%3], tri[k]}]; ok && twin != i {
+			if twin, ok := owner.Get(tri[(k+1)%3], tri[k]); ok && twin != i {
 				if adj[i] == nil {
 					if neighbors == nil {
 						if err := ctx.Err(); err != nil {
