@@ -144,6 +144,15 @@ func (t *EdgeTable) Set(a, b, v int) {
 	}
 }
 
+// Clear removes every edge, keeping the allocated capacity.
+func (t *EdgeTable) Clear() {
+	for i := range t.keys {
+		t.keys[i] = edgeEmpty
+	}
+	t.flat = 0
+	t.side = nil
+}
+
 // Delete removes edge (a, b); it reports whether the edge was present.
 func (t *EdgeTable) Delete(a, b int) bool {
 	key, ok := pack(a, b)

@@ -207,3 +207,22 @@ func requireSameKept(t *testing.T, op meshbool.OperationKind) {
 		require.Equal(t, rebuilt[i].Keys, reused[i].Keys, "kept %d keys", i)
 	}
 }
+
+func TestEdgeTableClear(t *testing.T) {
+	tab := meshbool.NewEdgeTable(4)
+	for i := range 100 {
+		tab.Set(i, i+1, i)
+	}
+	tab.Set(-1, 2, 5) // side map entry
+	tab.Clear()
+	require.Equal(t, 0, tab.Len())
+	_, ok := tab.Get(3, 4)
+	require.False(t, ok)
+	_, ok = tab.Get(-1, 2)
+	require.False(t, ok)
+	tab.Set(3, 4, 9)
+	v, ok := tab.Get(3, 4)
+	require.True(t, ok)
+	require.Equal(t, 9, v)
+	require.Equal(t, 1, tab.Len())
+}

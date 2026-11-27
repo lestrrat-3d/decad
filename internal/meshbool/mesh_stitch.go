@@ -231,7 +231,7 @@ func finishStitch(ctx context.Context, xverts []proof.Xpt, approx []r3.Vec, xbet
 	// Closure audit: each directed edge exactly once, each with its reverse.
 	// A closed boundary has three edge uses per triangle and two per key.
 	// Open boundaries may grow the table; this hint admits no geometry.
-	edges := make(map[[2]int]uint8, len(tris)+len(tris)/2)
+	edges := NewEdgeTable(len(tris) + len(tris)/2)
 	if !stitchEdgesPaired(tris, edges) {
 		return nil, fmt.Errorf(`%w: the stitched boundary does not close`, decaderr.ErrBooleanFailed)
 	}
@@ -267,7 +267,7 @@ func finishStitch(ctx context.Context, xverts []proof.Xpt, approx []r3.Vec, xbet
 // held mesh embedded and closed. edges is a table the rounded audit may
 // clear and reuse, or nil.
 func roundStitched(ctx context.Context, xverts []proof.Xpt, approx []r3.Vec, xbeta []float64,
-	tris [][3]int, src []int, edges map[[2]int]uint8) (*StitchedMesh, error) {
+	tris [][3]int, src []int, edges *EdgeTable) (*StitchedMesh, error) {
 	// Round to float64, welding vertices whose roundings coincide — two exact
 	// points closer than an ulp become one held vertex — and drop the facets
 	// that collapse under the weld: a collapsed facet's two real directed
@@ -373,9 +373,9 @@ func roundStitched(ctx context.Context, xverts []proof.Xpt, approx []r3.Vec, xbe
 	out.DropArea = proofbound.PerturbedAreaUpper(out.Verts, droppedTris, out.Round)
 
 	if edges == nil {
-		edges = make(map[[2]int]uint8, len(out.Tris)+len(out.Tris)/2)
+		edges = NewEdgeTable(len(out.Tris) + len(out.Tris)/2)
 	} else {
-		clear(edges)
+		edges.Clear()
 	}
 	if !stitchEdgesPaired(out.Tris, edges) {
 		return nil, fmt.Errorf(`%w: the rounded boundary does not close`, decaderr.ErrBooleanFailed)
@@ -387,7 +387,10 @@ func roundStitched(ctx context.Context, xverts []proof.Xpt, approx []r3.Vec, xbe
 // reverse. edges must be empty. Each undirected key records the two directions
 // as bits; a repeated bit fails immediately, so a third use cannot cancel a
 // duplicate in the opposite direction. No reverse-key lookup is needed.
-func stitchEdgesPaired(tris [][3]int, edges map[[2]int]uint8) bool {
+func stitchEdgesPaired(tris [][3]int, edges *EdgeTable) bool {
+	// open counts the keys whose direction bits are not yet both set. Bits only
+	// grow, so the final all-keys-are-3 check is open == 0, with no iteration.
+	open := 0
 	for _, tri := range tris {
 		for k, a := range tri {
 			b := tri[(k+1)%3]
@@ -399,20 +402,21 @@ func stitchEdgesPaired(tris [][3]int, edges map[[2]int]uint8) bool {
 				// A self-edge is its own reverse in the directed census.
 				direction = 3
 			}
-			key := [2]int{a, b}
-			seen := edges[key]
+			v, found := edges.Get(a, b)
+			seen := uint8(v)
 			if seen&direction != 0 {
 				return false
 			}
-			edges[key] = seen | direction
+			now := seen | direction
+			edges.Set(a, b, int(now))
+			if !found && now != 3 {
+				open++
+			} else if found && now == 3 {
+				open--
+			}
 		}
 	}
-	for _, seen := range edges {
-		if seen != 3 {
-			return false
-		}
-	}
-	return true
+	return open == 0
 }
 
 // maxGap is the largest of gaps, polling ctx every 256 vertices.
