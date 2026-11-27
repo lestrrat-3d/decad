@@ -582,10 +582,10 @@ func TestPlanarCandidateMatchesPerCorner(t *testing.T) {
 		{"two interior", twoInterior},
 		{"collinear tent", tentWithCollinearFirst()},
 	} {
-		owner := make(map[[2]int]int)
+		owner := NewEdgeTable(3 * len(fx.in.Tris))
 		for f, tri := range fx.in.Tris {
 			for k := range 3 {
-				owner[[2]int{tri[k], tri[(k+1)%3]}] = f
+				owner.Set(tri[k], tri[(k+1)%3], f)
 			}
 		}
 		faces := map[int][]int{}
@@ -629,7 +629,7 @@ func TestPlanarCandidateMatchesPerCorner(t *testing.T) {
 			top = append(top, f)
 		}
 	}
-	_, _, ok, err := planarCandidate(t.Context(), proofbound.NewWorkBudget(t.Context()), tent, map[[2]int]int{}, top, 1)
+	_, _, ok, err := planarCandidate(t.Context(), proofbound.NewWorkBudget(t.Context()), tent, NewEdgeTable(0), top, 1)
 	require.NoError(t, err)
 	require.False(t, ok, "a collinear first facet gives no plane")
 }
