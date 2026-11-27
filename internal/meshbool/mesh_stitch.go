@@ -569,7 +569,26 @@ func keepRoundedEmbedded(ctx context.Context, xverts []proof.Xpt, remap []int, o
 // rounding bounds account for it: the swept volume is charged against the
 // pre-round surface (preArea) and the missing facet area against dropArea, both
 // of which count the dropped facets.
+//
+// A component is refused only when none of its facets is alive, so with no
+// dropped facet at all every component is alive and the answer is nil. That
+// case is returned before the facet adjacency is built, which is the cost of
+// the call; the adjacency never fails except on context cancellation, which the
+// entry check still reports.
 func RefuseWeldedAwayComponent(ctx context.Context, tris [][3]int, dropped []bool) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	anyDropped := false
+	for _, d := range dropped {
+		if d {
+			anyDropped = true
+			break
+		}
+	}
+	if !anyDropped {
+		return nil
+	}
 	comp := make([]int, len(tris))
 	for i := range comp {
 		comp[i] = -1
