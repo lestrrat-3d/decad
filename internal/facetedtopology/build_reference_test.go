@@ -34,7 +34,7 @@ func referenceBuild(
 
 	// Directed halfedge → facet, and the boundary predicate: the twin facet
 	// belongs to a different face.
-	halfOwner := newDirectedFacets(len(verts), 0)
+	halfOwner := newMapDirectedFacets(len(verts), 0)
 	for i, t := range tris {
 		for k := range 3 {
 			if err := budget.Step(); err != nil {
@@ -425,7 +425,7 @@ func referenceBuild(
 	// as the deterministic bookkeeping choice: validity never reads it, and
 	// Faceted faces expose their polygons through Tessellate, not through loop
 	// nesting.
-	for _, f := range collectFaces(facetFace) {
+	for _, f := range mapCollectFaces(facetFace) {
 		if err := budget.Step(); err != nil {
 			return err
 		}
