@@ -70,6 +70,17 @@ func WithSTEPOrganization(organization string) STEPOption {
 // (agent-docs/step-export-design.md §9). A body of several lumps writes one
 // solid per lump, all as items of one representation. A sheet is refused. ctx and body must not be nil.
 func NewSTEPFile(ctx context.Context, body *decad.Body, tol units.Value, header step.Header) (step.File, error) {
+	return newSTEPFile(ctx, body, tol, header, false)
+}
+
+// NewFacetedSTEPFile writes the verified tessellation as planar STEP faces.
+// It accepts the same arguments and checks as NewSTEPFile. ctx and body must
+// not be nil.
+func NewFacetedSTEPFile(ctx context.Context, body *decad.Body, tol units.Value, header step.Header) (step.File, error) {
+	return newSTEPFile(ctx, body, tol, header, true)
+}
+
+func newSTEPFile(ctx context.Context, body *decad.Body, tol units.Value, header step.Header, forceFaceted bool) (step.File, error) {
 	if ctx == nil {
 		return step.File{}, fmt.Errorf("export: STEP: %w: nil context", decad.ErrDegenerate)
 	}
@@ -79,7 +90,7 @@ func NewSTEPFile(ctx context.Context, body *decad.Body, tol units.Value, header 
 	if body == nil {
 		return step.File{}, fmt.Errorf("export: STEP: %w: nil body", decad.ErrDegenerate)
 	}
-	plan, err := planSTEPBody(ctx, body, tol)
+	plan, err := planSTEPBodyMode(ctx, body, tol, forceFaceted)
 	if err != nil {
 		return step.File{}, err
 	}
@@ -101,6 +112,10 @@ type stepPlan struct {
 // tessellates at tol with the boundary verified and checks the mesh against
 // the body's shells. ctx must not be nil.
 func planSTEPBody(ctx context.Context, body *decad.Body, tol units.Value) (stepPlan, error) {
+	return planSTEPBodyMode(ctx, body, tol, false)
+}
+
+func planSTEPBodyMode(ctx context.Context, body *decad.Body, tol units.Value, forceFaceted bool) (stepPlan, error) {
 	if body.Kind() != decad.BodySolid || !body.IsSolid() {
 		return stepPlan{}, fmt.Errorf("export: STEP: %w: body does not enclose a valid region", decad.ErrNotSolid)
 	}
@@ -134,7 +149,7 @@ func planSTEPBody(ctx context.Context, body *decad.Body, tol units.Value) (stepP
 	analytic := false
 	var closed *closedstep.Coverage
 	var solids []meshSolid
-	if voids == 0 && len(shells) == 1 {
+	if !forceFaceted && voids == 0 && len(shells) == 1 {
 		if tagsUndeparted(body) && len(body.Faces()) == 1 {
 			c, ok, e := admitClosedSTEP(ctx, body)
 			if e != nil {

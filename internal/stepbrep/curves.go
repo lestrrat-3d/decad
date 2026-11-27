@@ -154,10 +154,14 @@ func (r *reader) circleSamples(circle stepread.Entity, start, end r3.Vec, sameSe
 		sweep = -(2*math.Pi - ccw)
 	}
 	step := math.Pi
-	if chordTolerance < rad {
-		step = 2 * math.Acos(1-chordTolerance/rad)
+	if r.chord < rad {
+		step = 2 * math.Acos(1-r.chord/rad)
 	}
-	n := max(int(math.Ceil(math.Abs(sweep)/step)), 1)
+	steps := math.Ceil(math.Abs(sweep) / step)
+	if math.IsNaN(steps) || math.IsInf(steps, 0) || steps > float64(r.limit) || steps >= float64(int(^uint(0)>>1)) {
+		return nil, fmt.Errorf("%w: circular edge exceeds sample limit", ErrTooLarge)
+	}
+	n := max(int(steps), 1)
 	samples := make([]r3.Vec, n+1)
 	samples[0], samples[n] = start, end
 	for k := 1; k < n; k++ {

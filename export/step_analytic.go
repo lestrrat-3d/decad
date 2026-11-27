@@ -84,10 +84,7 @@ func supportsAnalyticFaces(ctx context.Context, body *decad.Body) (bool, error) 
 					return false, nil
 				}
 			}
-			start := loops[0].CoEdges()[0].Start().Position().Value
-			end := loops[1].CoEdges()[0].Start().Position().Value
-			seam := end.Sub(start)
-			if seam == (r3.Vec{}) || seam.Cross(surface.Axis) != (r3.Vec{}) {
+			if loops[0].CoEdges()[0].Start().Position().Value == loops[1].CoEdges()[0].Start().Position().Value {
 				return false, nil
 			}
 		case decad.Torus:
@@ -430,6 +427,25 @@ func (b *analyticSTEPBuilder) addCylinderFace(ctx context.Context, face *decad.F
 	}
 	if err := ctx.Err(); err != nil {
 		return 0, err
+	}
+	// A full periodic face needs no seam when its original circles are kept as
+	// separate bounds. This also avoids inventing a seam through rounded starts
+	// that are not exactly parallel to the axis.
+	seamRun := end.Sub(start)
+	if seamRun == (r3.Vec{}) {
+		return 0, fmt.Errorf("%w: cylinder bounds share a seam point", decad.ErrDegenerate)
+	}
+	if seamRun.Cross(cylinder.Axis) != (r3.Vec{}) {
+		bounds := make([]step.Reference, 0, 2)
+		for _, item := range []struct {
+			edge    step.Reference
+			forward bool
+		}{{firstEdge, first.IsForward()}, {secondEdge, second.IsForward()}} {
+			oriented := b.add(ap214.OrientedEdge(0, "", item.edge, item.forward))
+			loop := b.add(ap214.EdgeLoop(0, "", oriented))
+			bounds = append(bounds, b.add(ap214.FaceBound(0, "", loop, true)))
+		}
+		return b.add(ap214.AdvancedFace(0, "", surface, sameSense, bounds...)), nil
 	}
 	seamStart := b.addVertex(first.Start())
 	seamEnd := b.addVertex(second.Start())

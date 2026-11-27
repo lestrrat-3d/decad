@@ -34,6 +34,7 @@ APIs are design-only.**
 | Linkages and joints | `agent-docs/linkage-check-design.md` |
 | Evaluator, topology or feature code | `agent-docs/evaluator-design.md` |
 | Tessellation, export or mesh-boolean operands | `agent-docs/tessellation-design.md` |
+| Binary body interchange | `agent-docs/body-wire-design.md` |
 | STEP export | `agent-docs/step-export-design.md` |
 | Free-form geometry or per-kind dispatch | `agent-docs/spline-design.md` |
 | `Union`/`Cut`/`Intersect`, `evaluateBoolean` dispatch, or any code combining recorded sections through a private `sketch` scene | `agent-docs/prism-boolean-design.md` |

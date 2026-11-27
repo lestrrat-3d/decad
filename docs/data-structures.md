@@ -131,6 +131,7 @@ configuration option.
 | `decad.MeshBody` | struct | An imported triangle mesh: vertices, triangles and what they say. Not a `decad.Body`. | `decad.ReadSTL`, `decad.ReadOBJ`, `decad.ReadThreeMF`, `decad.ReadSTEP`, `decad.NewMeshBody` |
 | `decad.MeshImportOption` | option set | A limit on `decad.ReadSTL`, `decad.ReadOBJ`, `decad.ReadThreeMF`, `decad.ReadSTEP` or `decad.ReadIGES`: `decad.WithMaxMeshTriangles` or `decad.WithMaxMeshBytes`. | The caller |
 | `export.ThreeMFItem` | struct | One object of a 3MF package: a name, a body and a rigid placement. | The caller |
+| `bodywire.Body` | struct | Decoded read-only body geometry that tessellates into a `MeshBody`. | `bodywire.Read` |
 | `decad.SubDCage` | struct | A polygon cage: vertices and the faces that index them, wound counter-clockwise seen from outside. | `decad.SubDMesh` |
 | `decad.LatticeKind` | enum | Which lattice an infill uses: `GyroidInfill`, `SchwarzPInfill`, `DiamondInfill`, `NeoviusInfill`, `IWPInfill`, `FischerKochSInfill`, `LidinoidInfill` or `SplitPInfill`. | `decad.Infill` |
 | `decad.SheetMetalReport` | struct | The flat pattern of a strip: each bend's allowance and the blank's length. | `SheetMetalCommand.Do` |
