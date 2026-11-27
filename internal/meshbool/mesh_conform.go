@@ -40,15 +40,14 @@ func conformOnceApprox(ctx context.Context, verts []proof.Xpt, approx []r3.Vec, 
 // budget must poll ctx.
 func conformOnceBudget(ctx context.Context, budget *proofbound.WorkBudget, verts []proof.Xpt, approx []r3.Vec,
 	tris *[][3]int, src *[]int, bounds *[]float64, xbeta []float64) (bool, error) {
-	if err := budget.Err(); err != nil {
-		return false, err
-	}
-	scan, err := newConformScanApprox(budget, verts, approx)
-	if err != nil {
-		return false, err
-	}
+	var session conformSession
+	return session.once(ctx, budget, verts, approx, tris, src, bounds, xbeta)
+}
 
-	memo := newConformEdgeMemo(len(*tris))
+// conformSplitPass is one conforming pass over tris with scan, reading and filling
+// memo (see conformEdgeMemo).
+func conformSplitPass(ctx context.Context, budget *proofbound.WorkBudget, scan *ConformScan, memo *conformEdgeMemo,
+	verts []proof.Xpt, tris *[][3]int, src *[]int, bounds *[]float64, xbeta []float64) (bool, error) {
 	var outTris [][3]int
 	var outSrc []int
 	var outBounds []float64

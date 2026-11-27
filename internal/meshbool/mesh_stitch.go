@@ -163,20 +163,9 @@ func StitchFacetsWith(ctx context.Context, kept []KeptFacet, opts StitchOptions)
 	for i, p := range xverts {
 		approx[i] = p.Vec()
 	}
-	for round := 0; ; round++ {
-		if round > 6 {
-			return nil, fmt.Errorf(`%w: the conforming pass did not converge`, decaderr.ErrBooleanFailed)
-		}
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		split, err := conformOnceApprox(ctx, xverts, approx, &tris, &src, &facetBound, xbeta)
-		if err != nil {
-			return nil, err
-		}
-		if !split {
-			break
-		}
+	newBudget := func() *proofbound.WorkBudget { return proofbound.NewWorkBudget(ctx) }
+	if err := conformRounds(ctx, newBudget, xverts, approx, &tris, &src, &facetBound, xbeta); err != nil {
+		return nil, err
 	}
 	if opts.Coplanar != nil {
 		if err := auditContactManifold(tris, xverts, opts.Coplanar); err != nil {
