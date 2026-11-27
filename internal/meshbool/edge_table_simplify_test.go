@@ -70,7 +70,7 @@ func TestSimplifyPlanarFacesMatchesMapReference(t *testing.T) {
 		switch {
 		case gotChanged:
 			changedCount++
-		case stitchEdgesPaired(in.Tris, map[[2]int]uint8{}):
+		case stitchEdgesPairedMap(in.Tris, map[[2]int]uint8{}):
 			unchangedClosed++
 		}
 	}
