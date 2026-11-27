@@ -37,8 +37,15 @@ func recordTag(f *topo.Face) bool {
 		return false
 	}
 	tagged := stitchflux.TaggedFace{Denoted: f.Denoted, Surface: f.Surface}
+	_, planar := f.Surface.(surfacegeom.Plane)
 	for _, loop := range f.Loops {
 		for _, ce := range loop.CoEdges {
+			// A Boolean intersection can add a circular rim anywhere in a
+			// retained plane. It is not a rim of the original revolution,
+			// so the original meridian need not end at its radius.
+			if planar && f.RetainedTag && ce.Edge.RetainedCurve {
+				continue
+			}
 			tagged.Curves = append(tagged.Curves, ce.Edge.Curve)
 		}
 	}

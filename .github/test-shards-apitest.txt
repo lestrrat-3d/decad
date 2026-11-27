@@ -3295,3 +3295,4 @@
 14	0.00	TestLoftUnionMatchingExtrusionWithoutShift
 14	0.00	TestMatchingLoftAndExtrusionCutWithoutShift
 14	0.00	TestLoftContinuationMatchingFacesKeepsRefusal
+14	0.00	TestFilletRetainedRevolvePlaneWithCutRim
