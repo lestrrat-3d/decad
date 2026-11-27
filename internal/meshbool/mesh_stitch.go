@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"math/big"
+	"math/bits"
 	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
@@ -480,7 +482,21 @@ func heldVertexBoundsFromGaps(ctx context.Context, gaps []*big.Rat, xbeta []floa
 }
 
 // CoordDistance is the exact largest per-coordinate distance from p to v.
+//
+// A p of positive power-of-two weight that is exactly v takes a shortcut that
+// forms no difference and no rational: the distance is then exactly zero, which
+// is what the full computation returns. Every other input, including a
+// nonpositive or other weight and a non-finite v, takes the full computation,
+// so the result and any panic are those of coordDistanceFull.
 func CoordDistance(p proof.Xpt, v r3.Vec) *big.Rat {
+	if dyadicVertexDenotes(p, v) {
+		return new(big.Rat)
+	}
+	return coordDistanceFull(p, v)
+}
+
+// coordDistanceFull is CoordDistance without the exact-vertex shortcut.
+func coordDistanceFull(p proof.Xpt, v r3.Vec) *big.Rat {
 	// All three exact differences share one denominator. Compare their
 	// absolute numerators, then reduce only the largest distance. Xsub owns
 	// its result, so taking absolute values cannot mutate p or its aliases.
@@ -637,4 +653,66 @@ func RefuseWeldedAwayComponent(ctx context.Context, tris [][3]int, dropped []boo
 		}
 	}
 	return nil
+}
+
+// dyadicVertexDenotes reports whether p is exactly the float vertex v, from
+// machine words alone: it forms no big.Int, no big.Rat and allocates nothing.
+// It answers true only when it has proved equality, and false when the
+// weight is not a power of two, v is not finite, or p and v differ, so a false
+// answer decides nothing. A coordinate is equal exactly when numerator =
+// v * 2^k for the weight 2^k, and v = sign * m * 2^e with m the integer
+// significand of the float, so the numerator must be sign * m * 2^(e+k).
+func dyadicVertexDenotes(p proof.Xpt, v r3.Vec) bool {
+	if p.W.Sign() <= 0 {
+		return false
+	}
+	k := p.W.BitLen() - 1
+	if p.W.TrailingZeroBits() != uint(k) {
+		return false
+	}
+	return dyadicCoordDenotes(p.X, v.X, k) && dyadicCoordDenotes(p.Y, v.Y, k) && dyadicCoordDenotes(p.Z, v.Z, k)
+}
+
+// dyadicCoordDenotes reports whether n == f * 2^k exactly, for a finite f.
+func dyadicCoordDenotes(n *big.Int, f float64, k int) bool {
+	b := math.Float64bits(f)
+	biased := int(b >> 52 & 0x7ff)
+	frac := b & (1<<52 - 1)
+	if biased == 0x7ff {
+		return false
+	}
+	if biased == 0 && frac == 0 {
+		return n.Sign() == 0
+	}
+	m, e := frac|1<<52, biased-1075
+	if biased == 0 {
+		m, e = frac, -1074
+	}
+	if (n.Sign() < 0) != (b>>63 != 0) || n.Sign() == 0 {
+		return false
+	}
+	// n must equal m * 2^s. A negative s needs m divisible by 2^-s.
+	s := e + k
+	if s < 0 {
+		if s <= -64 || bits.TrailingZeros64(m) < -s {
+			return false
+		}
+		m >>= uint(-s)
+		s = 0
+	}
+	if n.BitLen() != bits.Len64(m)+s || int(n.TrailingZeroBits()) < s {
+		return false
+	}
+	words := n.Bits()
+	var got uint64
+	for i := 0; i < 64; {
+		pos := s + i
+		wi, off := pos/bits.UintSize, pos%bits.UintSize
+		if wi >= len(words) {
+			break
+		}
+		got |= uint64(words[wi]) >> uint(off) << uint(i)
+		i += bits.UintSize - off
+	}
+	return got == m
 }
