@@ -1,47 +1,55 @@
 package facetedtopology
 
-import "math"
+import (
+	"math"
+
+	"github.com/lestrrat-3d/decad/internal/edgetable"
+)
 
 // directedFacets indexes an audited mesh's directed halfedges. Vertex indices
-// must be in [0, vertices). Packing two 32-bit indices halves the key storage
-// on 64-bit platforms; larger meshes keep the full-width pair representation.
+// must be in [0, vertices). It answers exactly as a map from the packed pair
+// uint64(u)<<32|uint64(v) does when vertices fit 32 bits, and as a map from
+// the pair [2]int otherwise, including for indices outside that range, where
+// the packed form lets distinct pairs share a key. A flat edge table holds
+// the entries; it has no iteration, so nothing depends on its layout.
 type directedFacets struct {
-	compact map[uint64]int
-	wide    map[[2]int]int
+	table *edgetable.Table
+	wide  bool
 }
 
 // newDirectedFacets sizes the index for halfedges entries, so filling it
-// with every halfedge of a mesh never grows the map. The size hint changes
+// with every halfedge of a mesh never grows the table. The size hint changes
 // no answer.
 func newDirectedFacets(vertices, halfedges int) directedFacets {
-	if uint64(vertices) <= uint64(math.MaxUint32)+1 {
-		return directedFacets{compact: make(map[uint64]int, halfedges)}
+	return directedFacets{
+		table: edgetable.New(halfedges),
+		wide:  uint64(vertices) > uint64(math.MaxUint32)+1,
 	}
-	return directedFacets{wide: make(map[[2]int]int, halfedges)}
+}
+
+// key returns the table's edge for the directed pair (u, v). In the packed
+// form it splits the 64-bit key into its two 32-bit halves, a bijection, so
+// two pairs share an edge exactly when they share a packed key.
+func (d directedFacets) key(u, v int) (int, int) {
+	if d.wide {
+		return u, v
+	}
+	k := uint64(u)<<32 | uint64(v)
+	return int(k >> 32), int(k & math.MaxUint32)
 }
 
 func (d directedFacets) set(u, v, facet int) {
-	if d.compact != nil {
-		d.compact[uint64(u)<<32|uint64(v)] = facet
-		return
-	}
-	d.wide[[2]int{u, v}] = facet
+	a, b := d.key(u, v)
+	d.table.Set(a, b, facet)
 }
 
 func (d directedFacets) get(u, v int) (int, bool) {
-	if d.compact != nil {
-		facet, ok := d.compact[uint64(u)<<32|uint64(v)]
-		return facet, ok
-	}
-	facet, ok := d.wide[[2]int{u, v}]
-	return facet, ok
+	a, b := d.key(u, v)
+	return d.table.Get(a, b)
 }
 
 func (d directedFacets) len() int {
-	if d.compact != nil {
-		return len(d.compact)
-	}
-	return len(d.wide)
+	return d.table.Len()
 }
 
 // halfedgeOwners answers, for each halfedge ordinal o = 3i+k (facet i's

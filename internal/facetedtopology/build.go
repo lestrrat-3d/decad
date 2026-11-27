@@ -8,6 +8,7 @@ import (
 	"unsafe"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
+	"github.com/lestrrat-3d/decad/internal/edgetable"
 	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
@@ -144,7 +145,8 @@ func buildWithPlanar(
 		fa, fb int
 		sign   int
 	}
-	var hinges map[[2]int]hingeInfo
+	var hingeTab *edgetable.Table
+	var hingeVals []hingeInfo
 	var fixedHinges *replayEdgeTable[hingeInfo]
 	if budget.Replay {
 		var err error
@@ -153,11 +155,15 @@ func buildWithPlanar(
 			return err
 		}
 	} else {
-		hinges = map[[2]int]hingeInfo{}
+		hingeTab = edgetable.New(0)
 	}
 	getHinge := func(key [2]int) (hingeInfo, error) {
 		if !budget.Replay {
-			return hinges[key], nil
+			// A missing key reads the zero value, as a map does.
+			if i, ok := hingeTab.Get(key[0], key[1]); ok {
+				return hingeVals[i], nil
+			}
+			return hingeInfo{}, nil
 		}
 		v, ok, err := fixedHinges.get(key)
 		if err != nil {
@@ -201,7 +207,10 @@ func buildWithPlanar(
 					return err
 				}
 			} else {
-				hinges[key] = info
+				// The table maps the key to its latest info, so a repeated
+				// key keeps the last write, as a map does.
+				hingeTab.Set(key[0], key[1], len(hingeVals))
+				hingeVals = append(hingeVals, info)
 			}
 			var err error
 			boundaryEdges, err = replayAppend(budget, boundaryEdges, [2]int{u, v})
@@ -218,7 +227,6 @@ func buildWithPlanar(
 			return fmt.Errorf(`%w: a faceted body carries no face boundaries`, decaderr.ErrBooleanFailed)
 		}
 		face := facetFace[0]
-		var seen map[int]struct{}
 		var seenFixed []bool
 		var queue []int
 		seenCount := 1
@@ -229,14 +237,14 @@ func buildWithPlanar(
 			if err := budget.ReserveBytesMul(uint64(len(tris)), uint64(unsafe.Sizeof(int(0)))); err != nil {
 				return err
 			}
-			seenFixed = make([]bool, len(tris))
-			seenFixed[0] = true
 			queue = make([]int, 0, len(tris))
 			queue = append(queue, 0)
 		} else {
-			seen = map[int]struct{}{0: {}}
 			queue = []int{0}
 		}
+		// Every facet the walk visits is a halfedge owner, so it is below len(tris).
+		seenFixed = make([]bool, len(tris))
+		seenFixed[0] = true
 		for len(queue) > 0 {
 			if err := budget.Step(); err != nil {
 				return err
@@ -251,18 +259,8 @@ func buildWithPlanar(
 				if twin < 0 || facetFace[twin] != face {
 					return fmt.Errorf("%w: a faceted body carries no face boundaries", decaderr.ErrBooleanFailed)
 				}
-				present := false
-				if budget.Replay {
-					present = seenFixed[twin]
-				} else {
-					_, present = seen[twin]
-				}
-				if !present {
-					if budget.Replay {
-						seenFixed[twin] = true
-					} else {
-						seen[twin] = struct{}{}
-					}
+				if !seenFixed[twin] {
+					seenFixed[twin] = true
 					seenCount++
 					queue = append(queue, twin)
 				}
@@ -284,7 +282,6 @@ func buildWithPlanar(
 
 	// Chain the boundary edges: a vertex continues a chain when exactly two
 	// boundary edges meet there with the same face pair and hinge sign.
-	var incident map[int][][2]int
 	var incidentFixed [][][2]int
 	if budget.Replay {
 		count := len(verts)
@@ -327,20 +324,33 @@ func buildWithPlanar(
 			incidentFixed[e[1]] = append(incidentFixed[e[1]], e)
 		}
 	} else {
-		incident = map[int][][2]int{}
+		// Every boundary edge's endpoints index verts: the hinge pass above
+		// read verts at all three corners of the facet owning each one, so a
+		// corner outside verts has already panicked there. Each list keeps the
+		// edges in boundaryEdges order, as appending to a map entry did. The
+		// step count is one per edge, as before.
+		counts := make([]int, len(verts))
 		for _, e := range boundaryEdges {
 			if err := budget.Step(); err != nil {
 				return err
 			}
-			incident[e[0]] = append(incident[e[0]], e)
-			incident[e[1]] = append(incident[e[1]], e)
+			counts[e[0]]++
+			counts[e[1]]++
+		}
+		incidentFixed = make([][][2]int, len(verts))
+		flat := make([][2]int, 2*len(boundaryEdges))
+		at := 0
+		for v, n := range counts {
+			incidentFixed[v] = flat[at : at : at+n]
+			at += n
+		}
+		for _, e := range boundaryEdges {
+			incidentFixed[e[0]] = append(incidentFixed[e[0]], e)
+			incidentFixed[e[1]] = append(incidentFixed[e[1]], e)
 		}
 	}
 	incidentOf := func(v int) [][2]int {
-		if budget.Replay {
-			return incidentFixed[v]
-		}
-		return incident[v]
+		return incidentFixed[v]
 	}
 	samePair := func(a, b hingeInfo) bool {
 		return a.sign == b.sign &&
@@ -375,7 +385,8 @@ func buildWithPlanar(
 		chain, pos     int
 		hasChain, used bool
 	}
-	var edges map[[2]int]edgeState
+	var edgeTab *edgetable.Table
+	var edgeVals []edgeState
 	var fixedEdges *replayEdgeTable[edgeState]
 	if budget.Replay {
 		var err error
@@ -384,20 +395,29 @@ func buildWithPlanar(
 			return err
 		}
 	} else {
-		edges = map[[2]int]edgeState{}
+		edgeTab = edgetable.New(len(boundaryEdges))
 	}
 	getEdge := func(key [2]int) (edgeState, error) {
 		if budget.Replay {
 			v, _, err := fixedEdges.get(key)
 			return v, err
 		}
-		return edges[key], nil
+		// A missing key reads the zero value, as a map does.
+		if i, ok := edgeTab.Get(key[0], key[1]); ok {
+			return edgeVals[i], nil
+		}
+		return edgeState{}, nil
 	}
 	setEdge := func(key [2]int, v edgeState) error {
 		if budget.Replay {
 			return fixedEdges.set(key, v)
 		}
-		edges[key] = v
+		if i, ok := edgeTab.Get(key[0], key[1]); ok {
+			edgeVals[i] = v
+			return nil
+		}
+		edgeTab.Set(key[0], key[1], len(edgeVals))
+		edgeVals = append(edgeVals, v)
 		return nil
 	}
 	var chains []chainRec
@@ -594,14 +614,21 @@ func buildWithPlanar(
 	// The area-weighted normal of each face's own facets. A face is ONE patch,
 	// and a patch of a PLANAR source is coplanar, so this is that plane's
 	// outward normal (scaled by twice the patch's area).
+	//
+	// Face ids index a slice when they are all in [0, len(facetFace)), and a map
+	// otherwise. A missing id reads the zero vector either way.
 	var faceNormal map[int]r3.Vec
 	var normalFixed []r3.Vec
+	denseNormals := true
 	if budget.Replay {
 		if err := budget.ReserveBytesMul(uint64(len(tris)), uint64(unsafe.Sizeof(r3.Vec{}))); err != nil {
 			return err
 		}
 		normalFixed = make([]r3.Vec, len(tris))
+	} else if bound, ok := denseFaceBound(facetFace); ok {
+		normalFixed = make([]r3.Vec, bound)
 	} else {
+		denseNormals = false
 		faceNormal = map[int]r3.Vec{}
 	}
 	for i, t := range tris {
@@ -614,6 +641,8 @@ func buildWithPlanar(
 			if f < 0 || f >= len(normalFixed) {
 				return fmt.Errorf("%w: replay face index", decaderr.ErrBooleanFailed)
 			}
+			normalFixed[f] = normalFixed[f].Add(b.Sub(a).Cross(c.Sub(a)))
+		} else if denseNormals {
 			normalFixed[f] = normalFixed[f].Add(b.Sub(a).Cross(c.Sub(a)))
 		} else {
 			faceNormal[f] = faceNormal[f].Add(b.Sub(a).Cross(c.Sub(a)))
@@ -642,7 +671,7 @@ func buildWithPlanar(
 		}
 		return faceLoops[id]
 	}
-	var visited map[[2]int]struct{}
+	var visited *edgetable.Table
 	var fixedVisited *replayEdgeTable[bool]
 	if budget.Replay {
 		var err error
@@ -651,21 +680,21 @@ func buildWithPlanar(
 			return err
 		}
 	} else {
-		visited = map[[2]int]struct{}{}
+		visited = edgetable.New(2 * len(boundaryEdges))
 	}
 	wasVisited := func(k [2]int) (bool, error) {
 		if budget.Replay {
 			v, ok, err := fixedVisited.get(k)
 			return ok && v, err
 		}
-		_, ok := visited[k]
+		_, ok := visited.Get(k[0], k[1])
 		return ok, nil
 	}
 	markVisited := func(k [2]int) error {
 		if budget.Replay {
 			return fixedVisited.set(k, true)
 		}
-		visited[k] = struct{}{}
+		visited.Set(k[0], k[1], 0)
 		return nil
 	}
 	// nextBoundary walks on from boundary halfedge h, whose ordinal is ho,
@@ -866,7 +895,7 @@ func buildWithPlanar(
 		li := -1
 		if isPlanar(f) {
 			var n r3.Vec
-			if budget.Replay {
+			if denseNormals {
 				n = normalFixed[f]
 			} else {
 				n = faceNormal[f]
@@ -926,6 +955,19 @@ func buildWithPlanar(
 // collectFaces lists the distinct face ids in ascending order, so the walk over
 // them spends the same budget steps before any refusal on every run.
 func collectFaces(facetFace []int) []int {
+	if bound, ok := denseFaceBound(facetFace); ok {
+		present := make([]bool, bound)
+		for _, f := range facetFace {
+			present[f] = true
+		}
+		out := make([]int, 0, len(facetFace))
+		for f, ok := range present {
+			if ok {
+				out = append(out, f)
+			}
+		}
+		return out
+	}
 	seen := make(map[int]struct{}, len(facetFace))
 	out := make([]int, 0, len(facetFace))
 	for _, f := range facetFace {
@@ -937,4 +979,18 @@ func collectFaces(facetFace []int) []int {
 	}
 	slices.Sort(out)
 	return out
+}
+
+// denseFaceBound reports whether every face id is in [0, len(ids)), and if so
+// returns one more than the largest, so a slice of that length holds one slot
+// per id. An empty list reports 0.
+func denseFaceBound(ids []int) (int, bool) {
+	bound := 0
+	for _, f := range ids {
+		if f < 0 || f >= len(ids) {
+			return 0, false
+		}
+		bound = max(bound, f+1)
+	}
+	return bound, true
 }
