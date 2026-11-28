@@ -14,7 +14,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `internal/sweeprun/` | The pair sweeps over nodes: producer choice, sampling, contact transfer, departure and track proofs. See contact-sweep §4–§7. |
 | `internal/sweepproof/` | The exact sweep proofs: the contact track behind `report.SweepContactTrackOf`, the replay proof behind `SweepReport`, and the box and track helpers they share. See contact-sweep §6–§7. |
 | `internal/seal/` | The key that opens the sealed accessors on `report/` sweep records, so only decad's own producers set a report's replay proof or a sample's exact fraction. See contact-sweep §7. |
-| `internal/payloadclass/` | The hook through which `decadtest.PayloadClass` reads a body's payload class, and the payload type name an error prints. See faceted-source-retention §10. |
+| `internal/payloadclass/` | Hooks for payload class and held-facet identification. See faceted-source-retention §10 and body-wire design. |
 | `internal/proof/` | Exact dyadic arithmetic, rational intervals and float rounding. |
 | `internal/measurement/` | Bounded reading carriers and volumes, inflated-box separation, `ExactnessOf` and `FiniteValues`. Public types live in `report/`. See API §5.3, §6. |
 | `internal/pair/` | Shared contact relation, reason and reading types; a scalar reading publishes as a measurement; maps a pair reason and relation to and from the `report/` contact enums. |

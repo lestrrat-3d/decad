@@ -21,6 +21,12 @@ returns `ErrDegenerate`. If several header options are given, the last wins.
 The product description says `analytic decad solid` or `faceted decad solid`
 according to the writer path.
 
+`NewFacetedSTEPFile(ctx, body, tol, header)` uses the same boundary verification,
+mesh audit, shell grouping and header as `NewSTEPFile`, but always writes its verified
+mesh as planar faces. It is an explicit output choice; the normal `NewSTEPFile` continues
+to prefer its analytic arm. The body wire writer uses this choice only for a body whose
+evaluator already holds faceted geometry, so its transmitted bound describes the same mesh.
+
 ## Geometry contract
 
 - Request `Body.Tessellate` at `VerifyBoundary` before either writer path.
@@ -33,8 +39,8 @@ according to the writer path.
   `Arc3`, an `Ellipse3` or a full `Circle3`. A plane's loops
   are one full circle each, or chains of lines and arcs (at least three
   edges, or two when one is an arc). A cylindrical wall is either full —
-  exactly two one-circle boundary loops whose start vertices align along its
-  axis — or partial: one loop of at least four edges, each an `Arc3` about
+  exactly two one-circle boundary loops with distinct start points — or partial: one loop of at least four edges,
+  each an `Arc3` about
   the cylinder's axis (its `Axis` that axis or its negation, exactly) or an `Ellipse3`, or a `Line3`
   along it (an exactly zero cross product), with lines and arcs or ellipses
   both present, since a side line split by a neighbouring face's vertex is
@@ -152,9 +158,16 @@ according to the writer path.
   revolved ball's sphere and a revolved ring's torus may use the complete-surface arm described above. No producer builds a full conical wall or a
   cone patch that the analytic writer receives; the arm's own tests write a revolved frustum and the
   loop chamfer corners through the writer directly.
-  A full cylindrical wall receives one synthetic straight seam edge, used
-  twice in opposite directions in its STEP loop. This seam changes STEP
-  topology, not the body's geometry. Plane faces use their source outer and
+  A full cylindrical wall whose two circle start points align exactly with
+  its axis receives one synthetic straight seam edge, used twice in opposite
+  directions in its STEP loop. When they do not align, write the two original
+  circular loops as separate `FACE_BOUND` entities, without a synthetic seam.
+  Reuse the same source edges as the cap faces and preserve each directed use;
+  do not move or project a vertex to manufacture alignment. A circular loop on
+  a cylinder is not a `FACE_OUTER_BOUND` (ISO 10303-42:2003 §5.4.17).
+  This admits the two-loop topology without asserting the rounded seam points
+  are exactly parallel. The tag-departure gate and the existing STEP precision
+  limitations above remain in force. Plane faces use their source outer and
   inner loops. A face's plane sense follows its outward normal; reverse its
   loop walks when the source walk opposes that normal. A plane whose outer
   loop is a chain of lines and arcs takes its own plane normal as the

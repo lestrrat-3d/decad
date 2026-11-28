@@ -33,6 +33,7 @@ type reader struct {
 	m        *stepread.Model
 	scale    float64
 	limit    int
+	chord    float64
 	vertices []r3.Vec
 	index    map[[3]float64]int
 	tris     [][3]int
@@ -44,7 +45,15 @@ type reader struct {
 // Read triangulates every solid of the model. limit is the most triangles it
 // accepts.
 func Read(m *stepread.Model, limit int) (Mesh, error) {
-	r := &reader{m: m, limit: limit, index: map[[3]float64]int{}, samples: map[int][]r3.Vec{}}
+	return ReadAtTolerance(m, limit, chordTolerance)
+}
+
+// ReadAtTolerance triangulates the model with a circular-edge chord in mm.
+func ReadAtTolerance(m *stepread.Model, limit int, chord float64) (Mesh, error) {
+	if m == nil || limit <= 0 || math.IsNaN(chord) || math.IsInf(chord, 0) || chord <= 0 {
+		return Mesh{}, fmt.Errorf("%w: invalid model, limit or chord", decaderr.ErrDegenerate)
+	}
+	r := &reader{m: m, limit: limit, chord: chord, index: map[[3]float64]int{}, samples: map[int][]r3.Vec{}}
 	scale, err := lengthScale(m)
 	if err != nil {
 		return Mesh{}, err

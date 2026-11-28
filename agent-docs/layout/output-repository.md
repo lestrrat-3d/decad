@@ -11,6 +11,8 @@ The rules for rows live in `agent-docs/layout.md`.
 |---|---|
 | `tessellate.go` | `Mesh`, `Body.Tessellate`, its mesh cache and proof withholding, and the call into `internal/tessdispatch/`. See tessellation design, surface §10.1. |
 | `tessellate_verification.go` | `Verification`, `WithVerification` and mesh proof publication. See tessellation §1, §4. |
+| `bodywire/` | Read-only binary body writer and receiver. See `agent-docs/body-wire-design.md`. |
+| `internal/stepwire/` | STEP frame codec and receiver-side tessellation. See `agent-docs/body-wire-design.md`. |
 | `mesh_body.go` | Public `MeshBody`, `MeshReport` and `NewMeshBody`: the imported triangle mesh and its bounds, area, volume and point readings. `internal/meshbody/` reads the triangles. See mesh-import design. |
 | `solid_from_mesh.go` | `SolidFromMeshCommand` over `solidFromMesh`, and the unregistered `solidFromMeshBody`: gates, the exact crossing audit and mesh audit, plane groups by `internal/meshplane/` tagged when square to an axis, then `facetedrecord.BuildWithProof` and one commit. See mesh-solid design. |
 | `internal/meshplane/` | Exact dyadic plane groups of a mesh's triangles and each group's exact area centroid. See mesh-solid design M4, §7. |
@@ -51,7 +53,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `apitest/` | Tests of the exported API alone. See `apitest/doc.go`. |
 | `decadtest/` | The public test kit. See `decadtest/doc.go`. |
 | `step_closed_surface.go` | Authenticates complete Revolve surfaces for the STEP writer through the internal bridge. |
-| `reader_install.go` | Installs the readers behind `internal/facedeparture` (step-export design) and `decadtest.PayloadClass` (faceted-source-retention §10). |
+| `reader_install.go` | Installs internal readers for face departure and body payload class. See STEP export and body wire designs. |
 | `_gallery/` | Nested module for README images, landing and linkage clips, dynamics scenes; excludes SolidLens. See `main.go`. |
 | `_shardgen/` | Nested module packing root and `apitest` tests into race shards. See `main.go`. |
 | `_proofs/` | Nested Lake project and Go module: Lean proofs, `trace.json`, trace checker. See `agent-docs/proofs-design.md`. |

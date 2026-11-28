@@ -405,7 +405,7 @@ jobs:
             group: packages
             race: "-race"
             shard: ""
-            packages: "./report/ ./linkage/ ./internal/..."
+            packages: "./bodywire/ ./report/ ./linkage/ ./internal/..."
             timeout: "10m"
           - os: ubuntu-latest
             group: meshbool

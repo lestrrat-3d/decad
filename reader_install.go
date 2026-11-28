@@ -2,6 +2,7 @@ package decad
 
 import (
 	"github.com/lestrrat-3d/decad/internal/facedeparture"
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/payloadclass"
 )
 
@@ -42,5 +43,18 @@ func init() {
 			return ""
 		}
 		return payloadclass.TypeName(b.n.Payload)
+	}
+}
+
+// init identifies held-facet payloads for the wire encoder. Root access is
+// needed for Body.n.Payload; no topology handle leaves this adapter.
+func init() {
+	payloadclass.FacetedReader = func(body any) bool {
+		b, ok := body.(*Body)
+		if !ok || b == nil {
+			return false
+		}
+		_, ok = b.n.Payload.(facetedrecord.Payload)
+		return ok
 	}
 }

@@ -183,6 +183,36 @@ func TestNewSTEPFileCylinderAnalytic(t *testing.T) {
 	}
 }
 
+func TestNewFacetedSTEPFileKeepsVerifiedMesh(t *testing.T) {
+	body := box(t, false)
+	tol := units.Millimeters(0.1)
+	analytic, err := export.NewSTEPFile(t.Context(), body, tol, header())
+	require.NoError(t, err)
+	analyticBytes, err := analytic.Marshal()
+	require.NoError(t, err)
+	require.Contains(t, string(analyticBytes), "analytic decad solid")
+	mesh, err := body.Tessellate(t.Context(), tol, decad.WithVerification(decad.VerifyBoundary))
+	require.NoError(t, err)
+	file, err := export.NewFacetedSTEPFile(t.Context(), body, tol, header())
+	require.NoError(t, err)
+	faces := 0
+	for _, entity := range file.Entities {
+		if entity.Name == "ADVANCED_FACE" {
+			faces++
+		}
+	}
+	require.Equal(t, len(mesh.Triangles()), faces)
+	data, err := file.Marshal()
+	require.NoError(t, err)
+	require.Contains(t, string(data), "faceted decad solid")
+	read, err := decad.ReadSTEP(t.Context(), bytes.NewReader(data))
+	require.NoError(t, err)
+	require.True(t, read.Report().Closed)
+	volume, err := read.Volume()
+	require.NoError(t, err)
+	require.InDelta(t, 24, volume.Value.Base(), 1e-12)
+}
+
 // TestNewSTEPFileArcPrismsAnalytic writes two arc-bearing prisms through the
 // analytic arm: a half disc of radius 10 swept 5 mm (a convex partial
 // cylinder wall, a planar wall, two caps whose loops are an arc and a line)

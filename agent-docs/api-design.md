@@ -2302,6 +2302,7 @@ func STL(ctx context.Context, w io.Writer, body *decad.Body, tol units.Value, op
 func OBJ(ctx context.Context, w io.Writer, body *decad.Body, tol units.Value, opts ...decad.TessellateOption) error
 func ThreeMF(ctx context.Context, w io.Writer, body *decad.Body, tol units.Value, opts ...decad.TessellateOption) error
 func STEP(ctx context.Context, w io.Writer, body *decad.Body, tol units.Value, opts ...STEPOption) error
+func NewFacetedSTEPFile(ctx context.Context, body *decad.Body, tol units.Value, header step.Header) (step.File, error)
 func WithSTEPName(name string) STEPOption
 func WithSTEPTimestamp(timestamp time.Time) STEPOption
 func WithSTEPAuthor(author string) STEPOption
@@ -2329,6 +2330,8 @@ mesh as a glTF 2.0 file with an embedded buffer, in metres, and defaults to
 `VerifyNone` like the others (`agent-docs/format-io-design.md`). `export.PNG` draws the mesh as an
 orthographic flat-shaded image from a `View` (`agent-docs/png-export-design.md`). `export.DXF` writes the mesh's
 feature edges as a 2D DXF drawing with hidden edges on their own layer (`agent-docs/dxf-export-design.md`).
+`bodywire` exchanges read-only geometry for receiver-side tessellation; its staged support and
+binary record are specified in `agent-docs/body-wire-design.md`.
 
 `Tessellate` and every writer pass `ctx` through chording, loop-clearance
 scans, cap triangulation, mesh audits, and faceted restatement. Cancellation

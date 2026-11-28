@@ -21,6 +21,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `agent-docs/payload-verification-design.md` | Per-payload proofs, certificates, bounded validity/clearance/survey algorithms. |
 | `agent-docs/evaluator-design.md` | Evaluator topology, payloads, mass properties, feature builds, and mesh booleans. |
 | `agent-docs/tessellation-design.md` | Tessellation: curve samples, manifold proofs, source faces, certificates, boolean handoff. |
+| `agent-docs/body-wire-design.md` | Binary read-only body interchange, representations, validation, and tests. |
 | `agent-docs/clearance-design.md` | Pair disjointness and bounded gap proofs. |
 | `agent-docs/proofs-design.md` | Lean proofs of decad's bounded arithmetic: layout, assumptions, trace manifest, CI, upgrade and recipe. |
 | `agent-docs/clearance-band-design.md` | Band readings of the clearance cells for placed carriers the degeneracy oracle cannot decide. |
