@@ -60,7 +60,7 @@ func WithSTEPOrganization(organization string) STEPOption {
 	return stepOption{option.New(identSTEPOrganization{}, organization)}
 }
 
-// NewSTEPFile builds an AP214 file from one boundary-verified solid.
+// NewSTEPFile builds an AP214 file from one boundary-verified solid or supported sheet.
 // tol is Body.Tessellate's chord tolerance. The caller supplies the mandatory
 // header fields, including a timestamp; AP214's schema replaces Header.Schemas.
 // Supported plane, cylinder, cone, sphere and torus boundaries retain analytic
@@ -68,7 +68,8 @@ func WithSTEPOrganization(organization string) STEPOption {
 // A solid with cavities writes a BREP_WITH_VOIDS: the outer shell and each void
 // shell as an ORIENTED_CLOSED_SHELL, all as planar faces per mesh triangle
 // (agent-docs/step-export-design.md §9). A body of several lumps writes one
-// solid per lump, all as items of one representation. A sheet is refused. ctx and body must not be nil.
+// solid per lump, all as items of one representation. A supported sheet is an open surface model.
+// ctx and body must not be nil.
 func NewSTEPFile(ctx context.Context, body *decad.Body, tol units.Value, header step.Header) (step.File, error) {
 	return newSTEPFile(ctx, body, tol, header, false)
 }
@@ -100,12 +101,15 @@ func newSTEPFile(ctx context.Context, body *decad.Body, tol units.Value, header 
 // stepPlan is one admitted body's writer arm and verified mesh
 // (agent-docs/step-export-design.md).
 type stepPlan struct {
-	analytic   bool
-	closed     *closedstep.Coverage
-	vertices   []r3.Vec
-	triangles  [][3]int
-	components []int
-	solids     []meshSolid
+	sheet       bool
+	analytic    bool
+	closed      *closedstep.Coverage
+	vertices    []r3.Vec
+	triangles   [][3]int
+	components  []int
+	sheetFaces  []int
+	sheetClosed []bool
+	solids      []meshSolid
 }
 
 // planSTEPBody admits body, a non-nil solid, and picks its writer arm: it
@@ -116,6 +120,33 @@ func planSTEPBody(ctx context.Context, body *decad.Body, tol units.Value) (stepP
 }
 
 func planSTEPBodyMode(ctx context.Context, body *decad.Body, tol units.Value, forceFaceted bool) (stepPlan, error) {
+	if body.Kind() == decad.BodySheet {
+		mesh, err := body.Tessellate(ctx, tol, decad.WithVerification(decad.VerifyBoundary))
+		if err != nil {
+			return stepPlan{}, err
+		}
+		if !mesh.BoundaryVerified() {
+			return stepPlan{}, fmt.Errorf("export: STEP: %w: unverified sheet", decad.ErrUnsupported)
+		}
+		vertices, triangles := mesh.Vertices(), mesh.Triangles()
+		checked, err := decad.NewMeshBody(ctx, vertices, triangles)
+		if err != nil {
+			return stepPlan{}, err
+		}
+		groups, faceGroups, closed, err := sheetGroups(ctx, body, mesh.SourceFaces(), triangles, checked.Report())
+		if err != nil {
+			return stepPlan{}, err
+		}
+		analytic := false
+		if !forceFaceted {
+			analytic, err = supportsAnalyticSTEP(ctx, body)
+			if err != nil {
+				return stepPlan{}, err
+			}
+		}
+		return stepPlan{sheet: true, analytic: analytic, vertices: vertices, triangles: triangles,
+			components: groups, sheetFaces: faceGroups, sheetClosed: closed}, nil
+	}
 	if body.Kind() != decad.BodySolid || !body.IsSolid() {
 		return stepPlan{}, fmt.Errorf("export: STEP: %w: body does not enclose a valid region", decad.ErrNotSolid)
 	}
@@ -185,6 +216,12 @@ func assembleSTEPFile(ctx context.Context, body *decad.Body, header step.Header,
 	if plan.analytic {
 		productDescription = "analytic decad solid"
 	}
+	if plan.sheet {
+		productDescription = "faceted decad sheet"
+		if plan.analytic {
+			productDescription = "analytic decad sheet"
+		}
+	}
 	b := &fileBuilder{}
 	sc := b.addSTEPContext()
 	product := b.add(ap214.Product(0, "1", header.Name, productDescription, sc.productContext))
@@ -194,6 +231,15 @@ func assembleSTEPFile(ctx context.Context, body *decad.Body, header step.Header,
 	definition := b.add(ap214.ProductDefinition(0, "design", "", formation, definitionContext))
 	shape := b.add(ap214.ProductDefinitionShape(0, "shape", "", definition))
 
+	if plan.sheet {
+		model, err := b.addSTEPSheet(ctx, body, header.Name, plan)
+		if err != nil {
+			return step.File{}, err
+		}
+		representation := b.add(step.Entity{Name: "MANIFOLD_SURFACE_SHAPE_REPRESENTATION", Parameters: []step.Value{step.String(header.Name), step.List{model}, sc.representation}})
+		b.add(ap214.ShapeDefinitionRepresentation(0, shape, representation))
+		return ap214.NewFile(header, b.entities...), nil
+	}
 	items, err := b.addSTEPSolids(ctx, body, header.Name, plan)
 	if err != nil {
 		return step.File{}, err

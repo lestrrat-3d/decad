@@ -398,7 +398,6 @@ func TestSTEPItemsHeldFloor(t *testing.T) {
 func TestSTEPItemsRefusals(t *testing.T) {
 	t.Parallel()
 	body := box(t, false)
-	sheet := box(t, true)
 	plane, err := r3.NewFrame(r3.Vec{}, r3.Vec{X: 1}, r3.Vec{Y: 1})
 	require.NoError(t, err)
 	reflect, err := r3.Reflection(plane)
@@ -429,7 +428,6 @@ func TestSTEPItemsRefusals(t *testing.T) {
 			{Name: "b", Body: body, Placement: r3.Identity(), Tolerance: units.Millimeters(1)}}, tol, decad.ErrDegenerate},
 		{"SharedBodyColor", []export.STEPItem{good,
 			{Name: "b", Body: body, Placement: r3.Identity(), Color: itemRed}}, tol, decad.ErrDegenerate},
-		{"Sheet", []export.STEPItem{{Name: "s", Body: sheet, Placement: r3.Identity()}}, tol, decad.ErrNotSolid},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -463,10 +461,14 @@ func TestSTEPItemsRefusals(t *testing.T) {
 	})
 	t.Run("PartErrorNamesItem", func(t *testing.T) {
 		t.Parallel()
-		_, err := export.NewSTEPItemsFile(t.Context(), []export.STEPItem{good,
-			{Name: "the-sheet", Body: sheet, Placement: translation(t, r3.Vec{X: 9})}}, tol, header())
-		require.ErrorIs(t, err, decad.ErrNotSolid)
-		require.ErrorContains(t, err, `"the-sheet"`)
+		plate := facetedCutPlate(t)
+		mesh, err := plate.Tessellate(t.Context(), units.Millimeters(1))
+		require.NoError(t, err)
+		below := units.Millimeters(math.Nextafter(mesh.Bound().Mag(), 0))
+		_, err = export.NewSTEPItemsFile(t.Context(), []export.STEPItem{good,
+			{Name: "the-plate", Body: plate, Placement: r3.Identity(), Tolerance: below}}, tol, header())
+		require.ErrorIs(t, err, decad.ErrUnsupported)
+		require.ErrorContains(t, err, `"the-plate"`)
 	})
 }
 
@@ -476,4 +478,23 @@ func TestSTEPItemsDefaultDescription(t *testing.T) {
 	require.NoError(t, export.STEPItems(t.Context(), &out, []export.STEPItem{{Name: "a", Body: box(t, false), Placement: r3.Identity()}},
 		units.Millimeters(0.1), export.WithSTEPName("asm.step"), export.WithSTEPAuthor("a"), export.WithSTEPOrganization("o")))
 	require.Contains(t, out.String(), "'decad assembly'")
+}
+
+func TestSTEPItemsSheetOccurrences(t *testing.T) {
+	body := box(t, true)
+	items := []export.STEPItem{
+		{Name: "first", Body: body, Placement: r3.Identity(), Color: itemRed},
+		{Name: "second", Body: body, Placement: translation(t, r3.NewVec(20, 0, 0)), Color: itemRed},
+	}
+	result, err := export.NewSTEPItemsFile(t.Context(), items, units.Millimeters(0.1), header())
+	require.NoError(t, err)
+	require.Len(t, result.Parts, 1)
+	require.True(t, result.Parts[0].Analytic)
+	require.Len(t, stepByName(result.File, "SHELL_BASED_SURFACE_MODEL"), 1)
+	require.Len(t, stepByName(result.File, "MANIFOLD_SURFACE_SHAPE_REPRESENTATION"), 1)
+	require.Len(t, stepByName(result.File, "NEXT_ASSEMBLY_USAGE_OCCURRENCE"), 2)
+	require.Len(t, stepByName(result.File, "STYLED_ITEM"), 1)
+	data, err := result.File.Marshal()
+	require.NoError(t, err)
+	require.Contains(t, string(data), "ITEM_DEFINED_TRANSFORMATION")
 }

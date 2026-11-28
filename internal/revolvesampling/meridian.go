@@ -76,6 +76,30 @@ func ArcStation(lift revolvemesh.RevolveLift, seg sectionrecord.CurveSegment, k,
 	return revolvemesh.RevMeridian{Z: z, Rho: rho, ZIv: zIv, RhoIv: rhoIv}, gap, nil
 }
 
+// ArcPlaneStation encloses the recorded plane point at an interior chord station.
+func ArcPlaneStation(seg sectionrecord.CurveSegment, k, n int) (float64, float64, proofbound.WalkEndBound, error) {
+	seg, err := sectionrecord.NormalizeSegment(seg)
+	if err != nil {
+		return 0, 0, proofbound.WalkEndBound{}, err
+	}
+	start, span, ok := loftmesh.CircularSegmentRange(seg)
+	if !ok || n <= 0 || k <= 0 || k >= n {
+		return 0, 0, proofbound.WalkEndBound{}, revolvemesh.ErrRevolveStationEnclosure
+	}
+	t := new(big.Rat).Add(start, new(big.Rat).Mul(new(big.Rat).SetFrac64(int64(k), int64(n)), span))
+	ui, vi, ok := circularbounds.EndpointInterval(circularbounds.RecordSegment(seg), t)
+	if !ok {
+		return 0, 0, proofbound.WalkEndBound{}, revolvemesh.ErrRevolveStationEnclosure
+	}
+	u, _ := midpoint(ui).Float64()
+	v, _ := midpoint(vi).Float64()
+	bound := proofbound.WalkEndBound{U: proofbound.IntervalFloatError(ui, u), V: proofbound.IntervalFloatError(vi, v)}
+	if proofbound.IsNonFinite(u) || proofbound.IsNonFinite(v) || !bound.Derivable() {
+		return 0, 0, proofbound.WalkEndBound{}, revolvemesh.ErrRevolveStationEnclosure
+	}
+	return u, v, bound, nil
+}
+
 func midpoint(iv proofbound.RatInterval) *big.Rat {
 	return new(big.Rat).Mul(new(big.Rat).Add(iv.Lo, iv.Hi), big.NewRat(1, 2))
 }

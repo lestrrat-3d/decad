@@ -95,3 +95,43 @@ func Example_export_step_cavity() {
 	// Output:
 	// holds a cavity: true
 }
+
+// A sheet writes as an open surface and can be read back without claiming a solid.
+func Example_export_step_sheet() {
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	if err != nil {
+		fmt.Printf("failed to create sketch: %s\n", err)
+		return
+	}
+	rect := s.CreateRectangle(0, 0, 2, 3)
+	s.Fix(rect.A)
+	if _, err := s.Solve(context.Background()); err != nil {
+		fmt.Printf("failed to solve: %s\n", err)
+		return
+	}
+	sheet, err := decad.PatchProfile(decad.New(), s, s.Profiles()[0]).Do(context.Background())
+	if err != nil {
+		fmt.Printf("failed to make sheet: %s\n", err)
+		return
+	}
+	var out bytes.Buffer
+	if err := export.STEP(context.Background(), &out, sheet, units.Millimeters(0.1),
+		export.WithSTEPName("sheet"), export.WithSTEPAuthor("decad"), export.WithSTEPOrganization("example")); err != nil {
+		fmt.Printf("failed to export: %s\n", err)
+		return
+	}
+	mesh, err := decad.ReadSTEP(context.Background(), &out)
+	if err != nil {
+		fmt.Printf("failed to read: %s\n", err)
+		return
+	}
+	area, err := mesh.Area()
+	if err != nil {
+		fmt.Printf("failed to measure: %s\n", err)
+		return
+	}
+	fmt.Printf("closed: %t, area: %.0f mm²\n", mesh.Report().Closed, area.Value.Base())
+	// Output:
+	// closed: false, area: 6 mm²
+}

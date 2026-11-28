@@ -64,9 +64,10 @@ const (
 // the public API's vocabulary, for the builders that print one into a refusal,
 // and the allocator the builders mint topology through.
 type Options struct {
-	Surface func(surfacegeom.Surface) any
-	Curve   func(surfacegeom.Curve) any
-	Alloc   topo.Alloc
+	Surface    func(surfacegeom.Surface) any
+	Curve      func(surfacegeom.Curve) any
+	Alloc      topo.Alloc
+	SourceMesh func(context.Context, *topo.Body, float64) (*topo.Mesh, error)
 }
 
 // Body dispatches one body to its payload's own tessellator.
@@ -98,6 +99,18 @@ func Body(ctx context.Context, b *topo.Body, chord float64, verify Verify, opts 
 	}
 	if bp, ok := b.Payload.(breprecord.Payload); ok {
 		return brepbandmesh.Tessellate(ctx, b, bp, chord, verify >= All)
+	}
+	if _, ok := b.Payload.(loftrecord.ChainPayload); ok {
+		return loftrecord.TessellateChain(ctx, b)
+	}
+	if up, ok := b.Payload.(stitchrecord.UnstitchPayload); ok {
+		if stitchrecord.AllTetrahedronEligible(topobuild.Faces(b)) {
+			return stitchtess.UnstitchPlanar(ctx, b, verify >= Boundary, verify >= All)
+		}
+		if opts.SourceMesh == nil {
+			return nil, fmt.Errorf(`%w: an unstitched face has no source mesh evaluator`, decaderr.ErrUnsupported)
+		}
+		return stitchtess.UnstitchSource(ctx, b, up, chord, verify >= Boundary, verify >= All, opts.SourceMesh)
 	}
 	if lp, ok := b.Payload.(loftrecord.Payload); ok {
 		// The loft path exactly restates the payload's complete set for a
@@ -147,6 +160,9 @@ func Body(ctx context.Context, b *topo.Body, chord float64, verify Verify, opts 
 	if rp, ok := b.Payload.(revolveplan.Payload); ok {
 		return revolvetess.TessellateRevolve(ctx, b, rp, chord, revolvetess.Level(verify))
 	}
+	if rp, ok := b.Payload.(revolveplan.ChainPayload); ok && revolvetess.SupportsChainRevolve(b, rp) {
+		return revolvetess.TessellateChainRevolve(ctx, b, rp, chord, revolvetess.Level(verify))
+	}
 	if cbp, ok := b.Payload.(capblend.Payload); ok {
 		return capBlendMesh(ctx, b, cbp, chord, verify)
 	}
@@ -161,6 +177,10 @@ func Body(ctx context.Context, b *topo.Body, chord float64, verify Verify, opts 
 	}
 	if sp, ok := b.Payload.(stitchrecord.Payload); ok {
 		if sp.Tris == nil {
+			mesh, matched, err := stitchtess.SourceSheet(ctx, b, sp, chord, verify >= Boundary, verify >= All, opts.SourceMesh)
+			if matched || err != nil {
+				return mesh, err
+			}
 			return stitchtess.Curved(ctx, b, sp, chord, revolvetess.Level(verify), formatSurface)
 		}
 		// The all-planar stitch restatement takes no chord tolerance.
@@ -170,11 +190,8 @@ func Body(ctx context.Context, b *topo.Body, chord float64, verify Verify, opts 
 		return bodyPatchMesh(ctx, b, pp, chord, verify, opts)
 	}
 	if cp, ok := b.Payload.(chainrecord.Payload); ok {
-		// The chain-fed ribbon path takes no chord tolerance either, on the
-		// identical reasoning: every wall is already an exact planar quad,
-		// so there is no chording decision for a tolerance to bind
-		// (internal/chainrecord.Tessellate's own doc comment owns why).
-		return chainrecord.Tessellate(ctx, b, cp, formatSurface)
+		// Planar ribbon walls are restated; the free-form arm uses the chord.
+		return chainrecord.Tessellate(ctx, b, cp, chord, formatSurface)
 	}
 	if sp, ok := b.Payload.(sweeprecord.ChainPayload); ok {
 		if len(sp.Spans) != 0 {
@@ -188,7 +205,7 @@ func Body(ctx context.Context, b *topo.Body, chord float64, verify Verify, opts 
 		// the chainrecord.Payload it wraps unchanged (internal/sweeprecord's
 		// FinishChain), so it reuses that same restatement rather
 		// than a second one keyed on the wrapper type.
-		return chainrecord.Tessellate(ctx, b, sp.Chain, formatSurface)
+		return chainrecord.Tessellate(ctx, b, sp.Chain, chord, formatSurface)
 	}
 	if mp, ok := b.Payload.(sweepmitre.Payload); ok {
 		// agent-docs/sweep-design.md Table DM row DM2: an exact restatement of the

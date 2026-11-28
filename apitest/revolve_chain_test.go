@@ -29,8 +29,10 @@ func TestRevolveChainFullTurnWithOnePole(t *testing.T) {
 	require.Equal(t, decad.Exact, box.Exactness)
 	require.Equal(t, r3.NewVec(0, -3, -3), box.Min)
 	require.Equal(t, r3.NewVec(4, 3, 3), box.Max)
-	_, err = body.Tessellate(t.Context(), units.Millimeters(0.5))
-	require.ErrorIs(t, err, decad.ErrUnsupported)
+	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.5), decad.WithVerification(decad.VerifyBoundary))
+	require.NoError(t, err)
+	require.True(t, mesh.BoundaryVerified())
+	require.False(t, mesh.VolumeVerified())
 }
 
 func TestRevolveChainPoleAtLastEnd(t *testing.T) {
@@ -118,6 +120,8 @@ func TestRevolveChainSnappedPoleChargesArea(t *testing.T) {
 	// The snapped wall is the cone from (0,0) to (4,3), even though its
 	// recorded start radius was positive. The published bound must cover it.
 	requireAreaContains15PiFraction(t, area, 1)
+	_, err = body.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyBoundary))
+	require.ErrorIs(t, err, decad.ErrUnsupported)
 }
 
 func TestRevolveChainPolePlacedBounds(t *testing.T) {

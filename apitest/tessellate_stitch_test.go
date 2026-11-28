@@ -256,7 +256,7 @@ func TestStitchCurvedRevolveMeshVerificationAndExport(t *testing.T) {
 	require.NotEmpty(t, obj.Bytes())
 }
 
-func TestStitchCurvedMeshRefusesUnsharedChording(t *testing.T) {
+func TestStitchCurvedMeshCopiesSourceSheets(t *testing.T) {
 	t.Parallel()
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
@@ -269,10 +269,10 @@ func TestStitchCurvedMeshRefusesUnsharedChording(t *testing.T) {
 	require.NoError(t, err)
 	stitched, err := decad.Stitch(sheet).Do(t.Context())
 	require.NoError(t, err)
-	_, err = stitched.Tessellate(t.Context(), units.Millimeters(0.1))
-	require.ErrorIs(t, err, decad.ErrUnsupported)
-	require.ErrorContains(t, err, "this evaluator has no chording arm for the source construction")
-	require.ErrorContains(t, err, "Cylinder")
+	mesh, err := stitched.Tessellate(t.Context(), units.Millimeters(0.1))
+	require.NoError(t, err)
+	require.True(t, mesh.BoundaryVerified())
+	require.NotEmpty(t, mesh.Triangles())
 
 	_, source := annularRevolveSheet(t, 10, 5, 15)
 	curved, err := decad.Stitch(source).Do(t.Context())
@@ -281,9 +281,10 @@ func TestStitchCurvedMeshRefusesUnsharedChording(t *testing.T) {
 	require.NoError(t, err)
 	placed, err := decad.Transform(curved, motion).Do(t.Context())
 	require.NoError(t, err)
-	_, err = placed.Tessellate(t.Context(), units.Millimeters(0.1))
-	require.ErrorIs(t, err, decad.ErrUnsupported)
-	require.ErrorContains(t, err, "Cylinder")
+	placedMesh, err := placed.Tessellate(t.Context(), units.Millimeters(0.1))
+	require.NoError(t, err)
+	require.True(t, placedMesh.BoundaryVerified())
+	require.NotEmpty(t, placedMesh.Triangles())
 }
 
 // This file is agent-docs/surface-design.md §14 Table D row 5's own test list

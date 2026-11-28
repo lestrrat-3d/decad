@@ -229,7 +229,6 @@
 0	0.01	TestTangentChainUndecidedRefused
 0	0.08	TestTaperFarOrigin
 0	0.02	TestTaperRing
-0	0.00	TestTessellateRefusalNamesChainLoftPayload
 0	0.01	TestTessellateUndisplacedPrismSpendsTheWholeTolerance
 0	0.00	TestThickenChainRevolveCylinder
 0	0.01	TestThickenRevolveWasherInward
@@ -701,7 +700,6 @@
 2	0.00	TestSweptBoxStrictlyDisjoint
 2	0.07	TestTangentChainSlotCapLoop
 2	0.01	TestTaperPlacedEquivalence
-2	0.00	TestTessellateRefusalNamesUnstitchPayload
 2	0.02	TestTessellateRejectsTangentHole
 2	0.01	TestTextProfilesKeepsALettersCounterAsAHole
 2	0.00	TestThickenChainRevolveReachesAxis
@@ -1900,7 +1898,6 @@
 7	0.02	TestStackedOpposedTouchingPocketsRefuse
 7	0.40	TestSteppedShaftClassBCut
 7	0.00	TestStitchConicalRevolveSheetCloses
-7	0.01	TestStitchCurvedMeshRefusesUnsharedChording
 7	0.00	TestStitchRefusesRevolveTagOffItsRecord
 7	0.01	TestStitchSphereSolidMatchesTheRevolveEngine
 7	0.00	TestStraightSweepChamferRefusesOtherEdges
@@ -2154,7 +2151,7 @@
 8	0.04	TestSweepArcTessellatesAsItsRevolve
 8	0.00	TestSweepChainArcThickenNoncardinalRefusesWithoutRetiringSheet
 8	0.02	TestSweepChainArcThickenPositiveAxisSideKeepsCapOrder
-8	0.00	TestSweepChainSingleArcMultiSegmentMeshRefuses
+12	0.00	TestSweepChainSingleArcMultiSegmentMeshVerifies
 8	0.01	TestSweepCompositeArcLineArcMeasurementsReplay
 8	0.00	TestSweepLineTiltedFrameCarriesEndpointGap
 8	0.01	TestSweepPairPerVertexCurvature
@@ -2763,7 +2760,6 @@
 11	0.00	TestEmbossEngravedOnBottom
 11	0.01	TestEmbossOnACylinderRefusals
 11	0.00	TestExtrudeBoxBoundsEnclosesTranslatedCorner
-11	0.00	TestExtrudeChainTessellateRefusesCurvedWall
 11	0.00	TestExtrudeFreeformTopology
 11	0.01	TestExtrudeFreeformVerifySound
 11	0.00	TestExtrudeThroughAllSideCupStop
@@ -3275,3 +3271,6 @@
 8	0.05	TestPairDigestSharedSource
 9	0.02	TestBodyDigestIncludesHistory
 7	0.01	TestBodyDigestGates
+12	0.00	TestExtrudeChainTessellatesCurvedWall
+12	0.00	TestUnstitchedPlanarMeshVerifies
+12	0.00	TestStitchCurvedMeshCopiesSourceSheets

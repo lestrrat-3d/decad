@@ -67,6 +67,20 @@ func ReadAtTolerance(m *stepread.Model, limit int, chord float64) (Mesh, error) 
 	for _, id := range sortedIDs(m) {
 		e := m.Entities[id]
 		switch e.Name {
+		case "SHELL_BASED_SURFACE_MODEL":
+			if len(e.Params) < 2 {
+				return Mesh{}, fmt.Errorf("%w: #%d has no shells", ErrMalformed, id)
+			}
+			shells, ok := e.Params[1].(stepread.List)
+			if !ok || len(shells) == 0 {
+				return Mesh{}, fmt.Errorf("%w: #%d has no shells", ErrMalformed, id)
+			}
+			for _, shell := range shells {
+				if err := r.shell(shell, false); err != nil {
+					return Mesh{}, err
+				}
+			}
+			solids++
 		case "MANIFOLD_SOLID_BREP":
 			if len(e.Params) < 2 {
 				return Mesh{}, fmt.Errorf("%w: #%d has no shell", ErrMalformed, id)

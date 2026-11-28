@@ -25,6 +25,12 @@ func AuditsFacetContact(p topo.Payload) bool {
 	if _, ok := p.(patchchain.Payload); ok {
 		return true
 	}
+	if _, ok := p.(stitchrecord.UnstitchPayload); ok {
+		return true
+	}
+	if _, ok := p.(revolveplan.ChainPayload); ok {
+		return true
+	}
 	_, ok := p.(revolveplan.Payload)
 	if ok {
 		return true

@@ -206,7 +206,7 @@ func ReadIGES(ctx context.Context, r io.Reader, opts ...MeshImportOption) (*Mesh
 	return NewMeshBody(ctx, mesh.Vertices, mesh.Triangles)
 }
 
-// ReadSTEP reads the planar-, cylinder- and cone-faced solids of a STEP file into a [MeshBody]
+// ReadSTEP reads supported solids and shell-based surface models of a STEP file into a [MeshBody]
 // (agent-docs/format-io-design.md). It reads every MANIFOLD_SOLID_BREP and
 // BREP_WITH_VOIDS: each face on a plane is cut into triangles, a face with holes
 // included, each wall on a cylinder or a cone is cut into a ladder of triangles, arcs are

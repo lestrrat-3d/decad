@@ -648,7 +648,9 @@ stretches a mesh body by a separate factor along each axis about a point; a nega
 
 `export.STEP`, `export.IGES`, `export.STL`, `export.OBJ`, `export.ThreeMF` and `export.GLTF` write a body to an `io.Writer` at a chord tolerance. `export.IGES` writes the body's tessellation as planar-faced solid B-reps of an IGES 5.3 file, a solid for each lump with a void shell for each cavity, which `decad.ReadIGES` reads back to the same vertices.
 `export.GLTF` writes a glTF 2.0 JSON file with its mesh embedded, in metres.
-`export.NewFacetedSTEPFile` writes the verified tessellation as planar STEP faces.
+`export.NewFacetedSTEPFile` writes the verified tessellation as planar STEP faces. STEP also writes supported
+sheets as surface models, preserving supported analytic faces when possible. `decad.ReadSTEP` reads these models into
+a `MeshBody`, retaining their open or closed boundaries. STEP assemblies also accept sheet parts.
 `bodywire.Write` prefers analytic STEP geometry and falls back to facets when needed, including when the receiver
 cannot read an analytic STEP surface. It sends sheet bodies as facets. `bodywire.Read` returns a read-only body,
 and `bodywire.Body.IsSheet` identifies a sheet. The receiver can tessellate analytic geometry at its requested
