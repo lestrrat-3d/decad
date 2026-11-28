@@ -82,6 +82,10 @@ func TestContactMemoUntouched(t *testing.T) {
 	value.Store(0, 0, TriContact{Kind: ContactSegment})
 	require.False(t, value.untouched(), "a stored contact with a value")
 
+	block := NewContactMemo(c.a, c.b)
+	block.BlockIndex = make([]uint32, 1)
+	require.False(t, block.untouched(), "block mode with an empty overflow map")
+
 	dense := NewContactMemo(c.a, c.b)
 	for i := range len(c.a.Tris) {
 		for j := range len(c.b.Tris) {
