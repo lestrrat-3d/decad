@@ -177,6 +177,10 @@ func Body(ctx context.Context, b *topo.Body, chord float64, verify Verify, opts 
 	}
 	if sp, ok := b.Payload.(stitchrecord.Payload); ok {
 		if sp.Tris == nil {
+			mesh, matched, err := stitchtess.SourceSheet(ctx, b, sp, chord, verify >= Boundary, verify >= All, opts.SourceMesh)
+			if matched || err != nil {
+				return mesh, err
+			}
 			return stitchtess.Curved(ctx, b, sp, chord, revolvetess.Level(verify), formatSurface)
 		}
 		// The all-planar stitch restatement takes no chord tolerance.

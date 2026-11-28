@@ -1898,7 +1898,6 @@
 7	0.02	TestStackedOpposedTouchingPocketsRefuse
 7	0.40	TestSteppedShaftClassBCut
 7	0.00	TestStitchConicalRevolveSheetCloses
-7	0.01	TestStitchCurvedMeshRefusesUnsharedChording
 7	0.00	TestStitchRefusesRevolveTagOffItsRecord
 7	0.01	TestStitchSphereSolidMatchesTheRevolveEngine
 7	0.00	TestStraightSweepChamferRefusesOtherEdges
@@ -3274,3 +3273,4 @@
 7	0.01	TestBodyDigestGates
 12	0.00	TestExtrudeChainTessellatesCurvedWall
 12	0.00	TestUnstitchedPlanarMeshVerifies
+12	0.00	TestStitchCurvedMeshCopiesSourceSheets
