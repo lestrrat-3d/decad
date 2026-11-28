@@ -110,7 +110,8 @@ func SourceSheet(ctx context.Context, body *topo.Body, sp stitchrecord.Payload, 
 		if sp.Xform != r3.Identity() {
 			bound = proofbound.AbsSumUpper(massmoment.PlacedBound(bound, charge), maxRound)
 		}
-		if !ok || proofbound.IsNonFinite(bound) || (sp.Xform != r3.Identity() && bound > chord) {
+		// The inherited face bound can exceed the requested chord tolerance.
+		if !ok || proofbound.IsNonFinite(bound) || (sp.Xform != r3.Identity() && massmoment.PlacedBound(sourceChord, charge) > chord) {
 			return nil, false, nil
 		}
 		topobuild.SetFaceBound(mesh, paired[old], bound)

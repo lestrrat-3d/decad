@@ -98,7 +98,9 @@ func UnstitchSource(ctx context.Context, body *topo.Body, up stitchrecord.Unstit
 	// Some source meshers publish their construction allowance only in the
 	// face bound. The complete face bound is a conservative coordinate bound.
 	mesh.CoordBound = proofbound.AbsSumUpper(massmoment.PlacedBound(math.Max(source.CoordBound, sourceBound), charge), maxRound)
-	if proofbound.IsNonFinite(bound) || (up.Xform != r3.Identity() && bound > chord) {
+	// Only chording must fit the requested tolerance. The inherited source
+	// and placement displacement remain published even when they exceed it.
+	if proofbound.IsNonFinite(bound) || (up.Xform != r3.Identity() && massmoment.PlacedBound(sourceChord, charge) > chord) {
 		return bad()
 	}
 	topobuild.SetFaceBound(mesh, faces[0], bound)
