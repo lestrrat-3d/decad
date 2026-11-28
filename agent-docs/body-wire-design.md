@@ -50,7 +50,7 @@ that decision to `internal/stepwire`; it does not expose a root handle to intern
 
 ## Sheet facet record
 
-STEP export currently refuses sheets, so write their boundary-verified tessellation in a
+The wire writer sends sheets as their boundary-verified tessellation in a
 `DCS3` frame. It has the same 24-byte header and source-bound field as `DCS2`. Its gzip payload
 starts with uint64 vertex count and uint64 triangle count. The vertices follow as IEEE binary64
 little-endian `(x,y,z)` triples in millimetres; triangles follow as uint32 little-endian index
@@ -72,7 +72,7 @@ refuses a sample count above the triangle limit before allocation. `ReadSTEP` re
 existing 0.01 mm chord. The sender's verification tolerance must not become the receiver's
 requested chord or a claim about the decoded geometry.
 
-The current STEP writer first performs a boundary-verified tessellation and handles solids.
+The current STEP writer first performs a boundary-verified tessellation and handles solids and sheets.
 It emits analytic surfaces only for the cases `agent-docs/step-export-design.md` admits.
 Neither that admission nor the STEP reader covers all decad bodies. Sheets use the facet
 fallback above. Other held-facet payload classes use the STEP faceted fallback when admitted.

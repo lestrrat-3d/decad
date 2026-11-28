@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
@@ -31,12 +32,8 @@ func TestStitchStagedSurveyNamesPayloadClass(t *testing.T) {
 		"stitchPayload survey support", diag.Message)
 }
 
-// TestTessellateRefusalNamesUnstitchPayload pins the payload class the
-// unsupported-payload refusal prints for one piece of an unstitched box.
-//
-// Shown to fail first: with SurveyClass deleted from internal/stitchrecord's
-// UnstitchPayload, the message named stitchrecord.UnstitchPayload.
-func TestTessellateRefusalNamesUnstitchPayload(t *testing.T) {
+// TestUnstitchedPlanarMeshVerifies checks the source face and its reflected copy.
+func TestUnstitchedPlanarMeshVerifies(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	s, p := plateSketch(t)
@@ -45,7 +42,27 @@ func TestTessellateRefusalNamesUnstitchPayload(t *testing.T) {
 	pieces, err := decad.Unstitch(box).Do(t.Context())
 	require.NoError(t, err)
 	require.NotEmpty(t, pieces)
-	_, err = pieces[0].Tessellate(t.Context(), units.Millimeters(0.5))
-	require.ErrorIs(t, err, decad.ErrUnsupported)
-	require.Equal(t, refusalText("decad.unstitchPayload"), err.Error())
+	check := func(body *decad.Body) {
+		mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.5), decad.WithVerification(decad.VerifyAll))
+		require.NoError(t, err)
+		require.True(t, mesh.BoundaryVerified())
+		vertices, sources := mesh.Vertices(), mesh.SourceFaces()
+		for i, tri := range mesh.Triangles() {
+			a, b, c := vertices[tri[0]], vertices[tri[1]], vertices[tri[2]]
+			normal, err := sources[i].NormalAt(a.Add(b).Add(c).Scale(1.0 / 3))
+			require.NoError(t, err)
+			require.Positive(t, b.Sub(a).Cross(c.Sub(a)).Dot(normal.Value))
+		}
+		draft, err := body.Tessellate(t.Context(), units.Millimeters(0.5), decad.WithVerification(decad.VerifyNone))
+		require.NoError(t, err)
+		require.False(t, draft.BoundaryVerified())
+	}
+	check(pieces[0])
+	frame, err := r3.NewFrame(r3.Vec{}, r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1))
+	require.NoError(t, err)
+	reflection, err := r3.Reflection(frame)
+	require.NoError(t, err)
+	placed, err := decad.Transform(pieces[0], reflection).Do(t.Context())
+	require.NoError(t, err)
+	check(placed)
 }

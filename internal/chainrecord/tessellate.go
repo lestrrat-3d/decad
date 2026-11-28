@@ -23,19 +23,19 @@ import (
 // file emits is a mesh face, and the ribbon's free boundary is both rims plus
 // one sweep edge per free end (Table G).
 //
-// This increment tessellates a chain of LINE segments only, Table G's Plane
+// This file restates a chain of LINE segments, Table G's Plane
 // row: each wall is already an exact planar quad the build placed directly on
 // the recorded boundary, so there is no chord to choose and no tolerance for
 // one to bind — the identical reading RestateLoft's own doc comment
 // states for a loft's exact restatement. A chain holding a curved
 // (CircleSeg/ArcSeg fragment) or free-form segment builds a Cylinder or
-// NURBSSurface wall this file has no chording arm for yet, staged for the
-// increment that chords those walls too. Both chain Extrude and the chain
+// NURBSSurface wall. The curved arm chords each recorded walk in
+// tessellate_freeform.go. Both chain Extrude and the chain
 // Sweep's one-span straight reduction build through Build, so both a Payload
 // and the Payload a chain Sweep's payload wraps reach Tessellate unchanged.
 
-// Tessellate restates body's own wall topology, whose payload is pp, as a
-// mesh node. Every wall face is already an exact planar quad — four corner
+// Tessellate turns body's own wall topology and record into a mesh node.
+// The planar arm reads each exact quad directly — four corner
 // vertices Build placed directly on the recorded boundary — so the mesh is
 // read straight off Face -> Loop -> CoEdge -> Vertex, with no chording
 // decision of its own. A straight wall's own published topo.Face.Reversed is
@@ -48,10 +48,15 @@ import (
 // the prism mesher (internal/prismtess) corrects with the identical final
 // swap over its own 2D-chorded triangles. formatSurface names a non-planar
 // wall's surface in its public form for the refusal.
-func Tessellate(ctx context.Context, body *topo.Body, pp Payload,
+func Tessellate(ctx context.Context, body *topo.Body, pp Payload, chord float64,
 	formatSurface func(surfacegeom.Surface) any) (*topo.Mesh, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
+	}
+	for _, face := range topobuild.Faces(body) {
+		if _, ok := face.Surface.(surfacegeom.Plane); !ok {
+			return tessellateCurved(ctx, body, pp, chord)
+		}
 	}
 	reflected := pp.Xform.IsReflection()
 

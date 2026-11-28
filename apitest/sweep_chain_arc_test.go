@@ -140,7 +140,7 @@ func TestSweepChainSingleArcOppositeAxisSideWinding(t *testing.T) {
 	requireChainArcWinding(t, body, mesh)
 }
 
-func TestSweepChainSingleArcMultiSegmentMeshRefuses(t *testing.T) {
+func TestSweepChainSingleArcMultiSegmentMeshVerifies(t *testing.T) {
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	require.NoError(t, err)
@@ -161,10 +161,36 @@ func TestSweepChainSingleArcMultiSegmentMeshRefuses(t *testing.T) {
 	body, err := decad.Sweep(doc, s, s.Chains()[0], path).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, body.Faces(), 2)
-	_, err = body.Tessellate(t.Context(), units.Millimeters(0.1),
+	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.1),
 		decad.WithVerification(decad.VerifyAll))
-	require.ErrorIs(t, err, decad.ErrUnsupported)
+	require.NoError(t, err)
+	require.True(t, mesh.BoundaryVerified())
+	requireSweepChainFaceWinding(t, mesh)
+	plane, err := r3.NewFrame(r3.Vec{}, r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
+	require.NoError(t, err)
+	reflection, err := r3.Reflection(plane)
+	require.NoError(t, err)
+	placed, err := decad.Transform(body, reflection).Do(t.Context())
+	require.NoError(t, err)
+	placedMesh, err := placed.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	require.True(t, placedMesh.BoundaryVerified())
+	requireSweepChainFaceWinding(t, placedMesh)
 	require.Len(t, doc.Bodies(), 1)
+}
+
+func requireSweepChainFaceWinding(t *testing.T, mesh *decad.Mesh) {
+	t.Helper()
+	vertices, sources := mesh.Vertices(), mesh.SourceFaces()
+	seen := map[*decad.Face]bool{}
+	for i, tri := range mesh.Triangles() {
+		a, b, c := vertices[tri[0]], vertices[tri[1]], vertices[tri[2]]
+		normal, err := sources[i].NormalAt(a.Add(b).Add(c).Scale(1.0 / 3))
+		require.NoError(t, err)
+		require.Positive(t, b.Sub(a).Cross(c.Sub(a)).Dot(normal.Value))
+		seen[sources[i]] = true
+	}
+	require.Len(t, seen, 2)
 }
 
 func sweepChainArcLine(t *testing.T, a, b r3.Vec) (*sketch.Sketch, *sketch.Chain) {

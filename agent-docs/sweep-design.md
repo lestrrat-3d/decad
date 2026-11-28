@@ -915,12 +915,12 @@ a chain sweep adds that neither sibling has is §15.2's path height bound.
 | PR | Lands | Still staged |
 |---|---|---|
 | **C1** | `Sweep` over a chain along a one-span `LineTo` path: Table SC rows SC1 through SC4 and SC6, the chain prism reduction, and the four readings §15.5 states for it | a standalone arc and composite paths outside §15.8 |
-| **C2** | a one-span circular reduction with the chain shell's own axis gates (SC8), plus §15.9's one-line sheet mesh | other chain-arc meshes |
+| **C2** | a one-span circular reduction with the chain shell's own axis gates (SC8), plus §15.9's straight and circular chain sheet mesh | free-form and axis-touching chain-arc meshes |
 | **C3a** | §15.8's radial line/half-circle composite with one source `LineSeg`: its certified sheet mesh | other composite sheet meshes and a placed composite sheet |
 | **C3** | §15.8's composite join over `N` tangent line/arc spans that start with a line and turn only by exact coordinate-axis quarter and half turns: wall-face rim lists per recorded segment, indexed sew, separation and boundary audits, area and bounds, and `Thicken` of a source walk of axis-parallel lines with right-angle corners | an arc-first path, curved source segments, other arcs, other sheet meshes, `Thicken` of other line walks and placement |
 
 The one-span straight chain sweep reuses the chain prism's exact-quad mesh.
-§15.9 meshes one straight source line swept through a single arc. §15.8's
+§15.9 meshes a straight or circular source chain swept through a single arc. §15.8's
 composite uses its own bounded sheet mesh. Other chain-sweep meshes return
 `ErrUnsupported` at tessellation, and the modify operations have no receiver
 row for the one-span arc sheet (D8).
@@ -1044,9 +1044,10 @@ their composed placement.
 a closed profile in a solid one-arc `sweepPayload`; its wall and cap roles
 follow the original path order. See `agent-docs/surface-design.md` §16.8.
 
-The mesh admits one `LineSeg` whose complete re-expressed walk has both ends
-strictly clear of the resolved axis. The recorded line and bounded path axis
-give two certified endpoint intervals in axial coordinate `z` and radius `ρ`.
+The mesh admits a chain of `LineSeg` and `ArcSeg` walks with proven positive
+clearance from the resolved axis. Adjacent walls share a junction ring. Each recorded line
+and the bounded path axis give certified endpoint intervals in axial coordinate
+`z` and radius `ρ`.
 Both vary affinely along the line, so positive endpoint radius intervals keep the whole source
 line on one side of the axis. Each angular cell's four exact corner points
 are coplanar; the chosen diagonal adds no meridian chording error. The
@@ -1056,7 +1057,7 @@ of the wall. `SweptPointGap` charges path-axis, source-endpoint, angle and
 placement errors at every stored vertex. Its maximum plus the sagitta must
 fit the requested tolerance.
 
-The one source wall owns two triangles per angular cell and four free edges.
+Each source wall owns two triangles per angular cell, and adjacent walls share their junction ring.
 The sheet and positive-facet audits run at every verification level;
 `RevolveContactAudit` runs at `VerifyBoundary` and `VerifyAll`. `VerifyNone`
 keeps the same triangles but reports `BoundaryVerified() == false`.
@@ -1067,9 +1068,10 @@ The added bound is `(LtrueUpper*δstep + stepHeldUpper*δL)*ρtrueUpper +
 LheldUpper*stepHeldUpper*δρ`, where each `δ` is an outward interval difference
 and `δρ` is the larger endpoint difference. The line makes that endpoint
 maximum valid for every `t`. `CoordinateAreaAllow` charges held vertices.
-The sheet publishes no occupied-volume proof. A source with a curved segment, several segments or
-an endpoint on the axis may build analytically, but its mesh refuses until
-it has a separate station and boundary proof.
+The sheet publishes no occupied-volume proof. Circular walks use the certified stations and per-face area comparison described in
+`agent-docs/tessellation-design.md` §4. A single circular walk can also use an exact free pole when
+its radius is proven non-negative. Other sources that reach the axis may build analytically, but their
+mesh refuses until it has a separate station and boundary proof.
 
 ## 16. Mitred polyline sweep with a per-span section scale
 

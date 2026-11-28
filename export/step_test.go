@@ -627,8 +627,6 @@ func TestNewSTEPFileRefusals(t *testing.T) {
 	t.Parallel()
 	_, err := export.NewSTEPFile(t.Context(), nil, units.Millimeters(0.1), header())
 	require.ErrorIs(t, err, decad.ErrDegenerate)
-	_, err = export.NewSTEPFile(t.Context(), box(t, true), units.Millimeters(0.1), header())
-	require.ErrorIs(t, err, decad.ErrNotSolid)
 	_, err = export.NewSTEPFile(t.Context(), box(t, false), units.Millimeters(0), header())
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 	ctx, cancel := context.WithCancel(t.Context())

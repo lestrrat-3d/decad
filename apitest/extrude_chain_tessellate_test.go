@@ -2,6 +2,7 @@ package apitest_test
 
 import (
 	"bytes"
+	"math"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -100,11 +101,8 @@ func TestExtrudeChainTessellatesThreeWallRibbon(t *testing.T) {
 	require.Equal(t, 6, countSTLFacets(buf.String()))
 }
 
-// TestExtrudeChainTessellateRefusesCurvedWall is Table G's own staging: a
-// chain holding a curved fragment builds a Cylinder wall this increment has
-// no chording arm for, so Tessellate, STL and OBJ all refuse it rather than
-// silently dropping or approximating the wall.
-func TestExtrudeChainTessellateRefusesCurvedWall(t *testing.T) {
+// TestExtrudeChainTessellatesCurvedWall checks a line joined to an arc.
+func TestExtrudeChainTessellatesCurvedWall(t *testing.T) {
 	t.Parallel()
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
@@ -117,18 +115,21 @@ func TestExtrudeChainTessellateRefusesCurvedWall(t *testing.T) {
 	s.CreateArc(s.CreatePoint(10, 5), b, c)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	ch := s.Chains()[0]
-
-	doc := decad.New()
-	body, err := decad.Extrude(doc, s, ch, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
+	body, err := decad.Extrude(decad.New(), s, s.Chains()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
-
-	_, err = body.Tessellate(t.Context(), units.Millimeters(0.1))
-	require.ErrorIs(t, err, decad.ErrUnsupported)
-	require.ErrorContains(t, err, "no chording arm for a chain-fed")
-
+	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyBoundary))
+	require.NoError(t, err)
+	require.True(t, mesh.BoundaryVerified())
+	require.InDelta(t, 100+25*math.Pi, meshTriangleArea(mesh), 0.5)
 	var buf bytes.Buffer
-	require.ErrorIs(t, export.STL(t.Context(), &buf, body, units.Millimeters(0.1)), decad.ErrUnsupported)
+	require.NoError(t, export.STEP(t.Context(), &buf, body, units.Millimeters(0.1),
+		export.WithSTEPName("ribbon"), export.WithSTEPAuthor("test"), export.WithSTEPOrganization("test")))
+	received, err := decad.ReadSTEP(t.Context(), &buf)
+	require.NoError(t, err)
+	require.False(t, received.Report().Closed)
+	area, err := received.Area()
+	require.NoError(t, err)
+	require.InDelta(t, 100+25*math.Pi, area.Value.Base(), 0.5)
 }
 
 // TestSweepChainTessellatesRibbon confirms the chainSweepPayload arm reuses

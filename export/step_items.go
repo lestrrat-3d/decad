@@ -30,7 +30,7 @@ type STEPItem struct {
 	// held faceted mesh that refuses it be written at its own floor; a non-zero Tolerance is used as given
 	// and its refusal is returned.
 	Tolerance units.Value
-	// Color, when not nil, colours every solid of the body. Alpha is ignored.
+	// Color, when not nil, colours the body geometry. Alpha is ignored.
 	Color *color.RGBA
 }
 
@@ -88,14 +88,37 @@ func NewSTEPItemsFile(ctx context.Context, items []STEPItem, tol units.Value, he
 		if plan.analytic {
 			description = "analytic decad solid"
 		}
+		if plan.sheet {
+			description = "faceted decad sheet"
+			if plan.analytic {
+				description = "analytic decad sheet"
+			}
+		}
 		definitions[k] = b.addSTEPProduct(sc, definitionContext, it.Name, description)
 		pds := b.add(ap214.ProductDefinitionShape(0, "shape", "", definitions[k]))
-		if solids[k], err = b.addSTEPSolids(ctx, it.Body, it.Name, plan); err != nil {
+		if plan.sheet {
+			var model step.Reference
+			model, err = b.addSTEPSheet(ctx, it.Body, it.Name, plan)
+			if err == nil {
+				solids[k] = []step.Reference{model}
+			}
+		} else {
+			solids[k], err = b.addSTEPSolids(ctx, it.Body, it.Name, plan)
+		}
+		if err != nil {
 			return STEPItemsFile{}, fmt.Errorf("export: STEP item %q: %w", it.Name, err)
 		}
 		origins[k] = b.addOrigin()
 		members := append(append([]step.Reference(nil), solids[k]...), origins[k])
-		absrs[k] = b.add(ap214.AdvancedBrepShapeRepresentation(0, it.Name, sc.representation, members...))
+		if plan.sheet {
+			values := make(step.List, len(members))
+			for i, member := range members {
+				values[i] = member
+			}
+			absrs[k] = b.add(step.Entity{Name: "MANIFOLD_SURFACE_SHAPE_REPRESENTATION", Parameters: []step.Value{step.String(it.Name), values, sc.representation}})
+		} else {
+			absrs[k] = b.add(ap214.AdvancedBrepShapeRepresentation(0, it.Name, sc.representation, members...))
+		}
 		b.add(ap214.ShapeDefinitionRepresentation(0, pds, absrs[k]))
 	}
 
@@ -266,7 +289,7 @@ func (b *fileBuilder) addOrigin() step.Reference {
 	return b.add(ap214.Axis2Placement3D(0, "", location, axis, ref))
 }
 
-// addSTEPColours writes one colour style per distinct RGB, in first-use order, a STYLED_ITEM for each solid
+// addSTEPColours writes one colour style per distinct RGB, in first-use order, a STYLED_ITEM for each representation item
 // of each coloured body, and the presentation representation that holds them. It writes nothing when no item
 // has a colour.
 func (b *fileBuilder) addSTEPColours(sc stepContext, items []STEPItem, bodies []int, solids [][]step.Reference) {
@@ -290,8 +313,8 @@ func (b *fileBuilder) addSTEPColours(sc stepContext, items []STEPItem, bodies []
 			assignment = b.add(ap214.PresentationStyleAssignment(0, usage))
 			styles[key] = assignment
 		}
-		for _, solid := range solids[k] {
-			styled = append(styled, b.add(ap214.StyledItem(0, "color", []step.Reference{assignment}, solid)))
+		for _, item := range solids[k] {
+			styled = append(styled, b.add(ap214.StyledItem(0, "color", []step.Reference{assignment}, item)))
 		}
 	}
 	if len(styled) > 0 {

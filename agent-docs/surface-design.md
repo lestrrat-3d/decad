@@ -79,7 +79,7 @@ a caller reads for the rest.
 | `Thicken` | §16.1's admitted sheet families build | Holed or placed composite sweeps, chain sweeps outside §16.8's classes, loft, stitched, `PatchEdges` and `Unstitch` sheets refuse under R24; §16.8 names their missing proofs |
 | `Trim`, `Extend` | `Trim` over a receiver whose section is one closed loop and `Extend` over a chain ribbon, in the prism family and the revolve family alike (`agent-docs/surface-intersection-design.md` §2.2) | That document's §4 states shapes outside the admitted class, and `agent-docs/api-design.md` §2.1 explains the refusal of a pair sharing no generator |
 | `Split` | the prism family and the revolve family alike: one solid target, a sheet tool, and one solid body per arranged piece out (`agent-docs/surface-intersection-design.md` §8). A revolve piece charges its cut ends through that document's §7.2 | nothing is staged. That document's §4 states every shape outside the admitted class |
-| `Sweep` over a chain | one straight span, one arc through the chain Revolve gates, or a §15.8 composite of tangent lines and exact coordinate-axis quarter and half turns that starts with a line, over a line-only source walk | Other composite paths refuse R34. Only §15.8's radial line/half-circle composite has a sheet mesh. A single-arc sheet from more than one straight off-axis source segment has no mesh. `agent-docs/sweep-design.md` §15 states the reductions. Table D row 13 |
+| `Sweep` over a chain | one straight span, one arc through the chain Revolve gates, or a §15.8 composite of tangent lines and exact coordinate-axis quarter and half turns that starts with a line, over a line-only source walk | Other composite paths refuse R34. Only §15.8's radial line/half-circle composite has a sheet mesh. A single-arc sheet meshes off-axis line and circular source chains with shared junction rings. `agent-docs/sweep-design.md` §15 states the reductions. Table D row 13 |
 | `LoftChain` | a `LineSeg`-only correspondence between two exactly-parallel walks whose to-plane origin lies strictly on the from-plane's positive side (`agent-docs/loft-design.md` §16.6's PR L1) | a curved correspondence, R36, until §5.1's station generator there states each COMPUTED station's own side against the from-plane (that document's §16.2, §16.6's PR L2). A non-parallel plane pair refuses at R35, which §7 reads as a reach boundary rather than a queued build: the ribbon between two non-parallel open walks exists, and what this evaluator lacks is a stated positive side for it |
 
 ### 1.3 What this design refuses permanently
@@ -239,6 +239,9 @@ as a surface closes and stays `BodySheet` (§4.1), because nothing has yet claim
 inside it. `Stitch` is what makes the claim — a welded all-planar boundary that
 closes returns `BodySolid` (Table C) — and a closed sheet that `Stitch` has not
 run on, or that it refused to promote (R8), keeps its kind.
+
+A chain extrusion can be tessellated with the certified curve stations in
+`agent-docs/tessellation-design.md`; its mesh is a sheet and makes no occupied-volume claim.
 
 ### 2.2 Topology
 
@@ -1588,7 +1591,7 @@ geometry, `ErrUnsupported` is this evaluator's reach.
 | R41 | `Offset` on a retired receiver | `ErrRetiredBody` |
 | R43 | `Thicken` on a revolve sheet or a chain revolve shell whose axis is not stated exactly along a recorded plane axis, whose swept offset has no proven strictly positive radius from that axis over the whole interval, or whose assembled section leaves the axis side undecided (§16.5, §16.7) | `ErrUnsupported` |
 | R44 | `Thicken` on a chain-fed sheet holding more than one recorded walk, carrying a nonzero section displacement, or holding a walk outside §16.6's axis-parallel right-angle class | `ErrUnsupported` |
-| R45 | A chain `Extrude` or a chain `Sweep`'s tessellation or export over a chain holding a curved (`CircleSeg`/`ArcSeg` fragment) or free-form wall, because no mesh chords that wall yet | `ErrUnsupported` |
+| R45 | A chain prism ribbon requests a chord tolerance at or below its own section displacement | `ErrUnsupported` |
 | R46 | `PatchEdges` chain holding a circular edge whose curve bound could not be proven (a cap copy at a sweep end with no denotation, a bound not below half the radius), so the new face has no proven area (§5.2) | `ErrUnsupported` |
 
 R6, R8, R10 and R20 are `ErrUnsupported` rather than `ErrDegenerate` on
@@ -1611,7 +1614,7 @@ R29 is `ErrUnsupported`; its pair-sharing-no-generator case is permanent
 (`agent-docs/surface-intersection-design.md` §4). R30 joins R5, R7 and R9 as
 `ErrDegenerate` when a tool separates nothing.
 
-R22, R34, R36 and R45 are `ErrUnsupported` and STAGED: each names real
+R22, R34 and R36 are `ErrUnsupported` and STAGED: each names real
 geometry, and each waits on a topology build rather than on a different
 operation. R43 and R44 are `ErrUnsupported` and NOT staged in that sense:
 each names a receiver whose own geometry the proof cannot decide — an axis
@@ -2561,14 +2564,13 @@ governs it row for row: a boolean, `Fillet`, `Chamfer` and `Shell` refuse it,
 `Transform`/`Copy` admit it, a planar wall answers `ToFace`, and
 every selector predicate reads its faces and edges. A chain-fed prism ribbon
 built from `LineSeg` segments alone tessellates and exports through §10's
-manifold-with-boundary audit, reading each wall's own exact planar quad
-straight off its topology with no chording at all — a curved
-(`CircleSeg`/`ArcSeg` fragment) or free-form wall is `ErrUnsupported` (R45). A
-chain-fed revolve ribbon's mesh is `ErrUnsupported` too:
-`tessellateBodyContext` has no `chainRevolvePayload` arm, and `planRevolve` plus
-its wraparound axis-incidence audit consume closed loops. The existing pole-fan
-chording does not prove that an open walk's free pole gets one manifold
-boundary. A one-line chain `Sweep` over a
+manifold-with-boundary audit. Planar walls retain their exact quads; circular and free-form
+walls use certified stations with their boundary and displacement bounds. A
+chain revolve with straight meridians uses certified endpoint and junction rings, including an
+exactly proven pole at a free end. A chain of circular and straight meridians also uses certified
+stations when the source clears its axis. One circular meridian with proven non-negative radius may also end at an exact free pole. Free-form meridians, axis-line walks, and uncertain snapped poles remain unsupported. Trimmed straight and circular chain revolutions can carry cut displacement and multiple separate chains
+through the same mesh and STEP path. A `LoftChain` ribbon restates its audited
+triangular faces and shared vertices for tessellation and STEP export. A one-line chain `Sweep` over a
 single arc instead uses §15.9's limited open-wall mesh. A ribbon is an
 ordinary `Stitch` operand: a
 straight walk's free edges are all `Line3`, so Table J's J5 answers vacuously
@@ -2634,7 +2636,7 @@ ANSWER is accepted and reads `Suspect`.
 | 16 | `Thicken` on a profile-fed revolve sheet (§16.5): the exact axis class, the meridian annulus over §16.2's own offsets, the radial gate over the interval scan's own boxes, the re-resolved axis frame, and §15's T158–T161 |
 | 17 | `Thicken` on a chain ribbon (§16.6): the closed-form assembled section, its exact-generation gate and endpoint crossing audit, all three sides, and §15's T162–T164 |
 | 18 | `Thicken` on a chain revolve shell (§16.7): §16.6's assembled section under §16.5's sweep and radial gate, and §15's T165–T169. A free end on the axis stays R43 |
-| 19 | The chain-fed prism ribbon's `Tessellate`/`STL`/`OBJ` mesh over a `LineSeg`-only chain (`internal/chainrecord/tessellate.go`): every wall's exact planar quad read straight off its topology with no chording. A curved or free-form wall, and the chain-fed revolve ribbon's mesh, stay R45 and row 10's own staging respectively |
+| 19 | The chain-fed prism ribbon's `Tessellate`/`STL`/`OBJ` mesh reads planar quads and chords curved or free-form walks with certified bounds (`internal/chainrecord/tessellate.go`). An off-axis straight chain revolve uses the endpoint-ring mesh; its other cases remain staged in row 10. |
 | 20 | `Thicken` on one-span straight and arc sweep sheets (§16.8): reuse the prism or revolve offset proof, then publish the new solid as `sweepPayload` with its path and roles. Composite profile sweep sheets re-sweep one generated annulus (§16.8). T213 checks both reductions and replay |
 | 21 | Composite chain `Sweep` `Thicken` (§16.8): exact ribbon section and a radial interval per arc span; the solid composite sweep sews caps and proves measurements and mesh (T195c, T195f). Other chain sweeps stay R24 except row 22's one-arc class |
 | 22 | One-arc chain `Sweep` `Thicken` (§16.8): §16.7 closes the source walk under its exact-axis gate, and the result uses the solid one-arc Sweep proof and path roles (T214) |
@@ -2659,9 +2661,8 @@ order is admissible.
 **Increment 8 depends on increments 1 and 6**, and on no other: increment 1 for
 `BodyKind`, `Edge.IsFree` and §9.1's sheet validity audit, and increment 6 for
 `ChainRecord` and the ribbon wall build every trimmed result is assembled by.
-None of 2, 3, 4 or 5 is a prerequisite of it, and none of them depends on it. A
-trimmed revolve sheet has no mesh: `chainRevolvePayload` has no tessellation arm (§13.4),
-which is outside increment 4's reach and no dependency of this one.
+None of 2, 3, 4 or 5 is a prerequisite of it, and none of them depends on it.
+Trimmed revolve sheets mesh when their resulting chains meet §13.4's mesh gates.
 
 **Increment 6 depends on increment 1 alone**, for `BodyKind` and `Kind()`,
 `Edge.IsFree` and `Free()`, §8's sheet measurement rows, §9.1's sheet validity
@@ -2706,6 +2707,11 @@ build refuses at the call with `ErrUnsupported`.
 computed geometry, never merely that it ran. Each row below names a concrete
 assertion, and each bound assertion must first be **shown to fail** — the
 proof leg deleted, the test watched to go red — before it is trusted.
+
+An `Unstitch` piece with straight planar edges triangulates its own face. Other pieces can reuse
+facets attributed to their original face when the original body can be tessellated, including after
+placement. The extracted facets retain their source bound and are checked against the new free
+boundary. Nested `Unstitch` sources remain unsupported.
 
 The row-9 curved-mesh obligations are:
 

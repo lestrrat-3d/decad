@@ -288,6 +288,17 @@ func tessellateContextWithBudget(ctx context.Context, b *Body, tol units.Value, 
 			Surface: func(s surfacegeom.Surface) any { return publicSurface(s) },
 			Curve:   func(c surfacegeom.Curve) any { return publicCurve(c) },
 			Alloc:   handleAlloc{},
+			SourceMesh: func(ctx context.Context, source *topo.Body, sourceChord float64) (*topo.Mesh, error) {
+				owner, ok := source.Owner.(*Body)
+				if !ok || owner == nil {
+					return nil, fmt.Errorf(`%w: an unstitched face has no source body handle`, ErrUnsupported)
+				}
+				mesh, err := tessellateContext(ctx, owner, units.Millimeters(sourceChord), verify)
+				if err != nil {
+					return nil, err
+				}
+				return meshNode(mesh), nil
+			},
 		})
 	}
 	if err != nil {

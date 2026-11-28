@@ -1,0 +1,1405 @@
+package export_test
+
+import (
+	"bytes"
+	"fmt"
+	"math"
+	"strings"
+	"testing"
+
+	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/decad/decadtest"
+	"github.com/lestrrat-3d/decad/export"
+	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/sketch"
+	"github.com/lestrrat-3d/step"
+	"github.com/lestrrat-3d/units"
+	"github.com/stretchr/testify/require"
+)
+
+func TestSTEPPlanarSheetRoundTrip(t *testing.T) {
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	rect := s.CreateRectangle(0, 0, 2, 3)
+	s.Fix(rect.A)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	body, err := decad.PatchProfile(decad.New(), s, s.Profiles()[0]).Do(t.Context())
+	require.NoError(t, err)
+	file, err := export.NewSTEPFile(t.Context(), body, units.Millimeters(0.1), header())
+	require.NoError(t, err)
+	data, err := file.Marshal()
+	require.NoError(t, err)
+	require.Contains(t, string(data), "SHELL_BASED_SURFACE_MODEL")
+	require.Contains(t, string(data), "OPEN_SHELL")
+	mesh, err := decad.ReadSTEP(t.Context(), bytes.NewReader(data))
+	require.NoError(t, err)
+	require.False(t, mesh.Report().Closed)
+	area, err := mesh.Area()
+	require.NoError(t, err)
+	require.InDelta(t, 6, area.Value.Base(), 1e-10)
+	normal, err := body.Faces()[0].NormalAt(r3.NewVec(1, 1, 0))
+	require.NoError(t, err)
+	vertices, triangles := mesh.Vertices(), mesh.Triangles()
+	for _, tri := range triangles {
+		a, b, c := vertices[tri[0]], vertices[tri[1]], vertices[tri[2]]
+		require.Positive(t, b.Sub(a).Cross(c.Sub(a)).Dot(normal.Value))
+	}
+}
+
+func TestSTEPFacetedSheetRoundTrip(t *testing.T) {
+	body := box(t, true)
+	tol := units.Millimeters(0.1)
+	source, err := body.Tessellate(t.Context(), tol, decad.WithVerification(decad.VerifyBoundary))
+	require.NoError(t, err)
+	sourceMesh, err := decad.NewMeshBody(t.Context(), source.Vertices(), source.Triangles())
+	require.NoError(t, err)
+	want, err := sourceMesh.Area()
+	require.NoError(t, err)
+	file, err := export.NewFacetedSTEPFile(t.Context(), body, tol, header())
+	require.NoError(t, err)
+	data, err := file.Marshal()
+	require.NoError(t, err)
+	require.Contains(t, string(data), "faceted decad sheet")
+	mesh, err := decad.ReadSTEP(t.Context(), bytes.NewReader(data))
+	require.NoError(t, err)
+	require.False(t, mesh.Report().Closed)
+	require.Equal(t, len(source.Triangles()), mesh.Report().Triangles)
+	got, err := mesh.Area()
+	require.NoError(t, err)
+	require.InDelta(t, want.Value.Base(), got.Value.Base(), 1e-10)
+}
+
+func TestSTEPCircularSheetRoundTrip(t *testing.T) {
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	center := s.CreatePoint(0, 0)
+	s.Fix(center)
+	s.CreateCircle(center, 5)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	body, err := decad.PatchProfile(decad.New(), s, s.Profiles()[0]).Do(t.Context())
+	require.NoError(t, err)
+	file, err := export.NewSTEPFile(t.Context(), body, units.Millimeters(0.1), header())
+	require.NoError(t, err)
+	data, err := file.Marshal()
+	require.NoError(t, err)
+	require.Contains(t, string(data), "analytic decad sheet")
+	require.Contains(t, string(data), "CIRCLE(")
+	mesh, err := decad.ReadSTEP(t.Context(), bytes.NewReader(data))
+	require.NoError(t, err)
+	require.False(t, mesh.Report().Closed)
+	area, err := mesh.Area()
+	require.NoError(t, err)
+	n := float64(mesh.Report().Vertices)
+	require.InDelta(t, 0.5*n*25*math.Sin(2*math.Pi/n), area.Value.Base(), 1e-9)
+	require.InDelta(t, 5, mesh.Bounds().Max.X, 0.01)
+}
+
+func TestSTEPAnalyticMultiFaceSheetRoundTrip(t *testing.T) {
+	body := box(t, true)
+	file, err := export.NewSTEPFile(t.Context(), body, units.Millimeters(0.1), header())
+	require.NoError(t, err)
+	data, err := file.Marshal()
+	require.NoError(t, err)
+	require.Contains(t, string(data), "analytic decad sheet")
+	mesh, err := decad.ReadSTEP(t.Context(), bytes.NewReader(data))
+	require.NoError(t, err)
+	require.False(t, mesh.Report().Closed)
+	area, err := mesh.Area()
+	require.NoError(t, err)
+	require.InDelta(t, 40, area.Value.Base(), 1e-10)
+}
+
+func TestSTEPDisconnectedSheetRoundTrip(t *testing.T) {
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	outer := s.CreateRectangle(0, 0, 10, 10)
+	s.Fix(outer.A)
+	s.CreateRectangle(3, 3, 7, 7)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	var profile *sketch.Profile
+	for _, p := range s.Profiles() {
+		if len(p.Holes) == 1 {
+			profile = p
+			break
+		}
+	}
+	require.NotNil(t, profile)
+	body, err := decad.Extrude(decad.New(), s, profile, decad.Distance{D: units.Millimeters(2), Dir: decad.Along}).SurfaceResult().Do(t.Context())
+	require.NoError(t, err)
+	require.Len(t, body.Shells(), 2)
+	for _, faceted := range []bool{false, true} {
+		var file step.File
+		if faceted {
+			file, err = export.NewFacetedSTEPFile(t.Context(), body, units.Millimeters(0.1), header())
+		} else {
+			file, err = export.NewSTEPFile(t.Context(), body, units.Millimeters(0.1), header())
+		}
+		require.NoError(t, err)
+		data, err := file.Marshal()
+		require.NoError(t, err)
+		if faceted {
+			require.Contains(t, string(data), "faceted decad sheet")
+		} else {
+			require.Contains(t, string(data), "analytic decad sheet")
+		}
+		require.Equal(t, 2, strings.Count(string(data), "=OPEN_SHELL("))
+		mesh, err := decad.ReadSTEP(t.Context(), bytes.NewReader(data))
+		require.NoError(t, err)
+		require.Equal(t, 2, mesh.Report().Shells)
+		area, err := mesh.Area()
+		require.NoError(t, err)
+		require.InDelta(t, 112, area.Value.Base(), 1e-9)
+	}
+}
+
+func TestSTEPClosedSheetRoundTrip(t *testing.T) {
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	r := s.CreateRectangle(0, 5, 10, 15)
+	s.Fix(r.A)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	axis := decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}}
+	body, err := decad.Revolve(decad.New(), s, s.Profiles()[0], axis, decad.FullRevolution{}).SurfaceResult().Do(t.Context())
+	require.NoError(t, err)
+	require.Len(t, body.Shells(), 1)
+	require.False(t, body.Shells()[0].IsOpen())
+	file, err := export.NewFacetedSTEPFile(t.Context(), body, units.Millimeters(0.5), header())
+	require.NoError(t, err)
+	data, err := file.Marshal()
+	require.NoError(t, err)
+	require.Contains(t, string(data), "=CLOSED_SHELL(")
+	require.NotContains(t, string(data), "=MANIFOLD_SOLID_BREP(")
+	mesh, err := decad.ReadSTEP(t.Context(), bytes.NewReader(data))
+	require.NoError(t, err)
+	require.True(t, mesh.Report().Closed)
+	require.Equal(t, 1, mesh.Report().Shells)
+	bounds := mesh.Bounds()
+	require.InDelta(t, 10, bounds.Max.X-bounds.Min.X, 1e-9)
+	require.InDelta(t, 30, bounds.Max.Y-bounds.Min.Y, 1.0)
+}
+
+func TestSTEPCylindricalSheetRoundTrip(t *testing.T) {
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	center := s.CreatePoint(0, 0)
+	s.Fix(center)
+	s.CreateCircle(center, 5)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	body, err := decad.Extrude(decad.New(), s, s.Profiles()[0], decad.Distance{D: units.Millimeters(4), Dir: decad.Along}).SurfaceResult().Do(t.Context())
+	require.NoError(t, err)
+	file, err := export.NewSTEPFile(t.Context(), body, units.Millimeters(0.1), header())
+	require.NoError(t, err)
+	data, err := file.Marshal()
+	require.NoError(t, err)
+	require.Contains(t, string(data), "analytic decad sheet")
+	require.Contains(t, string(data), "CYLINDRICAL_SURFACE(")
+	mesh, err := decad.ReadSTEP(t.Context(), bytes.NewReader(data))
+	require.NoError(t, err)
+	require.False(t, mesh.Report().Closed)
+	area, err := mesh.Area()
+	require.NoError(t, err)
+	require.InDelta(t, 40*math.Pi, area.Value.Base(), 0.2)
+}
+
+func TestSTEPCurvedDisconnectedSheetRoundTrip(t *testing.T) {
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	r := s.CreateRectangle(0, 0, 10, 10)
+	s.Fix(r.A)
+	s.CreateCircle(s.CreatePoint(5, 5), 2)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	var profile *sketch.Profile
+	for _, p := range s.Profiles() {
+		if len(p.Holes) == 1 {
+			profile = p
+			break
+		}
+	}
+	require.NotNil(t, profile)
+	body, err := decad.Extrude(decad.New(), s, profile, decad.Distance{D: units.Millimeters(2), Dir: decad.Along}).SurfaceResult().Do(t.Context())
+	require.NoError(t, err)
+	file, err := export.NewSTEPFile(t.Context(), body, units.Millimeters(0.1), header())
+	require.NoError(t, err)
+	data, err := file.Marshal()
+	require.NoError(t, err)
+	require.Contains(t, string(data), "analytic decad sheet")
+	require.Contains(t, string(data), "CYLINDRICAL_SURFACE(")
+	require.Equal(t, 2, strings.Count(string(data), "=OPEN_SHELL("))
+	mesh, err := decad.ReadSTEP(t.Context(), bytes.NewReader(data))
+	require.NoError(t, err)
+	require.Equal(t, 2, mesh.Report().Shells)
+	area, err := mesh.Area()
+	require.NoError(t, err)
+	require.InDelta(t, 80+8*math.Pi, area.Value.Base(), 0.1)
+}
+
+func TestSTEPFreeformSheetRoundTrip(t *testing.T) {
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	p0 := s.CreatePoint(0, 0)
+	s.Fix(p0)
+	_, err = s.CreateSpline(p0, s.CreatePoint(10, 5), s.CreatePoint(20, 8), s.CreatePoint(30, 9))
+	require.NoError(t, err)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	body, err := decad.Extrude(decad.New(), s, s.Chains()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
+	require.NoError(t, err)
+	tol := units.Millimeters(0.5)
+	source, err := body.Tessellate(t.Context(), tol, decad.WithVerification(decad.VerifyBoundary))
+	require.NoError(t, err)
+	require.True(t, source.BoundaryVerified())
+	require.Positive(t, source.Bound().Base())
+	fine, err := body.Tessellate(t.Context(), units.Millimeters(0.01), decad.WithVerification(decad.VerifyBoundary))
+	require.NoError(t, err)
+	require.Greater(t, len(fine.Triangles()), len(source.Triangles()))
+	require.Less(t, fine.Bound().Base(), source.Bound().Base())
+	verified, err := body.Tessellate(t.Context(), tol, decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	require.True(t, verified.BoundaryVerified())
+	require.False(t, verified.VolumeVerified())
+	vertices := fine.Vertices()
+	for _, tri := range fine.Triangles() {
+		a, b, c := vertices[tri[0]], vertices[tri[1]], vertices[tri[2]]
+		require.Negative(t, b.Sub(a).Cross(c.Sub(a)).Y)
+	}
+	file, err := export.NewSTEPFile(t.Context(), body, tol, header())
+	require.NoError(t, err)
+	data, err := file.Marshal()
+	require.NoError(t, err)
+	require.Contains(t, string(data), "faceted decad sheet")
+	mesh, err := decad.ReadSTEP(t.Context(), bytes.NewReader(data))
+	require.NoError(t, err)
+	require.False(t, mesh.Report().Closed)
+	require.Equal(t, len(source.Triangles()), mesh.Report().Triangles)
+	want, err := decad.NewMeshBody(t.Context(), source.Vertices(), source.Triangles())
+	require.NoError(t, err)
+	wantArea, err := want.Area()
+	require.NoError(t, err)
+	gotArea, err := mesh.Area()
+	require.NoError(t, err)
+	require.InDelta(t, wantArea.Value.Base(), gotArea.Value.Base(), 1e-8)
+	mirrorPlane, err := r3.NewFrame(r3.Vec{}, r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
+	require.NoError(t, err)
+	reflection, err := r3.Reflection(mirrorPlane)
+	require.NoError(t, err)
+	reflected, err := decad.Transform(body, reflection).Do(t.Context())
+	require.NoError(t, err)
+	reflectedMesh, err := reflected.Tessellate(t.Context(), tol, decad.WithVerification(decad.VerifyBoundary))
+	require.NoError(t, err)
+	points := reflectedMesh.Vertices()
+	for _, tri := range reflectedMesh.Triangles() {
+		a, b, c := points[tri[0]], points[tri[1]], points[tri[2]]
+		require.Negative(t, b.Sub(a).Cross(c.Sub(a)).Y)
+	}
+}
+
+func TestSTEPMixedSplineSheetRoundTrip(t *testing.T) {
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	start := s.CreatePoint(0, 0)
+	end := s.CreatePoint(30, 9)
+	s.Fix(start)
+	_, err = s.CreateSpline(start, s.CreatePoint(10, 5), s.CreatePoint(20, 8), end)
+	require.NoError(t, err)
+	s.CreateLine(end, s.CreatePoint(40, 9))
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	body, err := decad.Extrude(decad.New(), s, s.Chains()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
+	require.NoError(t, err)
+	file, err := export.NewSTEPFile(t.Context(), body, units.Millimeters(0.1), header())
+	require.NoError(t, err)
+	data, err := file.Marshal()
+	require.NoError(t, err)
+	require.Contains(t, string(data), "faceted decad sheet")
+	mesh, err := decad.ReadSTEP(t.Context(), bytes.NewReader(data))
+	require.NoError(t, err)
+	require.False(t, mesh.Report().Closed)
+	require.Equal(t, 1, mesh.Report().Shells)
+	require.Zero(t, mesh.Report().MisorientedEdges)
+	require.InDelta(t, 40, mesh.Bounds().Max.X-mesh.Bounds().Min.X, 1e-9)
+}
+
+func TestSTEPTrimmedCurvedSheetRoundTrip(t *testing.T) {
+	doc := decad.New()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	center := s.CreatePoint(0, 0)
+	s.Fix(center)
+	s.CreateCircle(center, 5)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	sheet, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).SurfaceResult().Do(t.Context())
+	require.NoError(t, err)
+	toolSketch, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	rect := toolSketch.CreateRectangle(0, -8, 8, 8)
+	toolSketch.Fix(rect.A)
+	_, err = toolSketch.Solve(t.Context())
+	require.NoError(t, err)
+	tool, err := decad.Extrude(doc, toolSketch, toolSketch.Profiles()[0], decad.TwoSided{One: decad.DistanceSide{D: units.Millimeters(11)}, Two: decad.DistanceSide{D: units.Millimeters(1)}}).Do(t.Context())
+	require.NoError(t, err)
+	body, err := decad.Trim(sheet, tool, decad.KeepOutside).Do(t.Context())
+	require.NoError(t, err)
+	require.Equal(t, "decad.chainPayload", decadtest.PayloadClass(body))
+	_, err = body.Tessellate(t.Context(), units.Millimeters(1e-30), decad.WithVerification(decad.VerifyBoundary))
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	require.ErrorContains(t, err, "section displacement")
+	tol := units.Millimeters(0.1)
+	source, err := body.Tessellate(t.Context(), tol, decad.WithVerification(decad.VerifyBoundary))
+	require.NoError(t, err)
+	require.Positive(t, source.Bound().Base())
+	verified, err := body.Tessellate(t.Context(), tol, decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	require.True(t, verified.BoundaryVerified())
+	require.False(t, verified.VolumeVerified())
+	file, err := export.NewSTEPFile(t.Context(), body, tol, header())
+	require.NoError(t, err)
+	data, err := file.Marshal()
+	require.NoError(t, err)
+	mesh, err := decad.ReadSTEP(t.Context(), bytes.NewReader(data))
+	require.NoError(t, err)
+	require.False(t, mesh.Report().Closed)
+	area, err := mesh.Area()
+	require.NoError(t, err)
+	require.InDelta(t, 50*math.Pi, area.Value.Base(), 1)
+}
+
+func TestSTEPRevolvedChainSheetRoundTrip(t *testing.T) {
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	a := s.CreatePoint(0, 5)
+	s.Fix(a)
+	s.CreateLine(a, s.CreatePoint(10, 5))
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	axis := decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}}
+	body, err := decad.Revolve(decad.New(), s, s.Chains()[0], axis, decad.FullRevolution{}).Do(t.Context())
+	require.NoError(t, err)
+	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	require.True(t, mesh.BoundaryVerified())
+	require.False(t, mesh.VolumeVerified())
+	points := mesh.Vertices()
+	for _, tri := range mesh.Triangles() {
+		a, b, c := points[tri[0]], points[tri[1]], points[tri[2]]
+		center := a.Add(b).Add(c).Scale(1.0 / 3)
+		normal, err := body.Faces()[0].NormalAt(center)
+		require.NoError(t, err)
+		require.Positive(t, b.Sub(a).Cross(c.Sub(a)).Dot(normal.Value))
+	}
+	file, err := export.NewSTEPFile(t.Context(), body, units.Millimeters(0.1), header())
+	require.NoError(t, err)
+	data, err := file.Marshal()
+	require.NoError(t, err)
+	require.Contains(t, string(data), "analytic decad sheet")
+	require.Contains(t, string(data), "CYLINDRICAL_SURFACE(")
+	result, err := decad.ReadSTEP(t.Context(), bytes.NewReader(data))
+	require.NoError(t, err)
+	require.False(t, result.Report().Closed)
+	area, err := result.Area()
+	require.NoError(t, err)
+	require.InDelta(t, 100*math.Pi, area.Value.Base(), 0.5)
+}
+
+func TestSTEPRevolvedTaperedChainRoundTrip(t *testing.T) {
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	a := s.CreatePoint(0, 2)
+	s.Fix(a)
+	s.CreateLine(a, s.CreatePoint(10, 5))
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	axis := decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}}
+	body, err := decad.Revolve(decad.New(), s, s.Chains()[0], axis, decad.FullRevolution{}).Do(t.Context())
+	require.NoError(t, err)
+	source, err := body.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyBoundary))
+	require.NoError(t, err)
+	original, err := decad.NewMeshBody(t.Context(), source.Vertices(), source.Triangles())
+	require.NoError(t, err)
+	want, err := original.Area()
+	require.NoError(t, err)
+	file, err := export.NewSTEPFile(t.Context(), body, units.Millimeters(0.1), header())
+	require.NoError(t, err)
+	data, err := file.Marshal()
+	require.NoError(t, err)
+	require.Contains(t, string(data), "faceted decad sheet")
+	mesh, err := decad.ReadSTEP(t.Context(), bytes.NewReader(data))
+	require.NoError(t, err)
+	require.False(t, mesh.Report().Closed)
+	area, err := mesh.Area()
+	require.NoError(t, err)
+	require.InDelta(t, want.Value.Base(), area.Value.Base(), 1e-9)
+	require.InDelta(t, 7*math.Pi*math.Sqrt(109), area.Value.Base(), 2.5)
+}
+
+func TestSTEPPartialRevolvedChainRoundTrip(t *testing.T) {
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	a := s.CreatePoint(0, 5)
+	s.Fix(a)
+	s.CreateLine(a, s.CreatePoint(10, 5))
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	axis := decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}}
+	body, err := decad.Revolve(decad.New(), s, s.Chains()[0], axis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along}).Do(t.Context())
+	require.NoError(t, err)
+	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	require.True(t, mesh.BoundaryVerified())
+	file, err := export.NewSTEPFile(t.Context(), body, units.Millimeters(0.1), header())
+	require.NoError(t, err)
+	data, err := file.Marshal()
+	require.NoError(t, err)
+	result, err := decad.ReadSTEP(t.Context(), bytes.NewReader(data))
+	require.NoError(t, err)
+	require.False(t, result.Report().Closed)
+	area, err := result.Area()
+	require.NoError(t, err)
+	require.InDelta(t, 25*math.Pi, area.Value.Base(), 0.5)
+}
+
+func TestSTEPRevolvedPoleSheetRoundTrip(t *testing.T) {
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	a := s.CreatePoint(0, 0)
+	s.Fix(a)
+	s.CreateLine(a, s.CreatePoint(4, 3))
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	axis := decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}}
+	body, err := decad.Revolve(decad.New(), s, s.Chains()[0], axis, decad.FullRevolution{}).Do(t.Context())
+	require.NoError(t, err)
+	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	require.True(t, mesh.BoundaryVerified())
+	original, err := decad.NewMeshBody(t.Context(), mesh.Vertices(), mesh.Triangles())
+	require.NoError(t, err)
+	want, err := original.Area()
+	require.NoError(t, err)
+	file, err := export.NewSTEPFile(t.Context(), body, units.Millimeters(0.1), header())
+	require.NoError(t, err)
+	data, err := file.Marshal()
+	require.NoError(t, err)
+	result, err := decad.ReadSTEP(t.Context(), bytes.NewReader(data))
+	require.NoError(t, err)
+	require.False(t, result.Report().Closed)
+	area, err := result.Area()
+	require.NoError(t, err)
+	require.InDelta(t, want.Value.Base(), area.Value.Base(), 1e-9)
+	require.InDelta(t, 15*math.Pi, area.Value.Base(), 1)
+}
+
+func TestSTEPPartialRevolvedPoleSheetRoundTrip(t *testing.T) {
+	for _, reverse := range []bool{false, true} {
+		t.Run(fmt.Sprintf("reverse=%t", reverse), func(t *testing.T) {
+			w := sketch.NewWorld()
+			s, err := w.CreateSketch(w.XY())
+			require.NoError(t, err)
+			a, b := s.CreatePoint(0, 0), s.CreatePoint(4, 3)
+			s.Fix(a)
+			if reverse {
+				s.CreateLine(b, a)
+			} else {
+				s.CreateLine(a, b)
+			}
+			_, err = s.Solve(t.Context())
+			require.NoError(t, err)
+			axis := decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}}
+			body, err := decad.Revolve(decad.New(), s, s.Chains()[0], axis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along}).Do(t.Context())
+			require.NoError(t, err)
+			source, err := body.Tessellate(t.Context(), units.Millimeters(0.05), decad.WithVerification(decad.VerifyAll))
+			require.NoError(t, err)
+			require.True(t, source.BoundaryVerified())
+			file, err := export.NewSTEPFile(t.Context(), body, units.Millimeters(0.05), header())
+			require.NoError(t, err)
+			data, err := file.Marshal()
+			require.NoError(t, err)
+			result, err := decad.ReadSTEP(t.Context(), bytes.NewReader(data))
+			require.NoError(t, err)
+			require.False(t, result.Report().Closed)
+			area, err := result.Area()
+			require.NoError(t, err)
+			require.InDelta(t, 15*math.Pi/4, area.Value.Base(), 0.25)
+		})
+	}
+}
+
+func TestSTEPRevolvedMultisegmentChainRoundTrip(t *testing.T) {
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	a, b, c := s.CreatePoint(0, 5), s.CreatePoint(5, 5), s.CreatePoint(10, 8)
+	s.Fix(a)
+	s.CreateLine(a, b)
+	s.CreateLine(b, c)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	axis := decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}}
+	body, err := decad.Revolve(decad.New(), s, s.Chains()[0], axis, decad.FullRevolution{}).Do(t.Context())
+	require.NoError(t, err)
+	require.Len(t, body.Faces(), 2)
+	tol := units.Millimeters(0.1)
+	source, err := body.Tessellate(t.Context(), tol, decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	require.True(t, source.BoundaryVerified())
+	vertices, faces := source.Vertices(), source.SourceFaces()
+	for i, tri := range source.Triangles() {
+		a, b, c := vertices[tri[0]], vertices[tri[1]], vertices[tri[2]]
+		center := a.Add(b).Add(c).Scale(1.0 / 3)
+		normal, err := faces[i].NormalAt(center)
+		require.NoError(t, err)
+		require.Positive(t, b.Sub(a).Cross(c.Sub(a)).Dot(normal.Value))
+	}
+	file, err := export.NewFacetedSTEPFile(t.Context(), body, tol, header())
+	require.NoError(t, err)
+	data, err := file.Marshal()
+	require.NoError(t, err)
+	result, err := decad.ReadSTEP(t.Context(), bytes.NewReader(data))
+	require.NoError(t, err)
+	require.False(t, result.Report().Closed)
+	require.Equal(t, 1, result.Report().Shells)
+	require.Zero(t, result.Report().MisorientedEdges)
+	require.Equal(t, len(source.Triangles()), result.Report().Triangles)
+	area, err := result.Area()
+	require.NoError(t, err)
+	want := 2*math.Pi*5*5 + math.Pi*(5+8)*math.Sqrt(34)
+	require.InDelta(t, want, area.Value.Base(), 3)
+}
+
+func TestSTEPPartialRevolvedMultisegmentPoleRoundTrip(t *testing.T) {
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	a, b, c := s.CreatePoint(0, 0), s.CreatePoint(4, 3), s.CreatePoint(7, 3)
+	s.Fix(a)
+	s.CreateLine(a, b)
+	s.CreateLine(b, c)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	axis := decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}}
+	body, err := decad.Revolve(decad.New(), s, s.Chains()[0], axis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along}).Do(t.Context())
+	require.NoError(t, err)
+	source, err := body.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	require.True(t, source.BoundaryVerified())
+	file, err := export.NewFacetedSTEPFile(t.Context(), body, units.Millimeters(0.1), header())
+	require.NoError(t, err)
+	data, err := file.Marshal()
+	require.NoError(t, err)
+	result, err := decad.ReadSTEP(t.Context(), bytes.NewReader(data))
+	require.NoError(t, err)
+	require.False(t, result.Report().Closed)
+	require.Equal(t, 1, result.Report().Shells)
+	area, err := result.Area()
+	require.NoError(t, err)
+	require.InDelta(t, 33*math.Pi/4, area.Value.Base(), 0.4)
+}
+
+func TestSTEPRevolvedCircularChainRoundTrip(t *testing.T) {
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	a, b := s.CreatePoint(0, 5), s.CreatePoint(3, 8)
+	s.Fix(a)
+	s.CreateArc(s.CreatePoint(0, 8), a, b)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	axis := decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}}
+	body, err := decad.Revolve(decad.New(), s, s.Chains()[0], axis, decad.FullRevolution{}).Do(t.Context())
+	require.NoError(t, err)
+	tol := units.Millimeters(0.2)
+	source, err := body.Tessellate(t.Context(), tol, decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	require.True(t, source.BoundaryVerified())
+	require.LessOrEqual(t, source.Bound().Base(), tol.Base())
+	fine, err := body.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyBoundary))
+	require.NoError(t, err)
+	require.Greater(t, len(fine.Triangles()), len(source.Triangles()))
+	require.Less(t, fine.Bound().Base(), source.Bound().Base())
+	analytic, err := export.NewSTEPFile(t.Context(), body, tol, header())
+	require.NoError(t, err)
+	require.Len(t, stepByName(analytic, "TOROIDAL_SURFACE"), 1)
+	file, err := export.NewFacetedSTEPFile(t.Context(), body, tol, header())
+	require.NoError(t, err)
+	data, err := file.Marshal()
+	require.NoError(t, err)
+	result, err := decad.ReadSTEP(t.Context(), bytes.NewReader(data))
+	require.NoError(t, err)
+	require.False(t, result.Report().Closed)
+	require.Equal(t, len(source.Triangles()), result.Report().Triangles)
+	area, err := result.Area()
+	require.NoError(t, err)
+	want := 2 * math.Pi * (12*math.Pi - 9)
+	require.InDelta(t, want, area.Value.Base(), 5)
+}
+
+func TestSTEPPartialRevolvedCircularChainRoundTrip(t *testing.T) {
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	a, b := s.CreatePoint(2, 4), s.CreatePoint(4, 6)
+	s.Fix(a)
+	s.CreateArc(s.CreatePoint(2, 6), a, b)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	axis := decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}}
+	body, err := decad.Revolve(decad.New(), s, s.Chains()[0], axis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along}).Do(t.Context())
+	require.NoError(t, err)
+	source, err := body.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	require.True(t, source.BoundaryVerified())
+	file, err := export.NewFacetedSTEPFile(t.Context(), body, units.Millimeters(0.1), header())
+	require.NoError(t, err)
+	data, err := file.Marshal()
+	require.NoError(t, err)
+	result, err := decad.ReadSTEP(t.Context(), bytes.NewReader(data))
+	require.NoError(t, err)
+	require.False(t, result.Report().Closed)
+	require.Zero(t, result.Report().MisorientedEdges)
+	area, err := result.Area()
+	require.NoError(t, err)
+	require.InDelta(t, math.Pi*(6*math.Pi-4)/2, area.Value.Base(), 1)
+}
+
+func TestSTEPRevolvedCircularChainOffsetAxisRoundTrip(t *testing.T) {
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	a, b := s.CreatePoint(0, 15), s.CreatePoint(3, 18)
+	s.Fix(a)
+	s.CreateArc(s.CreatePoint(0, 18), a, b)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	axis := decad.SketchLine{Start: decad.Point2{U: 2, V: 10}, End: decad.Point2{U: 3, V: 10}}
+	body, err := decad.Revolve(decad.New(), s, s.Chains()[0], axis, decad.FullRevolution{}).Do(t.Context())
+	require.NoError(t, err)
+	tol := units.Millimeters(0.2)
+	source, err := body.Tessellate(t.Context(), tol, decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	require.True(t, source.BoundaryVerified())
+	file, err := export.NewFacetedSTEPFile(t.Context(), body, tol, header())
+	require.NoError(t, err)
+	data, err := file.Marshal()
+	require.NoError(t, err)
+	result, err := decad.ReadSTEP(t.Context(), bytes.NewReader(data))
+	require.NoError(t, err)
+	require.False(t, result.Report().Closed)
+	area, err := result.Area()
+	require.NoError(t, err)
+	require.InDelta(t, 2*math.Pi*(12*math.Pi-9), area.Value.Base(), 5)
+	require.InDelta(t, 18, result.Bounds().Max.Y, 0.5)
+}
+
+func TestSTEPRevolvedCircularChainRoundedAxisRoundTrip(t *testing.T) {
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	a, b := s.CreatePoint(0, 5.1), s.CreatePoint(3, 8.1)
+	s.Fix(a)
+	s.CreateArc(s.CreatePoint(0, 8.1), a, b)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	axis := decad.SketchLine{Start: decad.Point2{U: 0, V: 0.1}, End: decad.Point2{U: 1, V: 0.1}}
+	body, err := decad.Revolve(decad.New(), s, s.Chains()[0], axis, decad.FullRevolution{}).Do(t.Context())
+	require.NoError(t, err)
+	tol := units.Millimeters(0.2)
+	source, err := body.Tessellate(t.Context(), tol, decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	require.True(t, source.BoundaryVerified())
+	require.LessOrEqual(t, source.Bound().Base(), tol.Base())
+	file, err := export.NewFacetedSTEPFile(t.Context(), body, tol, header())
+	require.NoError(t, err)
+	data, err := file.Marshal()
+	require.NoError(t, err)
+	result, err := decad.ReadSTEP(t.Context(), bytes.NewReader(data))
+	require.NoError(t, err)
+	require.False(t, result.Report().Closed)
+	area, err := result.Area()
+	require.NoError(t, err)
+	require.InDelta(t, 2*math.Pi*(12*math.Pi-9), area.Value.Base(), 5)
+}
+
+func TestSTEPRevolvedCircularChainVerticalAxisRoundTrip(t *testing.T) {
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	a, b := s.CreatePoint(8, 3), s.CreatePoint(5, 0)
+	s.Fix(a)
+	s.CreateArc(s.CreatePoint(8, 0), a, b)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	axis := decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 0, V: 1}}
+	body, err := decad.Revolve(decad.New(), s, s.Chains()[0], axis, decad.FullRevolution{}).Do(t.Context())
+	require.NoError(t, err)
+	tol := units.Millimeters(0.2)
+	source, err := body.Tessellate(t.Context(), tol, decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	require.True(t, source.BoundaryVerified())
+	require.LessOrEqual(t, source.Bound().Base(), tol.Base())
+	file, err := export.NewFacetedSTEPFile(t.Context(), body, tol, header())
+	require.NoError(t, err)
+	data, err := file.Marshal()
+	require.NoError(t, err)
+	result, err := decad.ReadSTEP(t.Context(), bytes.NewReader(data))
+	require.NoError(t, err)
+	require.False(t, result.Report().Closed)
+	area, err := result.Area()
+	require.NoError(t, err)
+	require.InDelta(t, 2*math.Pi*(12*math.Pi-9), area.Value.Base(), 5)
+	rotation, err := r3.Rotation(r3.NewVec(0, 0, 1), units.Degrees(37))
+	require.NoError(t, err)
+	placed, err := decad.Transform(body, rotation).Do(t.Context())
+	require.NoError(t, err)
+	placedFile, err := export.NewFacetedSTEPFile(t.Context(), placed, tol, header())
+	require.NoError(t, err)
+	placedData, err := placedFile.Marshal()
+	require.NoError(t, err)
+	placedResult, err := decad.ReadSTEP(t.Context(), bytes.NewReader(placedData))
+	require.NoError(t, err)
+	placedArea, err := placedResult.Area()
+	require.NoError(t, err)
+	require.InDelta(t, area.Value.Base(), placedArea.Value.Base(), 1e-8)
+}
+
+func TestSTEPRevolvedMixedChainRoundTrip(t *testing.T) {
+	for _, partial := range []bool{false, true} {
+		t.Run(fmt.Sprintf("partial=%t", partial), func(t *testing.T) {
+			w := sketch.NewWorld()
+			s, err := w.CreateSketch(w.XY())
+			require.NoError(t, err)
+			a, b := s.CreatePoint(0, 5), s.CreatePoint(3, 8)
+			s.Fix(a)
+			s.CreateArc(s.CreatePoint(0, 8), a, b)
+			s.CreateLine(b, s.CreatePoint(5, 8))
+			_, err = s.Solve(t.Context())
+			require.NoError(t, err)
+			axis := decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}}
+			var extent decad.AngularExtent = decad.FullRevolution{}
+			if partial {
+				extent = decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along}
+			}
+			body, err := decad.Revolve(decad.New(), s, s.Chains()[0], axis, extent).Do(t.Context())
+			require.NoError(t, err)
+			tol := units.Millimeters(0.2)
+			mesh, err := body.Tessellate(t.Context(), tol, decad.WithVerification(decad.VerifyAll))
+			require.NoError(t, err)
+			require.True(t, mesh.BoundaryVerified())
+			analytic, err := export.NewSTEPFile(t.Context(), body, tol, header())
+			require.NoError(t, err)
+			require.Len(t, stepByName(analytic, "TOROIDAL_SURFACE"), 1)
+			require.Len(t, stepByName(analytic, "CYLINDRICAL_SURFACE"), 1)
+			file, err := export.NewFacetedSTEPFile(t.Context(), body, tol, header())
+			require.NoError(t, err)
+			data, err := file.Marshal()
+			require.NoError(t, err)
+			result, err := decad.ReadSTEP(t.Context(), bytes.NewReader(data))
+			require.NoError(t, err)
+			require.False(t, result.Report().Closed)
+			require.Zero(t, result.Report().MisorientedEdges)
+			area, err := result.Area()
+			require.NoError(t, err)
+			want := 2 * math.Pi * (12*math.Pi - 9 + 16)
+			if partial {
+				want /= 4
+			}
+			require.InDelta(t, want, area.Value.Base(), 6)
+		})
+	}
+}
+
+func TestSTEPRevolvedTwoArcChainRoundTrip(t *testing.T) {
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	a, b, c, d := s.CreatePoint(0, 5), s.CreatePoint(3, 8), s.CreatePoint(5, 8), s.CreatePoint(8, 11)
+	s.Fix(a)
+	s.CreateArc(s.CreatePoint(0, 8), a, b)
+	s.CreateLine(b, c)
+	s.CreateArc(s.CreatePoint(5, 11), c, d)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	axis := decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}}
+	body, err := decad.Revolve(decad.New(), s, s.Chains()[0], axis, decad.FullRevolution{}).Do(t.Context())
+	require.NoError(t, err)
+	sourceArea, err := body.Area()
+	require.NoError(t, err)
+	file, err := export.NewFacetedSTEPFile(t.Context(), body, units.Millimeters(0.1), header())
+	require.NoError(t, err)
+	data, err := file.Marshal()
+	require.NoError(t, err)
+	result, err := decad.ReadSTEP(t.Context(), bytes.NewReader(data))
+	require.NoError(t, err)
+	require.Zero(t, result.Report().MisorientedEdges)
+	area, err := result.Area()
+	require.NoError(t, err)
+	require.InDelta(t, sourceArea.Value.Base(), area.Value.Base(), 5)
+}
+
+func TestSTEPRevolvedMixedChainObliqueAxisRoundTrip(t *testing.T) {
+	for _, partial := range []bool{false, true} {
+		t.Run(fmt.Sprintf("partial=%t", partial), func(t *testing.T) {
+			w := sketch.NewWorld()
+			s, err := w.CreateSketch(w.XY())
+			require.NoError(t, err)
+			a, b := s.CreatePoint(0, 5), s.CreatePoint(3, 8)
+			s.Fix(a)
+			s.CreateArc(s.CreatePoint(0, 8), a, b)
+			s.CreateLine(b, s.CreatePoint(5, 8))
+			_, err = s.Solve(t.Context())
+			require.NoError(t, err)
+			axis := decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 1}}
+			var extent decad.AngularExtent = decad.FullRevolution{}
+			if partial {
+				extent = decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along}
+			}
+			body, err := decad.Revolve(decad.New(), s, s.Chains()[0], axis, extent).Do(t.Context())
+			require.NoError(t, err)
+			draft, err := body.Tessellate(t.Context(), units.Millimeters(0.2), decad.WithVerification(decad.VerifyNone))
+			require.NoError(t, err)
+			require.False(t, draft.BoundaryVerified())
+			sourceArea, err := body.Area()
+			require.NoError(t, err)
+			analytic, err := export.NewSTEPFile(t.Context(), body, units.Millimeters(0.2), header())
+			require.NoError(t, err)
+			analyticData, err := analytic.Marshal()
+			require.NoError(t, err)
+			analyticResult, err := decad.ReadSTEP(t.Context(), bytes.NewReader(analyticData))
+			require.NoError(t, err)
+			require.False(t, analyticResult.Report().Closed)
+			file, err := export.NewFacetedSTEPFile(t.Context(), body, units.Millimeters(0.2), header())
+			require.NoError(t, err)
+			data, err := file.Marshal()
+			require.NoError(t, err)
+			result, err := decad.ReadSTEP(t.Context(), bytes.NewReader(data))
+			require.NoError(t, err)
+			require.Zero(t, result.Report().MisorientedEdges)
+			area, err := result.Area()
+			require.NoError(t, err)
+			require.InDelta(t, sourceArea.Value.Base(), area.Value.Base(), 5)
+		})
+	}
+}
+
+func TestSTEPLoftChainRoundTrip(t *testing.T) {
+	w := sketch.NewWorld()
+	top, err := w.CreateOffsetPlane(w.XY(), 10)
+	require.NoError(t, err)
+	makeSketch := func(plane *sketch.Plane) (*sketch.Sketch, *sketch.Chain) {
+		s, err := w.CreateSketch(plane)
+		require.NoError(t, err)
+		a, b, c := s.CreatePoint(0, 0), s.CreatePoint(4, 0), s.CreatePoint(6, 3)
+		for _, p := range []*sketch.Point{a, b, c} {
+			s.Fix(p)
+		}
+		s.CreateLine(a, b)
+		s.CreateLine(b, c)
+		_, err = s.Solve(t.Context())
+		require.NoError(t, err)
+		return s, s.Chains()[0]
+	}
+	s0, c0 := makeSketch(w.XY())
+	s1, c1 := makeSketch(top)
+	body, err := decad.LoftChain(decad.New(), s0, c0, s1, c1).Do(t.Context())
+	require.NoError(t, err)
+	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.2), decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	require.True(t, mesh.BoundaryVerified())
+	require.Len(t, mesh.Triangles(), 4)
+	file, err := export.NewSTEPFile(t.Context(), body, units.Millimeters(0.2), header())
+	require.NoError(t, err)
+	require.Len(t, stepByName(file, "PLANE"), 4)
+	data, err := file.Marshal()
+	require.NoError(t, err)
+	result, err := decad.ReadSTEP(t.Context(), bytes.NewReader(data))
+	require.NoError(t, err)
+	require.False(t, result.Report().Closed)
+	require.Zero(t, result.Report().MisorientedEdges)
+	area, err := result.Area()
+	require.NoError(t, err)
+	require.InDelta(t, 10*(4+math.Sqrt(13)), area.Value.Base(), 1e-8)
+	rotation, err := r3.Rotation(r3.NewVec(1, 1, 1), units.Degrees(37))
+	require.NoError(t, err)
+	placed, err := decad.Transform(body, rotation).Do(t.Context())
+	require.NoError(t, err)
+	faceted, err := export.NewFacetedSTEPFile(t.Context(), placed, units.Millimeters(0.2), header())
+	require.NoError(t, err)
+	placedData, err := faceted.Marshal()
+	require.NoError(t, err)
+	placedResult, err := decad.ReadSTEP(t.Context(), bytes.NewReader(placedData))
+	require.NoError(t, err)
+	placedArea, err := placedResult.Area()
+	require.NoError(t, err)
+	require.InDelta(t, area.Value.Base(), placedArea.Value.Base(), 1e-8)
+	mirrorFrame, err := r3.NewFrame(r3.NewVec(0, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1))
+	require.NoError(t, err)
+	mirror, err := r3.Reflection(mirrorFrame)
+	require.NoError(t, err)
+	mirrored, err := decad.Transform(placed, mirror).Do(t.Context())
+	require.NoError(t, err)
+	mirroredFile, err := export.NewFacetedSTEPFile(t.Context(), mirrored, units.Millimeters(0.2), header())
+	require.NoError(t, err)
+	mirroredData, err := mirroredFile.Marshal()
+	require.NoError(t, err)
+	mirroredResult, err := decad.ReadSTEP(t.Context(), bytes.NewReader(mirroredData))
+	require.NoError(t, err)
+	require.Zero(t, mirroredResult.Report().MisorientedEdges)
+	mirroredArea, err := mirroredResult.Area()
+	require.NoError(t, err)
+	require.InDelta(t, area.Value.Base(), mirroredArea.Value.Base(), 1e-8)
+}
+
+func TestSTEPSweptMultiLineChainArcRoundTrip(t *testing.T) {
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	a, b, c := s.CreatePoint(0, 0), s.CreatePoint(2, 0), s.CreatePoint(4, 1)
+	for _, p := range []*sketch.Point{a, b, c} {
+		s.Fix(p)
+	}
+	s.CreateLine(a, b)
+	s.CreateLine(b, c)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	path, err := decad.NewPath(r3.Vec{}, decad.ArcThrough{Through: r3.NewVec(5, 0, 5), End: r3.NewVec(10, 0, 0)})
+	require.NoError(t, err)
+	body, err := decad.Sweep(decad.New(), s, s.Chains()[0], path).Do(t.Context())
+	require.NoError(t, err)
+	sourceArea, err := body.Area()
+	require.NoError(t, err)
+	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	require.True(t, mesh.BoundaryVerified())
+	file, err := export.NewSTEPFile(t.Context(), body, units.Millimeters(0.1), header())
+	require.NoError(t, err)
+	data, err := file.Marshal()
+	require.NoError(t, err)
+	result, err := decad.ReadSTEP(t.Context(), bytes.NewReader(data))
+	require.NoError(t, err)
+	require.False(t, result.Report().Closed)
+	require.Zero(t, result.Report().MisorientedEdges)
+	area, err := result.Area()
+	require.NoError(t, err)
+	require.InDelta(t, sourceArea.Value.Base(), area.Value.Base(), 2)
+}
+
+func TestSTEPSweptCurvedChainArcRoundTrip(t *testing.T) {
+	for _, mixed := range []bool{false, true} {
+		t.Run(fmt.Sprintf("mixed=%t", mixed), func(t *testing.T) {
+			w := sketch.NewWorld()
+			s, err := w.CreateSketch(w.XY())
+			require.NoError(t, err)
+			a, b := s.CreatePoint(0, 0), s.CreatePoint(2, 2)
+			s.Fix(a)
+			s.CreateArc(s.CreatePoint(0, 2), a, b)
+			if mixed {
+				s.CreateLine(b, s.CreatePoint(3, 2))
+			}
+			_, err = s.Solve(t.Context())
+			require.NoError(t, err)
+			path, err := decad.NewPath(r3.Vec{}, decad.ArcThrough{Through: r3.NewVec(5, 0, 5), End: r3.NewVec(10, 0, 0)})
+			require.NoError(t, err)
+			body, err := decad.Sweep(decad.New(), s, s.Chains()[0], path).Do(t.Context())
+			require.NoError(t, err)
+			sourceArea, err := body.Area()
+			require.NoError(t, err)
+			mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.2), decad.WithVerification(decad.VerifyAll))
+			require.NoError(t, err)
+			require.True(t, mesh.BoundaryVerified())
+			vertices, sources := mesh.Vertices(), mesh.SourceFaces()
+			seen := map[*decad.Face]bool{}
+			for i, tri := range mesh.Triangles() {
+				a, b, c := vertices[tri[0]], vertices[tri[1]], vertices[tri[2]]
+				normal, err := sources[i].NormalAt(a.Add(b).Add(c).Scale(1.0 / 3))
+				require.NoError(t, err)
+				require.Positive(t, b.Sub(a).Cross(c.Sub(a)).Dot(normal.Value))
+				seen[sources[i]] = true
+			}
+			wantFaces := 1
+			if mixed {
+				wantFaces = 2
+			}
+			require.Len(t, seen, wantFaces)
+			analytic, err := export.NewSTEPFile(t.Context(), body, units.Millimeters(0.2), header())
+			require.NoError(t, err)
+			require.Len(t, stepByName(analytic, "TOROIDAL_SURFACE"), 1)
+			file, err := export.NewFacetedSTEPFile(t.Context(), body, units.Millimeters(0.2), header())
+			require.NoError(t, err)
+			data, err := file.Marshal()
+			require.NoError(t, err)
+			result, err := decad.ReadSTEP(t.Context(), bytes.NewReader(data))
+			require.NoError(t, err)
+			require.False(t, result.Report().Closed)
+			require.Zero(t, result.Report().MisorientedEdges)
+			area, err := result.Area()
+			require.NoError(t, err)
+			require.InDelta(t, sourceArea.Value.Base(), area.Value.Base(), 3)
+			frame, err := r3.NewFrame(r3.Vec{}, r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
+			require.NoError(t, err)
+			mirror, err := r3.Reflection(frame)
+			require.NoError(t, err)
+			placed, err := decad.Transform(body, mirror).Do(t.Context())
+			require.NoError(t, err)
+			placedFile, err := export.NewFacetedSTEPFile(t.Context(), placed, units.Millimeters(0.2), header())
+			require.NoError(t, err)
+			placedData, err := placedFile.Marshal()
+			require.NoError(t, err)
+			placedResult, err := decad.ReadSTEP(t.Context(), bytes.NewReader(placedData))
+			require.NoError(t, err)
+			require.Zero(t, placedResult.Report().MisorientedEdges)
+			placedArea, err := placedResult.Area()
+			require.NoError(t, err)
+			require.InDelta(t, area.Value.Base(), placedArea.Value.Base(), 1e-8)
+		})
+	}
+}
+
+func TestSTEPRevolvedCircularPoleRoundTrip(t *testing.T) {
+	for _, atEnd := range []bool{false, true} {
+		for _, partial := range []bool{false, true} {
+			t.Run(fmt.Sprintf("atEnd=%t/partial=%t", atEnd, partial), func(t *testing.T) {
+				w := sketch.NewWorld()
+				s, err := w.CreateSketch(w.XY())
+				require.NoError(t, err)
+				var a, b *sketch.Point
+				if atEnd {
+					a, b = s.CreatePoint(0, 3), s.CreatePoint(-3, 0)
+				} else {
+					a, b = s.CreatePoint(3, 0), s.CreatePoint(0, 3)
+				}
+				s.Fix(a)
+				s.CreateArc(s.CreatePoint(0, 0), a, b)
+				_, err = s.Solve(t.Context())
+				require.NoError(t, err)
+				axis := decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}}
+				var extent decad.AngularExtent = decad.FullRevolution{}
+				if partial {
+					extent = decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along}
+				}
+				body, err := decad.Revolve(decad.New(), s, s.Chains()[0], axis, extent).Do(t.Context())
+				require.NoError(t, err)
+				mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
+				require.NoError(t, err)
+				require.True(t, mesh.BoundaryVerified())
+				vertices, sources := mesh.Vertices(), mesh.SourceFaces()
+				for i, tri := range mesh.Triangles() {
+					a, b, c := vertices[tri[0]], vertices[tri[1]], vertices[tri[2]]
+					normal, err := sources[i].NormalAt(a.Add(b).Add(c).Scale(1.0 / 3))
+					require.NoError(t, err)
+					require.Positive(t, b.Sub(a).Cross(c.Sub(a)).Dot(normal.Value))
+				}
+				file, err := export.NewFacetedSTEPFile(t.Context(), body, units.Millimeters(0.1), header())
+				require.NoError(t, err)
+				data, err := file.Marshal()
+				require.NoError(t, err)
+				result, err := decad.ReadSTEP(t.Context(), bytes.NewReader(data))
+				require.NoError(t, err)
+				require.False(t, result.Report().Closed)
+				require.Zero(t, result.Report().MisorientedEdges)
+				area, err := result.Area()
+				require.NoError(t, err)
+				want := 18 * math.Pi
+				if partial {
+					want /= 4
+				}
+				require.InDelta(t, want, area.Value.Base(), 2)
+			})
+		}
+	}
+}
+
+func TestSTEPRevolvedCircularUncertainPoleRefuses(t *testing.T) {
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	a, b := s.CreatePoint(3, 1e-10), s.CreatePoint(0, 3)
+	s.Fix(a)
+	s.CreateArc(s.CreatePoint(0, 0), a, b)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	axis := decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}}
+	body, err := decad.Revolve(decad.New(), s, s.Chains()[0], axis, decad.FullRevolution{}).Do(t.Context())
+	require.NoError(t, err)
+	_, err = export.NewFacetedSTEPFile(t.Context(), body, units.Millimeters(0.1), header())
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+}
+
+func TestSTEPRevolvedHornPoleRoundTrip(t *testing.T) {
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	a, b := s.CreatePoint(0, 0), s.CreatePoint(3, 3)
+	s.Fix(a)
+	s.CreateArc(s.CreatePoint(0, 3), a, b)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	axis := decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}}
+	body, err := decad.Revolve(decad.New(), s, s.Chains()[0], axis, decad.FullRevolution{}).Do(t.Context())
+	require.NoError(t, err)
+	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	require.True(t, mesh.BoundaryVerified())
+	vertices, sources := mesh.Vertices(), mesh.SourceFaces()
+	for i, tri := range mesh.Triangles() {
+		a, b, c := vertices[tri[0]], vertices[tri[1]], vertices[tri[2]]
+		normal, err := sources[i].NormalAt(a.Add(b).Add(c).Scale(1.0 / 3))
+		require.NoError(t, err)
+		require.Positive(t, b.Sub(a).Cross(c.Sub(a)).Dot(normal.Value))
+	}
+	file, err := export.NewFacetedSTEPFile(t.Context(), body, units.Millimeters(0.1), header())
+	require.NoError(t, err)
+	data, err := file.Marshal()
+	require.NoError(t, err)
+	result, err := decad.ReadSTEP(t.Context(), bytes.NewReader(data))
+	require.NoError(t, err)
+	require.False(t, result.Report().Closed)
+	area, err := result.Area()
+	require.NoError(t, err)
+	require.InDelta(t, 2*math.Pi*(4.5*math.Pi-9), area.Value.Base(), 2)
+}
+
+func TestSTEPTrimmedRevolveSheetRoundTrip(t *testing.T) {
+	doc := decad.New()
+	axis := decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 0, V: 1}}
+	makeRing := func(u0, v0, u1, v1 float64, sheet bool) *decad.Body {
+		w := sketch.NewWorld()
+		s, err := w.CreateSketch(w.XY())
+		require.NoError(t, err)
+		rect := s.CreateRectangle(u0, v0, u1, v1)
+		s.Fix(rect.A)
+		_, err = s.Solve(t.Context())
+		require.NoError(t, err)
+		cmd := decad.Revolve(doc, s, s.Profiles()[0], axis, decad.FullRevolution{})
+		if sheet {
+			cmd.SurfaceResult()
+		}
+		body, err := cmd.Do(t.Context())
+		require.NoError(t, err)
+		return body
+	}
+	sheet := makeRing(3, 0, 5, 20, true)
+	tool := makeRing(2, 5, 8, 10, false)
+	trimmed, err := decad.Trim(sheet, tool, decad.KeepOutside).Do(t.Context())
+	require.NoError(t, err)
+	mesh, err := trimmed.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	require.True(t, mesh.BoundaryVerified())
+	vertices, sources := mesh.Vertices(), mesh.SourceFaces()
+	for i, tri := range mesh.Triangles() {
+		a, b, c := vertices[tri[0]], vertices[tri[1]], vertices[tri[2]]
+		normal, err := sources[i].NormalAt(a.Add(b).Add(c).Scale(1.0 / 3))
+		require.NoError(t, err)
+		require.Positive(t, b.Sub(a).Cross(c.Sub(a)).Dot(normal.Value))
+	}
+	file, err := export.NewFacetedSTEPFile(t.Context(), trimmed, units.Millimeters(0.1), header())
+	require.NoError(t, err)
+	data, err := file.Marshal()
+	require.NoError(t, err)
+	result, err := decad.ReadSTEP(t.Context(), bytes.NewReader(data))
+	require.NoError(t, err)
+	require.Equal(t, 2, result.Report().Shells)
+	require.Zero(t, result.Report().MisorientedEdges)
+	area, err := result.Area()
+	require.NoError(t, err)
+	require.InDelta(t, 272*math.Pi, area.Value.Base(), 8)
+	rotation, err := r3.Rotation(r3.NewVec(1, 1, 1), units.Degrees(37))
+	require.NoError(t, err)
+	placed, err := decad.Transform(trimmed, rotation).Do(t.Context())
+	require.NoError(t, err)
+	placedFile, err := export.NewFacetedSTEPFile(t.Context(), placed, units.Millimeters(0.1), header())
+	require.NoError(t, err)
+	placedData, err := placedFile.Marshal()
+	require.NoError(t, err)
+	placedResult, err := decad.ReadSTEP(t.Context(), bytes.NewReader(placedData))
+	require.NoError(t, err)
+	require.Equal(t, 2, placedResult.Report().Shells)
+	placedArea, err := placedResult.Area()
+	require.NoError(t, err)
+	require.InDelta(t, area.Value.Base(), placedArea.Value.Base(), 1e-8)
+}
+
+func TestSTEPTrimmedTorusSheetRoundTrip(t *testing.T) {
+	doc := decad.New()
+	axis := decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 0, V: 1}}
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	center := s.CreatePoint(5, 10)
+	s.Fix(center)
+	s.CreateCircle(center, 2)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	sheet, err := decad.Revolve(doc, s, s.Profiles()[0], axis, decad.FullRevolution{}).SurfaceResult().Do(t.Context())
+	require.NoError(t, err)
+	toolWorld := sketch.NewWorld()
+	toolSketch, err := toolWorld.CreateSketch(toolWorld.XY())
+	require.NoError(t, err)
+	rect := toolSketch.CreateRectangle(1, 9, 10, 11)
+	toolSketch.Fix(rect.A)
+	_, err = toolSketch.Solve(t.Context())
+	require.NoError(t, err)
+	tool, err := decad.Revolve(doc, toolSketch, toolSketch.Profiles()[0], axis, decad.FullRevolution{}).Do(t.Context())
+	require.NoError(t, err)
+	trimmed, err := decad.Trim(sheet, tool, decad.KeepOutside).Do(t.Context())
+	require.NoError(t, err)
+	mesh, err := trimmed.Tessellate(t.Context(), units.Millimeters(0.2), decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	require.True(t, mesh.BoundaryVerified())
+	require.Positive(t, mesh.Bound().Base())
+	vertices, sources := mesh.Vertices(), mesh.SourceFaces()
+	for i, tri := range mesh.Triangles() {
+		a, b, c := vertices[tri[0]], vertices[tri[1]], vertices[tri[2]]
+		normal, err := sources[i].NormalAt(a.Add(b).Add(c).Scale(1.0 / 3))
+		require.NoError(t, err)
+		require.Positive(t, b.Sub(a).Cross(c.Sub(a)).Dot(normal.Value))
+	}
+	file, err := export.NewFacetedSTEPFile(t.Context(), trimmed, units.Millimeters(0.2), header())
+	require.NoError(t, err)
+	data, err := file.Marshal()
+	require.NoError(t, err)
+	result, err := decad.ReadSTEP(t.Context(), bytes.NewReader(data))
+	require.NoError(t, err)
+	require.Equal(t, 2, result.Report().Shells)
+	require.Zero(t, result.Report().MisorientedEdges)
+	sourceArea, err := trimmed.Area()
+	require.NoError(t, err)
+	area, err := result.Area()
+	require.NoError(t, err)
+	require.InDelta(t, sourceArea.Value.Base(), area.Value.Base(), 5)
+	rotation, err := r3.Rotation(r3.NewVec(1, 1, 1), units.Degrees(37))
+	require.NoError(t, err)
+	placed, err := decad.Transform(trimmed, rotation).Do(t.Context())
+	require.NoError(t, err)
+	placedFile, err := export.NewFacetedSTEPFile(t.Context(), placed, units.Millimeters(0.2), header())
+	require.NoError(t, err)
+	placedData, err := placedFile.Marshal()
+	require.NoError(t, err)
+	placedResult, err := decad.ReadSTEP(t.Context(), bytes.NewReader(placedData))
+	require.NoError(t, err)
+	require.Equal(t, 2, placedResult.Report().Shells)
+	placedArea, err := placedResult.Area()
+	require.NoError(t, err)
+	require.InDelta(t, area.Value.Base(), placedArea.Value.Base(), 1e-8)
+}
+
+func TestSTEPUnstitchedBoxFacesRoundTrip(t *testing.T) {
+	body := box(t, false)
+	pieces, err := decad.Unstitch(body).Do(t.Context())
+	require.NoError(t, err)
+	require.Len(t, pieces, 6)
+	totalArea := 0.0
+	for _, piece := range pieces {
+		file, err := export.NewSTEPFile(t.Context(), piece, units.Millimeters(0.1), header())
+		require.NoError(t, err)
+		require.Len(t, stepByName(file, "PLANE"), 1)
+		data, err := file.Marshal()
+		require.NoError(t, err)
+		result, err := decad.ReadSTEP(t.Context(), bytes.NewReader(data))
+		require.NoError(t, err)
+		require.False(t, result.Report().Closed)
+		area, err := result.Area()
+		require.NoError(t, err)
+		totalArea += area.Value.Base()
+	}
+	require.InDelta(t, 52, totalArea, 1e-10)
+}
+
+func TestSTEPUnstitchedCylinderWallRoundTrip(t *testing.T) {
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	center := s.CreatePoint(0, 0)
+	s.Fix(center)
+	s.CreateCircle(center, 5)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	body, err := decad.Extrude(decad.New(), s, s.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
+	require.NoError(t, err)
+	pieces, err := decad.Unstitch(body).Do(t.Context())
+	require.NoError(t, err)
+	var wall *decad.Body
+	caps := 0
+	for _, piece := range pieces {
+		if _, ok := piece.Faces()[0].Surface().(decad.Cylinder); ok {
+			wall = piece
+			continue
+		}
+		capFile, err := export.NewFacetedSTEPFile(t.Context(), piece, units.Millimeters(0.2), header())
+		require.NoError(t, err)
+		capData, err := capFile.Marshal()
+		require.NoError(t, err)
+		capResult, err := decad.ReadSTEP(t.Context(), bytes.NewReader(capData))
+		require.NoError(t, err)
+		capArea, err := capResult.Area()
+		require.NoError(t, err)
+		require.InDelta(t, 25*math.Pi, capArea.Value.Base(), 3)
+		caps++
+	}
+	require.Equal(t, 2, caps)
+	require.NotNil(t, wall)
+	mesh, err := wall.Tessellate(t.Context(), units.Millimeters(0.2), decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	require.True(t, mesh.BoundaryVerified())
+	vertices, sources := mesh.Vertices(), mesh.SourceFaces()
+	for i, tri := range mesh.Triangles() {
+		a, b, c := vertices[tri[0]], vertices[tri[1]], vertices[tri[2]]
+		normal, err := sources[i].NormalAt(a.Add(b).Add(c).Scale(1.0 / 3))
+		require.NoError(t, err)
+		require.Positive(t, b.Sub(a).Cross(c.Sub(a)).Dot(normal.Value))
+	}
+	analytic, err := export.NewSTEPFile(t.Context(), wall, units.Millimeters(0.2), header())
+	require.NoError(t, err)
+	require.Len(t, stepByName(analytic, "CYLINDRICAL_SURFACE"), 1)
+	file, err := export.NewFacetedSTEPFile(t.Context(), wall, units.Millimeters(0.2), header())
+	require.NoError(t, err)
+	data, err := file.Marshal()
+	require.NoError(t, err)
+	result, err := decad.ReadSTEP(t.Context(), bytes.NewReader(data))
+	require.NoError(t, err)
+	require.False(t, result.Report().Closed)
+	area, err := result.Area()
+	require.NoError(t, err)
+	require.InDelta(t, 100*math.Pi, area.Value.Base(), 6)
+	frame, err := r3.NewFrame(r3.Vec{}, r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1))
+	require.NoError(t, err)
+	mirror, err := r3.Reflection(frame)
+	require.NoError(t, err)
+	placed, err := decad.Transform(wall, mirror).Do(t.Context())
+	require.NoError(t, err)
+	placedMesh, err := placed.Tessellate(t.Context(), units.Millimeters(0.2), decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	placedVertices, placedSources := placedMesh.Vertices(), placedMesh.SourceFaces()
+	for i, tri := range placedMesh.Triangles() {
+		a, b, c := placedVertices[tri[0]], placedVertices[tri[1]], placedVertices[tri[2]]
+		normal, err := placedSources[i].NormalAt(a.Add(b).Add(c).Scale(1.0 / 3))
+		require.NoError(t, err)
+		require.Positive(t, b.Sub(a).Cross(c.Sub(a)).Dot(normal.Value))
+	}
+	placedFile, err := export.NewFacetedSTEPFile(t.Context(), placed, units.Millimeters(0.2), header())
+	require.NoError(t, err)
+	placedData, err := placedFile.Marshal()
+	require.NoError(t, err)
+	placedResult, err := decad.ReadSTEP(t.Context(), bytes.NewReader(placedData))
+	require.NoError(t, err)
+	placedArea, err := placedResult.Area()
+	require.NoError(t, err)
+	require.InDelta(t, area.Value.Base(), placedArea.Value.Base(), 1e-8)
+}

@@ -27,12 +27,27 @@ mesh as planar faces. It is an explicit output choice; the normal `NewSTEPFile` 
 to prefer its analytic arm. The body wire writer uses this choice only for a body whose
 evaluator already holds faceted geometry, so its transmitted bound describes the same mesh.
 
+## Sheet geometry
+
+A boundary-verified sheet with supported analytic faces and loops is written as a
+`SHELL_BASED_SURFACE_MODEL` containing its open or closed shells, in a
+`MANIFOLD_SURFACE_SHAPE_REPRESENTATION`. The face keeps its positive-side orientation. The
+representation contains no solid and does not claim volume. A sheet with consistently wound facet sets
+can instead write one planar face per verified triangle.
+Each source shell is paired with one connected facet set; open shells retain boundary edges and closed
+shells have none. Nonmanifold, misoriented or mismatched facet sets are refused. The corresponding STEP
+reader consumes the actual surface model and returns its triangles as a `MeshBody`.
+This follows the ISO 10303-42 shell-based surface model and manifold surface mapping.
+
+STEP assemblies admit sheet parts as surface models. Each occurrence places its shared surface
+representation through the same rigid placement as a solid part.
+
 ## Geometry contract
 
 - Request `Body.Tessellate` at `VerifyBoundary` before either writer path.
   Its closed and embedded boundary is the shared admission check.
 - Admit one valid `BodySolid` of one or more lumps, each with one outer shell
-  and any number of void shells (§9). Refuse sheets and a mesh whose connected
+  and any number of void shells (§9). Sheets follow Sheet geometry above. Refuse a mesh whose connected
   facet sets do not match the body's shells one to one.
 - Use analytic AP214 faces when every body face is a `Plane`, a `Cylinder`, a `Cone`, a `Sphere` or a
   `Torus` whose tag states no departure from the face's surface (below), and every edge is a `Line3`, an
@@ -225,15 +240,16 @@ parts to `STEPItem{Name, Body, Placement, Tolerance, Color}` as it does for `Thr
 
 | Decision | Rule |
 |---|---|
-| A1 | The file is an AP214 product structure: one `PRODUCT` per distinct body (first item's name is its id and name), each with its own `ADVANCED_BREP_SHAPE_REPRESENTATION`, and one assembly `PRODUCT` named by `header.Name` with a `SHAPE_REPRESENTATION`. A flat file of named solids is refused: OpenCascade drops solid names by default and it has no instances. |
+| A1 | The file is an AP214 product structure: one `PRODUCT` per distinct body (first item's name is its id and name), each with its own `ADVANCED_BREP_SHAPE_REPRESENTATION` for solids or
+`MANIFOLD_SURFACE_SHAPE_REPRESENTATION` for sheets, and one assembly `PRODUCT` named by `header.Name` with a `SHAPE_REPRESENTATION`. A flat file of named solids is refused: OpenCascade drops solid names by default and it has no instances. |
 | A2 | Each item is one `NEXT_ASSEMBLY_USAGE_OCCURRENCE` named by the item, placed by an `ITEM_DEFINED_TRANSFORMATION` inside the complex `REPRESENTATION_RELATIONSHIP` / `..._WITH_TRANSFORMATION` / `SHAPE_REPRESENTATION_RELATIONSHIP`, attached by a `CONTEXT_DEPENDENT_SHAPE_REPRESENTATION`. `item_1` is the child representation's origin axis, `item_2` the occurrence's axis from `Placement.Basis()` and `Translation()`. The child is `rep_1`, the parent `rep_2`. Placement never moves geometry, so analytic surfaces stay exact. |
 | A3 | One `GEOMETRIC_REPRESENTATION_CONTEXT`, one application context and one `PRODUCT_DEFINITION_CONTEXT` serve every representation. |
-| A4 | Each body is written by `planSTEPBody` and `addSTEPSolids`, the same arms as `NewSTEPFile`. Items naming one pointer share one product; they must agree on `Tolerance` and `Color`. |
+| A4 | Each body is written by `planSTEPBody` and the corresponding solid or sheet writer, as in `NewSTEPFile`. Items naming one pointer share one product; they must agree on `Tolerance` and `Color`. |
 | A5 | IDs: shared block, then each body in first-item order, then the assembly product, the occurrence axes, the assembly representation, each item's usage records in input order, and last the colour block. No map is iterated for output; equal inputs and header give equal bytes. |
 | A6 | Tolerance: a zero `STEPItem.Tolerance` uses the call's `tol`; when a held faceted body refuses it with a `*decad.MeshBoundError` (`errors.As`), the body is planned once more at `Floor()`. The held facets do not depend on a tolerance at or above the floor, so the file loses no detail. `STEPPart.HeldFloor` reports it. A non-zero `Tolerance` is used as given and its refusal is returned. Error text is never parsed. |
-| A7 | Colour: `Color` (alpha ignored) writes `COLOUR_RGB` (channel/255) through `FILL_AREA_STYLE_COLOUR`, `FILL_AREA_STYLE`, `SURFACE_STYLE_FILL_AREA`, `SURFACE_SIDE_STYLE`, `SURFACE_STYLE_USAGE(.BOTH.)` to one `PRESENTATION_STYLE_ASSIGNMENT` per distinct RGB, a `STYLED_ITEM('color')` on every solid of a coloured body, and one `MECHANICAL_DESIGN_GEOMETRIC_PRESENTATION_REPRESENTATION` last. |
+| A7 | Colour: `Color` (alpha ignored) writes `COLOUR_RGB` (channel/255) through `FILL_AREA_STYLE_COLOUR`, `FILL_AREA_STYLE`, `SURFACE_STYLE_FILL_AREA`, `SURFACE_SIDE_STYLE`, `SURFACE_STYLE_USAGE(.BOTH.)` to one `PRESENTATION_STYLE_ASSIGNMENT` per distinct RGB, a `STYLED_ITEM('color')` on each representation item of a coloured body, and one `MECHANICAL_DESIGN_GEOMETRIC_PRESENTATION_REPRESENTATION` last. |
 | A8 | Not written: material, mass, density, body-less parts. A reflection or invalid placement is `ErrDegenerate`. The whole `step.File` is built before the writer is touched. |
 
 `decad.ReadSTEP` refuses such a file with `ErrUnsupported` because it does not read placements. The tests check the
-graph with the `step.File` entities (`export/step_items_test.go`); reader acceptance (IDT item order, shared context, colours on
-solids) is unverified outside decad.
+graph with the `step.File` entities (`export/step_items_test.go`). Open Cascade has read two
+placed sheet occurrences and a mixed sheet-and-solid assembly with the expected area and bounds.
