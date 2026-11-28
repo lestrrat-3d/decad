@@ -649,10 +649,11 @@ stretches a mesh body by a separate factor along each axis about a point; a nega
 `export.STEP`, `export.IGES`, `export.STL`, `export.OBJ`, `export.ThreeMF` and `export.GLTF` write a body to an `io.Writer` at a chord tolerance. `export.IGES` writes the body's tessellation as planar-faced solid B-reps of an IGES 5.3 file, a solid for each lump with a void shell for each cavity, which `decad.ReadIGES` reads back to the same vertices.
 `export.GLTF` writes a glTF 2.0 JSON file with its mesh embedded, in metres.
 `export.NewFacetedSTEPFile` writes the verified tessellation as planar STEP faces.
-`bodywire.Write` prefers analytic STEP geometry and falls back to facets when needed. It sends sheet bodies as
-facets, including when the receiver cannot read an analytic STEP surface. `bodywire.Read` returns a read-only body, and `Body.IsSheet` identifies a sheet. The receiver can tessellate
-analytic geometry at its requested tolerance. Faceted records retain the sender's claimed boundary bound, available
-through `Body.SourceBoundaryBound`, and refuse a finer tolerance. The returned `MeshBody` does not carry a proven
+`bodywire.Write` prefers analytic STEP geometry and falls back to facets when needed, including when the receiver
+cannot read an analytic STEP surface. It sends sheet bodies as facets. `bodywire.Read` returns a read-only body,
+and `bodywire.Body.IsSheet` identifies a sheet. The receiver can tessellate analytic geometry at its requested
+tolerance. Faceted records retain the sender's claimed boundary bound, available through
+`bodywire.Body.SourceBoundaryBound`, and refuse a finer tolerance. The returned `MeshBody` does not carry a proven
 error bound to the original body. The receiver supports only the analytic geometry its STEP reader accepts.
 `export.ThreeMFItems` writes several bodies as one 3MF file of named objects, each moved by a rigid `export.ThreeMFItem.Placement`, for a whole build in the assembled pose or pulled apart.
 `export.PNG` draws a body as an orthographic, flat-shaded PNG image from a `export.View`, such as `export.IsometricView`. `export.PNGBodies` draws several bodies together in one image, each in its own colour when `export.View.Colors` gives them. Set `export.View.Outlines` to draw the visible feature edges over the shading, `export.View.HiddenEdges` for the hidden ones as dashes, `export.View.Shadows` for the key light's shadows, `export.View.ShadowSoftness` for soft ones, `export.View.Gloss` for a specular highlight, `export.View.Opacity` for translucent bodies, `export.View.BackColor` for the colour of faces looking away, or `export.View.FieldOfView` for a perspective camera, which draws outlines, hidden edges and shadows too.
