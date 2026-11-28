@@ -28,12 +28,6 @@ func SourceSheet(ctx context.Context, body *topo.Body, sp stitchrecord.Payload, 
 	if source == nil || source == body || source.Kind != topo.BodySheet {
 		return nil, false, nil
 	}
-	// The existing revolve and sibling routes own their own source handling.
-	// Avoid nested stitched sources until their work can be bounded together.
-	switch source.Payload.(type) {
-	case stitchrecord.Payload, stitchrecord.UnstitchPayload:
-		return nil, false, nil
-	}
 	paired := make(map[*topo.Face]*topo.Face, len(sp.Faces))
 	liveSeen := make(map[*topo.Face]bool, len(sp.Faces))
 	for i, face := range sp.Faces {

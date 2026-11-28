@@ -15,6 +15,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/topobuild"
+	"github.com/lestrrat-3d/r3"
 )
 
 // UnstitchSource extracts a face's attributed facets from its original body.
@@ -28,11 +29,11 @@ func UnstitchSource(ctx context.Context, body *topo.Body, up stitchrecord.Unstit
 	if body.Kind != topo.BodySheet || len(faces) != 1 || up.Face == nil || up.Face.Body == nil || up.Face.Body == body {
 		return bad()
 	}
-	// Avoid recursively replaying an unbounded chain of Unstitch operations.
-	if _, ok := up.Face.Body.Payload.(stitchrecord.UnstitchPayload); ok {
-		return bad()
+	sourceChord := chord
+	if up.Xform != r3.Identity() {
+		sourceChord /= 2
 	}
-	source, err := meshSource(ctx, up.Face.Body, chord/2)
+	source, err := meshSource(ctx, up.Face.Body, sourceChord)
 	if err != nil {
 		return nil, err
 	}
@@ -90,11 +91,14 @@ func UnstitchSource(ctx context.Context, body *topo.Body, up stitchrecord.Unstit
 	if len(mesh.Triangles) == 0 {
 		return bad()
 	}
-	bound := proofbound.AbsSumUpper(massmoment.PlacedBound(sourceBound, charge), maxRound)
+	bound := sourceBound
+	if up.Xform != r3.Identity() {
+		bound = proofbound.AbsSumUpper(massmoment.PlacedBound(sourceBound, charge), maxRound)
+	}
 	// Some source meshers publish their construction allowance only in the
 	// face bound. The complete face bound is a conservative coordinate bound.
 	mesh.CoordBound = proofbound.AbsSumUpper(massmoment.PlacedBound(math.Max(source.CoordBound, sourceBound), charge), maxRound)
-	if proofbound.IsNonFinite(bound) || bound > chord {
+	if proofbound.IsNonFinite(bound) || (up.Xform != r3.Identity() && bound > chord) {
 		return bad()
 	}
 	topobuild.SetFaceBound(mesh, faces[0], bound)

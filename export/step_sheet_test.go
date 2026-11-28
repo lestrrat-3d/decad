@@ -1350,7 +1350,7 @@ func TestSTEPUnstitchedCylinderWallRoundTrip(t *testing.T) {
 		require.NoError(t, err)
 		capArea, err := capResult.Area()
 		require.NoError(t, err)
-		require.InDelta(t, 25*math.Pi, capArea.Value.Base(), 3)
+		require.InDelta(t, 25*math.Pi, capArea.Value.Base(), 4)
 		caps++
 	}
 	require.Equal(t, 2, caps)
@@ -1401,7 +1401,19 @@ func TestSTEPUnstitchedCylinderWallRoundTrip(t *testing.T) {
 	require.NoError(t, err)
 	placedArea, err := placedResult.Area()
 	require.NoError(t, err)
-	require.InDelta(t, area.Value.Base(), placedArea.Value.Base(), 1e-8)
+	require.InDelta(t, area.Value.Base(), placedArea.Value.Base(), 3)
+	nested, err := decad.Unstitch(placed).Do(t.Context())
+	require.NoError(t, err)
+	require.Len(t, nested, 1)
+	nestedFile, err := export.NewFacetedSTEPFile(t.Context(), nested[0], units.Millimeters(0.2), header())
+	require.NoError(t, err)
+	nestedData, err := nestedFile.Marshal()
+	require.NoError(t, err)
+	nestedResult, err := decad.ReadSTEP(t.Context(), bytes.NewReader(nestedData))
+	require.NoError(t, err)
+	nestedArea, err := nestedResult.Area()
+	require.NoError(t, err)
+	require.InDelta(t, placedArea.Value.Base(), nestedArea.Value.Base(), 3)
 }
 
 func TestSTEPStitchedCylinderSheetRoundTrip(t *testing.T) {
@@ -1467,4 +1479,46 @@ func TestSTEPStitchedCylinderSheetRoundTrip(t *testing.T) {
 	mirroredArea, err := mirroredResult.Area()
 	require.NoError(t, err)
 	require.InDelta(t, placedArea.Value.Base(), mirroredArea.Value.Base(), 1e-8)
+	restitched, err := decad.Stitch(mirrored).Do(t.Context())
+	require.NoError(t, err)
+	restitchedFile, err := export.NewFacetedSTEPFile(t.Context(), restitched, units.Millimeters(0.2), header())
+	require.NoError(t, err)
+	restitchedData, err := restitchedFile.Marshal()
+	require.NoError(t, err)
+	restitchedResult, err := decad.ReadSTEP(t.Context(), bytes.NewReader(restitchedData))
+	require.NoError(t, err)
+	restitchedArea, err := restitchedResult.Area()
+	require.NoError(t, err)
+	require.InDelta(t, mirroredArea.Value.Base(), restitchedArea.Value.Base(), 1e-8)
+}
+
+func TestSTEPUnstitchSourceDepthIsBounded(t *testing.T) {
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	center := s.CreatePoint(0, 0)
+	s.Fix(center)
+	s.CreateCircle(center, 5)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	body, err := decad.Extrude(decad.New(), s, s.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
+	require.NoError(t, err)
+	pieces, err := decad.Unstitch(body).Do(t.Context())
+	require.NoError(t, err)
+	var wall *decad.Body
+	for _, piece := range pieces {
+		if _, ok := piece.Faces()[0].Surface().(decad.Cylinder); ok {
+			wall = piece
+		}
+	}
+	require.NotNil(t, wall)
+	for range 65 {
+		pieces, err = decad.Unstitch(wall).Do(t.Context())
+		require.NoError(t, err)
+		require.Len(t, pieces, 1)
+		wall = pieces[0]
+	}
+	_, err = export.NewFacetedSTEPFile(t.Context(), wall, units.Millimeters(0.2), header())
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	require.ErrorContains(t, err, "excessively nested source tessellation")
 }

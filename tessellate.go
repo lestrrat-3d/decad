@@ -26,6 +26,17 @@ import (
 // A boolean-faceted body restates its held mesh here; the exact-predicate
 // mesh boolean that produces it lives in boolean.go.
 
+// sourceTessellationTrace bounds nested source replays and rejects cycles.
+type sourceTessellationTrace struct {
+	body     *topo.Body
+	previous *sourceTessellationTrace
+	depth    int
+}
+
+type sourceTessellationTraceKey struct{}
+
+const maxSourceTessellationDepth = 64
+
 // Mesh is a triangle mesh: an OUTPUT of [Body.Tessellate], never the body
 // representation (core §3 invariant #1 — the public vocabulary stays
 // Body → Face → Edge → Vertex). Vertices lie on the evaluator's held boundary;
@@ -289,6 +300,20 @@ func tessellateContextWithBudget(ctx context.Context, b *Body, tol units.Value, 
 			Curve:   func(c surfacegeom.Curve) any { return publicCurve(c) },
 			Alloc:   handleAlloc{},
 			SourceMesh: func(ctx context.Context, source *topo.Body, sourceChord float64) (*topo.Mesh, error) {
+				trace, _ := ctx.Value(sourceTessellationTraceKey{}).(*sourceTessellationTrace)
+				depth := 1
+				if trace != nil {
+					depth = trace.depth + 1
+				}
+				if source == nil || source == &b.n || depth > maxSourceTessellationDepth {
+					return nil, fmt.Errorf(`%w: invalid or excessively nested source tessellation`, ErrUnsupported)
+				}
+				for p := trace; p != nil; p = p.previous {
+					if p.body == source {
+						return nil, fmt.Errorf(`%w: cyclic source tessellation`, ErrUnsupported)
+					}
+				}
+				ctx = context.WithValue(ctx, sourceTessellationTraceKey{}, &sourceTessellationTrace{body: source, previous: trace, depth: depth})
 				owner, ok := source.Owner.(*Body)
 				if !ok || owner == nil {
 					return nil, fmt.Errorf(`%w: an unstitched face has no source body handle`, ErrUnsupported)

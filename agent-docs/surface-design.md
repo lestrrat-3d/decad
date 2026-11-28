@@ -2711,7 +2711,7 @@ proof leg deleted, the test watched to go red — before it is trusted.
 An `Unstitch` piece with straight planar edges triangulates its own face. Other pieces can reuse
 facets attributed to their original face when the original body can be tessellated, including after
 placement. The extracted facets retain their source bound and are checked against the new free
-boundary. Nested `Unstitch` sources remain unsupported.
+boundary. Nested source replays are cycle-checked and bounded to 64 levels.
 
 The row-9 curved-mesh obligations are:
 
