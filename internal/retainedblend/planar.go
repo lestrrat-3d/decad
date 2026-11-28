@@ -286,65 +286,176 @@ func collinearOverlap(a, b, end, other pt2) bool {
 // their own: such a sliver is exact in the plane but can fold when a later
 // placement rounds its vertices.
 func earClip(ps []pt2, poly []int) ([][3]int, error) {
-	idx := append([]int(nil), poly...)
-	tris := make([][3]int, 0, len(idx))
-	var ears []planarEar
-	turns := make([]int, len(idx))
-	qualities := make([]float64, len(idx))
+	n := len(poly)
+	if n <= 3 {
+		return earClipLast(ps, poly, make([][3]int, 0, n))
+	}
+	// The polygon is a ring of slots 0..n-1 in poly order. A clipped slot leaves the ring, so the slots still in it
+	// keep their relative order and slot order equals the position order of the scan over the current vertices.
+	prev, next := make([]int, n), make([]int, n)
+	alive := make([]bool, n)
+	for i := range n {
+		prev[i], next[i], alive[i] = (i+n-1)%n, (i+1)%n, true
+	}
+	ring := &earRing{ps: ps, poly: poly, prev: prev, next: next, alive: alive}
+	tris := make([][3]int, 0, n)
+	// version[i] counts the changes to slot i's triangle. A heap or parked entry is current only when its version is.
+	version := make([]int, n)
+	turns := make([]int, n)
+	qualities := make([]float64, n)
+	// waiting[v] holds the ears parked because slot v blocks them.
+	waiting := make([][]earEntry, n)
+	var heap earHeap
 	update := func(at int) {
-		n := len(idx)
-		a, b, c := ps[idx[(at+n-1)%n]], ps[idx[at]], ps[idx[(at+1)%n]]
+		a, b, c := ps[poly[prev[at]]], ps[poly[at]], ps[poly[next[at]]]
 		turns[at] = orient(a, b, c)
 		if turns[at] > 0 {
 			qualities[at] = earQuality(a, b, c)
 		}
 	}
-	for i := range idx {
+	for i := range n {
 		update(i)
 	}
-	for len(idx) > 3 {
-		ears = ears[:0]
-		n := len(idx)
-		for i := range n {
-			if turns[i] <= 0 {
-				continue
-			}
-			ears = append(ears, planarEar{i, qualities[i]})
-		}
-		best, ok := bestPlanarEar(ears)
-		if !ok {
-			return nil, fmt.Errorf("%w: the face's boundary has no ear to clip", decaderr.ErrUnsupported)
-		}
-		ia, ib, ic := idx[(best.at+n-1)%n], idx[best.at], idx[(best.at+1)%n]
-		if earBlocked(ps, idx, ia, ib, ic) {
-			sortPlanarEars(ears)
-			found := false
-			for _, e := range ears[1:] {
-				ia, ib, ic = idx[(e.at+n-1)%n], idx[e.at], idx[(e.at+1)%n]
-				if earBlocked(ps, idx, ia, ib, ic) {
-					continue
-				}
-				best = e
-				found = true
-				break
-			}
-			if !found {
-				return nil, fmt.Errorf("%w: the face's boundary has no ear to clip", decaderr.ErrUnsupported)
-			}
-		}
-		tris = append(tris, [3]int{ia, ib, ic})
-		idx = append(idx[:best.at], idx[best.at+1:]...)
-		turns = append(turns[:best.at], turns[best.at+1:]...)
-		qualities = append(qualities[:best.at], qualities[best.at+1:]...)
-		if len(idx) > 3 {
-			update((best.at + len(idx) - 1) % len(idx))
-			update(best.at % len(idx))
+	for i := range n {
+		if turns[i] > 0 {
+			heap.push(earEntry{planarEar{i, qualities[i]}, version[i]})
 		}
 	}
+	for left := n; left > 3; left-- {
+		clip := -1
+		for len(heap) > 0 {
+			e := heap.pop()
+			if !alive[e.at] || e.version != version[e.at] {
+				continue
+			}
+			blocker := ring.blocker(e.at)
+			if blocker < 0 {
+				clip = e.at
+				break
+			}
+			waiting[blocker] = append(waiting[blocker], e)
+		}
+		if clip < 0 {
+			return nil, fmt.Errorf("%w: the face's boundary has no ear to clip", decaderr.ErrUnsupported)
+		}
+		p, q := prev[clip], next[clip]
+		tris = append(tris, [3]int{poly[p], poly[clip], poly[q]})
+		alive[clip] = false
+		next[p], prev[q] = q, p
+		// The ears the clipped slot blocked may be free now; the heap decides again when it reaches them.
+		for _, e := range waiting[clip] {
+			if alive[e.at] && e.version == version[e.at] {
+				heap.push(e)
+			}
+		}
+		waiting[clip] = nil
+		if left-1 > 3 {
+			for _, at := range [2]int{p, q} {
+				version[at]++
+				update(at)
+				if turns[at] > 0 {
+					heap.push(earEntry{planarEar{at, qualities[at]}, version[at]})
+				}
+			}
+		}
+	}
+	rest := make([]int, 0, 3)
+	for i := range n {
+		if alive[i] {
+			rest = append(rest, poly[i])
+		}
+	}
+	return earClipLast(ps, rest, tris)
+}
+
+// earClipLast closes the triangulation with the last three vertices.
+func earClipLast(ps []pt2, idx []int, tris [][3]int) ([][3]int, error) {
 	if orient(ps[idx[0]], ps[idx[1]], ps[idx[2]]) <= 0 {
 		return nil, fmt.Errorf("%w: the face's boundary closes on a degenerate triangle", decaderr.ErrUnsupported)
 	}
 	return append(tris, [3]int{idx[0], idx[1], idx[2]}), nil
+}
+
+// earEntry is a candidate ear and the version of the slot's triangle it was made for.
+type earEntry struct {
+	planarEar
+	version int
+}
+
+// earHeap is a binary min-heap in comparePlanarEars order, so its top is the best ear.
+type earHeap []earEntry
+
+func (h *earHeap) push(e earEntry) {
+	*h = append(*h, e)
+	s := *h
+	i := len(s) - 1
+	for i > 0 {
+		parent := (i - 1) / 2
+		if comparePlanarEars(s[i].planarEar, s[parent].planarEar) >= 0 {
+			break
+		}
+		s[i], s[parent] = s[parent], s[i]
+		i = parent
+	}
+}
+
+func (h *earHeap) pop() earEntry {
+	s := *h
+	top := s[0]
+	last := len(s) - 1
+	s[0] = s[last]
+	s = s[:last]
+	*h = s
+	i := 0
+	for {
+		l, r, least := 2*i+1, 2*i+2, i
+		if l < last && comparePlanarEars(s[l].planarEar, s[least].planarEar) < 0 {
+			least = l
+		}
+		if r < last && comparePlanarEars(s[r].planarEar, s[least].planarEar) < 0 {
+			least = r
+		}
+		if least == i {
+			return top
+		}
+		s[i], s[least] = s[least], s[i]
+		i = least
+	}
+}
+
+// earRing is the polygon earClip has left, as a ring of slots into poly.
+type earRing struct {
+	ps         []pt2
+	poly       []int
+	prev, next []int
+	alive      []bool
+}
+
+// blocker returns the first slot, in ring order, that earBlocked finds in the triangle of the ear at slot at, or -1
+// when none does. It applies earBlocked's tests to the same vertices in the same order.
+func (r *earRing) blocker(at int) int {
+	ps, poly := r.ps, r.poly
+	a, b, c := ps[poly[r.prev[at]]], ps[poly[at]], ps[poly[r.next[at]]]
+	finite := finitePt(a) && finitePt(b) && finitePt(c)
+	minU, maxU := math.Min(a.u, math.Min(b.u, c.u)), math.Max(a.u, math.Max(b.u, c.u))
+	minW, maxW := math.Min(a.w, math.Min(b.w, c.w)), math.Max(a.w, math.Max(b.w, c.w))
+	for v := range r.alive {
+		if !r.alive[v] {
+			continue
+		}
+		p := ps[poly[v]]
+		if samePt(p, a) || samePt(p, b) || samePt(p, c) {
+			continue
+		}
+		// Keep non-finite points on the exact-predicate path. The box proof only holds for finite coordinates.
+		if finite && finitePt(p) && (p.u < minU || p.u > maxU || p.w < minW || p.w > maxW) {
+			continue
+		}
+		if orient(a, b, p) >= 0 && orient(b, c, p) >= 0 && orient(c, a, p) >= 0 {
+			return v
+		}
+	}
+	return -1
 }
 
 // earQuality is twice the triangle's area over the square of its longest side:
