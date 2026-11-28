@@ -100,6 +100,15 @@ func NewContactMemo(ma, mb *BoolMesh) *ContactMemo {
 	return &ContactMemo{Ma: ma, Mb: mb, Cols: len(mb.Tris), Sparse: map[[2]int32]uint64{}}
 }
 
+// untouched reports whether nothing was ever stored: every Lookup then misses.
+// Every Store lands in Dense, Sparse, the block index (promoted only from a
+// non-empty Sparse), Far or Values, and nothing is ever removed, so all of
+// them empty and Dense and BlockIndex absent means no Store has happened.
+func (c *ContactMemo) untouched() bool {
+	return c != nil && c.Dense == nil && c.BlockIndex == nil && len(c.Sparse) == 0 && len(c.Far) == 0 &&
+		len(c.Values) == 0
+}
+
 func (c *ContactMemo) Lookup(i, j int) (TriContact, bool) {
 	var status uint64
 	var ok bool
