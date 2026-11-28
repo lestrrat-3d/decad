@@ -182,7 +182,7 @@ func GatherNearContacts(ctx context.Context, bmA *BoolMesh, fis []int, bmB *Bool
 // relative to each read, and the poll schedule is the one the gate always had.
 // run must fill Measured and Far as NearContactRunner(slack) does.
 func gatherNearContacts(ctx context.Context, bmA *BoolMesh, fis []int, bmB *BoolMesh, fjs []int, slack float64, memo *ContactMemo, run ContactBatchRunner, limit int) (NearContacts, bool, error) {
-	return gatherNearContactsLog(ctx, bmA, fis, bmB, fjs, slack, memo, run, limit, nil)
+	return gatherNearContactsLog(ctx, bmA, fis, bmB, fjs, slack, memo, run, limit, nil, false)
 }
 
 // gatheredPair is one facet pair a gather read back from its classifier, in
@@ -198,8 +198,9 @@ type gatheredPair struct {
 
 // gatherNearContactsLog is gatherNearContacts, and when log is not nil it
 // also appends every pair it reads back to *log. A deferred gather's log is
-// incomplete and means nothing.
-func gatherNearContactsLog(ctx context.Context, bmA *BoolMesh, fis []int, bmB *BoolMesh, fjs []int, slack float64, memo *ContactMemo, run ContactBatchRunner, limit int, log *[]gatheredPair) (NearContacts, bool, error) {
+// incomplete and means nothing. noLookup skips the memo reads of its executor;
+// the caller must know none would hit (refuseProximity).
+func gatherNearContactsLog(ctx context.Context, bmA *BoolMesh, fis []int, bmB *BoolMesh, fjs []int, slack float64, memo *ContactMemo, run ContactBatchRunner, limit int, log *[]gatheredPair, noLookup bool) (NearContacts, bool, error) {
 	var nc NearContacts
 	seenA := map[int]bool{}
 	seenB := map[int]bool{}
@@ -207,6 +208,7 @@ func gatherNearContactsLog(ctx context.Context, bmA *BoolMesh, fis []int, bmB *B
 	contacts := NewContactBatchExecutor(ctx, bmA, bmB, memo, ContactWorkers(ctx), nil)
 	contacts.Run = run
 	contacts.Limit = limit
+	contacts.NoMemoLookup = noLookup
 	contacts.ConsumeResult = func(pair ContactPair, r ContactBatchResult) error {
 		i, j := pair.I, pair.J
 		c := r.Contact

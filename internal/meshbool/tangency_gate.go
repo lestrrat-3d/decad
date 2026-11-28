@@ -90,6 +90,30 @@ func RefuseProximityWithPlaneEvidence(ctx context.Context, ma, mb *topo.Mesh, bm
 func RefuseProximityWithFaceEvidence(ctx context.Context, ma, mb *topo.Mesh, bmA, bmB *BoolMesh,
 	memo *ContactMemo, capFace, coneFace *topo.Face, planeBudget *proofbound.WorkBudget,
 	evidence func(*topo.Face, *topo.Face) (bool, error)) error {
+	return refuseProximity(ctx, ma, mb, bmA, bmB, memo, capFace, coneFace, planeBudget, evidence, true)
+}
+
+// refuseProximity is RefuseProximityWithFaceEvidence. skipEmptyMemo lets the gate's broad gathers skip memo
+// lookups when memo holds nothing on entry; false keeps every lookup (the path before the skip existed).
+//
+// The skip is sound because a lookup in a broad gather can only hit a pair some earlier step stored, and
+// every store this gate makes is for a pair of one face pair it examined:
+//   - facesOfMesh puts each facet of an operand in exactly one faceFacets group, so the facet pairs of two
+//     different face pairs are disjoint sets;
+//   - gateFacePairs calls examine at most once per (ga, gb): rows run over fa once and visit each fb index at
+//     most once (a full scan, or the distinct, sorted candidates of a box tree whose leaves partition fb);
+//   - within examine nothing stores before the broad gather, and everything after it (the gather itself,
+//     separatedCoarseFaces, refuseFacetContact, the tight gather's fallback) stores only pairs of ga.facets x
+//     gb.facets.
+//
+// So when the memo is untouched on entry, no pair a broad gather adds is in the memo, and Lookup misses
+// exactly as it would have. A miss and a skipped lookup both enter the batch with HitIndex -1; Lookup reads
+// and polls nothing, so no result, error, ctx poll or memo store changes. The evidence callback and the
+// plane-separation proof take no memo.
+func refuseProximity(ctx context.Context, ma, mb *topo.Mesh, bmA, bmB *BoolMesh,
+	memo *ContactMemo, capFace, coneFace *topo.Face, planeBudget *proofbound.WorkBudget,
+	evidence func(*topo.Face, *topo.Face) (bool, error), skipEmptyMemo bool) error {
+	noLookup := skipEmptyMemo && memo.untouched()
 	// One counter spans the grouping and the pair scan it feeds: the grouping
 	// walks every facet and every new source face's edges, which is work the
 	// §7.2 interval covers just as the pair scan is.
@@ -124,7 +148,7 @@ func RefuseProximityWithFaceEvidence(ctx context.Context, ma, mb *topo.Mesh, bmA
 		broadSlack := slack * (1 + 1e-9)
 		var log []gatheredPair
 		broad, deferred, err := gatherNearContactsLog(ctx, bmA, ga.facets, bmB, gb.facets, broadSlack, memo,
-			NearContactRunner(broadSlack), ContactBatchSize, &log)
+			NearContactRunner(broadSlack), ContactBatchSize, &log, noLookup)
 		if err != nil {
 			return err
 		}

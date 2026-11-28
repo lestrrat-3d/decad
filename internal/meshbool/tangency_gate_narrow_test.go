@@ -120,7 +120,7 @@ func TestNarrowNearContactsMatchesTightGather(t *testing.T) {
 		var err error
 		if logged {
 			broad, deferred, err = gatherNearContactsLog(ctx, c.a, c.fis, c.b, c.fjs, c.broad, memo,
-				NearContactRunner(c.broad), ContactBatchSize, &log)
+				NearContactRunner(c.broad), ContactBatchSize, &log, false)
 		} else {
 			broad, deferred, err = GatherNearContacts(ctx, c.a, c.fis, c.b, c.fjs, c.broad, memo)
 		}
